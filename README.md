@@ -10,6 +10,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 
 * **Real-Time Multi-Exchange Monitoring**: Subscribes to public ticker WebSockets for BTC/USDT, ETH/USDT, and SOL/USDT on Kraken and Binance. It monitors last-trade prices, not order-book bid/ask prices.
 * **Rich Dashboard**: Refreshes a compact per-symbol market and sampled-spread summary at a configurable interval instead of printing every ticker update.
+* **Local Web Dashboard**: Serves recent spread observations from `spread_observations.csv` over localhost, with a configurable threshold and an observation freshness indicator.
 * **Safety Guards**:
   * Rejects prices that are missing, non-finite, zero, or negative.
   * Estimates net spread by subtracting a fixed 0.36% fee estimate from the absolute gross spread.
@@ -108,6 +109,16 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    `ALERT_CONFIRMATION_SECONDS` is the uninterrupted time the spread must remain profitable before triggering. After an alert, the spread must fall below the trigger level minus `ALERT_REARM_HYSTERESIS_PERCENT` before another alert can trigger. A signal is evaluated only while both exchange prices are fresh and their local receive times are within the maximum skew.
 
    Simulation settings: `PAPER_MODE=portfolio` sizes each virtual position as a percentage of available cash; `PAPER_MODE=fixed` uses `PAPER_FIXED_POSITION_USDT`, capped by available cash. The default portfolio starts with 1,000 USDT and allocates 10% of available cash per position. Virtual positions are closed when the spread returns to the configured target in the simulated trade direction or reaches the maximum holding time. Estimated round-trip fees are deducted at close. This simplified paper ledger uses last-trade prices and is not a realistic execution backtest. Restarting the bot resets the in-memory paper balance and open positions; closed-position history remains in `paper_trades.csv`.
+
+8. **Open the local web dashboard** (in a second PowerShell window, from the repository directory):
+   ```powershell
+   python dashboard.py
+   ```
+
+   Open `http://127.0.0.1:8080`. The dashboard reads the same `spread_observations.csv` file as the bot, refreshes every five seconds, and displays up to the latest 20 observations. It binds only to localhost and does not expose the telemetry to other machines. The status reflects the age of the latest CSV observation; it is not a direct health check of the bot process. The default threshold is `MIN_SPREAD_THRESHOLD` or `0.05%`, and observations are marked stale after 30 seconds. You can override settings with `DASHBOARD_PORT`, `DASHBOARD_STALE_AFTER_SECONDS`, or command-line arguments, for example:
+   ```powershell
+   python dashboard.py --csv .\spread_observations.csv --port 8081 --threshold 0.05 --stale-after 30
+   ```
 
 ## 🧪 Tests
 
