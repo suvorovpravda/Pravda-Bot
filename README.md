@@ -2,6 +2,8 @@
 
 **Pravda-Bot** est un projet Python de surveillance de marchés crypto et de données énergétiques européennes. Il reçoit des cotations publiques Kraken et Binance, mesure leurs écarts, les enregistre pour analyse et fournit un tableau de bord web local.
 
+**Langues : Français · [Русский](#russian) · [English](#english)**
+
 > **Avertissement important :** le bot ne passe aucun ordre et ne nécessite aucune clé d’échange. Il lit des prix de dernier échange, pas des prix acheteur/vendeur exécutables. La simulation papier est indicative : elle ne modélise pas les carnets, les exécutions, le slippage ni toutes les contraintes d’une vraie stratégie. Ce projet ne fournit pas de conseil financier.
 
 ## Sommaire
@@ -379,3 +381,407 @@ Pour toute intégration de prix TTF ou de suivi maritime, documentez le fourniss
 ## Licence
 
 Aucun fichier de licence n’est actuellement fourni dans ce dépôt. En attendant qu’une licence soit ajoutée, ne présumez pas que le code peut être redistribué ou réutilisé selon les conditions d’une licence open source.
+
+<a id="russian"></a>
+
+# Русский
+
+**Pravda-Bot** — локальный Python-проект для мониторинга крипторынка и европейской энергетики. Он получает публичные котировки Kraken и Binance, измеряет спреды, сохраняет наблюдения для анализа и предоставляет локальную веб-панель.
+
+> **Важно:** бот не размещает реальные ордера и не требует ключей бирж. Он использует цены последних сделок, а не исполнимые цены покупки/продажи. Бумажный симулятор носит справочный характер и не моделирует стаканы, исполнение, проскальзывание и все ограничения реальной стратегии. Это не финансовая рекомендация.
+
+## Возможности
+
+### Мониторинг криптовалют
+
+- Публичные WebSocket-такеры **Kraken** и **Binance** для BTC/USDT, ETH/USDT и SOL/USDT.
+- Контроль отключения, устаревания и рассинхронизации потоков; повторное подключение с экспоненциальной задержкой.
+- Расчёт спреда, приблизительной комиссии, настраиваемых порогов и подтверждение/гистерезис сигналов.
+- Уведомления о движении цены и возможностях через ntfy при настройке темы.
+- Необязательный анализ прошедших проверки сигналов через локальный сервер, совместимый с LM Studio.
+- Бумажная симуляция портфеля или фиксированного размера; реальные сделки не отправляются.
+
+### Локальная панель
+
+- Котировки, полученные ботом, и график тиков с момента открытия страницы.
+- Цены криптовалют в **EUR и CHF**: пересчёт использует ежедневные справочные курсы ЕЦБ через Frankfurter и приближение USDT ≈ USD.
+- Статус и возраст каждого биржевого потока; устаревшая цена отмечается и не выдаётся за текущую.
+- Наблюдения за физическими трансграничными потоками газа ENTSOG и новости GDELT с резервным RSS BBC World.
+- Локальный интерфейс в сине-бело-красной палитре.
+- По умолчанию сервер доступен только на `127.0.0.1`.
+
+## Ограничения и данные, которых пока нет
+
+- **Реальные ордера не размещаются.** Мониторинг и бумажная симуляция не являются торговым роботом.
+- **Котировки TTF нет.** Не подключён лицензированный поставщик рыночных цен. Панель не показывает цену или единицу котировки TTF. Ссылка ICE описывает спецификации контракта, а не предоставляет поток котировок.
+- **Нет реальной карты трубопроводов.** Схема ENTSOG показывает точки трансграничных наблюдений, а не трассы газопроводов.
+- **Нет отслеживания газовозов по AIS.** Для отображения позиций и маршрутов необходим поставщик AIS, его ключ и права на хранение и распространение данных.
+- **Нет подтверждённой системы геополитической разведки.** Новости не являются проверенными инцидентами, оценками угроз или прогнозами.
+- **Нет Forex-котировок в реальном времени.** Курсы валют — ежедневные справочные значения ЕЦБ.
+- **Нет облачной или мобильной версии.** Этот репозиторий содержит локальное Python-приложение, а не Node.js/PostgreSQL/PostGIS, Next.js или Expo.
+
+## Дорожная карта
+
+Следующие идеи — **планы, а не реализованные функции**. Реализация зависит от доступности, качества и лицензий источников данных.
+
+1. **Улучшить рыночный терминал:** сохранять историю тиков и строить графики за день/неделю/месяц; добавить CSV-экспорт, уведомления о ценовых уровнях в EUR/CHF и единый статус свежести источников.
+2. **Добавить проверенные энергетические данные:** географические трассы трубопроводов и терминалы, цены TTF от разрешённого поставщика с контрактом, сроком, единицей и временем публикации; хранилища, мощности терминалов и погодный контекст.
+3. **Показывать коммерческие маршруты СПГ-судов:** только с подходящим AIS-поставщиком и разрешёнными правами использования; реальные позиции не будут выдумываться или экстраполироваться.
+4. **Развить геополитическую карту:** объединять GDELT, ACLED и новостные источники, удалять дубликаты, сохранять первоисточник и географию, показывать покрытие и неопределённость. Медийная активность не равна фактическому уровню риска.
+5. **Изучить многопользовательский и мобильный доступ:** API, база данных, веб-хостинг или мобильное приложение — только после определения требований к безопасности, аутентификации и стоимости эксплуатации.
+
+Некоторые источники требуют платных подписок и явных прав на хранение и повторное распространение. Симулированные данные не будут выдаваться за реальные.
+
+## Установка
+
+Требуется Python 3.12 (рекомендуется), Git и подключение к Интернету для публичных потоков и источников данных.
+
+```powershell
+git clone https://github.com/suvorovpravda/Pravda-Bot.git
+Set-Location Pravda-Bot
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+`.env` игнорируется Git. Замените демонстрационные значения; тема ntfy в примере — только заглушка.
+
+## Быстрый запуск
+
+**Windows, запуск одним кликом:** дважды щёлкните `Lancer_Pravda_Bot.bat`. Он запускает бота и веб-панель в отдельных окнах и открывает `http://127.0.0.1:8080`. Не закрывайте окна, пока пользуетесь панелью.
+
+**Вручную**, в двух окнах PowerShell из каталога проекта:
+
+```powershell
+# Окно 1
+.\.venv\Scripts\Activate.ps1
+python main.py
+```
+
+```powershell
+# Окно 2
+.\.venv\Scripts\Activate.ps1
+python dashboard.py
+```
+
+Откройте [http://127.0.0.1:8080](http://127.0.0.1:8080). Без запущенного бота криптокотировки не поступают. Запустить только панель можно командой `python dashboard.py`. Параметры сервера можно задать, например, так:
+
+```powershell
+python dashboard.py --csv .\spread_observations.csv --lng-csv .\lng_observations.csv --port 8081 --threshold 0.05 --stale-after 30
+```
+
+Сервер остаётся привязанным к localhost.
+
+## Панель и источники данных
+
+Бот атомарно записывает последние котировки в `market_snapshot.json`; панель опрашивает файл каждую секунду. Через 10 секунд цена считается устаревшей и показывается с соответствующей пометкой.
+
+Приблизительное преобразование криптоцен:
+
+```text
+EUR = цена USDT / (USD за 1 EUR)
+CHF = EUR × (CHF за 1 EUR)
+```
+
+Это оценка по последней сделке и ежедневным курсам ЕЦБ; она не является ценой исполнения или непрерывной Forex-котировкой. График сохраняет тики только во время открытой сессии браузера.
+
+- **ENTSOG:** исходные физические наблюдения с сохранением единиц и периода; точки не дедуплицируются и не равны чистому национальному импорту/экспорту.
+- **GDELT / BBC World:** новости со ссылками на издателей; сообщения требуют независимой проверки.
+- **TTF:** курс отсутствует, пока не подключён разрешённый источник.
+- **Метрики `/api/metrics`:** показатели процесса панели, а не проверка здоровья отдельного процесса бота.
+
+Кэш сервера: потоки ENTSOG — 5 минут, новости — 15 минут, справочник точек — 24 часа, валютные курсы — 6 часов. Источник может обновлять данные медленнее.
+
+Локальные маршруты: `/`, `/api/market`, `/api/fx`, `/api/eu/flows`, `/api/geopolitics`, `/api/gas-price`, `/api/metrics`, `/data`, `/lng-data`. Это не публичный аутентифицированный API.
+
+## Конфигурация
+
+Переменные задаются в `.env` или окружении; уже заданные переменные окружения имеют приоритет.
+
+### Бот и сигналы
+
+| Переменная | По умолчанию | Назначение |
+| --- | --- | --- |
+| `LM_STUDIO_API_BASE` | `http://192.168.1.146:1234/v1` | Локальный endpoint LM Studio; используйте `http://127.0.0.1:1234/v1`, если сервер на этом компьютере. |
+| `LM_MODEL_NAME` | `qwen/qwen3.5-9b` | Идентификатор модели. |
+| `TRADING_MODE` | `paper` | Метка отображения; не включает реальные сделки. |
+| `MIN_SPREAD_THRESHOLD` | `0.05` | Минимальный валовый спред, проценты. |
+| `MAX_ALLOWED_SPREAD_PERCENT` | `5.0` | Предел спреда до классификации как аномалии. |
+| `SPREAD_LOG_INTERVAL_SECONDS` | `2` | Интервал записи наблюдений. |
+| `DASHBOARD_INTERVAL_SECONDS` | `30` | Интервал обновления терминального Rich-дашборда. |
+| `MARKET_DATA_STALE_SECONDS` | `4` | Возраст потока, допустимый при оценке сигнала. |
+| `MARKET_DATA_MAX_SKEW_SECONDS` | `3` | Максимальная рассинхронизация потоков. |
+| `ALERT_CONFIRMATION_SECONDS` | `3` | Время подтверждения сигнала. |
+| `ALERT_REARM_HYSTERESIS_PERCENT` | `0.05` | Падение ниже порога для повторного включения сигнала. |
+| `PRICE_ALERT_COOLDOWN_SECONDS` | `5` | Пауза уведомлений по паре; `0` отключает только эту паузу. |
+| `NTFY_GLOBAL_COOLDOWN_SECONDS` | `10` | Общая минимальная пауза между уведомлениями. |
+| `NTFY_TOPIC_URL` | пусто | HTTPS-адрес темы ntfy; пустое значение отключает уведомления. |
+
+### Бумажный симулятор
+
+`PAPER_MODE=portfolio` использует процент свободного остатка, `PAPER_MODE=fixed` — фиксированный размер.
+
+| Переменная | По умолчанию |
+| --- | --- |
+| `PAPER_STARTING_BALANCE_USDT` | `1000` |
+| `PAPER_POSITION_PERCENT` | `10` |
+| `PAPER_FIXED_POSITION_USDT` | `100` |
+| `PAPER_EXIT_SPREAD_PERCENT` | `0.05` |
+| `PAPER_MAX_HOLD_SECONDS` | `3600` |
+
+Симулятор ведёт учёт в USDT. Баланс и CSV симулятора не конвертируются панелью в EUR/CHF.
+
+### Панель
+
+`DASHBOARD_PORT` / `--port` — `8080`; `SPREAD_LOG_FILE` / `--csv` — `spread_observations.csv`; `LNG_LOG_FILE` / `--lng-csv` — `lng_observations.csv`; `DASHBOARD_STALE_AFTER_SECONDS` / `--stale-after` — `30`; `MIN_SPREAD_THRESHOLD` / `--threshold` — `0.05`; `MARKET_SNAPSHOT_FILE` — `market_snapshot.json`.
+
+Три порога свежести различаются: `MARKET_DATA_STALE_SECONDS` защищает оценку бота, панель рынка считает snapshot устаревшим через 10 секунд, а `DASHBOARD_STALE_AFTER_SECONDS` относится к CSV-журналу.
+
+## Файлы и анализ
+
+Локальные `arbitrage_log.csv`, `spread_observations.csv`, `paper_trades.csv`, `market_snapshot.json`, `lng_observations.csv` и `.env` исключены из Git. Не добавляйте их принудительно, если они содержат личные данные или секреты.
+
+Команды анализа не подключаются к сети:
+
+```powershell
+python analyze_spreads.py
+python analyze_spreads.py .\spread_observations.csv --output .\spread_summary.csv
+python analyze_paper_results.py
+```
+
+Скрипты рассчитывают статистику и статусы по сохранённым CSV; это диагностика, а не доказательство исполнимой прибыльности. Детектор использует `abs(Kraken - Binance) / min(Kraken, Binance)`, симулятор — `(Kraken - Binance) / Binance`; эти проценты нельзя напрямую сравнивать. Комиссия 0,36% фиксирована и приблизительна, без учёта проскальзывания и сетевых расходов.
+
+`python lng_observations.py` создаёт демонстрационные строки со статусом `SIMULATED` для TTF, JKM и Henry Hub. Это не текущие котировки и не данные о судах.
+
+## Тесты
+
+```powershell
+python -m pytest -q
+python -m compileall -q .
+git diff --check
+```
+
+GitHub Actions запускает проверку импортов/синтаксиса и тесты при push и pull request в `main`.
+
+## Устранение неполадок
+
+- **`ERR_CONNECTION_REFUSED`:** запустите `python dashboard.py`, оставьте окно открытым и обновите `http://127.0.0.1:8080`. Если порт занят, используйте `--port 8081`.
+- **Нет или устарели криптоцены:** проверьте `main.py`, Интернет и WebSocket; статус Binance и Kraken показывается отдельно.
+- **Нет курсов EUR/CHF:** источник ЕЦБ ежедневный; при недоступности панель не подставляет выдуманное значение.
+- **Нет ENTSOG/новостей:** внешние сервисы могут задерживаться или быть недоступны. Для новостей предусмотрен BBC fallback.
+- **LM Studio не отвечает:** проверьте URL API и имя модели; для сервера на этом ПК используйте `127.0.0.1`. LLM-анализ необязателен.
+- **Не найдены Python/пакеты:** установите Python 3.12 и выполните `python -m pip install -r requirements.txt`.
+
+## Безопасность, структура и участие
+
+Не публикуйте `.env`, ключи или URL ntfy. Темы ntfy не защищены аутентификацией; скрытая URL может быть использована для чтения/публикации. Не открывайте локальный сервер в Интернет без отдельной архитектуры авторизации и защиты. Запросы анализа отправляют выбранной модели символы и цены.
+
+Основные файлы: `main.py` (бот), `dashboard.py` и `dashboard.html` (локальная панель), `live_market_data.py` (snapshot и FX), `energy_data.py` (ENTSOG/GDELT/BBC/TTF), `bot_config.py`, `market_data_health.py`, `alert_gate.py`, `reconnect.py`, `paper_simulator.py`, `security_and_fees.py`, `analyze_spreads.py`, `analyze_paper_results.py`, `lng_observations.py`, `tests/`, `.env.example`, `requirements.txt` и `Lancer_Pravda_Bot.bat`.
+
+Для вклада создайте ветку, добавьте тесты, запустите проверки, проверьте diff на секреты и откройте pull request с описанием ограничений. Для TTF и AIS укажите поставщика, права и точность данных.
+
+**Лицензия:** файл лицензии в репозитории отсутствует. Не предполагайте, что разрешено свободное повторное использование или распространение.
+
+<a id="english"></a>
+
+# English
+
+**Pravda-Bot** is a local Python project for monitoring crypto markets and European energy data. It consumes public Kraken and Binance ticker streams, measures spreads, records observations for analysis, and serves a local web dashboard.
+
+> **Important:** the bot does not place real orders and does not need exchange API keys. It reads last-trade prices, not executable bid/ask prices. Paper simulation is indicative and does not model order books, fills, slippage, or all real-world strategy constraints. This project is not financial advice.
+
+## Features
+
+### Crypto monitoring
+
+- Public **Kraken** and **Binance** WebSocket tickers for BTC/USDT, ETH/USDT, and SOL/USDT.
+- Detection of disconnected, stale, or desynchronized streams, with exponential-backoff reconnection.
+- Gross-spread calculations, approximate fees, configurable thresholds, and alert confirmation/hysteresis.
+- Price-movement and opportunity notifications through ntfy when configured.
+- Optional analysis of eligible signals via a local LM Studio-compatible server.
+- Portfolio or fixed-size paper simulator; no live trades are submitted.
+
+### Local dashboard
+
+- Bot-fed crypto quotes and a chart of ticks seen since the page was opened.
+- Crypto prices converted and displayed in **EUR and CHF**, using daily ECB reference rates distributed by Frankfurter and the indicative assumption USDT ≈ USD.
+- Per-feed status and age; stale prices are identified and must not be treated as current.
+- ENTSOG cross-border physical-flow observations and GDELT news, with BBC World RSS fallback.
+- French-language local interface with a blue, white, and red palette.
+- The server binds to `127.0.0.1` by default.
+
+## What this project does not do
+
+- **No live order placement:** monitoring and paper simulation are not an automated trading system.
+- **No TTF quote:** no licensed market-price provider is connected. The dashboard therefore shows neither a TTF price nor a quote unit as if one were available. The ICE link describes contract specifications; it is not a price feed.
+- **No actual pipeline-route map:** the ENTSOG schematic shows cross-border observation points, not pipeline paths.
+- **No LNG carrier AIS tracking:** vessel positions and trade routes require a suitable AIS provider, credentials, and storage/redistribution rights.
+- **No verified geopolitical intelligence:** news reports are not verified incidents, threat assessments, or predictions.
+- **No tick-by-tick Forex:** EUR/CHF and other fiat rates are daily ECB reference rates.
+- **No cloud or mobile app:** this repository is a local Python application, not a Node.js/PostgreSQL/PostGIS, Next.js, or Expo project.
+
+## Roadmap
+
+The following items are **ideas, not implemented features**. Delivery depends on data availability, quality, licensing, and user needs.
+
+1. **A more useful market terminal:** persist tick history; add day/week/month charts, CSV export, EUR/CHF threshold alerts, and unified source-freshness status.
+2. **Verified energy data:** geographically accurate pipeline and terminal layers; licensed TTF quotes with contract, expiry, unit, and timestamp; storage, LNG capacity, and relevant weather context.
+3. **LNG carrier routes:** display routes only after integrating a suitable AIS provider under its terms and redistribution rights; never invent or extrapolate live positions.
+4. **A careful geopolitical map:** combine GDELT, ACLED, and news providers; deduplicate while retaining source links, locations, coverage, and uncertainty. Media volume must not be represented as ground-truth risk.
+5. **Multi-device access:** consider an API/database, hosted web app, or mobile client only after defining authentication, data protection, and operating costs.
+
+Some sources require paid subscriptions and explicit rights to store or redistribute their data. Simulated data will not be presented as live observations.
+
+## Requirements and installation
+
+Python 3.12 is recommended (the codebase requires Python 3.10+), with Git and Internet access for public market and data sources.
+
+```powershell
+git clone https://github.com/suvorovpravda/Pravda-Bot.git
+Set-Location Pravda-Bot
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+`.env` is ignored by Git. Replace example values; the ntfy URL in the example is only a placeholder.
+
+## Quick start
+
+**Windows one-click launch:** double-click `Lancer_Pravda_Bot.bat`. It starts the bot and dashboard in separate windows and opens `http://127.0.0.1:8080`. Keep both windows open while using the dashboard.
+
+**Manual launch**, in two PowerShell windows from the repository directory:
+
+```powershell
+# Window 1
+.\.venv\Scripts\Activate.ps1
+python main.py
+```
+
+```powershell
+# Window 2
+.\.venv\Scripts\Activate.ps1
+python dashboard.py
+```
+
+Open [http://127.0.0.1:8080](http://127.0.0.1:8080). Crypto quotes require the bot to be running. To run only the dashboard, use `python dashboard.py`. For example, customize its paths and settings with:
+
+```powershell
+python dashboard.py --csv .\spread_observations.csv --lng-csv .\lng_observations.csv --port 8081 --threshold 0.05 --stale-after 30
+```
+
+The web server remains bound to localhost.
+
+## Dashboard and data sources
+
+The bot atomically writes recent quotes to `market_snapshot.json`; the dashboard polls that file every second. Quotes older than 10 seconds are marked stale.
+
+Indicative crypto conversion:
+
+```text
+EUR = USDT price / (USD per 1 EUR)
+CHF = EUR × (CHF per 1 EUR)
+```
+
+These are last-trade prices converted with daily ECB reference rates, not executable prices or streaming FX quotes. The chart retains ticks only for the current browser session.
+
+- **ENTSOG:** source physical-flow observations retain their original units and periods; they are not deduplicated or equivalent to national net imports/exports.
+- **GDELT / BBC World:** linked news reports require independent verification.
+- **TTF:** no quote is shown until an authorized, verifiable provider is configured.
+- **`/api/metrics`:** metrics for the dashboard process, not a health check for the separate bot.
+
+Server cache periods: ENTSOG flows, 5 minutes; news, 15 minutes; ENTSOG point reference data, 24 hours; FX rates, 6 hours. Upstream publication may be slower.
+
+Local routes: `/`, `/api/market`, `/api/fx`, `/api/eu/flows`, `/api/geopolitics`, `/api/gas-price`, `/api/metrics`, `/data`, and `/lng-data`. This is not a public or authenticated API.
+
+## Configuration
+
+Settings may be placed in `.env` or in the process environment; existing environment variables take precedence.
+
+### Bot and alerts
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LM_STUDIO_API_BASE` | `http://192.168.1.146:1234/v1` | Local LM Studio-compatible API; use `http://127.0.0.1:1234/v1` when it runs on this PC. |
+| `LM_MODEL_NAME` | `qwen/qwen3.5-9b` | Model identifier. |
+| `TRADING_MODE` | `paper` | Display label only; does not enable live trading. |
+| `MIN_SPREAD_THRESHOLD` | `0.05` | Minimum gross spread, percent. |
+| `MAX_ALLOWED_SPREAD_PERCENT` | `5.0` | Maximum spread before anomaly rejection. |
+| `SPREAD_LOG_INTERVAL_SECONDS` | `2` | Per-symbol observation interval. |
+| `DASHBOARD_INTERVAL_SECONDS` | `30` | Rich terminal dashboard refresh interval. |
+| `MARKET_DATA_STALE_SECONDS` | `4` | Maximum feed age for evaluating a signal. |
+| `MARKET_DATA_MAX_SKEW_SECONDS` | `3` | Maximum desynchronization between feeds. |
+| `ALERT_CONFIRMATION_SECONDS` | `3` | Required signal confirmation duration. |
+| `ALERT_REARM_HYSTERESIS_PERCENT` | `0.05` | Drop below the trigger before rearming. |
+| `PRICE_ALERT_COOLDOWN_SECONDS` | `5` | Per-symbol alert cooldown; `0` disables only this cooldown. |
+| `NTFY_GLOBAL_COOLDOWN_SECONDS` | `10` | Minimum global interval between ntfy sends. |
+| `NTFY_TOPIC_URL` | empty | HTTPS ntfy topic URL; empty disables notifications. |
+
+### Paper simulator
+
+`PAPER_MODE=portfolio` sizes positions as a percentage of available cash; `PAPER_MODE=fixed` uses a fixed size.
+
+| Variable | Default |
+| --- | --- |
+| `PAPER_STARTING_BALANCE_USDT` | `1000` |
+| `PAPER_POSITION_PERCENT` | `10` |
+| `PAPER_FIXED_POSITION_USDT` | `100` |
+| `PAPER_EXIT_SPREAD_PERCENT` | `0.05` |
+| `PAPER_MAX_HOLD_SECONDS` | `3600` |
+
+The simulator accounts in USDT. Dashboard EUR/CHF conversion does not convert the simulator balance or paper-trade CSV.
+
+### Dashboard
+
+`DASHBOARD_PORT` / `--port`: `8080`; `SPREAD_LOG_FILE` / `--csv`: `spread_observations.csv`; `LNG_LOG_FILE` / `--lng-csv`: `lng_observations.csv`; `DASHBOARD_STALE_AFTER_SECONDS` / `--stale-after`: `30`; `MIN_SPREAD_THRESHOLD` / `--threshold`: `0.05`; `MARKET_SNAPSHOT_FILE`: `market_snapshot.json`.
+
+Freshness settings differ: `MARKET_DATA_STALE_SECONDS` protects bot signal evaluation; the market snapshot is stale after 10 seconds; `DASHBOARD_STALE_AFTER_SECONDS` applies to the spread CSV.
+
+## Files and offline analysis
+
+Local `arbitrage_log.csv`, `spread_observations.csv`, `paper_trades.csv`, `market_snapshot.json`, `lng_observations.csv`, and `.env` are ignored by Git. Do not force-add local files containing private data or secrets.
+
+Analysis scripts do not connect to the network:
+
+```powershell
+python analyze_spreads.py
+python analyze_spreads.py .\spread_observations.csv --output .\spread_summary.csv
+python analyze_paper_results.py
+```
+
+They report historical statistics and CSV statuses for diagnostics; they do not establish executable profitability. The detector uses `abs(Kraken - Binance) / min(Kraken, Binance)`, whereas the simulator uses `(Kraken - Binance) / Binance`; their percentages are not directly comparable. The fixed 0.36% fee estimate excludes slippage and network costs.
+
+`python lng_observations.py` writes **SIMULATED** sample rows for TTF, JKM, and Henry Hub. It does not fetch current prices or vessel data.
+
+## Tests
+
+```powershell
+python -m pytest -q
+python -m compileall -q .
+git diff --check
+```
+
+GitHub Actions also runs syntax/import checks and tests on pushes and pull requests to `main`.
+
+## Troubleshooting
+
+- **`ERR_CONNECTION_REFUSED`:** start `python dashboard.py`, keep its window open, and reload `http://127.0.0.1:8080`. If the port is occupied, use `--port 8081`.
+- **Missing or stale crypto quotes:** check that `main.py` is running and that Internet/WebSocket access is available. Binance and Kraken statuses are shown separately.
+- **Missing EUR/CHF rates:** ECB rates are daily; if the source is unavailable, the dashboard does not invent a value.
+- **ENTSOG/news unavailable:** upstream services may be delayed or offline; the BBC feed is a news fallback.
+- **LM Studio unavailable:** check the API URL and model identifier; use `127.0.0.1` if it is on this PC. LLM analysis is optional.
+- **Python/dependencies missing:** install Python 3.12 and run `python -m pip install -r requirements.txt`.
+
+## Security, repository structure, and contributing
+
+Never publish `.env`, credentials, or an ntfy topic URL. ntfy topics do not provide authentication; anyone who knows the URL may read or publish messages. Do not expose the local web server to the Internet without separate authentication and security controls. LLM analysis sends the selected symbols and prices to the configured model.
+
+Key files: `main.py` (bot), `dashboard.py` and `dashboard.html` (local dashboard), `live_market_data.py` (snapshot and FX), `energy_data.py` (ENTSOG/GDELT/BBC/TTF), `bot_config.py`, `market_data_health.py`, `alert_gate.py`, `reconnect.py`, `paper_simulator.py`, `security_and_fees.py`, `analyze_spreads.py`, `analyze_paper_results.py`, `lng_observations.py`, `tests/`, `.env.example`, `requirements.txt`, and `Lancer_Pravda_Bot.bat`.
+
+To contribute, create a branch, add tests, run checks, review the diff for secrets, and open a pull request describing the change and limitations. TTF/AIS integrations must document providers, licensing, and data accuracy.
+
+**License:** no license file is currently present. Do not assume the code is freely reusable or redistributable.
