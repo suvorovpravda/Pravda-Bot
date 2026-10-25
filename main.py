@@ -18,6 +18,7 @@ ESTIMATED_FEES = 0.36
 SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 LOG_FILE = "arbitrage_log.csv"
 LOG_HEADERS = ["Timestamp", "Symbol", "Kraken_Price", "Binance_Price", "Spread_Percent", "Net_Spread_Estimated", "LLM_Analysis"]
+NTFY_TOPIC_URL = os.getenv("NTFY_TOPIC_URL", "https://ntfy.sh/pravda_bot_vincent_9832")
 
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, mode='w', newline='', encoding='utf-8') as f:
@@ -49,6 +50,18 @@ def log_opportunity(symbol, p_kraken, p_binance, spread, net_spread, analysis):
     with open(LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([time.strftime('%Y-%m-%d %H:%M:%S'), symbol, p_kraken, p_binance, f"{spread:.4f}%", f"{net_spread:.4f}%", analysis])
+
+def notify_opportunity(symbol, net_spread):
+    try:
+        response = requests.post(
+            NTFY_TOPIC_URL,
+            data=f"Spread net : {net_spread:.2f}% sur {symbol}".encode('utf-8'),
+            headers={"Title": "Pravda-Bot Opportunity"},
+            timeout=5
+        )
+        response.raise_for_status()
+    except requests.RequestException as e:
+        print(f"  ⚠️ Échec de la notification ntfy : {e}")
 
 print(f"=== Pravda-Bot Sécurisé (Mode: {TRADING_MODE}) ===")
 print(f"Paires surveillées : {', '.join(SYMBOLS)}")
@@ -94,6 +107,7 @@ try:
                     opportunities_count += 1
                     print("\a")
                     print(f"\033[91m  ⚡ [ALERTE RENTABLE] Opportunité valide sur {symbol} (Net: {net_spread:.4f}%) !\033[0m")
+                    notify_opportunity(symbol, net_spread)
                     print("  🤖 Analyse LLM en cours...")
                     analysis = ask_llm_analysis(symbol, p_kraken, p_binance, spread)
                     print(f"  \033[92m🤖 LLM: {analysis}\033[0m")
