@@ -19,7 +19,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
   * Rejects non-finite, non-positive, or anomalously large spreads (default maximum `5%`) before paper simulation, arbitrage alerts, or LLM analysis. Finite rejected anomalies are logged with the `ANOMALY` status and excluded from offline spread statistics.
   * Skips LLM analysis when the estimated net spread is zero or negative.
   * Requires a candidate spread to remain profitable for a configurable confirmation interval and uses hysteresis before rearming alerts.
-  * Rejects stale or excessively desynchronized exchange prices before spread evaluation.
+  * Rejects exchange prices older than 4 seconds by default or excessively desynchronized before spread evaluation; rechecks the same fresh price snapshot after asynchronous spread logging and before LLM analysis. Rejected signals cancel only their own alert activation. Configure the stale limit with `MARKET_DATA_STALE_SECONDS`.
 * **Local LLM Analysis**: Sends qualifying symbol and price data to the configured `LM_STUDIO_API_BASE` chat-completions endpoint. Use a trusted local LM Studio endpoint if the data must remain on your network.
 * **Price-Movement Alerts**: Detects ticker changes over WebSockets. ntfy notifications have a default five-second per-pair cooldown and a ten-second global send interval. Ticks suppressed by the global limit are not queued.
 * **Arbitrage Alerts and Logging**: Sends a separate alert and logs an LLM analysis only when the estimated net spread becomes positive. `spread_observations.csv` records sampled numeric spread data (default every 2 seconds per pair), including threshold and fee values, for later offline analysis with `analyze_spreads.py`.

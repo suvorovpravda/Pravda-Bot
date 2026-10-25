@@ -43,6 +43,28 @@ class AlertGateTests(unittest.TestCase):
         gate.reset_candidate("BTC/USDT")
         self.assertTrue(gate.is_active("BTC/USDT"))
 
+    def test_cancel_activation_allows_a_fresh_signal(self):
+        gate = AlertGate(0)
+        self.assertTrue(self.update(gate, 1))
+        activation_id = gate.activation_id("BTC/USDT")
+        self.assertTrue(gate.cancel_activation("BTC/USDT", activation_id))
+        self.assertFalse(gate.is_active("BTC/USDT"))
+        self.assertTrue(self.update(gate, 2))
+
+    def test_cancel_activation_does_not_cancel_a_newer_activation(self):
+        gate = AlertGate(0)
+        self.assertTrue(self.update(gate, 1))
+        old_activation_id = gate.activation_id("BTC/USDT")
+        self.assertFalse(
+            self.update(gate, 2, profitable=False, spread=0.3, rearm=0.3)
+        )
+        self.assertTrue(self.update(gate, 3))
+        new_activation_id = gate.activation_id("BTC/USDT")
+
+        self.assertNotEqual(old_activation_id, new_activation_id)
+        self.assertFalse(gate.cancel_activation("BTC/USDT", old_activation_id))
+        self.assertEqual(gate.activation_id("BTC/USDT"), new_activation_id)
+
     def test_reset_candidate_discards_pending_confirmation(self):
         gate = AlertGate(3)
         self.assertFalse(self.update(gate, 10))

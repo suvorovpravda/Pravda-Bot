@@ -35,3 +35,24 @@ def assess_market_data(
         status = "OK"
 
     return MarketDataHealth(status, kraken_age, binance_age, skew)
+
+
+def assess_market_data_snapshot(
+    snapshot_generation: tuple[int | None, int | None],
+    current_generation: tuple[int | None, int | None],
+    kraken_updated_at: float | None,
+    binance_updated_at: float | None,
+    *,
+    now: float | None = None,
+    stale_after_seconds: float,
+    max_skew_seconds: float,
+) -> MarketDataHealth | None:
+    if snapshot_generation != current_generation:
+        return None
+    return assess_market_data(
+        kraken_updated_at,
+        binance_updated_at,
+        now=now,
+        stale_after_seconds=stale_after_seconds,
+        max_skew_seconds=max_skew_seconds,
+    )

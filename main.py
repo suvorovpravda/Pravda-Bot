@@ -18,7 +18,11 @@ from alert_gate import AlertGate
 from bot_config import load_config
 from bot_dashboard import SpreadSummary, build_dashboard
 from csv_schema import ensure_csv_schema
-from market_data_health import MarketDataHealth, assess_market_data
+from market_data_health import (
+    MarketDataHealth,
+    assess_market_data,
+    assess_market_data_snapshot,
+)
 from paper_simulator import PaperSimulator
 from security_and_fees import (
     DEFAULT_ESTIMATED_FEES_PERCENT,
@@ -108,6 +112,7 @@ paper_simulator = PaperSimulator(
 
 latest_prices = {"Kraken": {}, "Binance": {}}
 last_price_update_at = {"Kraken": {}, "Binance": {}}
+price_update_generation = {"Kraken": {}, "Binance": {}}
 last_movement_notification_at = {}
 last_spread_log_at = {}
 spread_summaries = {symbol: SpreadSummary() for symbol in SYMBOLS}
@@ -254,6 +259,9 @@ async def handle_price_update(exchange_name, symbol, raw_price):
     try:
         price = parse_positive_price(raw_price)
     except ValueError:
+        price_update_generation[exchange_name][symbol] = (
+            price_update_generation[exchange_name].get(symbol, 0) + 1
+        )
         alert_gate.reset_candidate(symbol)
         console.print(
             f"[bold yellow][GARDE-FOU] Prix invalide reçu de "
@@ -264,6 +272,9 @@ async def handle_price_update(exchange_name, symbol, raw_price):
     previous_price = latest_prices[exchange_name].get(symbol)
     latest_prices[exchange_name][symbol] = price
     last_price_update_at[exchange_name][symbol] = time.monotonic()
+    price_update_generation[exchange_name][symbol] = (
+        price_update_generation[exchange_name].get(symbol, 0) + 1
+    )
     price_updates_count += 1
 
     if previous_price is not None and price != previous_price:
@@ -286,6 +297,10 @@ async def handle_price_update(exchange_name, symbol, raw_price):
         return
 
     now = time.monotonic()
+    market_data_snapshot = (
+        price_update_generation["Kraken"].get(symbol),
+        price_update_generation["Binance"].get(symbol),
+    )
     market_health = assess_market_data(
         last_price_update_at["Kraken"].get(symbol),
         last_price_update_at["Binance"].get(symbol),
@@ -389,6 +404,7 @@ async def handle_price_update(exchange_name, symbol, raw_price):
         rearm_threshold=rearm_spread,
         now=now,
     )
+    activation_id = alert_gate.activation_id(symbol) if opportunity_triggered else None
 
     last_logged_at = last_spread_log_at.get(symbol)
     if (
@@ -418,6 +434,31 @@ async def handle_price_update(exchange_name, symbol, raw_price):
                 threshold_reached,
                 opportunity_triggered,
             )
+
+    current_market_health = assess_market_data_snapshot(
+        market_data_snapshot,
+        (
+            price_update_generation["Kraken"].get(symbol),
+            price_update_generation["Binance"].get(symbol),
+        ),
+        last_price_update_at["Kraken"].get(symbol),
+        last_price_update_at["Binance"].get(symbol),
+        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+    )
+    if current_market_health is None:
+        if activation_id is not None:
+            alert_gate.cancel_activation(symbol, activation_id)
+        return
+    if current_market_health.status != "OK":
+        alert_gate.reset_candidate(symbol)
+        if activation_id is not None:
+            alert_gate.cancel_activation(symbol, activation_id)
+        console.print(
+            f"[bold yellow]Signal ignoré pour {symbol} : les prix sont devenus "
+            f"{current_market_health.status} pendant la journalisation.[/bold yellow]"
+        )
+        return
 
     try:
         paper_result = paper_simulator.update(
@@ -462,6 +503,25 @@ async def handle_price_update(exchange_name, symbol, raw_price):
             f"(aucun ordre envoyé).[/cyan]"
         )
     await asyncio.to_thread(notify_opportunity, symbol, net_spread)
+    current_market_health = assess_market_data_snapshot(
+        market_data_snapshot,
+        (
+            price_update_generation["Kraken"].get(symbol),
+            price_update_generation["Binance"].get(symbol),
+        ),
+        last_price_update_at["Kraken"].get(symbol),
+        last_price_update_at["Binance"].get(symbol),
+        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+    )
+    if current_market_health is None or current_market_health.status != "OK":
+        if activation_id is not None:
+            alert_gate.cancel_activation(symbol, activation_id)
+        console.print(
+            f"[bold yellow]Analyse LLM ignorée pour {symbol} : les prix "
+            "ont changé ou sont devenus obsolètes pendant la notification.[/bold yellow]"
+        )
+        return
     analysis = await asyncio.to_thread(ask_llm_analysis, symbol, price_kraken, price_binance, spread)
     console.print(f"  [green]🤖 LLM: {escape(analysis)}[/green]")
     await asyncio.to_thread(log_opportunity, symbol, price_kraken, price_binance, spread, net_spread, analysis)

@@ -113,7 +113,7 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
             values, "ALERT_REARM_HYSTERESIS_PERCENT", 0.05, allow_zero=True
         ),
         market_data_stale_seconds=_float_setting(
-            values, "MARKET_DATA_STALE_SECONDS", 15, allow_zero=False
+            values, "MARKET_DATA_STALE_SECONDS", 4, allow_zero=False
         ),
         market_data_max_skew_seconds=_float_setting(
             values, "MARKET_DATA_MAX_SKEW_SECONDS", 3, allow_zero=False

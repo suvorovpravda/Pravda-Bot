@@ -8,7 +8,7 @@ class BotConfigTests(unittest.TestCase):
         config = load_config({})
         self.assertEqual(config.min_spread_threshold, 0.05)
         self.assertEqual(config.max_allowed_spread_percent, 5.0)
-        self.assertEqual(config.spread_log_interval_seconds, 2)
+        self.assertEqual(config.spread_log_interval_seconds, 2.0)
         self.assertEqual(config.dashboard_interval_seconds, 30)
         self.assertEqual(config.price_alert_cooldown_seconds, 5)
         self.assertEqual(config.ntfy_global_cooldown_seconds, 10)
@@ -17,7 +17,7 @@ class BotConfigTests(unittest.TestCase):
         self.assertEqual(config.paper_starting_balance_usdt, 1000)
         self.assertEqual(config.paper_position_percent, 10)
         self.assertEqual(config.alert_confirmation_seconds, 3)
-        self.assertEqual(config.market_data_stale_seconds, 15)
+        self.assertEqual(config.market_data_stale_seconds, 4.0)
 
     def test_custom_settings_are_loaded(self):
         config = load_config(
