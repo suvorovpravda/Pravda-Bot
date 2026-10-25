@@ -24,6 +24,7 @@ from market_data_health import (
     assess_market_data_snapshot,
 )
 from paper_simulator import PaperSimulator
+from reconnect import ExponentialBackoff, run_with_reconnect
 from security_and_fees import (
     DEFAULT_ESTIMATED_FEES_PERCENT,
     check_security_guardrails,
@@ -58,8 +59,6 @@ PRICE_ALERT_COOLDOWN_SECONDS = CONFIG.price_alert_cooldown_seconds
 NTFY_GLOBAL_COOLDOWN_SECONDS = CONFIG.ntfy_global_cooldown_seconds
 NTFY_INITIAL_BACKOFF_SECONDS = 60.0
 NTFY_MAX_BACKOFF_SECONDS = 900.0
-STREAM_RECONNECT_SECONDS = 5
-
 SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 BINANCE_SYMBOLS = {symbol.replace('/', ''): symbol for symbol in SYMBOLS}
 LOG_FILE = "arbitrage_log.csv"
@@ -560,14 +559,11 @@ async def stream_binance_tickers():
                 await handle_price_update("Binance", symbol, ticker["c"])
 
 async def run_stream_with_reconnect(exchange_name, stream_function):
-    while True:
-        try:
-            await stream_function()
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:
-            print(f"  ⚠️ Flux {exchange_name} interrompu : {e}. Reconnexion dans {STREAM_RECONNECT_SECONDS}s.")
-            await asyncio.sleep(STREAM_RECONNECT_SECONDS)
+    await run_with_reconnect(
+        stream_function,
+        exchange_name,
+        backoff=ExponentialBackoff(base_delay=1.0, max_delay=30.0),
+    )
 
 async def render_dashboard_periodically():
     while True:
