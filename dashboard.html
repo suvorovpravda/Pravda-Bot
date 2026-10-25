@@ -77,6 +77,7 @@
         .quote-table th, .quote-table td { padding: 9px 7px; border-bottom: 1px solid rgba(32,53,74,.75); text-align: right; white-space: nowrap; }
         .quote-table th:first-child, .quote-table td:first-child { text-align: left; }
         .quote-symbol { font-weight: 700; }
+        .quote-stale { color: var(--muted); }
         .positive { color: var(--green); }
         .negative { color: var(--red); }
         .fx-list { display: grid; gap: 0; }
@@ -350,11 +351,11 @@
             }
             rows.push({ symbol, binance, kraken, spread, euroValue });
         }
-        const latestAge = Math.min(...Object.values(symbols).flatMap(quotes =>
-            Object.values(quotes).filter(quote => quote.status === "live").map(quote => quote.age_seconds)
-        ));
-        if (Number.isFinite(latestAge)) {
-            setStatus($("market-feed-status"), "live", "Flux marché connecté");
+        const allQuotes = Object.values(symbols).flatMap(quotes => Object.values(quotes));
+        const liveQuoteCount = allQuotes.filter(quote => quote.status === "live").length;
+        if (liveQuoteCount > 0) {
+            const label = liveQuoteCount === allQuotes.length ? "Tous les prix récents" : "Prix récents partiels";
+            setStatus($("market-feed-status"), "live", label);
         } else {
             setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? "Démarre le bot" : "Prix périmés");
         }
@@ -363,8 +364,22 @@
         for (const row of rows) {
             const tr = document.createElement("tr");
             const sym = document.createElement("td"); sym.className = "quote-symbol"; sym.textContent = row.symbol;
-            const b = document.createElement("td"); b.textContent = row.binance?.status === "live" ? numericFormat(row.binance.price) : "—";
-            const k = document.createElement("td"); k.textContent = row.kraken?.status === "live" ? numericFormat(row.kraken.price) : "—";
+            const quoteCell = quote => {
+                const cell = document.createElement("td");
+                if (Number.isFinite(quote?.price)) {
+                    cell.textContent = numericFormat(quote.price);
+                    if (quote.status !== "live") {
+                        cell.className = "quote-stale";
+                        cell.textContent += " · périmé";
+                        cell.title = `Dernier tick reçu il y a ${quote.age_seconds}s`;
+                    }
+                } else {
+                    cell.textContent = "—";
+                }
+                return cell;
+            };
+            const b = quoteCell(row.binance);
+            const k = quoteCell(row.kraken);
             const euro = document.createElement("td"); euro.textContent = row.euroValue;
             const s = document.createElement("td"); s.textContent = row.spread;
             if (row.spread !== "—") s.className = parseFloat(row.spread) >= 0 ? "positive" : "negative";
@@ -373,13 +388,14 @@
         const symbol = $("chart-symbol").value, exchange = $("chart-exchange").value;
         const quote = symbols[symbol]?.[exchange];
         const fxUsdRate = latestFx?.rates?.USD;
-        const euroEstimate = quote?.status === "live" && Number.isFinite(fxUsdRate) && fxUsdRate > 0
+        const hasPrice = Number.isFinite(quote?.price);
+        const euroEstimate = hasPrice && Number.isFinite(fxUsdRate) && fxUsdRate > 0
             ? ` · ≈ ${numericFormat(quote.price / fxUsdRate)} EUR`
             : "";
-        $("chart-price").textContent = quote?.status === "live"
-            ? `${symbol} · ${exchange} · ${numericFormat(quote.price)} ${symbol.split("/")[1]}${euroEstimate}`
+        $("chart-price").textContent = hasPrice
+            ? `${symbol} · ${exchange} · ${numericFormat(quote.price)} ${symbol.split("/")[1]}${euroEstimate}${quote.status === "live" ? "" : " · dernier prix périmé"}`
             : `${symbol} · ${exchange} · prix indisponible`;
-        $("chart-age").textContent = quote ? `Reçu il y a ${quote.age_seconds}s · ${formatDate(quote.received_at)}` : "Lance le bot pour recevoir les ticks.";
+        $("chart-age").textContent = quote ? `${quote.status === "live" ? "Reçu" : "Périmé · dernier tick reçu"} il y a ${quote.age_seconds}s · ${formatDate(quote.received_at)}` : "Lance le bot pour recevoir les ticks.";
         drawPriceChart();
     }
 
