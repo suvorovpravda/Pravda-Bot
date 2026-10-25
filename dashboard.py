@@ -29,6 +29,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; white-space: nowrap; }
         th { background: #334155; }
         .status { font-weight: bold; color: #4ade80; }
+        .status.error { color: #f87171; }
         .muted { color: #94a3b8; font-size: 0.9rem; }
     </style>
 </head>
@@ -93,7 +94,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     throw new Error(`HTTP ${response.status}`);
                 }
                 const payload = await response.json();
-                document.getElementById("status").textContent = payload.status;
+                const status = document.getElementById("status");
+                status.textContent = payload.status;
+                status.classList.remove("error");
                 document.getElementById("threshold").textContent = `${payload.threshold}%`;
                 document.getElementById("last-observation").textContent =
                     payload.last_observation || "Aucune";
@@ -101,7 +104,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                     "Aucune observation crypto disponible.");
             } catch (error) {
                 container.textContent = "Erreur de chargement des observations.";
-                document.getElementById("status").textContent = "Indisponible";
+                const status = document.getElementById("status");
+                status.textContent = "Indisponible";
+                status.classList.add("error");
             }
         }
 

@@ -13,7 +13,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 * **Local Web Dashboard**: Serves recent spread observations from `spread_observations.csv` over localhost, with a configurable threshold and an observation freshness indicator.
 * **Safety Guards**:
   * Rejects prices that are missing, non-finite, zero, or negative.
-  * Resets pending alert confirmation when a price tick is invalid and masks URL values in ntfy request errors.
+  * Resets pending alert confirmation when a price tick is invalid and logs only the exception type/HTTP status for ntfy request errors.
   * Estimates net spread by subtracting a fixed 0.36% fee estimate from the absolute gross spread.
   * Uses a configurable minimum gross spread threshold (default `0.05%`) and rejects invalid threshold settings at startup.
   * Rejects non-finite, non-positive, or anomalously large spreads (default maximum `5%`) before paper simulation, arbitrage alerts, or LLM analysis. Finite rejected anomalies are logged with the `ANOMALY` status and excluded from offline spread statistics.
@@ -39,6 +39,28 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
 * **Exchange Data**: Kraken and Binance public WebSocket ticker streams
 * **AI / LLM**: LM Studio-compatible chat-completions API
 * **Environment Configuration, WebSockets, Notifications and Terminal Output**: `python-dotenv`, `requests`, `websockets`, `rich`
+
+---
+
+## AI tools: configuration and responsibilities
+
+The repository has **one AI integration at runtime**: the configured model served by LM Studio. Copilot, Gemini, and ChatGPT are development/review assistants, not services called by the bot.
+
+| Tool | Role in this project | Configuration and data flow |
+| --- | --- | --- |
+| **Qwen via LM Studio** | Optional local analysis of a crypto spread that has already passed the bot's numeric, fee, market-data, threshold, and confirmation checks. Its response is informational; it cannot place exchange orders or override those checks. | Load a Qwen model in LM Studio and enable its local API server. Set `LM_STUDIO_API_BASE` to that server's `/v1` endpoint and `LM_MODEL_NAME` to the model identifier shown by LM Studio. `main.py` sends qualifying symbol and price data to the chat-completions endpoint. Keep the endpoint on a trusted local machine/network if this data must remain private. The bot does not use a Qwen API key. |
+| **GitHub Copilot in VS Code** | Coding assistance: implementation, explanations, and test-driven changes in the editor. | Used interactively during development; it is not a dependency, runtime service, or configured exchange connection in this repository. |
+| **Gemini** | Optional independent/manual review of selected code or a sanitized diff. | No Gemini SDK, API key, model setting, or automated request is configured here. Share only the minimum necessary review material through the service you choose. |
+| **ChatGPT** | Optional independent/manual review, test-plan suggestions, and a second opinion on code changes. | No ChatGPT SDK, API key, model setting, or automated request is configured here. Share only the minimum necessary review material through the service you choose. |
+
+### Suggested review workflow
+
+1. Use Copilot for a small, scoped implementation and ask it to add or update tests.
+2. Run the local test suite and inspect the complete Git diff before accepting or publishing changes.
+3. For an independent review, provide Gemini or ChatGPT a sanitized diff plus the relevant requirements. Ask for concrete findings with file/line references, impact, confidence, and a reproducible test; verify every finding locally rather than applying suggestions blindly.
+4. Treat AI output as untrusted advice. None of these assistants replaces code review, test results, exchange documentation, or a security audit.
+
+Never include `.env`, API keys, private ntfy topic URLs, credentials, or unredacted private logs in prompts or public issues. The repository ignores `.env` and local CSV logs, but check the staged diff before every commit. AI assistance does not automatically make Gemini, Qwen, or ChatGPT a GitHub contributor: GitHub attribution requires a real commit author/co-author identity linked to a GitHub account. Do not invent co-author emails or rewrite published history to manufacture attribution.
 
 ---
 

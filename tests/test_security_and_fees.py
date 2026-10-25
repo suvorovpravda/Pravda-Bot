@@ -6,23 +6,26 @@ from security_and_fees import (
     calculate_net_spread_safe,
     check_security_guardrails,
     parse_positive_price,
-    sanitize_error_message,
+    request_error_summary,
 )
 
 
 class SecurityAndFeesTests(unittest.TestCase):
-    def test_sanitize_error_message_masks_http_and_https_urls(self):
-        error = "failed https://ntfy.sh/private-topic and http://example.test/path"
-        self.assertEqual(
-            sanitize_error_message(error),
-            "failed [URL_MASQUEE] and [URL_MASQUEE]",
+    def test_request_error_summary_does_not_include_exception_text_or_url(self):
+        error = RuntimeError(
+            "connection failed with url: /AUDIT_DUMMY_TOPIC?token=secret"
         )
+        self.assertEqual(request_error_summary(error), "RuntimeError")
 
-    def test_sanitize_error_message_preserves_non_url_error_details(self):
-        self.assertEqual(
-            sanitize_error_message("connection timed out"),
-            "connection timed out",
-        )
+    def test_request_error_summary_includes_http_status_without_url(self):
+        class Response:
+            status_code = 503
+
+        class HttpRequestFailure(Exception):
+            response = Response()
+
+        error = HttpRequestFailure("failed at url: /private-topic")
+        self.assertEqual(request_error_summary(error), "HttpRequestFailure (HTTP 503)")
 
     def test_price_parser_accepts_finite_positive_prices(self):
         self.assertEqual(parse_positive_price("123.45"), 123.45)

@@ -111,6 +111,21 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(payload["observations"][0]["Gross_Spread_Percent"], "0.4")
         self.assertEqual(response.headers["Cache-Control"], "no-store")
 
+    def test_missing_csv_files_return_empty_success_payloads(self):
+        base_url = self.serve()
+
+        with urlopen(f"{base_url}/data") as response:
+            crypto_payload = json.load(response)
+            self.assertEqual(response.status, 200)
+        with urlopen(f"{base_url}/lng-data") as response:
+            lng_payload = json.load(response)
+            self.assertEqual(response.status, 200)
+
+        self.assertEqual(crypto_payload["observations"], [])
+        self.assertEqual(crypto_payload["status"], "Aucune observation")
+        self.assertEqual(lng_payload["observations"], [])
+        self.assertEqual(lng_payload["status"], "Aucune observation GNL")
+
     def test_homepage_renders_csv_values_as_text_not_html(self):
         base_url = self.serve()
 
@@ -119,6 +134,9 @@ class DashboardTests(unittest.TestCase):
 
         self.assertIn("textContent = row[key]", html)
         self.assertNotIn("innerHTML", html)
+        self.assertIn(".status.error { color: #f87171; }", html)
+        self.assertIn('status.classList.add("error")', html)
+        self.assertIn('status.classList.remove("error")', html)
         self.assertIn("/lng-data", html)
         self.assertIn("Marché GNL &amp; Transport (Simulé)", html)
 

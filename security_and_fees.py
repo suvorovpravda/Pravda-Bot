@@ -1,18 +1,21 @@
 import logging
 import math
-import re
 
 
 logger = logging.getLogger("PravdaSecurity")
 DEFAULT_ESTIMATED_FEES_PERCENT = 0.36
 DEFAULT_ESTIMATED_FEES_RATE = DEFAULT_ESTIMATED_FEES_PERCENT / 100
 DEFAULT_MAX_ALLOWED_SPREAD_PERCENT = 5.0
-_URL_PATTERN = re.compile(r"https?://[^\s]+", re.IGNORECASE)
 
 
-def sanitize_error_message(error: object) -> str:
-    """Remove URL values that may contain private notification topic tokens."""
-    return _URL_PATTERN.sub("[URL_MASQUEE]", str(error))
+def request_error_summary(error: BaseException) -> str:
+    """Describe a network error without exposing its URL or request details."""
+    exception_name = type(error).__name__
+    response = getattr(error, "response", None)
+    status_code = getattr(response, "status_code", None)
+    if isinstance(status_code, int) and not isinstance(status_code, bool):
+        return f"{exception_name} (HTTP {status_code})"
+    return exception_name
 
 
 def parse_positive_price(raw_price: object) -> float:

@@ -25,7 +25,7 @@ from security_and_fees import (
     check_security_guardrails,
     calculate_net_spread_safe,
     parse_positive_price,
-    sanitize_error_message,
+    request_error_summary,
 )
 
 load_dotenv()
@@ -210,7 +210,7 @@ def send_ntfy_notification(title, message):
             ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
             console.print(
                 f"  ⚠️ Échec de la notification ntfy : "
-                f"{escape(sanitize_error_message(e))}"
+                f"{escape(request_error_summary(e))}"
             )
             return False
 
@@ -228,7 +228,7 @@ def send_ntfy_notification(title, message):
             ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
             console.print(
                 f"  ⚠️ Échec de la notification ntfy : "
-                f"{escape(sanitize_error_message(e))}"
+                f"{escape(request_error_summary(e))}"
             )
             return False
 
