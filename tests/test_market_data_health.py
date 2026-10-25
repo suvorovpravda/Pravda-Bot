@@ -1,6 +1,10 @@
 import unittest
 
-from market_data_health import assess_market_data, assess_market_data_snapshot
+from market_data_health import (
+    assess_market_data,
+    assess_market_data_snapshot,
+    event_time_to_monotonic,
+)
 
 
 class MarketDataHealthTests(unittest.TestCase):
@@ -59,6 +63,31 @@ class MarketDataHealthTests(unittest.TestCase):
             max_skew_seconds=3,
         )
         self.assertEqual(result.status, "STALE")
+
+    def test_converts_binance_millisecond_event_time_to_monotonic_age(self):
+        result = event_time_to_monotonic(
+            1_700_000_000_000,
+            now_epoch=1_700_000_005,
+            now_monotonic=500,
+        )
+        self.assertEqual(result, 495)
+
+    def test_converts_kraken_iso_event_time_to_monotonic_age(self):
+        result = event_time_to_monotonic(
+            "2023-11-14T22:13:20Z",
+            now_epoch=1_700_000_005,
+            now_monotonic=500,
+        )
+        self.assertEqual(result, 495)
+
+    def test_rejects_invalid_or_far_future_event_timestamps(self):
+        for value in ("not-a-timestamp", 1_700_000_020_000):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                event_time_to_monotonic(
+                    value,
+                    now_epoch=1_700_000_000,
+                    now_monotonic=500,
+                )
 
 
 if __name__ == "__main__":

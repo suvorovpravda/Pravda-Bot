@@ -22,6 +22,7 @@ from market_data_health import (
     MarketDataHealth,
     assess_market_data,
     assess_market_data_snapshot,
+    event_time_to_monotonic,
 )
 from paper_simulator import PaperSimulator
 from reconnect import ExponentialBackoff, run_with_reconnect
@@ -252,7 +253,29 @@ def notify_price_movement(exchange_name, symbol, previous_price, current_price, 
         f"{exchange_name} {symbol}: {previous_price} -> {current_price} ({change_pct:+.4f}%)"
     )
 
-async def handle_price_update(exchange_name, symbol, raw_price):
+
+def current_market_data_health(snapshot, symbol):
+    return assess_market_data_snapshot(
+        snapshot,
+        (
+            price_update_generation["Kraken"].get(symbol),
+            price_update_generation["Binance"].get(symbol),
+        ),
+        last_price_update_at["Kraken"].get(symbol),
+        last_price_update_at["Binance"].get(symbol),
+        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+    )
+
+
+def run_market_data_action(snapshot, symbol, action, *args):
+    health = current_market_data_health(snapshot, symbol)
+    if health is None or health.status != "OK":
+        return False, None
+    return True, action(*args)
+
+
+async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=None):
     global price_updates_count, opportunities_count
 
     try:
@@ -268,41 +291,66 @@ async def handle_price_update(exchange_name, symbol, raw_price):
         )
         return
 
+    try:
+        updated_at = (
+            time.monotonic()
+            if event_timestamp is None
+            else event_time_to_monotonic(event_timestamp)
+        )
+    except ValueError as error:
+        price_update_generation[exchange_name][symbol] = (
+            price_update_generation[exchange_name].get(symbol, 0) + 1
+        )
+        alert_gate.reset_candidate(symbol)
+        console.print(
+            f"[bold yellow][GARDE-FOU] Horodatage invalide reçu de "
+            f"{exchange_name} pour {symbol} ({type(error).__name__}); mise à jour ignorée.[/bold yellow]"
+        )
+        return
+
     previous_price = latest_prices[exchange_name].get(symbol)
     latest_prices[exchange_name][symbol] = price
-    last_price_update_at[exchange_name][symbol] = time.monotonic()
+    last_price_update_at[exchange_name][symbol] = updated_at
     price_update_generation[exchange_name][symbol] = (
         price_update_generation[exchange_name].get(symbol, 0) + 1
     )
     price_updates_count += 1
 
-    if previous_price is not None and price != previous_price:
-        change_pct = (price - previous_price) / previous_price * 100
-        now = time.monotonic()
-        if now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
-            last_movement_notification_at[symbol] = now
-            await asyncio.to_thread(
-                notify_price_movement,
-                exchange_name,
-                symbol,
-                previous_price,
-                price,
-                change_pct
-            )
-
     price_kraken = latest_prices["Kraken"].get(symbol)
     price_binance = latest_prices["Binance"].get(symbol)
-    if price_kraken is None or price_binance is None:
-        return
-
-    now = time.monotonic()
     market_data_snapshot = (
         price_update_generation["Kraken"].get(symbol),
         price_update_generation["Binance"].get(symbol),
     )
+    kraken_updated_at = last_price_update_at["Kraken"].get(symbol)
+    binance_updated_at = last_price_update_at["Binance"].get(symbol)
+
+    if previous_price is not None and price != previous_price:
+        change_pct = (price - previous_price) / previous_price * 100
+        now = time.monotonic()
+        if now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
+            if price_kraken is not None and price_binance is not None:
+                sent, _ = await asyncio.to_thread(
+                    run_market_data_action,
+                    market_data_snapshot,
+                    symbol,
+                    notify_price_movement,
+                    exchange_name,
+                    symbol,
+                    previous_price,
+                    price,
+                    change_pct,
+                )
+                if sent:
+                    last_movement_notification_at[symbol] = time.monotonic()
+
+    if price_kraken is None or price_binance is None:
+        return
+
+    now = time.monotonic()
     market_health = assess_market_data(
-        last_price_update_at["Kraken"].get(symbol),
-        last_price_update_at["Binance"].get(symbol),
+        kraken_updated_at,
+        binance_updated_at,
         stale_after_seconds=MARKET_DATA_STALE_SECONDS,
         max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
     )
@@ -412,39 +460,23 @@ async def handle_price_update(exchange_name, symbol, raw_price):
         or opportunity_triggered
     ):
         last_spread_log_at[symbol] = now
-        try:
-            await asyncio.to_thread(
-                log_spread_observation,
-                symbol,
-                price_kraken,
-                price_binance,
-                spread,
-                net_spread,
-                threshold_reached,
-                opportunity_triggered,
-                market_health,
-            )
-        except OSError as e:
-            console.print(f"[bold red]Échec de journalisation du spread : {e}[/bold red]")
-        else:
-            spread_summaries[symbol].record(
-                spread,
-                net_spread,
-                threshold_reached,
-                opportunity_triggered,
-            )
+        if not opportunity_triggered:
+            try:
+                await asyncio.to_thread(
+                    log_spread_observation,
+                    symbol,
+                    price_kraken,
+                    price_binance,
+                    spread,
+                    net_spread,
+                    threshold_reached,
+                    False,
+                    market_health,
+                )
+            except OSError as e:
+                console.print(f"[bold red]Échec de journalisation du spread : {e}[/bold red]")
 
-    current_market_health = assess_market_data_snapshot(
-        market_data_snapshot,
-        (
-            price_update_generation["Kraken"].get(symbol),
-            price_update_generation["Binance"].get(symbol),
-        ),
-        last_price_update_at["Kraken"].get(symbol),
-        last_price_update_at["Binance"].get(symbol),
-        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
-        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
-    )
+    current_market_health = current_market_data_health(market_data_snapshot, symbol)
     if current_market_health is None:
         if activation_id is not None:
             alert_gate.cancel_activation(symbol, activation_id)
@@ -458,6 +490,13 @@ async def handle_price_update(exchange_name, symbol, raw_price):
             f"{current_market_health.status} pendant la journalisation.[/bold yellow]"
         )
         return
+
+    spread_summaries[symbol].record(
+        spread,
+        net_spread,
+        threshold_reached,
+        opportunity_triggered,
+    )
 
     try:
         paper_result = paper_simulator.update(
@@ -501,27 +540,61 @@ async def handle_price_update(exchange_name, symbol, raw_price):
             f"{paper_result['notional_usdt']:.2f} USDT sur {symbol} "
             f"(aucun ordre envoyé).[/cyan]"
         )
-    await asyncio.to_thread(notify_opportunity, symbol, net_spread)
-    current_market_health = assess_market_data_snapshot(
+    try:
+        await asyncio.to_thread(
+            log_spread_observation,
+            symbol,
+            price_kraken,
+            price_binance,
+            spread,
+            net_spread,
+            threshold_reached,
+            True,
+            market_health,
+        )
+    except OSError as error:
+        console.print(f"[bold red]Échec de journalisation du signal : {error}[/bold red]")
+
+    notification_started, _ = await asyncio.to_thread(
+        run_market_data_action,
         market_data_snapshot,
-        (
-            price_update_generation["Kraken"].get(symbol),
-            price_update_generation["Binance"].get(symbol),
-        ),
-        last_price_update_at["Kraken"].get(symbol),
-        last_price_update_at["Binance"].get(symbol),
-        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
-        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+        symbol,
+        notify_opportunity,
+        symbol,
+        net_spread,
     )
-    if current_market_health is None or current_market_health.status != "OK":
+    if not notification_started:
         if activation_id is not None:
             alert_gate.cancel_activation(symbol, activation_id)
         console.print(
-            f"[bold yellow]Analyse LLM ignorée pour {symbol} : les prix "
-            "ont changé ou sont devenus obsolètes pendant la notification.[/bold yellow]"
+            f"[bold yellow]Notification ignorée pour {symbol} : les prix "
+            "ont changé ou sont devenus obsolètes avant son exécution.[/bold yellow]"
         )
         return
-    analysis = await asyncio.to_thread(ask_llm_analysis, symbol, price_kraken, price_binance, spread)
+
+    current_market_health = current_market_data_health(market_data_snapshot, symbol)
+    if current_market_health is None or current_market_health.status != "OK":
+        console.print(
+            f"[bold yellow]Analyse LLM ignorée pour {symbol} : les prix "
+            "ont changé ou sont devenus obsolètes après la notification.[/bold yellow]"
+        )
+        return
+    analysis_started, analysis = await asyncio.to_thread(
+        run_market_data_action,
+        market_data_snapshot,
+        symbol,
+        ask_llm_analysis,
+        symbol,
+        price_kraken,
+        price_binance,
+        spread,
+    )
+    if not analysis_started:
+        console.print(
+            f"[bold yellow]Analyse LLM ignorée pour {symbol} : les prix "
+            "ont changé ou sont devenus obsolètes avant son exécution.[/bold yellow]"
+        )
+        return
     console.print(f"  [green]🤖 LLM: {escape(analysis)}[/green]")
     await asyncio.to_thread(log_opportunity, symbol, price_kraken, price_binance, spread, net_spread, analysis)
 
@@ -545,7 +618,12 @@ async def stream_kraken_tickers():
             for ticker in message.get("data", []):
                 symbol = ticker.get("symbol")
                 if symbol in SYMBOLS and ticker.get("last") is not None:
-                    await handle_price_update("Kraken", symbol, ticker["last"])
+                    await handle_price_update(
+                        "Kraken",
+                        symbol,
+                        ticker["last"],
+                        ticker.get("timestamp"),
+                    )
 
 async def stream_binance_tickers():
     streams = "/".join(f"{symbol.replace('/', '').lower()}@ticker" for symbol in SYMBOLS)
@@ -555,8 +633,17 @@ async def stream_binance_tickers():
             message = json.loads(raw_message)
             ticker = message.get("data", message)
             symbol = BINANCE_SYMBOLS.get(ticker.get("s"))
-            if symbol is not None and ticker.get("c") is not None:
-                await handle_price_update("Binance", symbol, ticker["c"])
+            if (
+                symbol is not None
+                and ticker.get("c") is not None
+                and ticker.get("E") is not None
+            ):
+                await handle_price_update(
+                    "Binance",
+                    symbol,
+                    ticker["c"],
+                    ticker["E"],
+                )
 
 async def run_stream_with_reconnect(exchange_name, stream_function):
     await run_with_reconnect(

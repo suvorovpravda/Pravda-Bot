@@ -1,4 +1,6 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
+import math
 import time
 from typing import Literal
 
@@ -9,6 +11,40 @@ class MarketDataHealth:
     kraken_age_seconds: float | None
     binance_age_seconds: float | None
     exchange_skew_seconds: float | None
+
+
+def event_time_to_monotonic(
+    event_timestamp,
+    *,
+    now_epoch: float | None = None,
+    now_monotonic: float | None = None,
+) -> float:
+    if isinstance(event_timestamp, bool):
+        raise ValueError("market event timestamp must be numeric or ISO-8601")
+
+    if isinstance(event_timestamp, (int, float)):
+        event_epoch = float(event_timestamp)
+        if not math.isfinite(event_epoch):
+            raise ValueError("market event timestamp must be finite")
+        if event_epoch > 100_000_000_000:
+            event_epoch /= 1000
+    elif isinstance(event_timestamp, str):
+        try:
+            parsed = datetime.fromisoformat(event_timestamp.replace("Z", "+00:00"))
+        except ValueError as error:
+            raise ValueError("market event timestamp must be valid ISO-8601") from error
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        event_epoch = parsed.timestamp()
+    else:
+        raise ValueError("market event timestamp must be numeric or ISO-8601")
+
+    wall_now = time.time() if now_epoch is None else now_epoch
+    monotonic_now = time.monotonic() if now_monotonic is None else now_monotonic
+    age_seconds = wall_now - event_epoch
+    if age_seconds < -5:
+        raise ValueError("market event timestamp is too far in the future")
+    return monotonic_now - age_seconds
 
 
 def assess_market_data(
