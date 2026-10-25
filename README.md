@@ -13,6 +13,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 * **Local Web Dashboard**: Serves recent spread observations from `spread_observations.csv` over localhost, with a configurable threshold and an observation freshness indicator.
 * **Safety Guards**:
   * Rejects prices that are missing, non-finite, zero, or negative.
+  * Resets pending alert confirmation when a price tick is invalid and masks URL values in ntfy request errors.
   * Estimates net spread by subtracting a fixed 0.36% fee estimate from the absolute gross spread.
   * Uses a configurable minimum gross spread threshold (default `0.05%`) and rejects invalid threshold settings at startup.
   * Rejects non-finite, non-positive, or anomalously large spreads (default maximum `5%`) before paper simulation, arbitrage alerts, or LLM analysis. Finite rejected anomalies are logged with the `ANOMALY` status and excluded from offline spread statistics.
@@ -21,12 +22,12 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
   * Rejects stale or excessively desynchronized exchange prices before spread evaluation.
 * **Local LLM Analysis**: Sends qualifying symbol and price data to the configured `LM_STUDIO_API_BASE` chat-completions endpoint. Use a trusted local LM Studio endpoint if the data must remain on your network.
 * **Price-Movement Alerts**: Detects ticker changes over WebSockets. ntfy notifications have a default five-second per-pair cooldown and a ten-second global send interval. Ticks suppressed by the global limit are not queued.
-* **Arbitrage Alerts and Logging**: Sends a separate alert and logs an LLM analysis only when the estimated net spread becomes positive. `spread_observations.csv` records sampled numeric spread data (default every 10 seconds per pair), including threshold and fee values, for later offline analysis with `analyze_spreads.py`.
+* **Arbitrage Alerts and Logging**: Sends a separate alert and logs an LLM analysis only when the estimated net spread becomes positive. `spread_observations.csv` records sampled numeric spread data (default every 2 seconds per pair), including threshold and fee values, for later offline analysis with `analyze_spreads.py`.
 * **Paper Simulator**: Tracks a virtual portfolio or fixed-size positions without sending exchange orders. It estimates spread-capture P&L after configured fees and records closed simulations in `paper_trades.csv`; this is not a fill-accurate backtest.
 * **Centralized Configuration Validation**: Validates endpoints, required model settings, and numeric intervals at startup with actionable errors.
 * **No Order Placement**: The script does not use exchange API keys and contains no order-placement calls.
 
-The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. No network fee is currently included in the net spread. The gross spread uses an absolute price difference; the paper simulator uses the signed difference between last prices to estimate spread capture, but does not model order books, fills, funding, borrowing, or exchange constraints. The gross spread safety cap is configurable with `MAX_ALLOWED_SPREAD_PERCENT` (default `5.0%`). The minimum trigger threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
+The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. No network fee is currently included in the net spread. The safe price-based helper accepts `fee_rate` as a fraction (`0.0036` = `0.36%`) and returns a fractional net rate (`0.01` = `1%`); the bot explicitly converts it to percentage points for logs and thresholds. The gross spread uses an absolute price difference; the paper simulator uses the signed difference between last prices to estimate spread capture, but does not model order books, fills, funding, borrowing, or exchange constraints. The gross spread safety cap is configurable with `MAX_ALLOWED_SPREAD_PERCENT` (default `5.0%`). The minimum trigger threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
 
 Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, configure a private, randomly generated topic URL in your local `.env`; never commit or share that topic. ntfy.sh topics are unlisted, not access-controlled, so anyone who learns the topic name may be able to read or publish notifications. After HTTP 429, sends pause according to `Retry-After` or an exponential backoff starting at 60 seconds (up to 15 minutes). `PRICE_ALERT_COOLDOWN_SECONDS=0` disables the per-pair cooldown but does not remove the global limit or server backoff.
 
@@ -67,7 +68,7 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    $env:TRADING_MODE = "paper"
    $env:MIN_SPREAD_THRESHOLD = "0.05"
    $env:MAX_ALLOWED_SPREAD_PERCENT = "5.0"
-   $env:SPREAD_LOG_INTERVAL_SECONDS = "10"
+   $env:SPREAD_LOG_INTERVAL_SECONDS = "2"
    $env:DASHBOARD_INTERVAL_SECONDS = "30"
    $env:ALERT_CONFIRMATION_SECONDS = "3"
    $env:ALERT_REARM_HYSTERESIS_PERCENT = "0.05"
@@ -118,9 +119,9 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    python dashboard.py
    ```
 
-   Open `http://127.0.0.1:8080`. The dashboard reads the same `spread_observations.csv` file as the bot, refreshes every five seconds, and displays up to the latest 20 observations. It binds only to localhost and does not expose the telemetry to other machines. The status reflects the age of the latest CSV observation; it is not a direct health check of the bot process. The default threshold is `MIN_SPREAD_THRESHOLD` or `0.05%`, and observations are marked stale after 30 seconds. You can override settings with `DASHBOARD_PORT`, `DASHBOARD_STALE_AFTER_SECONDS`, or command-line arguments, for example:
+   Open `http://127.0.0.1:8080`. The dashboard reads the same `spread_observations.csv` file as the bot, refreshes every five seconds, and displays up to the latest 20 observations. It also displays the latest 10 rows from `lng_observations.csv` when that optional sample file exists; the panel identifies these as simulated examples, not live LNG or shipping data. The dashboard uses local CSS and JavaScript without a third-party CDN, binds only to localhost, and renders CSV fields as text. It does not expose telemetry to other machines by default. The crypto status reflects the age of the latest CSV observation; it is not a direct health check of the bot process. The default threshold is `MIN_SPREAD_THRESHOLD` or `0.05%`, and observations are marked stale after 30 seconds. You can override settings with `DASHBOARD_PORT`, `DASHBOARD_STALE_AFTER_SECONDS`, or command-line arguments, for example:
    ```powershell
-   python dashboard.py --csv .\spread_observations.csv --port 8081 --threshold 0.05 --stale-after 30
+   python dashboard.py --csv .\spread_observations.csv --lng-csv .\lng_observations.csv --port 8081 --threshold 0.05 --stale-after 30
    ```
 
 9. **Write sample LNG benchmark observations** (standalone; no live quotes or shipping data are fetched):

@@ -14,45 +14,78 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 
 
-HTML_CONTENT = """<!DOCTYPE html>
+HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="fr">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pravda-Bot Control Center</title>
+    <title>Pravda-Bot // Command Center</title>
     <style>
         body { font-family: sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
         h1 { color: #38bdf8; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
         .card { background: #1e293b; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); overflow-x: auto; }
         table { width: 100%; border-collapse: collapse; margin-top: 10px; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; white-space: nowrap; }
         th { background: #334155; }
         .status { font-weight: bold; color: #4ade80; }
+        .muted { color: #94a3b8; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <h1>Pravda-Bot Control Center</h1>
+    <h1>Pravda-Bot // Command Center</h1>
     <div class="card">
         <h2>État de la télémétrie : <span id="status" class="status">Chargement...</span></h2>
         <p>Seuil minimum configuré : <strong id="threshold">—</strong></p>
         <p>Dernière observation : <span id="last-observation">—</span></p>
     </div>
-    <div class="card">
-        <h2>Dernières observations</h2>
-        <div id="data">Chargement des données...</div>
+    <div class="grid">
+        <div class="card">
+            <h2>Derniers Spreads Crypto</h2>
+            <p class="muted">Journal Kraken/Binance · dernière estimation nette et état des flux</p>
+            <div id="data">Chargement des données...</div>
+        </div>
+        <div class="card">
+            <h2>Marché GNL &amp; Transport (Simulé)</h2>
+            <p class="muted">Exemples simulés uniquement — pas de cotations réelles ni de suivi de navires.</p>
+            <div id="lng-status" class="muted">Chargement des observations GNL...</div>
+            <div id="lng-data"></div>
+        </div>
     </div>
     <script>
-        const columns = [
+        const cryptoColumns = [
             ["Timestamp_UTC", "UTC"],
             ["Symbol", "Paire"],
-            ["Kraken_Price", "Kraken"],
-            ["Binance_Price", "Binance"],
-            ["Gross_Spread_Percent", "Spread brut (%)"],
-            ["Threshold_Reached", "Seuil atteint"],
+            ["Estimated_Net_Spread_Percent", "Net estimé (%)"],
             ["Market_Data_Status", "Santé des flux"]
         ];
 
-        async function fetchData() {
+        function renderTable(container, rows, columns, emptyMessage) {
+            const table = document.createElement("table");
+            const header = table.createTHead().insertRow();
+            for (const [, label] of columns) {
+                const cell = document.createElement("th");
+                cell.textContent = label;
+                header.appendChild(cell);
+            }
+            const body = table.createTBody();
+            for (const row of rows) {
+                const tableRow = body.insertRow();
+                for (const [key] of columns) {
+                    const cell = tableRow.insertCell();
+                    cell.textContent = row[key] ?? "";
+                }
+            }
+            if (rows.length === 0) {
+                const row = body.insertRow();
+                const cell = row.insertCell();
+                cell.colSpan = columns.length;
+                cell.textContent = emptyMessage;
+            }
+            container.replaceChildren(table);
+        }
+
+        async function fetchCryptoData() {
             const container = document.getElementById("data");
             try {
                 const response = await fetch("/data", { cache: "no-store" });
@@ -64,37 +97,44 @@ HTML_CONTENT = """<!DOCTYPE html>
                 document.getElementById("threshold").textContent = `${payload.threshold}%`;
                 document.getElementById("last-observation").textContent =
                     payload.last_observation || "Aucune";
-
-                const table = document.createElement("table");
-                const header = table.createTHead().insertRow();
-                for (const [, label] of columns) {
-                    const cell = document.createElement("th");
-                    cell.textContent = label;
-                    header.appendChild(cell);
-                }
-                const body = table.createTBody();
-                for (const row of payload.observations) {
-                    const tableRow = body.insertRow();
-                    for (const [key] of columns) {
-                        const cell = tableRow.insertCell();
-                        cell.textContent = row[key] ?? "";
-                    }
-                }
-                if (payload.observations.length === 0) {
-                    const row = body.insertRow();
-                    const cell = row.insertCell();
-                    cell.colSpan = columns.length;
-                    cell.textContent = "Aucune observation disponible.";
-                }
-                container.replaceChildren(table);
+                renderTable(container, payload.observations, cryptoColumns,
+                    "Aucune observation crypto disponible.");
             } catch (error) {
                 container.textContent = "Erreur de chargement des observations.";
                 document.getElementById("status").textContent = "Indisponible";
             }
         }
 
-        fetchData();
-        setInterval(fetchData, 5000);
+        const lngColumns = [
+            ["Timestamp_UTC", "UTC"],
+            ["Benchmark", "Benchmark"],
+            ["Price_USD", "Prix exemple (USD)"],
+            ["Status", "Source"],
+            ["Note", "Note"]
+        ];
+
+        async function fetchLngData() {
+            const container = document.getElementById("lng-data");
+            const status = document.getElementById("lng-status");
+            try {
+                const response = await fetch("/lng-data", { cache: "no-store" });
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const payload = await response.json();
+                status.textContent = payload.status;
+                renderTable(container, payload.observations, lngColumns,
+                    "Aucune observation GNL. Lancez lng_observations.py pour créer des exemples.");
+            } catch (error) {
+                status.textContent = "Journal GNL indisponible.";
+                container.textContent = "Impossible de lire les observations GNL.";
+            }
+        }
+
+        fetchCryptoData();
+        fetchLngData();
+        setInterval(fetchCryptoData, 5000);
+        setInterval(fetchLngData, 5000);
     </script>
 </body>
 </html>
@@ -137,16 +177,38 @@ def read_dashboard_data(csv_path: Path, *, stale_after_seconds: float, now=None)
     }
 
 
+def read_lng_dashboard_data(csv_path: Path):
+    observations = deque(maxlen=10)
+    if csv_path.exists():
+        with csv_path.open("r", encoding="utf-8-sig", newline="") as source:
+            reader = csv.DictReader(source)
+            required_columns = {"Timestamp_UTC", "Benchmark", "Price_USD", "Status", "Note"}
+            if reader.fieldnames is None or not required_columns.issubset(reader.fieldnames):
+                raise ValueError("LNG CSV has an incompatible schema")
+            observations.extend(reader)
+
+    return {
+        "status": (
+            "Exemples simulés (pas de données de marché réelles)"
+            if observations
+            else "Aucune observation GNL"
+        ),
+        "observations": list(reversed(observations)),
+    }
+
+
 class DashboardHandler(BaseHTTPRequestHandler):
     def __init__(
         self,
         *args,
         csv_path=Path("spread_observations.csv"),
+        lng_csv_path=Path("lng_observations.csv"),
         threshold=0.05,
         stale_after_seconds=30.0,
         **kwargs,
     ):
         self.csv_path = Path(csv_path)
+        self.lng_csv_path = Path(lng_csv_path)
         self.threshold = threshold
         self.stale_after_seconds = stale_after_seconds
         super().__init__(*args, **kwargs)
@@ -154,9 +216,25 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         request_path = urlsplit(self.path).path
         if request_path == "/":
-            body = HTML_CONTENT.encode("utf-8")
+            body = HTML_TEMPLATE.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
+        if request_path == "/lng-data":
+            try:
+                payload = read_lng_dashboard_data(self.lng_csv_path)
+            except (OSError, csv.Error, UnicodeDecodeError, ValueError):
+                logging.exception("Unable to read LNG dashboard CSV %s", self.lng_csv_path)
+                self.send_error(500, "Unable to read LNG observation log")
+                return
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
@@ -215,6 +293,12 @@ def main():
         help="Path to spread_observations.csv (default: current directory)",
     )
     parser.add_argument(
+        "--lng-csv",
+        type=Path,
+        default=Path(os.environ.get("LNG_LOG_FILE", "lng_observations.csv")),
+        help="Path to lng_observations.csv (default: current directory)",
+    )
+    parser.add_argument(
         "--port",
         type=int,
         default=os.environ.get("DASHBOARD_PORT", "8080"),
@@ -239,6 +323,7 @@ def main():
     handler = partial(
         DashboardHandler,
         csv_path=args.csv,
+        lng_csv_path=args.lng_csv,
         threshold=args.threshold,
         stale_after_seconds=args.stale_after,
     )

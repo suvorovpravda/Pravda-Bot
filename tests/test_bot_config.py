@@ -8,7 +8,7 @@ class BotConfigTests(unittest.TestCase):
         config = load_config({})
         self.assertEqual(config.min_spread_threshold, 0.05)
         self.assertEqual(config.max_allowed_spread_percent, 5.0)
-        self.assertEqual(config.spread_log_interval_seconds, 10)
+        self.assertEqual(config.spread_log_interval_seconds, 2)
         self.assertEqual(config.dashboard_interval_seconds, 30)
         self.assertEqual(config.price_alert_cooldown_seconds, 5)
         self.assertEqual(config.ntfy_global_cooldown_seconds, 10)

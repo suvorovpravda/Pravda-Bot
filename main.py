@@ -23,8 +23,9 @@ from paper_simulator import PaperSimulator
 from security_and_fees import (
     DEFAULT_ESTIMATED_FEES_PERCENT,
     check_security_guardrails,
-    calculate_net_spread,
+    calculate_net_spread_safe,
     parse_positive_price,
+    sanitize_error_message,
 )
 
 load_dotenv()
@@ -207,7 +208,10 @@ def send_ntfy_notification(title, message):
             )
         except requests.RequestException as e:
             ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
-            print(f"  ⚠️ Échec de la notification ntfy : {e}")
+            console.print(
+                f"  ⚠️ Échec de la notification ntfy : "
+                f"{escape(sanitize_error_message(e))}"
+            )
             return False
 
         if response.status_code == 429:
@@ -222,7 +226,10 @@ def send_ntfy_notification(title, message):
             response.raise_for_status()
         except requests.RequestException as e:
             ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
-            print(f"  ⚠️ Échec de la notification ntfy : {e}")
+            console.print(
+                f"  ⚠️ Échec de la notification ntfy : "
+                f"{escape(sanitize_error_message(e))}"
+            )
             return False
 
         ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
@@ -247,6 +254,7 @@ async def handle_price_update(exchange_name, symbol, raw_price):
     try:
         price = parse_positive_price(raw_price)
     except ValueError:
+        alert_gate.reset_candidate(symbol)
         console.print(
             f"[bold yellow][GARDE-FOU] Prix invalide reçu de "
             f"{exchange_name} pour {symbol}; mise à jour ignorée.[/bold yellow]"
@@ -293,7 +301,11 @@ async def handle_price_update(exchange_name, symbol, raw_price):
                 f"(état du flux : {market_health.status}).[/bold yellow]"
             )
             return
-        net_spread = calculate_net_spread(spread, ESTIMATED_FEES)
+        net_spread = calculate_net_spread_safe(
+            price_kraken,
+            price_binance,
+            ESTIMATED_FEES / 100,
+        ) * 100
         last_logged_at = last_spread_log_at.get(symbol)
         if last_logged_at is None or now - last_logged_at >= SPREAD_LOG_INTERVAL_SECONDS:
             last_spread_log_at[symbol] = now
@@ -326,7 +338,11 @@ async def handle_price_update(exchange_name, symbol, raw_price):
                 "aucune simulation ni alerte arbitrage ne sera déclenchée.[/bold yellow]"
             )
             return
-        net_spread = calculate_net_spread(spread, ESTIMATED_FEES)
+        net_spread = calculate_net_spread_safe(
+            price_kraken,
+            price_binance,
+            ESTIMATED_FEES / 100,
+        ) * 100
         anomaly_health = MarketDataHealth(
             "ANOMALY",
             market_health.kraken_age_seconds,
@@ -354,7 +370,11 @@ async def handle_price_update(exchange_name, symbol, raw_price):
                 )
         return
 
-    net_spread = calculate_net_spread(spread, ESTIMATED_FEES)
+    net_spread = calculate_net_spread_safe(
+        price_kraken,
+        price_binance,
+        ESTIMATED_FEES / 100,
+    ) * 100
     threshold_reached = spread >= MIN_SPREAD_THRESHOLD
     is_profitable = threshold_reached and net_spread > 0
     rearm_spread = max(

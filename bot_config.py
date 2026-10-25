@@ -95,7 +95,7 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
             values, "MAX_ALLOWED_SPREAD_PERCENT", 5.0, allow_zero=False
         ),
         spread_log_interval_seconds=_float_setting(
-            values, "SPREAD_LOG_INTERVAL_SECONDS", 10, allow_zero=False
+            values, "SPREAD_LOG_INTERVAL_SECONDS", 2, allow_zero=False
         ),
         price_alert_cooldown_seconds=_float_setting(
             values, "PRICE_ALERT_COOLDOWN_SECONDS", 5, allow_zero=True

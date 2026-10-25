@@ -43,6 +43,13 @@ class AlertGateTests(unittest.TestCase):
         gate.reset_candidate("BTC/USDT")
         self.assertTrue(gate.is_active("BTC/USDT"))
 
+    def test_reset_candidate_discards_pending_confirmation(self):
+        gate = AlertGate(3)
+        self.assertFalse(self.update(gate, 10))
+        gate.reset_candidate("BTC/USDT")
+        self.assertFalse(self.update(gate, 12.9))
+        self.assertTrue(self.update(gate, 15.9))
+
 
 if __name__ == "__main__":
     unittest.main()

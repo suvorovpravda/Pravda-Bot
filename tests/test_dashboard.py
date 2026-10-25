@@ -1,4 +1,5 @@
 import csv
+import html
 import json
 import threading
 import unittest
@@ -10,7 +11,7 @@ from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-from dashboard import DashboardHandler, read_dashboard_data
+from dashboard import DashboardHandler, HTML_TEMPLATE, read_dashboard_data
 
 
 class DashboardTests(unittest.TestCase):
@@ -18,6 +19,7 @@ class DashboardTests(unittest.TestCase):
         self.temporary_directory = TemporaryDirectory()
         self.addCleanup(self.temporary_directory.cleanup)
         self.csv_path = Path(self.temporary_directory.name) / "observations.csv"
+        self.lng_csv_path = Path(self.temporary_directory.name) / "lng_observations.csv"
 
     def write_rows(self, rows):
         fields = [
@@ -38,6 +40,7 @@ class DashboardTests(unittest.TestCase):
         handler = partial(
             DashboardHandler,
             csv_path=self.csv_path,
+            lng_csv_path=self.lng_csv_path,
             threshold=0.25,
             stale_after_seconds=30,
         )
@@ -116,6 +119,61 @@ class DashboardTests(unittest.TestCase):
 
         self.assertIn("textContent = row[key]", html)
         self.assertNotIn("innerHTML", html)
+        self.assertIn("/lng-data", html)
+        self.assertIn("Marché GNL &amp; Transport (Simulé)", html)
+
+    def test_unified_dashboard_template_has_crypto_and_lng_sections(self):
+        template_text = html.unescape(HTML_TEMPLATE)
+        self.assertIn("Pravda-Bot // Command Center", template_text)
+        self.assertIn("Derniers Spreads Crypto", template_text)
+        self.assertIn("Marché GNL & Transport", template_text)
+
+    def test_lng_data_endpoint_returns_latest_rows_and_labels_samples(self):
+        rows = [
+            {
+                "Timestamp_UTC": f"2026-01-01T00:00:{second:02d}Z",
+                "Benchmark": f"BENCHMARK-{second}",
+                "Price_USD": str(second + 1),
+                "Status": "SIMULATED",
+                "Note": "<script>alert(1)</script>",
+            }
+            for second in range(12)
+        ]
+        with self.lng_csv_path.open("w", encoding="utf-8", newline="") as target:
+            writer = csv.DictWriter(
+                target,
+                fieldnames=[
+                    "Timestamp_UTC",
+                    "Benchmark",
+                    "Price_USD",
+                    "Status",
+                    "Note",
+                ],
+            )
+            writer.writeheader()
+            writer.writerows(rows)
+        base_url = self.serve()
+
+        with urlopen(f"{base_url}/lng-data") as response:
+            payload = json.load(response)
+
+        self.assertEqual(payload["status"], "Exemples simulés (pas de données de marché réelles)")
+        self.assertEqual(len(payload["observations"]), 10)
+        self.assertEqual(payload["observations"][0]["Benchmark"], "BENCHMARK-11")
+        self.assertEqual(
+            payload["observations"][-1]["Note"],
+            "<script>alert(1)</script>",
+        )
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+    def test_lng_data_endpoint_rejects_incompatible_csv_schema(self):
+        self.lng_csv_path.write_text("Timestamp,Status\nnow,SIMULATED\n", encoding="utf-8")
+        base_url = self.serve()
+
+        with self.assertRaises(HTTPError) as error:
+            urlopen(f"{base_url}/lng-data")
+
+        self.assertEqual(error.exception.code, 500)
 
     def test_unknown_path_returns_not_found(self):
         base_url = self.serve()

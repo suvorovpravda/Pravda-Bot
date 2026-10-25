@@ -3,12 +3,27 @@ from unittest.mock import patch
 
 from security_and_fees import (
     calculate_net_spread,
+    calculate_net_spread_safe,
     check_security_guardrails,
     parse_positive_price,
+    sanitize_error_message,
 )
 
 
 class SecurityAndFeesTests(unittest.TestCase):
+    def test_sanitize_error_message_masks_http_and_https_urls(self):
+        error = "failed https://ntfy.sh/private-topic and http://example.test/path"
+        self.assertEqual(
+            sanitize_error_message(error),
+            "failed [URL_MASQUEE] and [URL_MASQUEE]",
+        )
+
+    def test_sanitize_error_message_preserves_non_url_error_details(self):
+        self.assertEqual(
+            sanitize_error_message("connection timed out"),
+            "connection timed out",
+        )
+
     def test_price_parser_accepts_finite_positive_prices(self):
         self.assertEqual(parse_positive_price("123.45"), 123.45)
         self.assertEqual(parse_positive_price(1), 1.0)
@@ -31,6 +46,28 @@ class SecurityAndFeesTests(unittest.TestCase):
     def test_net_spread_uses_existing_fee_estimate_in_percentage_points(self):
         self.assertAlmostEqual(calculate_net_spread(0.5), 0.14)
         self.assertAlmostEqual(calculate_net_spread(0.1), -0.26)
+
+    def test_safe_price_net_spread_returns_fractional_rate(self):
+        self.assertAlmostEqual(
+            calculate_net_spread_safe(100, 101.2),
+            0.012 - 0.0036,
+        )
+        self.assertAlmostEqual(calculate_net_spread_safe(100, 100), -0.0036)
+
+    def test_safe_price_net_spread_rejects_invalid_prices_and_fee_rates(self):
+        for price_1, price_2, fee_rate in (
+            (0, 100, 0.0036),
+            (-1, 100, 0.0036),
+            (float("nan"), 100, 0.0036),
+            (float("inf"), 100, 0.0036),
+            (1e-308, 1e308, 0.0036),
+            (100, 101, float("nan")),
+            (100, 101, float("inf")),
+            (100, 101, -0.1),
+        ):
+            with self.subTest(price_1=price_1, price_2=price_2, fee_rate=fee_rate):
+                with self.assertRaises(ValueError):
+                    calculate_net_spread_safe(price_1, price_2, fee_rate)
 
     def test_net_spread_rejects_invalid_values(self):
         for gross, fees in ((float("nan"), 0.36), (1, float("inf")), (-1, 0.36), (1, -0.1)):
