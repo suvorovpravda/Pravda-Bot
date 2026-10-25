@@ -21,7 +21,24 @@ console = Console()
 LM_URL = os.getenv("LM_STUDIO_API_BASE", "http://192.168.1.146:1234/v1")
 TRADING_MODE = os.getenv("TRADING_MODE", "paper")
 MODEL_NAME = os.getenv("LM_MODEL_NAME", "qwen/qwen3.5-9b")
-MIN_SPREAD_THRESHOLD = 0.05  # Modifie cette valeur selon tes besoins
+
+def nonnegative_float_setting(name, default):
+    try:
+        value = float(os.getenv(name, str(default)))
+    except ValueError as e:
+        raise ValueError(f"{name} must be a finite non-negative number") from e
+    if not math.isfinite(value) or value < 0:
+        raise ValueError(f"{name} must be a finite non-negative number")
+    return value
+
+def positive_float_setting(name, default):
+    value = nonnegative_float_setting(name, default)
+    if value == 0:
+        raise ValueError(f"{name} must be greater than zero")
+    return value
+
+MIN_SPREAD_THRESHOLD = nonnegative_float_setting("MIN_SPREAD_THRESHOLD", 0.05)
+SPREAD_LOG_INTERVAL_SECONDS = positive_float_setting("SPREAD_LOG_INTERVAL_SECONDS", 10)
 ESTIMATED_FEES = 0.36
 PRICE_ALERT_COOLDOWN_SECONDS = max(0.0, float(os.getenv("PRICE_ALERT_COOLDOWN_SECONDS", "5")))
 NTFY_GLOBAL_COOLDOWN_SECONDS = max(1.0, float(os.getenv("NTFY_GLOBAL_COOLDOWN_SECONDS", "10")))
@@ -33,6 +50,20 @@ SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 BINANCE_SYMBOLS = {symbol.replace('/', ''): symbol for symbol in SYMBOLS}
 LOG_FILE = "arbitrage_log.csv"
 LOG_HEADERS = ["Timestamp", "Symbol", "Kraken_Price", "Binance_Price", "Spread_Percent", "Net_Spread_Estimated", "LLM_Analysis"]
+SPREAD_LOG_FILE = "spread_observations.csv"
+SPREAD_LOG_HEADERS = [
+    "Timestamp_UTC",
+    "Symbol",
+    "Kraken_Price",
+    "Binance_Price",
+    "Gross_Spread_Percent",
+    "Estimated_Net_Spread_Percent",
+    "Minimum_Trigger_Threshold_Percent",
+    "Estimated_Fees_Percent",
+    "Threshold_Reached",
+    "Net_Spread_Positive",
+    "Opportunity_Triggered",
+]
 NTFY_TOPIC_URL = os.getenv("NTFY_TOPIC_URL", "").strip()
 
 if not os.path.exists(LOG_FILE):
@@ -40,12 +71,19 @@ if not os.path.exists(LOG_FILE):
         writer = csv.writer(f)
         writer.writerow(LOG_HEADERS)
 
+if not os.path.exists(SPREAD_LOG_FILE) or os.path.getsize(SPREAD_LOG_FILE) == 0:
+    with open(SPREAD_LOG_FILE, mode='w', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        writer.writerow(SPREAD_LOG_HEADERS)
+
 latest_prices = {"Kraken": {}, "Binance": {}}
 last_movement_notification_at = {}
+last_spread_log_at = {}
 last_profitable_state = {symbol: False for symbol in SYMBOLS}
 price_updates_count = 0
 opportunities_count = 0
 ntfy_lock = threading.Lock()
+spread_log_lock = threading.Lock()
 ntfy_blocked_until = 0.0
 ntfy_backoff_seconds = NTFY_INITIAL_BACKOFF_SECONDS
 
@@ -71,6 +109,25 @@ def log_opportunity(symbol, p_kraken, p_binance, spread, net_spread, analysis):
     with open(LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
         writer.writerow([time.strftime('%Y-%m-%d %H:%M:%S'), symbol, p_kraken, p_binance, f"{spread:.4f}%", f"{net_spread:.4f}%", analysis])
+
+def log_spread_observation(symbol, price_kraken, price_binance, spread, net_spread, threshold_reached, opportunity_triggered):
+    row = {
+        "Timestamp_UTC": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        "Symbol": symbol,
+        "Kraken_Price": price_kraken,
+        "Binance_Price": price_binance,
+        "Gross_Spread_Percent": spread,
+        "Estimated_Net_Spread_Percent": net_spread,
+        "Minimum_Trigger_Threshold_Percent": MIN_SPREAD_THRESHOLD,
+        "Estimated_Fees_Percent": ESTIMATED_FEES,
+        "Threshold_Reached": str(threshold_reached).lower(),
+        "Net_Spread_Positive": str(net_spread > 0).lower(),
+        "Opportunity_Triggered": str(opportunity_triggered).lower(),
+    }
+    with spread_log_lock:
+        with open(SPREAD_LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
+            writer = csv.DictWriter(f, fieldnames=SPREAD_LOG_HEADERS)
+            writer.writerow(row)
 
 def retry_after_seconds(value):
     if not value:
@@ -182,6 +239,32 @@ async def handle_price_update(exchange_name, symbol, raw_price):
 
     spread = abs(price_kraken - price_binance) / min(price_kraken, price_binance) * 100
     net_spread = spread - ESTIMATED_FEES
+    threshold_reached = spread >= MIN_SPREAD_THRESHOLD
+    is_profitable = threshold_reached and net_spread > 0
+    opportunity_triggered = is_profitable and not last_profitable_state[symbol]
+
+    now = time.monotonic()
+    last_logged_at = last_spread_log_at.get(symbol)
+    if (
+        last_logged_at is None
+        or now - last_logged_at >= SPREAD_LOG_INTERVAL_SECONDS
+        or opportunity_triggered
+    ):
+        last_spread_log_at[symbol] = now
+        try:
+            await asyncio.to_thread(
+                log_spread_observation,
+                symbol,
+                price_kraken,
+                price_binance,
+                spread,
+                net_spread,
+                threshold_reached,
+                opportunity_triggered,
+            )
+        except OSError as e:
+            console.print(f"[bold red]Échec de journalisation du spread : {e}[/bold red]")
+
     console.print(
         f"[bold cyan][Pravda-Bot][/bold cyan] Analyse du marché en cours... "
         f"Paire: [yellow]{symbol}[/yellow]"
@@ -195,7 +278,7 @@ async def handle_price_update(exchange_name, symbol, raw_price):
         f"(Seuil : {MIN_SPREAD_THRESHOLD}%)"
     )
 
-    if spread < MIN_SPREAD_THRESHOLD:
+    if not threshold_reached:
         last_profitable_state[symbol] = False
         console.print("[dim]💤 Écart trop faible, on surveille le prochain tick...[/dim]")
         return
@@ -268,6 +351,9 @@ async def run_stream_with_reconnect(exchange_name, stream_function):
 async def monitor_markets():
     print(f"=== Pravda-Bot Temps Réel (Mode: {TRADING_MODE}) ===")
     print(f"Paires surveillées : {', '.join(SYMBOLS)}")
+    print(f"Seuil de déclenchement : {MIN_SPREAD_THRESHOLD:g}%")
+    print(f"Échantillonnage des spreads : {SPREAD_LOG_INTERVAL_SECONDS:g}s par paire")
+    print(f"Observations CSV : {SPREAD_LOG_FILE}")
     print(
         "Notifications ntfy : configurées"
         if NTFY_TOPIC_URL

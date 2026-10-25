@@ -13,13 +13,14 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 * **Safety Guards**:
   * Rejects prices that are missing, non-finite, zero, or negative.
   * Estimates net spread by subtracting a fixed 0.36% fee estimate from the absolute gross spread.
+  * Uses a configurable minimum gross spread threshold (default `0.05%`) and rejects invalid threshold settings at startup.
   * Skips LLM analysis when the estimated net spread is zero or negative.
 * **Local LLM Analysis**: Sends qualifying symbol and price data to the configured `LM_STUDIO_API_BASE` chat-completions endpoint. Use a trusted local LM Studio endpoint if the data must remain on your network.
 * **Price-Movement Alerts**: Detects ticker changes over WebSockets. ntfy notifications have a default five-second per-pair cooldown and a ten-second global send interval. Ticks suppressed by the global limit are not queued.
-* **Arbitrage Alerts and Logging**: Sends a separate alert and logs an LLM analysis only when the estimated net spread becomes positive.
+* **Arbitrage Alerts and Logging**: Sends a separate alert and logs an LLM analysis only when the estimated net spread becomes positive. `spread_observations.csv` records sampled numeric spread data (default every 10 seconds per pair), including threshold and fee values, for later offline analysis.
 * **No Order Placement**: The script does not use exchange API keys and contains no order-placement calls.
 
-The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. The gross spread uses an absolute price difference, so it does not determine which exchange is cheaper to buy from and which is more expensive to sell on.
+The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. The gross spread uses an absolute price difference, so it does not determine which exchange is cheaper to buy from and which is more expensive to sell on. The threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
 
 Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, configure a private, randomly generated topic URL in your local `.env`; never commit or share that topic. ntfy.sh topics are unlisted, not access-controlled, so anyone who learns the topic name may be able to read or publish notifications. After HTTP 429, sends pause according to `Retry-After` or an exponential backoff starting at 60 seconds (up to 15 minutes). `PRICE_ALERT_COOLDOWN_SECONDS=0` disables the per-pair cooldown but does not remove the global limit or server backoff.
 
@@ -58,9 +59,13 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    $env:LM_STUDIO_API_BASE = "http://127.0.0.1:1234/v1"
    $env:LM_MODEL_NAME = "qwen/qwen3.5-9b"
    $env:TRADING_MODE = "paper"
+   $env:MIN_SPREAD_THRESHOLD = "0.05"
+   $env:SPREAD_LOG_INTERVAL_SECONDS = "10"
    ```
 
    Replace the endpoint and model name with the values shown by your LM Studio server. The defaults are `http://192.168.1.146:1234/v1`, `qwen/qwen3.5-9b`, and `paper`.
+
+   `MIN_SPREAD_THRESHOLD` must be a finite non-negative percentage. `SPREAD_LOG_INTERVAL_SECONDS` must be greater than zero. Both settings can also be placed in the ignored local `.env` file. The original `arbitrage_log.csv` remains an opportunity/LLM log; sampled numeric market observations are written separately to `spread_observations.csv`.
 
 5. **Optionally configure private ntfy notifications** (PowerShell). This creates a random topic in the ignored local `.env` file; do not publish that file or share the topic:
    ```powershell
@@ -75,4 +80,4 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    python main.py
    ```
 
-   Press `Ctrl+C` to stop it. The CSV log is created in the current working directory. No exchange API keys are needed for the public ticker requests.
+   Press `Ctrl+C` to stop it. The CSV logs are created in the current working directory. No exchange API keys are needed for the public ticker requests.
