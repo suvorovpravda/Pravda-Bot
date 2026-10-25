@@ -24,6 +24,7 @@ from market_data_health import (
     assess_market_data_snapshot,
     event_time_to_monotonic,
 )
+from live_market_data import write_market_snapshot
 from paper_simulator import PaperSimulator
 from reconnect import ExponentialBackoff, run_with_reconnect
 from security_and_fees import (
@@ -83,6 +84,7 @@ SPREAD_LOG_HEADERS = [
     "Exchange_Time_Skew_Seconds",
 ]
 NTFY_TOPIC_URL = CONFIG.ntfy_topic_url
+MARKET_SNAPSHOT_FILE = os.environ.get("MARKET_SNAPSHOT_FILE", "market_snapshot.json")
 
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, mode='w', newline='', encoding='utf-8') as f:
@@ -193,7 +195,7 @@ def retry_after_seconds(value):
         except (TypeError, ValueError, OverflowError):
             return 0.0
 
-def send_ntfy_notification(title, message):
+def send_ntfy_notification(title, message, *, pre_send_check=None):
     global ntfy_blocked_until, ntfy_backoff_seconds
 
     if not NTFY_TOPIC_URL:
@@ -202,6 +204,8 @@ def send_ntfy_notification(title, message):
     with ntfy_lock:
         now = time.monotonic()
         if now < ntfy_blocked_until:
+            return False
+        if pre_send_check is not None and not pre_send_check():
             return False
 
         try:
@@ -241,16 +245,29 @@ def send_ntfy_notification(title, message):
         ntfy_backoff_seconds = NTFY_INITIAL_BACKOFF_SECONDS
         return True
 
-def notify_opportunity(symbol, net_spread):
+def notify_opportunity(symbol, net_spread, market_data_snapshot=None):
     return send_ntfy_notification(
         "Pravda-Bot Opportunity",
-        f"Spread net : {net_spread:.2f}% sur {symbol}"
+        f"Spread net : {net_spread:.2f}% sur {symbol}",
+        pre_send_check=(
+            lambda: is_market_data_snapshot_fresh(market_data_snapshot, symbol)
+        ) if market_data_snapshot is not None else None,
     )
 
-def notify_price_movement(exchange_name, symbol, previous_price, current_price, change_pct):
+def notify_price_movement(
+    exchange_name,
+    symbol,
+    previous_price,
+    current_price,
+    change_pct,
+    market_data_snapshot=None,
+):
     return send_ntfy_notification(
         "Pravda-Bot Price Movement",
-        f"{exchange_name} {symbol}: {previous_price} -> {current_price} ({change_pct:+.4f}%)"
+        f"{exchange_name} {symbol}: {previous_price} -> {current_price} ({change_pct:+.4f}%)",
+        pre_send_check=(
+            lambda: is_market_data_snapshot_fresh(market_data_snapshot, symbol)
+        ) if market_data_snapshot is not None else None,
     )
 
 
@@ -266,6 +283,11 @@ def current_market_data_health(snapshot, symbol):
         stale_after_seconds=MARKET_DATA_STALE_SECONDS,
         max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
     )
+
+
+def is_market_data_snapshot_fresh(snapshot, symbol):
+    health = current_market_data_health(snapshot, symbol)
+    return health is not None and health.status == "OK"
 
 
 def run_market_data_action(snapshot, symbol, action, *args):
@@ -315,6 +337,17 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         price_update_generation[exchange_name].get(symbol, 0) + 1
     )
     price_updates_count += 1
+    try:
+        write_market_snapshot(
+            latest_prices,
+            last_price_update_at,
+            path=MARKET_SNAPSHOT_FILE,
+        )
+    except OSError as error:
+        console.print(
+            f"[bold red]Échec de publication des cotations dashboard "
+            f"({type(error).__name__}).[/bold red]"
+        )
 
     price_kraken = latest_prices["Kraken"].get(symbol)
     price_binance = latest_prices["Binance"].get(symbol)
@@ -328,7 +361,12 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
     if previous_price is not None and price != previous_price:
         change_pct = (price - previous_price) / previous_price * 100
         now = time.monotonic()
-        if now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
+        if not math.isfinite(change_pct):
+            console.print(
+                f"[bold yellow][GARDE-FOU] Variation non finie ignorée pour "
+                f"{exchange_name} {symbol}.[/bold yellow]"
+            )
+        elif now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
             if price_kraken is not None and price_binance is not None:
                 sent, _ = await asyncio.to_thread(
                     run_market_data_action,
@@ -340,6 +378,7 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
                     previous_price,
                     price,
                     change_pct,
+                    market_data_snapshot,
                 )
                 if sent:
                     last_movement_notification_at[symbol] = time.monotonic()
@@ -562,6 +601,7 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         notify_opportunity,
         symbol,
         net_spread,
+        market_data_snapshot,
     )
     if not notification_started:
         if activation_id is not None:

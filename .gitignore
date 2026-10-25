@@ -7,3 +7,5 @@ __pycache__/
 /spread_observations.csv
 /paper_trades.csv
 /lng_observations.csv
+/market_snapshot.json
+/market_snapshot.json.tmp

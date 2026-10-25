@@ -10,10 +10,11 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import urlopen
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import psutil
 
+import dashboard
 from dashboard import DashboardHandler, HTML_TEMPLATE, read_dashboard_data
 
 
@@ -39,11 +40,29 @@ class DashboardTests(unittest.TestCase):
             writer.writeheader()
             writer.writerows(rows)
 
+    def test_system_metrics_reuses_process_and_initializes_cpu_sample_once(self):
+        original_process = dashboard.SYSTEM_METRICS_PROCESS
+        dashboard.SYSTEM_METRICS_PROCESS = None
+        self.addCleanup(setattr, dashboard, "SYSTEM_METRICS_PROCESS", original_process)
+
+        process = Mock()
+        process.memory_info.return_value.rss = 1024 * 1024
+        process.cpu_percent.side_effect = [0.0, 12.5, 24.0]
+        with patch("dashboard.psutil.Process", return_value=process) as process_factory:
+            first = dashboard.get_system_metrics()
+            second = dashboard.get_system_metrics()
+
+        process_factory.assert_called_once()
+        self.assertEqual(first["cpu_percent"], 12.5)
+        self.assertEqual(second["cpu_percent"], 24.0)
+        self.assertEqual(process.cpu_percent.call_count, 3)
+
     def serve(self):
         handler = partial(
             DashboardHandler,
             csv_path=self.csv_path,
             lng_csv_path=self.lng_csv_path,
+            market_snapshot_path=Path(self.temporary_directory.name) / "market_snapshot.json",
             threshold=0.25,
             stale_after_seconds=30,
         )
@@ -164,20 +183,87 @@ class DashboardTests(unittest.TestCase):
 
         with urlopen(base_url) as response:
             html = response.read().decode("utf-8")
+            self.assertEqual(response.headers["Cache-Control"], "no-store")
+            self.assertEqual(response.headers["Content-Type"], "text/html; charset=utf-8")
 
-        self.assertIn("textContent = row[key]", html)
+        self.assertIn("textContent = safeText(value)", html)
         self.assertNotIn("innerHTML", html)
-        self.assertIn(".status.error { color: #f87171; }", html)
-        self.assertIn('status.classList.add("error")', html)
-        self.assertIn('status.classList.remove("error")', html)
-        self.assertIn("/lng-data", html)
-        self.assertIn("Marché GNL &amp; Transport (Simulé)", html)
+        self.assertIn('target="_blank" rel="noopener noreferrer"', html)
+        self.assertIn("function drawMap(rows)", html)
+        self.assertIn("/api/eu/flows", html)
+        self.assertIn("/api/geopolitics", html)
 
     def test_unified_dashboard_template_has_crypto_and_lng_sections(self):
         template_text = html.unescape(HTML_TEMPLATE)
-        self.assertIn("Pravda-Bot // Command Center", template_text)
-        self.assertIn("Derniers Spreads Crypto", template_text)
-        self.assertIn("Marché GNL & Transport", template_text)
+        self.assertIn("PRAVDA", template_text)
+        self.assertIn("Gaz, flux & risques", template_text)
+        self.assertIn("Réseau gazier européen", template_text)
+        self.assertIn("Actualités & risques géopolitiques", template_text)
+        self.assertIn("Aucun cours live configuré", template_text)
+
+    def test_european_flows_endpoint_serves_official_payload(self):
+        expected = {
+            "status": "live",
+            "observations": [{"point": "Border Point"}],
+        }
+        with patch("dashboard.get_entsog_flows", return_value=expected):
+            base_url = self.serve()
+            with urlopen(f"{base_url}/api/eu/flows") as response:
+                payload = json.load(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload, expected)
+
+    def test_gas_price_endpoint_does_not_claim_an_unconfigured_live_quote(self):
+        base_url = self.serve()
+        with urlopen(f"{base_url}/api/gas-price") as response:
+            payload = json.load(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["status"], "unavailable")
+        self.assertIsNone(payload["value"])
+
+    def test_market_endpoint_reads_local_exchange_snapshot(self):
+        snapshot = {
+            "status": "live",
+            "source": "Kraken + Binance public ticker streams",
+            "symbols": {"BTC/USDT": {"Binance": {"price": 90000, "status": "live"}}},
+        }
+        with patch("dashboard.read_market_snapshot", return_value=snapshot):
+            base_url = self.serve()
+            with urlopen(f"{base_url}/api/market") as response:
+                payload = json.load(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload, snapshot)
+
+    def test_fx_endpoint_returns_daily_reference_rates_and_cadence_notice(self):
+        rates = {
+            "status": "available",
+            "date": "2026-10-23",
+            "rates": {"USD": 1.12},
+            "notice": "Daily reference rates",
+        }
+        with patch("dashboard.get_reference_fx_rates", return_value=rates):
+            base_url = self.serve()
+            with urlopen(f"{base_url}/api/fx") as response:
+                payload = json.load(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["date"], "2026-10-23")
+        self.assertIn("Daily", payload["notice"])
+
+    def test_geopolitical_feed_errors_are_reported_as_unavailable(self):
+        from energy_data import EnergyDataError
+
+        with patch("dashboard.get_geopolitical_news", side_effect=EnergyDataError("offline")):
+            base_url = self.serve()
+            with self.assertRaises(HTTPError) as error:
+                urlopen(f"{base_url}/api/geopolitics")
+
+        self.assertEqual(error.exception.code, 502)
+        payload = json.load(error.exception)
+        self.assertEqual(payload["status"], "unavailable")
 
     def test_lng_data_endpoint_returns_latest_rows_and_labels_samples(self):
         rows = [

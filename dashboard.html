@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#07111f">
+    <title>Pravda | European Gas Monitor</title>
+    <style>
+        :root {
+            color-scheme: dark;
+            --bg: #07111f;
+            --panel: #0d1b2a;
+            --panel-raised: #112337;
+            --line: #20354a;
+            --text: #eaf2f8;
+            --muted: #8fa7bb;
+            --cyan: #4dd9e8;
+            --green: #64e6ac;
+            --amber: #f4bd62;
+            --red: #ff7979;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            min-width: 320px;
+            background:
+                radial-gradient(ellipse at 70% -20%, rgba(23, 111, 146, .18), transparent 55%),
+                var(--bg);
+            color: var(--text);
+            font: 14px/1.5 "Segoe UI", Inter, system-ui, sans-serif;
+        }
+        button { font: inherit; }
+        a { color: var(--cyan); }
+        .shell { max-width: 1600px; margin: auto; padding: 24px clamp(16px, 3vw, 42px) 40px; }
+        .topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 30px; }
+        .brand { display: flex; align-items: center; gap: 13px; }
+        .brand-mark { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 13px; color: #06131b; background: linear-gradient(135deg, var(--cyan), #90f5d4); font-weight: 900; font-size: 19px; }
+        .brand-title { margin: 0; font-size: 17px; letter-spacing: .12em; }
+        .brand-sub { color: var(--muted); font-size: 12px; }
+        .top-actions { display: flex; align-items: center; gap: 12px; }
+        .clock { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .clock strong { display: block; color: var(--text); font-size: 15px; }
+        .button { border: 1px solid var(--line); border-radius: 9px; padding: 9px 13px; background: var(--panel-raised); color: var(--text); cursor: pointer; }
+        .button:hover { border-color: var(--cyan); }
+        .eyebrow { margin: 0 0 7px; color: var(--cyan); font-size: 11px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; }
+        h1 { margin: 0; font-size: clamp(25px, 4vw, 38px); letter-spacing: -.035em; line-height: 1.12; }
+        .intro { display: flex; align-items: end; justify-content: space-between; gap: 22px; margin-bottom: 23px; }
+        .intro p:last-child { max-width: 540px; margin: 0; color: var(--muted); }
+        .grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 15px; }
+        .card { min-width: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, rgba(17,35,55,.96), rgba(11,25,40,.96)); box-shadow: 0 12px 32px rgba(0,0,0,.16); }
+        .card-head { display: flex; justify-content: space-between; align-items: start; gap: 14px; padding: 18px 19px 13px; }
+        .card-head h2 { margin: 0; font-size: 15px; letter-spacing: -.01em; }
+        .card-head p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
+        .card-body { padding: 0 19px 18px; }
+        .status { display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line); border-radius: 99px; padding: 5px 9px; color: var(--muted); white-space: nowrap; font-size: 11px; }
+        .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+        .status.live { color: var(--green); border-color: rgba(100,230,172,.3); }
+        .status.stale, .status.pending { color: var(--amber); border-color: rgba(244,189,98,.28); }
+        .status.error { color: var(--red); border-color: rgba(255,121,121,.32); }
+        .metrics { grid-column: span 12; display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .metric { padding: 17px 19px; }
+        .metric-label { color: var(--muted); font-size: 12px; }
+        .metric-value { margin: 7px 0 1px; font-size: 26px; font-weight: 700; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+        .metric-foot { color: var(--muted); font-size: 11px; }
+        .map-card { grid-column: span 8; }
+        .news-card { grid-column: span 4; }
+        .price-card { grid-column: span 4; }
+        .flows-card { grid-column: span 8; }
+        .secondary-card { grid-column: span 12; }
+        .crypto-live-card { grid-column: span 8; }
+        .fx-live-card { grid-column: span 4; }
+        .market-controls { display: flex; align-items: center; gap: 8px; }
+        .market-controls select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--panel-raised); color: var(--text); }
+        .market-chart { width: 100%; height: 230px; display: block; border: 1px solid rgba(58,89,112,.45); border-radius: 9px; background: rgba(5,14,24,.45); }
+        .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+        .quote-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .quote-table th, .quote-table td { padding: 9px 7px; border-bottom: 1px solid rgba(32,53,74,.75); text-align: right; white-space: nowrap; }
+        .quote-table th:first-child, .quote-table td:first-child { text-align: left; }
+        .quote-symbol { font-weight: 700; }
+        .positive { color: var(--green); }
+        .negative { color: var(--red); }
+        .fx-list { display: grid; gap: 0; }
+        .fx-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(32,53,74,.75); }
+        .fx-row strong { font-variant-numeric: tabular-nums; }
+        .market-caption { display: flex; justify-content: space-between; gap: 12px; margin-top: 9px; color: var(--muted); font-size: 11px; }
+        .map-wrap { position: relative; min-height: 340px; border: 1px solid rgba(58,89,112,.45); border-radius: 10px; overflow: hidden; background:
+            linear-gradient(rgba(53,92,120,.11) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(53,92,120,.11) 1px, transparent 1px),
+            radial-gradient(ellipse at 50% 48%, rgba(38,100,126,.2), rgba(7,17,31,.4) 68%);
+            background-size: 36px 36px, 36px 36px, auto; }
+        #flow-map { position: absolute; inset: 0; width: 100%; height: 100%; }
+        .map-axis { fill: #67849b; font-size: 10px; }
+        .map-point { cursor: pointer; stroke: #07111f; stroke-width: 2; }
+        .map-point.entry { fill: var(--cyan); }
+        .map-point.exit { fill: var(--amber); }
+        .map-point:hover { stroke: white; stroke-width: 3; }
+        .map-legend { position: absolute; left: 13px; bottom: 12px; display: flex; gap: 13px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: rgba(7,17,31,.9); color: var(--muted); font-size: 11px; }
+        .legend-key { display: inline-flex; align-items: center; gap: 6px; }
+        .legend-key i { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); }
+        .legend-key.exit i { background: var(--amber); }
+        .map-caption { margin: 10px 0 0; color: var(--muted); font-size: 11px; }
+        .rows { display: grid; gap: 9px; }
+        .flow-row { display: grid; grid-template-columns: minmax(100px, 1.5fr) .7fr .7fr 1fr; align-items: center; gap: 10px; border-bottom: 1px solid rgba(32,53,74,.75); padding: 9px 0; }
+        .flow-row:last-child { border: 0; }
+        .flow-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+        .flow-sub { color: var(--muted); font-size: 11px; }
+        .flow-value { font-variant-numeric: tabular-nums; }
+        .direction { display: inline-flex; align-items: center; gap: 5px; color: var(--cyan); font-size: 11px; }
+        .direction.exit { color: var(--amber); }
+        .flow-header { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+        .news-list { display: grid; max-height: 360px; overflow: auto; }
+        .news-item { padding: 13px 0; border-bottom: 1px solid rgba(32,53,74,.75); }
+        .news-item:last-child { border: 0; }
+        .news-item a { color: var(--text); text-decoration: none; font-weight: 600; line-height: 1.42; }
+        .news-item a:hover { color: var(--cyan); }
+        .news-meta { display: flex; justify-content: space-between; gap: 10px; margin-top: 6px; color: var(--muted); font-size: 11px; }
+        .price-state { padding: 17px; border: 1px dashed rgba(244,189,98,.42); border-radius: 10px; background: rgba(244,189,98,.045); }
+        .price-state strong { display: block; margin-bottom: 6px; color: var(--amber); }
+        .price-state p { margin: 0; color: var(--muted); font-size: 12px; }
+        .source-line { margin-top: 12px; color: var(--muted); font-size: 11px; }
+        .source-line a { text-decoration: none; }
+        .empty { padding: 20px 0; color: var(--muted); }
+        .table-wrap { overflow: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th, td { padding: 10px 9px; border-bottom: 1px solid rgba(32,53,74,.75); text-align: left; white-space: nowrap; }
+        th { color: var(--muted); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; }
+        td { font-variant-numeric: tabular-nums; }
+        .fine-print { margin: 18px 0 0; color: var(--muted); font-size: 11px; }
+        @media (max-width: 950px) {
+            .map-card, .news-card, .price-card, .flows-card, .crypto-live-card, .fx-live-card { grid-column: span 12; }
+            .news-list { max-height: 420px; }
+        }
+        @media (max-width: 620px) {
+            .shell { padding: 16px 12px 28px; }
+            .topbar { margin-bottom: 23px; }
+            .clock { display: none; }
+            .intro { display: block; }
+            .intro p:last-child { margin-top: 10px; }
+            .metrics { grid-template-columns: 1fr; gap: 10px; }
+            .metric { padding: 13px 15px; }
+            .metric-value { font-size: 22px; }
+            .map-wrap { min-height: 270px; }
+            .market-grid { grid-template-columns: 1fr; }
+            .flow-row { grid-template-columns: minmax(80px, 1.3fr) .7fr .7fr; }
+            .flow-updated { display: none; }
+        }
+    </style>
+</head>
+<body>
+<main class="shell">
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-mark">P</div>
+            <div><h2 class="brand-title">PRAVDA <span style="color:var(--cyan)">/</span> ENERGY</h2><div class="brand-sub">European gas intelligence</div></div>
+        </div>
+        <div class="top-actions">
+            <div class="clock"><strong id="clock">--:--:--</strong>Heure locale · rafraîchissement auto</div>
+            <button class="button" id="refresh-button" type="button">↻ Actualiser</button>
+        </div>
+    </header>
+
+    <section class="intro">
+        <div><p class="eyebrow">Tableau de bord · Europe</p><h1>Gaz, flux &amp; risques</h1></div>
+        <p>Observations physiques transfrontalières, repères marché et actualités géopolitiques. Chaque indicateur affiche sa source et sa date de mise à jour.</p>
+    </section>
+
+    <section class="grid" aria-label="Marchés en direct">
+        <article class="card crypto-live-card">
+            <div class="card-head">
+                <div><h2>Marchés crypto · cotations live</h2><p>Ticks des flux Kraken et Binance · paires USDT/USD</p></div>
+                <span class="status pending" id="market-feed-status"><i class="dot"></i>En attente du bot</span>
+            </div>
+            <div class="card-body">
+                <div class="market-grid">
+                    <div>
+                        <div class="market-controls">
+                            <label for="chart-symbol">Actif</label>
+                            <select id="chart-symbol"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select>
+                            <label for="chart-exchange">Flux</label>
+                            <select id="chart-exchange"><option>Binance</option><option>Kraken</option></select>
+                        </div>
+                        <canvas class="market-chart" id="price-chart" aria-label="Graphique de prix crypto live"></canvas>
+                        <div class="market-caption"><span id="chart-price">—</span><span id="chart-age">Démarre le bot pour recevoir les ticks.</span></div>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="quote-table">
+                            <thead><tr><th>Actif</th><th>Binance</th><th>Kraken</th><th>Écart</th></tr></thead>
+                            <tbody id="crypto-quotes"><tr><td colspan="4">Démarre le bot pour charger les prix.</td></tr></tbody>
+                        </table>
+                        <p class="fine-print">Prix du dernier échange public, pas un prix d’achat garanti. Le graphique conserve les ticks reçus depuis l’ouverture de la page.</p>
+                    </div>
+                </div>
+            </div>
+        </article>
+        <article class="card fx-live-card">
+            <div class="card-head"><div><h2>Devises fiduciaires</h2><p>Unités de devise pour 1 EUR</p></div><span class="status pending" id="fx-status"><i class="dot"></i>Chargement</span></div>
+            <div class="card-body">
+                <div class="fx-list" id="fx-rates"><div class="empty">Chargement des taux de référence…</div></div>
+                <div class="market-caption"><span id="fx-asof">—</span><span>Référence quotidienne</span></div>
+                <p class="fine-print">Taux de référence BCE via Frankfurter — ce ne sont pas des cotations Forex tick par tick.</p>
+                <div class="source-line"><a href="https://data.ecb.europa.eu/data/datasets/EXR" target="_blank" rel="noopener noreferrer">BCE · taux de change ↗</a></div>
+            </div>
+        </article>
+    </section>
+
+    <section class="grid">
+        <div class="metrics">
+            <article class="card metric"><div class="metric-label">Flux entrants observés</div><div class="metric-value" id="entry-count">—</div><div class="metric-foot" id="entry-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric"><div class="metric-label">Flux sortants observés</div><div class="metric-value" id="exit-count">—</div><div class="metric-foot" id="exit-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric"><div class="metric-label">Dernière publication source</div><div class="metric-value" style="font-size:18px" id="source-update">—</div><div class="metric-foot" id="flow-status">Connexion à ENTSOG…</div></article>
+        </div>
+
+        <article class="card map-card">
+            <div class="card-head"><div><h2>Réseau gazier européen</h2><p>Points transfrontaliers et sens des observations publiées</p></div><span class="status pending" id="map-status"><i class="dot"></i>Chargement</span></div>
+            <div class="card-body">
+                <div class="map-wrap">
+                    <svg id="flow-map" viewBox="0 0 800 430" role="img" aria-label="Carte schématique des points de flux gazier ENTSOG">
+                        <text x="400" y="210" text-anchor="middle" class="map-axis">Chargement des points ENTSOG…</text>
+                    </svg>
+                    <div class="map-legend"><span class="legend-key"><i></i>Entrée</span><span class="legend-key exit"><i></i>Sortie</span></div>
+                </div>
+                <p class="map-caption">Schéma de positions publié par ENTSOG, pas une carte de routes de pipelines. Les données sont des observations de points, pas des totaux nationaux.</p>
+            </div>
+        </article>
+
+        <article class="card news-card">
+            <div class="card-head"><div><h2>Actualités &amp; risques géopolitiques</h2><p id="news-source">Mentions liées au gaz · dernières 24 h</p></div><span class="status pending" id="news-status"><i class="dot"></i>Chargement</span></div>
+            <div class="card-body"><div class="news-list" id="news-list"><div class="empty">Chargement des sources…</div></div><div class="source-line">Les articles sont des informations rapportées, non des incidents vérifiés ni des prédictions.</div></div>
+        </article>
+
+        <article class="card price-card">
+            <div class="card-head"><div><h2>Prix de référence · TTF</h2><p>Contrat futures néerlandais · EUR/MWh</p></div><span class="status stale"><i class="dot"></i>Non connecté</span></div>
+            <div class="card-body">
+                <div class="price-state"><strong>Aucun cours live configuré</strong><p>Le prix TTF est un cours de marché soumis à licence. Je n’affiche pas de valeur simulée ou récupérée d’une source non autorisée.</p></div>
+                <div class="source-line">Spécifications du contrat : <a href="https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures" target="_blank" rel="noopener noreferrer">ICE Dutch TTF (TFM) ↗</a></div>
+            </div>
+        </article>
+
+        <article class="card flows-card">
+            <div class="card-head"><div><h2>Dernières observations de flux</h2><p>Valeurs publiées au point · unité native de la source</p></div><a class="status" href="https://transparency.entsog.eu/" target="_blank" rel="noopener noreferrer">Source ENTSOG ↗</a></div>
+            <div class="card-body">
+                <div class="flow-row flow-header"><span>Point / opérateur</span><span>Sens</span><span>Valeur publiée</span><span class="flow-updated">Période / mise à jour</span></div>
+                <div class="rows" id="flow-rows"><div class="empty">En attente des données ENTSOG.</div></div>
+                <p class="fine-print" id="flow-notice">Les valeurs aux points ne sont ni dédoublonnées ni équivalentes aux importations nettes d’un pays.</p>
+            </div>
+        </article>
+
+        <article class="card secondary-card">
+            <div class="card-head"><div><h2>Surveillance crypto</h2><p>Résumé du bot Kraken / Binance · panneau secondaire</p></div><span class="status pending" id="bot-status"><i class="dot"></i>Chargement</span></div>
+            <div class="card-body table-wrap" id="crypto-data">Lecture des observations locales…</div>
+        </article>
+    </section>
+    <p class="fine-print">Données gaz : ENTSOG Transparency Platform. Actualités : GDELT ou flux BBC World de repli, avec liens vers les éditeurs d’origine. Les flux peuvent être publiés avec retard et les actualités nécessitent une vérification indépendante.</p>
+</main>
+<script>
+    const $ = (id) => document.getElementById(id);
+    const safeText = (value) => value == null ? "" : String(value);
+    const setStatus = (element, state, label) => {
+        element.className = `status ${state}`;
+        element.replaceChildren();
+        const dot = document.createElement("i");
+        dot.className = "dot";
+        element.append(dot, document.createTextNode(label));
+    };
+    const formatDate = (value) => {
+        if (!value) return "—";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? safeText(value) : date.toLocaleString("fr-FR");
+    };
+    const numericFormat = (value) => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(value);
+    const marketHistory = new Map();
+    let latestMarket = null;
+    let latestFx = null;
+
+    function ensureMarketHistory(key) {
+        if (!marketHistory.has(key)) marketHistory.set(key, []);
+        return marketHistory.get(key);
+    }
+
+    function drawPriceChart() {
+        const canvas = $("price-chart");
+        const rect = canvas.getBoundingClientRect();
+        const ratio = window.devicePixelRatio || 1;
+        canvas.width = Math.max(1, Math.floor(rect.width * ratio));
+        canvas.height = Math.max(1, Math.floor(rect.height * ratio));
+        const context = canvas.getContext("2d");
+        context.scale(ratio, ratio);
+        const width = rect.width, height = rect.height;
+        context.clearRect(0, 0, width, height);
+        const symbol = $("chart-symbol").value;
+        const exchange = $("chart-exchange").value;
+        const history = ensureMarketHistory(`${symbol}:${exchange}`).slice(-240);
+        if (history.length < 2) {
+            context.fillStyle = "#8fa7bb";
+            context.font = "13px Segoe UI";
+            context.fillText("En attente des ticks de marché…", 18, height / 2);
+            return;
+        }
+        const prices = history.map(point => point.price);
+        const min = Math.min(...prices), max = Math.max(...prices);
+        const padding = 20, range = max - min || Math.max(Math.abs(max) * 0.0001, 0.000001);
+        context.strokeStyle = "rgba(143,167,187,.14)";
+        context.lineWidth = 1;
+        for (let i = 0; i < 4; i++) {
+            const y = padding + i * (height - padding * 2) / 3;
+            context.beginPath(); context.moveTo(padding, y); context.lineTo(width - padding, y); context.stroke();
+        }
+        context.beginPath();
+        history.forEach((point, index) => {
+            const x = padding + index * (width - padding * 2) / (history.length - 1);
+            const y = height - padding - (point.price - min) / range * (height - padding * 2);
+            if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+        });
+        context.strokeStyle = "#4dd9e8"; context.lineWidth = 2; context.stroke();
+        const first = prices[0], last = prices[prices.length - 1];
+        const change = first ? ((last - first) / first * 100) : 0;
+        context.fillStyle = change >= 0 ? "#64e6ac" : "#ff7979";
+        context.font = "12px Segoe UI";
+        context.fillText(`${change >= 0 ? "+" : ""}${change.toFixed(3)}% · ${history.length} ticks`, padding, 16);
+        context.fillStyle = "#8fa7bb"; context.textAlign = "right";
+        context.fillText(numericFormat(max), width - padding, 16);
+        context.fillText(numericFormat(min), width - padding, height - 5);
+        context.textAlign = "left";
+    }
+
+    function renderMarket(payload) {
+        latestMarket = payload;
+        const symbols = payload.symbols || {};
+        const rows = [];
+        for (const symbol of ["BTC/USDT", "ETH/USDT", "SOL/USDT"]) {
+            const quotes = symbols[symbol] || {};
+            const binance = quotes.Binance, kraken = quotes.Kraken;
+            for (const [exchange, quote] of Object.entries(quotes)) {
+                if (quote.status !== "live") continue;
+                const history = ensureMarketHistory(`${symbol}:${exchange}`);
+                const last = history[history.length - 1];
+                if (!last || last.price !== quote.price || Date.now() - last.time > 1000) {
+                    history.push({ time: Date.now(), price: quote.price });
+                    if (history.length > 900) history.splice(0, history.length - 900);
+                }
+            }
+            let spread = "—";
+            if (binance?.status === "live" && kraken?.status === "live") {
+                spread = `${(((kraken.price - binance.price) / ((kraken.price + binance.price) / 2)) * 100).toFixed(3)}%`;
+            }
+            rows.push({ symbol, binance, kraken, spread });
+        }
+        const latestAge = Math.min(...Object.values(symbols).flatMap(quotes =>
+            Object.values(quotes).filter(quote => quote.status === "live").map(quote => quote.age_seconds)
+        ));
+        if (Number.isFinite(latestAge)) {
+            setStatus($("market-feed-status"), "live", "Flux marché connecté");
+        } else {
+            setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? "Démarre le bot" : "Prix périmés");
+        }
+        const tbody = $("crypto-quotes");
+        tbody.replaceChildren();
+        for (const row of rows) {
+            const tr = document.createElement("tr");
+            const sym = document.createElement("td"); sym.className = "quote-symbol"; sym.textContent = row.symbol;
+            const b = document.createElement("td"); b.textContent = row.binance?.status === "live" ? numericFormat(row.binance.price) : "—";
+            const k = document.createElement("td"); k.textContent = row.kraken?.status === "live" ? numericFormat(row.kraken.price) : "—";
+            const s = document.createElement("td"); s.textContent = row.spread;
+            if (row.spread !== "—") s.className = parseFloat(row.spread) >= 0 ? "positive" : "negative";
+            tr.append(sym, b, k, s); tbody.append(tr);
+        }
+        const symbol = $("chart-symbol").value, exchange = $("chart-exchange").value;
+        const quote = symbols[symbol]?.[exchange];
+        $("chart-price").textContent = quote?.status === "live" ? `${symbol} · ${exchange} · ${numericFormat(quote.price)} ${symbol.split("/")[1]}` : `${symbol} · ${exchange} · prix indisponible`;
+        $("chart-age").textContent = quote ? `Reçu il y a ${quote.age_seconds}s · ${formatDate(quote.received_at)}` : "Lance le bot pour recevoir les ticks.";
+        drawPriceChart();
+    }
+
+    function renderFx(payload) {
+        latestFx = payload;
+        setStatus($("fx-status"), "live", "Taux BCE disponibles");
+        $("fx-asof").textContent = `Publié le ${formatDate(payload.date)}`;
+        const rates = $("fx-rates");
+        rates.replaceChildren();
+        for (const [currency, value] of Object.entries(payload.rates || {})) {
+            const row = document.createElement("div"); row.className = "fx-row";
+            const code = document.createElement("span"); code.textContent = `EUR / ${currency}`;
+            const rate = document.createElement("strong"); rate.textContent = numericFormat(value);
+            row.append(code, rate); rates.append(row);
+        }
+    }
+
+    function drawMap(rows) {
+        const svg = $("flow-map");
+        svg.replaceChildren();
+        const NS = "http://www.w3.org/2000/svg";
+        const points = rows.filter(row => Number.isFinite(row.map_x) && Number.isFinite(row.map_y));
+        if (!points.length) {
+            const text = document.createElementNS(NS, "text");
+            text.setAttribute("x", "400"); text.setAttribute("y", "210");
+            text.setAttribute("text-anchor", "middle"); text.setAttribute("class", "map-axis");
+            text.textContent = "Aucun point géographique exploitable dans les données récentes";
+            svg.append(text);
+            return;
+        }
+        const xs = points.map(row => row.map_x), ys = points.map(row => row.map_y);
+        const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+        for (let i = 0; i <= 4; i++) {
+            const line = document.createElementNS(NS, "line");
+            line.setAttribute("x1", String(35 + i * 182)); line.setAttribute("x2", String(35 + i * 182));
+            line.setAttribute("y1", "26"); line.setAttribute("y2", "397");
+            line.setAttribute("stroke", "rgba(73,115,143,.15)"); svg.append(line);
+        }
+        const unique = new Map();
+        for (const row of points) unique.set(`${row.point_key}:${row.direction}`, row);
+        for (const row of unique.values()) {
+            const circle = document.createElementNS(NS, "circle");
+            const x = 48 + ((row.map_x - minX) / (maxX - minX || 1)) * 704;
+            const y = 35 + (1 - (row.map_y - minY) / (maxY - minY || 1)) * 350;
+            circle.setAttribute("cx", String(x)); circle.setAttribute("cy", String(y));
+            circle.setAttribute("r", String(Math.max(4, Math.min(11, 4 + Math.log10(Math.abs(row.value) + 1)))));
+            circle.setAttribute("class", `map-point ${row.direction === "exit" ? "exit" : "entry"}`);
+            const title = document.createElementNS(NS, "title");
+            title.textContent = `${row.point} · ${row.direction} · ${numericFormat(row.value)} ${row.unit}`;
+            circle.append(title); svg.append(circle);
+        }
+    }
+
+    function renderFlows(payload) {
+        const rows = payload.observations || [];
+        const entries = rows.filter(row => row.direction === "entry");
+        const exits = rows.filter(row => row.direction === "exit");
+        $("entry-count").textContent = numericFormat(payload.entry_count ?? entries.length);
+        $("exit-count").textContent = numericFormat(payload.exit_count ?? exits.length);
+        $("entry-foot").textContent = "observations de points (pas un total national)";
+        $("exit-foot").textContent = "observations de points (pas un total national)";
+        $("source-update").textContent = formatDate(payload.latest_source_update);
+        $("flow-status").textContent = payload.status === "live" ? "Publication récente reçue" : payload.status === "stale" ? "Dernière publication ancienne" : "Aucune observation exploitable";
+        setStatus($("map-status"), payload.status === "live" ? "live" : "stale", payload.status === "live" ? "Données source récentes" : "Données retardées / absentes");
+        $("flow-notice").textContent = payload.notice || "Données officielles ENTSOG.";
+        drawMap(rows);
+        const container = $("flow-rows");
+        container.replaceChildren();
+        if (!rows.length) {
+            const empty = document.createElement("div");
+            empty.className = "empty";
+            empty.textContent = payload.status === "stale" ? "La source ENTSOG ne fournit pas de valeur récente exploitable. Réessaie plus tard." : "Aucune observation de flux n’est actuellement disponible.";
+            container.append(empty);
+            return;
+        }
+        for (const row of rows.slice(0, 14)) {
+            const item = document.createElement("div");
+            item.className = "flow-row";
+            const name = document.createElement("span");
+            name.className = "flow-name";
+            name.textContent = row.point || row.point_key;
+            name.title = `${row.operator || ""} ${row.country || ""}`.trim();
+            const direction = document.createElement("span");
+            direction.className = `direction ${row.direction === "exit" ? "exit" : ""}`;
+            direction.textContent = row.direction === "exit" ? "↗ Sortie" : "↙ Entrée";
+            const value = document.createElement("span");
+            value.className = "flow-value";
+            value.textContent = `${numericFormat(row.value)} ${row.unit}`;
+            const time = document.createElement("span");
+            time.className = "flow-sub flow-updated";
+            time.textContent = formatDate(row.period_from);
+            time.title = `Mise à jour source : ${formatDate(row.updated_at)}`;
+            item.append(name, direction, value, time);
+            container.append(item);
+        }
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url, { cache: "no-store" });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        return payload;
+    }
+    async function refreshMarket() {
+        try { renderMarket(await fetchJson("/api/market")); }
+        catch (error) {
+            setStatus($("market-feed-status"), "error", "Flux indisponible");
+            $("chart-age").textContent = error.message;
+        }
+    }
+    async function refreshFx() {
+        try { renderFx(await fetchJson("/api/fx")); }
+        catch (error) {
+            setStatus($("fx-status"), "error", "Taux indisponibles");
+            $("fx-rates").textContent = error.message;
+        }
+    }
+    async function refreshFlows() {
+        try { renderFlows(await fetchJson("/api/eu/flows")); }
+        catch (error) {
+            setStatus($("map-status"), "error", "Source indisponible");
+            $("flow-status").textContent = error.message;
+            $("flow-rows").textContent = "Impossible de charger les données ENTSOG. Le serveur réessaiera automatiquement.";
+        }
+    }
+    async function refreshNews() {
+        const list = $("news-list");
+        try {
+            const payload = await fetchJson("/api/geopolitics");
+            setStatus($("news-status"), "live", `${payload.source} · ${payload.articles.length}`);
+            $("news-source").textContent = `${payload.notice} · Mis à jour ${formatDate(payload.retrieved_at)}`;
+            list.replaceChildren();
+            if (!payload.articles.length) {
+                list.textContent = "Aucun article correspondant dans la fenêtre de recherche.";
+                return;
+            }
+            for (const article of payload.articles) {
+                let articleUrl;
+                try { articleUrl = new URL(article.url); }
+                catch { continue; }
+                if (!["http:", "https:"].includes(articleUrl.protocol)) continue;
+                const item = document.createElement("article");
+                item.className = "news-item";
+                const link = document.createElement("a");
+                link.href = articleUrl.href;
+                link.target = "_blank"; link.rel = "noopener noreferrer";
+                link.textContent = article.title;
+                const meta = document.createElement("div");
+                meta.className = "news-meta";
+                const source = document.createElement("span");
+                source.textContent = article.source || "Source média";
+                const date = document.createElement("time");
+                date.textContent = formatDate(article.published_at);
+                meta.append(source, date); item.append(link, meta); list.append(item);
+            }
+        } catch (error) {
+            setStatus($("news-status"), "error", "Flux indisponible");
+            list.textContent = `${error.message}. Le flux sera réessayé automatiquement.`;
+        }
+    }
+    async function refreshCrypto() {
+        try {
+            const payload = await fetchJson("/data");
+            setStatus($("bot-status"), payload.status === "Données récentes" ? "live" : "stale", payload.status);
+            const rows = payload.observations || [];
+            if (!rows.length) { $("crypto-data").textContent = "Aucune observation crypto locale."; return; }
+            const table = document.createElement("table");
+            const header = table.createTHead().insertRow();
+            for (const label of ["UTC", "Paire", "Kraken", "Binance", "Spread brut", "Santé"]) {
+                const cell = document.createElement("th"); cell.textContent = label; header.append(cell);
+            }
+            const body = table.createTBody();
+            for (const row of rows.slice(0, 5)) {
+                const tr = body.insertRow();
+                for (const value of [row.Timestamp_UTC, row.Symbol, row.Kraken_Price, row.Binance_Price, row.Gross_Spread_Percent, row.Market_Data_Status]) {
+                    const cell = tr.insertCell(); cell.textContent = safeText(value);
+                }
+            }
+            $("crypto-data").replaceChildren(table);
+        } catch (error) {
+            setStatus($("bot-status"), "error", "Journal indisponible");
+            $("crypto-data").textContent = error.message;
+        }
+    }
+    function updateClock() { $("clock").textContent = new Date().toLocaleTimeString("fr-FR"); }
+    async function refreshAll() { await Promise.all([refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto()]); }
+    $("refresh-button").addEventListener("click", refreshAll);
+    $("chart-symbol").addEventListener("change", drawPriceChart);
+    $("chart-exchange").addEventListener("change", drawPriceChart);
+    window.addEventListener("resize", drawPriceChart);
+    updateClock(); refreshAll();
+    setInterval(updateClock, 1000);
+    setInterval(refreshMarket, 1000);
+    setInterval(refreshFx, 21600000);
+    setInterval(refreshFlows, 300000);
+    setInterval(refreshNews, 900000);
+    setInterval(refreshCrypto, 5000);
+</script>
+</body>
+</html>

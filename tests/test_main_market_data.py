@@ -1,6 +1,7 @@
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import importlib.util
+from functools import partial
 import os
 from pathlib import Path
 import sys
@@ -188,6 +189,66 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(self.movement_action_calls, [])
         self.assertFalse(any(row[6] for row in self.logged_spread_rows))
+
+    async def test_non_finite_movement_percentage_is_not_notified(self):
+        self.release_log.set()
+        self.bot.latest_prices["Kraken"][self.symbol] = 1e-308
+        self.bot.last_price_update_at["Kraken"][self.symbol] = time.monotonic()
+        self.bot.last_movement_notification_at[self.symbol] = 0
+
+        await self.bot.handle_price_update("Kraken", self.symbol, 1.7e308)
+
+        self.assertEqual(self.movement_action_calls, [])
+        self.assertFalse(self.notification_started.is_set())
+
+    async def test_ntfy_rechecks_freshness_after_waiting_for_global_lock(self):
+        entered_lock = threading.Event()
+        release_lock = threading.Event()
+
+        class DelayedLock:
+            def __enter__(self):
+                entered_lock.set()
+                if not release_lock.wait(timeout=5):
+                    raise TimeoutError("test lock release timed out")
+                return self
+
+            def __exit__(self, *_):
+                return False
+
+        original_lock = self.bot.ntfy_lock
+        original_blocked_until = self.bot.ntfy_blocked_until
+        original_topic_url = self.bot.NTFY_TOPIC_URL
+        self.bot.ntfy_lock = DelayedLock()
+        self.bot.ntfy_blocked_until = 0
+        self.bot.NTFY_TOPIC_URL = "https://ntfy.sh/test-topic"
+        self.addCleanup(setattr, self.bot, "ntfy_lock", original_lock)
+        self.addCleanup(setattr, self.bot, "ntfy_blocked_until", original_blocked_until)
+        self.addCleanup(setattr, self.bot, "NTFY_TOPIC_URL", original_topic_url)
+
+        loop = asyncio.get_running_loop()
+        with patch.object(self.bot.requests, "post") as post:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                task = loop.run_in_executor(
+                    executor,
+                    partial(
+                        self.bot.send_ntfy_notification,
+                        "test",
+                        "message",
+                        pre_send_check=lambda: self.bot.is_market_data_snapshot_fresh(
+                            (1, 1), self.symbol
+                        ),
+                    ),
+                )
+                while not entered_lock.is_set():
+                    await asyncio.sleep(0.001)
+                self.bot.last_price_update_at["Kraken"][self.symbol] = (
+                    time.monotonic() - 20
+                )
+                release_lock.set()
+                result = await task
+
+            self.assertFalse(result)
+            post.assert_not_called()
 
     async def test_stale_prices_after_ntfy_skip_llm(self):
         self.release_log.set()

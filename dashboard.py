@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -15,14 +16,32 @@ from urllib.parse import urlsplit
 from dotenv import load_dotenv
 import psutil
 
+from energy_data import (
+    EnergyDataError,
+    get_entsog_flows,
+    get_geopolitical_news,
+    get_ttf_price_status,
+)
+from live_market_data import get_reference_fx_rates, read_market_snapshot
+
 
 START_TIME = time.monotonic()
+SYSTEM_METRICS_PROCESS = None
+SYSTEM_METRICS_PROCESS_LOCK = threading.Lock()
 
 
 def get_system_metrics():
-    process = psutil.Process(os.getpid())
-    memory_mb = process.memory_info().rss / (1024 * 1024)
-    cpu_percent = process.cpu_percent(interval=None)
+    global SYSTEM_METRICS_PROCESS
+
+    if SYSTEM_METRICS_PROCESS is None:
+        with SYSTEM_METRICS_PROCESS_LOCK:
+            if SYSTEM_METRICS_PROCESS is None:
+                process = psutil.Process(os.getpid())
+                process.cpu_percent(interval=None)
+                SYSTEM_METRICS_PROCESS = process
+
+    memory_mb = SYSTEM_METRICS_PROCESS.memory_info().rss / (1024 * 1024)
+    cpu_percent = SYSTEM_METRICS_PROCESS.cpu_percent(interval=None)
     return {
         "memory_rss_mb": round(memory_mb, 2),
         "cpu_percent": round(cpu_percent, 1),
@@ -30,136 +49,7 @@ def get_system_metrics():
     }
 
 
-HTML_TEMPLATE = """<!DOCTYPE html>
-<html lang="fr">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pravda-Bot // Command Center</title>
-    <style>
-        body { font-family: sans-serif; background: #0f172a; color: #f8fafc; margin: 0; padding: 20px; }
-        h1 { color: #38bdf8; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); gap: 20px; }
-        .card { background: #1e293b; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #334155; white-space: nowrap; }
-        th { background: #334155; }
-        .status { font-weight: bold; color: #4ade80; }
-        .status.error { color: #f87171; }
-        .muted { color: #94a3b8; font-size: 0.9rem; }
-    </style>
-</head>
-<body>
-    <h1>Pravda-Bot // Command Center</h1>
-    <div class="card">
-        <h2>État de la télémétrie : <span id="status" class="status">Chargement...</span></h2>
-        <p>Seuil minimum configuré : <strong id="threshold">—</strong></p>
-        <p>Dernière observation : <span id="last-observation">—</span></p>
-    </div>
-    <div class="grid">
-        <div class="card">
-            <h2>Derniers Spreads Crypto</h2>
-            <p class="muted">Journal Kraken/Binance · dernière estimation nette et état des flux</p>
-            <div id="data">Chargement des données...</div>
-        </div>
-        <div class="card">
-            <h2>Marché GNL &amp; Transport (Simulé)</h2>
-            <p class="muted">Exemples simulés uniquement — pas de cotations réelles ni de suivi de navires.</p>
-            <div id="lng-status" class="muted">Chargement des observations GNL...</div>
-            <div id="lng-data"></div>
-        </div>
-    </div>
-    <script>
-        const cryptoColumns = [
-            ["Timestamp_UTC", "UTC"],
-            ["Symbol", "Paire"],
-            ["Estimated_Net_Spread_Percent", "Net estimé (%)"],
-            ["Market_Data_Status", "Santé des flux"]
-        ];
-
-        function renderTable(container, rows, columns, emptyMessage) {
-            const table = document.createElement("table");
-            const header = table.createTHead().insertRow();
-            for (const [, label] of columns) {
-                const cell = document.createElement("th");
-                cell.textContent = label;
-                header.appendChild(cell);
-            }
-            const body = table.createTBody();
-            for (const row of rows) {
-                const tableRow = body.insertRow();
-                for (const [key] of columns) {
-                    const cell = tableRow.insertCell();
-                    cell.textContent = row[key] ?? "";
-                }
-            }
-            if (rows.length === 0) {
-                const row = body.insertRow();
-                const cell = row.insertCell();
-                cell.colSpan = columns.length;
-                cell.textContent = emptyMessage;
-            }
-            container.replaceChildren(table);
-        }
-
-        async function fetchCryptoData() {
-            const container = document.getElementById("data");
-            try {
-                const response = await fetch("/data", { cache: "no-store" });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const payload = await response.json();
-                const status = document.getElementById("status");
-                status.textContent = payload.status;
-                status.classList.remove("error");
-                document.getElementById("threshold").textContent = `${payload.threshold}%`;
-                document.getElementById("last-observation").textContent =
-                    payload.last_observation || "Aucune";
-                renderTable(container, payload.observations, cryptoColumns,
-                    "Aucune observation crypto disponible.");
-            } catch (error) {
-                container.textContent = "Erreur de chargement des observations.";
-                const status = document.getElementById("status");
-                status.textContent = "Indisponible";
-                status.classList.add("error");
-            }
-        }
-
-        const lngColumns = [
-            ["Timestamp_UTC", "UTC"],
-            ["Benchmark", "Benchmark"],
-            ["Price_USD", "Prix exemple (USD)"],
-            ["Status", "Source"],
-            ["Note", "Note"]
-        ];
-
-        async function fetchLngData() {
-            const container = document.getElementById("lng-data");
-            const status = document.getElementById("lng-status");
-            try {
-                const response = await fetch("/lng-data", { cache: "no-store" });
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-                const payload = await response.json();
-                status.textContent = payload.status;
-                renderTable(container, payload.observations, lngColumns,
-                    "Aucune observation GNL. Lancez lng_observations.py pour créer des exemples.");
-            } catch (error) {
-                status.textContent = "Journal GNL indisponible.";
-                container.textContent = "Impossible de lire les observations GNL.";
-            }
-        }
-
-        fetchCryptoData();
-        fetchLngData();
-        setInterval(fetchCryptoData, 5000);
-        setInterval(fetchLngData, 5000);
-    </script>
-</body>
-</html>
-"""
+HTML_TEMPLATE = Path(__file__).with_name("dashboard.html").read_text(encoding="utf-8")
 
 
 def read_dashboard_data(csv_path: Path, *, stale_after_seconds: float, now=None):
@@ -224,18 +114,81 @@ class DashboardHandler(BaseHTTPRequestHandler):
         *args,
         csv_path=Path("spread_observations.csv"),
         lng_csv_path=Path("lng_observations.csv"),
+        market_snapshot_path=Path(
+            os.environ.get("MARKET_SNAPSHOT_FILE", "market_snapshot.json")
+        ),
         threshold=0.05,
         stale_after_seconds=30.0,
         **kwargs,
     ):
         self.csv_path = Path(csv_path)
         self.lng_csv_path = Path(lng_csv_path)
+        self.market_snapshot_path = Path(market_snapshot_path)
         self.threshold = threshold
         self.stale_after_seconds = stale_after_seconds
         super().__init__(*args, **kwargs)
 
+    def _send_json(self, payload, status=200):
+        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         request_path = urlsplit(self.path).path
+        if request_path == "/api/market":
+            try:
+                payload = read_market_snapshot(
+                    self.market_snapshot_path,
+                    stale_after_seconds=10,
+                )
+            except ValueError as error:
+                logging.warning("Live market snapshot unavailable (%s)", type(error).__name__)
+                self._send_json(
+                    {"status": "unavailable", "error": "Market snapshot unavailable"}, 500
+                )
+                return
+            self._send_json(payload)
+            return
+
+        if request_path == "/api/fx":
+            try:
+                self._send_json(get_reference_fx_rates())
+            except RuntimeError as error:
+                logging.warning("Reference FX rates unavailable (%s)", type(error).__name__)
+                self._send_json(
+                    {"status": "unavailable", "error": "Reference FX rates unavailable"},
+                    502,
+                )
+            return
+
+        if request_path == "/api/eu/flows":
+            try:
+                self._send_json(get_entsog_flows())
+            except EnergyDataError as error:
+                logging.warning("ENTSOG flow data unavailable (%s)", type(error).__name__)
+                self._send_json(
+                    {"status": "unavailable", "error": "ENTSOG data unavailable"}, 502
+                )
+            return
+
+        if request_path == "/api/geopolitics":
+            try:
+                self._send_json(get_geopolitical_news())
+            except EnergyDataError as error:
+                logging.warning("Geopolitical news unavailable (%s)", type(error).__name__)
+                self._send_json(
+                    {"status": "unavailable", "error": "News feed unavailable"}, 502
+                )
+            return
+
+        if request_path == "/api/gas-price":
+            self._send_json(get_ttf_price_status())
+            return
+
         if request_path == "/api/metrics":
             try:
                 payload = {
@@ -274,6 +227,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             body = HTML_TEMPLATE.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
             self.wfile.write(body)
