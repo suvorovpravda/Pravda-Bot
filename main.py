@@ -14,8 +14,12 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.markup import escape
 
+from alert_gate import AlertGate
 from bot_config import load_config
 from bot_dashboard import SpreadSummary, build_dashboard
+from csv_schema import ensure_csv_schema
+from market_data_health import assess_market_data
+from paper_simulator import PaperSimulator
 
 load_dotenv()
 
@@ -33,6 +37,10 @@ MODEL_NAME = CONFIG.model_name
 MIN_SPREAD_THRESHOLD = CONFIG.min_spread_threshold
 SPREAD_LOG_INTERVAL_SECONDS = CONFIG.spread_log_interval_seconds
 DASHBOARD_INTERVAL_SECONDS = CONFIG.dashboard_interval_seconds
+ALERT_CONFIRMATION_SECONDS = CONFIG.alert_confirmation_seconds
+ALERT_REARM_HYSTERESIS_PERCENT = CONFIG.alert_rearm_hysteresis_percent
+MARKET_DATA_STALE_SECONDS = CONFIG.market_data_stale_seconds
+MARKET_DATA_MAX_SKEW_SECONDS = CONFIG.market_data_max_skew_seconds
 ESTIMATED_FEES = 0.36
 PRICE_ALERT_COOLDOWN_SECONDS = CONFIG.price_alert_cooldown_seconds
 NTFY_GLOBAL_COOLDOWN_SECONDS = CONFIG.ntfy_global_cooldown_seconds
@@ -57,6 +65,10 @@ SPREAD_LOG_HEADERS = [
     "Threshold_Reached",
     "Net_Spread_Positive",
     "Opportunity_Triggered",
+    "Market_Data_Status",
+    "Kraken_Age_Seconds",
+    "Binance_Age_Seconds",
+    "Exchange_Time_Skew_Seconds",
 ]
 NTFY_TOPIC_URL = CONFIG.ntfy_topic_url
 
@@ -65,16 +77,33 @@ if not os.path.exists(LOG_FILE):
         writer = csv.writer(f)
         writer.writerow(LOG_HEADERS)
 
-if not os.path.exists(SPREAD_LOG_FILE) or os.path.getsize(SPREAD_LOG_FILE) == 0:
-    with open(SPREAD_LOG_FILE, mode='w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(SPREAD_LOG_HEADERS)
+ensure_csv_schema(
+    SPREAD_LOG_FILE,
+    SPREAD_LOG_HEADERS,
+    added_column_defaults={
+        "Market_Data_Status": "LEGACY",
+        "Kraken_Age_Seconds": "",
+        "Binance_Age_Seconds": "",
+        "Exchange_Time_Skew_Seconds": "",
+    },
+)
+
+paper_simulator = PaperSimulator(
+    mode=CONFIG.paper_mode,
+    starting_balance_usdt=CONFIG.paper_starting_balance_usdt,
+    position_percent=CONFIG.paper_position_percent,
+    fixed_position_usdt=CONFIG.paper_fixed_position_usdt,
+    exit_spread_percent=CONFIG.paper_exit_spread_percent,
+    max_hold_seconds=CONFIG.paper_max_hold_seconds,
+    estimated_fees_percent=ESTIMATED_FEES,
+)
 
 latest_prices = {"Kraken": {}, "Binance": {}}
+last_price_update_at = {"Kraken": {}, "Binance": {}}
 last_movement_notification_at = {}
 last_spread_log_at = {}
 spread_summaries = {symbol: SpreadSummary() for symbol in SYMBOLS}
-last_profitable_state = {symbol: False for symbol in SYMBOLS}
+alert_gate = AlertGate(ALERT_CONFIRMATION_SECONDS)
 price_updates_count = 0
 opportunities_count = 0
 ntfy_lock = threading.Lock()
@@ -105,7 +134,16 @@ def log_opportunity(symbol, p_kraken, p_binance, spread, net_spread, analysis):
         writer = csv.writer(f)
         writer.writerow([time.strftime('%Y-%m-%d %H:%M:%S'), symbol, p_kraken, p_binance, f"{spread:.4f}%", f"{net_spread:.4f}%", analysis])
 
-def log_spread_observation(symbol, price_kraken, price_binance, spread, net_spread, threshold_reached, opportunity_triggered):
+def log_spread_observation(
+    symbol,
+    price_kraken,
+    price_binance,
+    spread,
+    net_spread,
+    threshold_reached,
+    opportunity_triggered,
+    market_health,
+):
     row = {
         "Timestamp_UTC": datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
         "Symbol": symbol,
@@ -118,6 +156,10 @@ def log_spread_observation(symbol, price_kraken, price_binance, spread, net_spre
         "Threshold_Reached": str(threshold_reached).lower(),
         "Net_Spread_Positive": str(net_spread > 0).lower(),
         "Opportunity_Triggered": str(opportunity_triggered).lower(),
+        "Market_Data_Status": market_health.status,
+        "Kraken_Age_Seconds": market_health.kraken_age_seconds,
+        "Binance_Age_Seconds": market_health.binance_age_seconds,
+        "Exchange_Time_Skew_Seconds": market_health.exchange_skew_seconds,
     }
     with spread_log_lock:
         with open(SPREAD_LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
@@ -205,6 +247,7 @@ async def handle_price_update(exchange_name, symbol, raw_price):
 
     previous_price = latest_prices[exchange_name].get(symbol)
     latest_prices[exchange_name][symbol] = price
+    last_price_update_at[exchange_name][symbol] = time.monotonic()
     price_updates_count += 1
 
     if previous_price is not None and price != previous_price:
@@ -226,13 +269,55 @@ async def handle_price_update(exchange_name, symbol, raw_price):
     if price_kraken is None or price_binance is None:
         return
 
+    now = time.monotonic()
+    market_health = assess_market_data(
+        last_price_update_at["Kraken"].get(symbol),
+        last_price_update_at["Binance"].get(symbol),
+        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+    )
+    if market_health.status != "OK":
+        alert_gate.reset_candidate(symbol)
+        spread = abs(price_kraken - price_binance) / min(price_kraken, price_binance) * 100
+        net_spread = spread - ESTIMATED_FEES
+        last_logged_at = last_spread_log_at.get(symbol)
+        if last_logged_at is None or now - last_logged_at >= SPREAD_LOG_INTERVAL_SECONDS:
+            last_spread_log_at[symbol] = now
+            try:
+                await asyncio.to_thread(
+                    log_spread_observation,
+                    symbol,
+                    price_kraken,
+                    price_binance,
+                    spread,
+                    net_spread,
+                    spread >= MIN_SPREAD_THRESHOLD,
+                    False,
+                    market_health,
+                )
+            except OSError as error:
+                console.print(
+                    f"[bold red]Échec de journalisation du spread : {error}[/bold red]"
+                )
+        return
+
     spread = abs(price_kraken - price_binance) / min(price_kraken, price_binance) * 100
     net_spread = spread - ESTIMATED_FEES
     threshold_reached = spread >= MIN_SPREAD_THRESHOLD
     is_profitable = threshold_reached and net_spread > 0
-    opportunity_triggered = is_profitable and not last_profitable_state[symbol]
+    rearm_spread = max(
+        0.0,
+        max(MIN_SPREAD_THRESHOLD, ESTIMATED_FEES)
+        - ALERT_REARM_HYSTERESIS_PERCENT,
+    )
+    opportunity_triggered = alert_gate.update(
+        symbol,
+        profitable=is_profitable,
+        spread=spread,
+        rearm_threshold=rearm_spread,
+        now=now,
+    )
 
-    now = time.monotonic()
     last_logged_at = last_spread_log_at.get(symbol)
     if (
         last_logged_at is None
@@ -250,30 +335,60 @@ async def handle_price_update(exchange_name, symbol, raw_price):
                 net_spread,
                 threshold_reached,
                 opportunity_triggered,
+                market_health,
             )
+        except OSError as e:
+            console.print(f"[bold red]Échec de journalisation du spread : {e}[/bold red]")
+        else:
             spread_summaries[symbol].record(
                 spread,
                 net_spread,
                 threshold_reached,
                 opportunity_triggered,
             )
-        except OSError as e:
-            console.print(f"[bold red]Échec de journalisation du spread : {e}[/bold red]")
 
-    if not threshold_reached:
-        last_profitable_state[symbol] = False
+    try:
+        paper_result = paper_simulator.update(
+            symbol,
+            price_kraken,
+            price_binance,
+            now=datetime.now(timezone.utc),
+        )
+    except OSError as error:
+        console.print(f"[bold red]Échec du journal paper : {error}[/bold red]")
+        paper_result = None
+    if paper_result is not None and paper_result["action"] == "closed":
+        console.print(
+            f"[cyan][PAPER] Position fermée pour {symbol} : "
+            f"{paper_result['net_pnl_usdt']:+.2f} USDT estimés "
+            f"({paper_result['reason']}).[/cyan]"
+        )
+
+    if not opportunity_triggered:
         return
 
-    if net_spread <= 0:
-        last_profitable_state[symbol] = False
-        return
-
-    if last_profitable_state[symbol]:
-        return
-
-    last_profitable_state[symbol] = True
     opportunities_count += 1
-    console.print(f"[bold green]🎯 Opportunité détectée : {symbol} ({net_spread:.4f}% net estimé)[/bold green]")
+    try:
+        paper_result = paper_simulator.update(
+            symbol,
+            price_kraken,
+            price_binance,
+            opportunity_confirmed=True,
+            now=datetime.now(timezone.utc),
+        )
+    except OSError as error:
+        console.print(f"[bold red]Échec du journal paper : {error}[/bold red]")
+        paper_result = None
+    console.print(
+        f"[bold green]🎯 Signal confirmé : {symbol} "
+        f"({net_spread:.4f}% net estimé)[/bold green]"
+    )
+    if paper_result is not None and paper_result["action"] == "opened":
+        console.print(
+            f"[cyan][PAPER] Position virtuelle ouverte : "
+            f"{paper_result['notional_usdt']:.2f} USDT sur {symbol} "
+            f"(aucun ordre envoyé).[/cyan]"
+        )
     await asyncio.to_thread(notify_opportunity, symbol, net_spread)
     analysis = await asyncio.to_thread(ask_llm_analysis, symbol, price_kraken, price_binance, spread)
     console.print(f"  [green]🤖 LLM: {escape(analysis)}[/green]")
@@ -333,6 +448,10 @@ async def render_dashboard_periodically():
                 threshold=MIN_SPREAD_THRESHOLD,
                 updates=price_updates_count,
                 opportunities=opportunities_count,
+                last_price_update_at=last_price_update_at,
+                stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+                max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+                paper_simulator=paper_simulator,
             )
         )
 
@@ -342,6 +461,21 @@ async def monitor_markets():
     print(f"Seuil de déclenchement : {MIN_SPREAD_THRESHOLD:g}%")
     print(f"Échantillonnage des spreads : {SPREAD_LOG_INTERVAL_SECONDS:g}s par paire")
     print(f"Tableau de bord Rich : toutes les {DASHBOARD_INTERVAL_SECONDS:g}s")
+    print(
+        f"Confirmation d'alerte : {ALERT_CONFIRMATION_SECONDS:g}s; "
+        f"hystérésis : {ALERT_REARM_HYSTERESIS_PERCENT:g}%"
+    )
+    print(
+        f"Santé des flux : obsolète après {MARKET_DATA_STALE_SECONDS:g}s; "
+        f"désynchronisation max {MARKET_DATA_MAX_SKEW_SECONDS:g}s"
+    )
+    print(
+        f"Simulation paper : mode {CONFIG.paper_mode}; solde initial "
+        f"{CONFIG.paper_starting_balance_usdt:.2f} USDT; sizing fixe "
+        f"{CONFIG.paper_fixed_position_usdt:.2f} USDT ou "
+        f"{CONFIG.paper_position_percent:g}% du solde selon le mode; "
+        f"journal paper_trades.csv"
+    )
     print(f"Observations CSV : {SPREAD_LOG_FILE}")
     print(
         "Notifications ntfy : configurées"

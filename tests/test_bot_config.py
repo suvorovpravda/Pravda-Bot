@@ -12,6 +12,11 @@ class BotConfigTests(unittest.TestCase):
         self.assertEqual(config.price_alert_cooldown_seconds, 5)
         self.assertEqual(config.ntfy_global_cooldown_seconds, 10)
         self.assertEqual(config.ntfy_topic_url, "")
+        self.assertEqual(config.paper_mode, "portfolio")
+        self.assertEqual(config.paper_starting_balance_usdt, 1000)
+        self.assertEqual(config.paper_position_percent, 10)
+        self.assertEqual(config.alert_confirmation_seconds, 3)
+        self.assertEqual(config.market_data_stale_seconds, 15)
 
     def test_custom_settings_are_loaded(self):
         config = load_config(
@@ -39,6 +44,9 @@ class BotConfigTests(unittest.TestCase):
             ("SPREAD_LOG_INTERVAL_SECONDS", "0"),
             ("DASHBOARD_INTERVAL_SECONDS", "inf"),
             ("PRICE_ALERT_COOLDOWN_SECONDS", "-1"),
+            ("PAPER_POSITION_PERCENT", "101"),
+            ("PAPER_STARTING_BALANCE_USDT", "0"),
+            ("MARKET_DATA_MAX_SKEW_SECONDS", "nan"),
         ):
             with self.subTest(key=key, value=value):
                 with self.assertRaisesRegex(ValueError, key):
@@ -51,6 +59,7 @@ class BotConfigTests(unittest.TestCase):
             ({"LM_STUDIO_API_BASE": "http://localhost:bad"}, "LM_STUDIO_API_BASE"),
             ({"NTFY_TOPIC_URL": "http://ntfy.sh/topic"}, "NTFY_TOPIC_URL"),
             ({"LM_MODEL_NAME": " "}, "LM_MODEL_NAME"),
+            ({"PAPER_MODE": "live"}, "PAPER_MODE"),
         ):
             with self.subTest(environment=environment):
                 with self.assertRaisesRegex(ValueError, expected):

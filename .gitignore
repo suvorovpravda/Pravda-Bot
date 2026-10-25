@@ -5,3 +5,4 @@ __pycache__/
 *.py[cod]
 /arbitrage_log.csv
 /spread_observations.csv
+/paper_trades.csv

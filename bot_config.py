@@ -15,6 +15,16 @@ class BotConfig:
     price_alert_cooldown_seconds: float
     ntfy_global_cooldown_seconds: float
     dashboard_interval_seconds: float
+    alert_confirmation_seconds: float
+    alert_rearm_hysteresis_percent: float
+    market_data_stale_seconds: float
+    market_data_max_skew_seconds: float
+    paper_mode: str
+    paper_starting_balance_usdt: float
+    paper_position_percent: float
+    paper_fixed_position_usdt: float
+    paper_exit_spread_percent: float
+    paper_max_hold_seconds: float
     ntfy_topic_url: str
 
 
@@ -51,6 +61,7 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
     lm_url = values.get("LM_STUDIO_API_BASE", "http://192.168.1.146:1234/v1").strip()
     model_name = values.get("LM_MODEL_NAME", "qwen/qwen3.5-9b").strip()
     trading_mode = values.get("TRADING_MODE", "paper").strip()
+    paper_mode = values.get("PAPER_MODE", "portfolio").strip().lower()
     ntfy_topic_url = values.get("NTFY_TOPIC_URL", "").strip()
 
     _validate_url("LM_STUDIO_API_BASE", lm_url)
@@ -58,8 +69,19 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
         raise ValueError("LM_MODEL_NAME must not be empty")
     if not trading_mode:
         raise ValueError("TRADING_MODE must not be empty")
+    if paper_mode not in {"fixed", "portfolio"}:
+        raise ValueError("PAPER_MODE must be either 'fixed' or 'portfolio'")
     if ntfy_topic_url:
         _validate_url("NTFY_TOPIC_URL", ntfy_topic_url, https_only=True)
+
+    paper_starting_balance = _float_setting(
+        values, "PAPER_STARTING_BALANCE_USDT", 1000, allow_zero=False
+    )
+    paper_position_percent = _float_setting(
+        values, "PAPER_POSITION_PERCENT", 10, allow_zero=False
+    )
+    if paper_position_percent > 100:
+        raise ValueError("PAPER_POSITION_PERCENT must not exceed 100")
 
     return BotConfig(
         lm_url=lm_url.rstrip("/"),
@@ -79,6 +101,30 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
         ),
         dashboard_interval_seconds=_float_setting(
             values, "DASHBOARD_INTERVAL_SECONDS", 30, allow_zero=False
+        ),
+        alert_confirmation_seconds=_float_setting(
+            values, "ALERT_CONFIRMATION_SECONDS", 3, allow_zero=True
+        ),
+        alert_rearm_hysteresis_percent=_float_setting(
+            values, "ALERT_REARM_HYSTERESIS_PERCENT", 0.05, allow_zero=True
+        ),
+        market_data_stale_seconds=_float_setting(
+            values, "MARKET_DATA_STALE_SECONDS", 15, allow_zero=False
+        ),
+        market_data_max_skew_seconds=_float_setting(
+            values, "MARKET_DATA_MAX_SKEW_SECONDS", 3, allow_zero=False
+        ),
+        paper_mode=paper_mode,
+        paper_starting_balance_usdt=paper_starting_balance,
+        paper_position_percent=paper_position_percent,
+        paper_fixed_position_usdt=_float_setting(
+            values, "PAPER_FIXED_POSITION_USDT", 100, allow_zero=False
+        ),
+        paper_exit_spread_percent=_float_setting(
+            values, "PAPER_EXIT_SPREAD_PERCENT", 0.05, allow_zero=True
+        ),
+        paper_max_hold_seconds=_float_setting(
+            values, "PAPER_MAX_HOLD_SECONDS", 3600, allow_zero=False
         ),
         ntfy_topic_url=ntfy_topic_url,
     )

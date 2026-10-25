@@ -33,20 +33,23 @@ class SpreadObservation:
     threshold_reached: bool
     net_positive: bool
     opportunity_triggered: bool
+    market_data_status: str
 
 
 @dataclass(frozen=True)
 class SymbolSummary:
     symbol: str
     samples: int
-    gross_mean: float
-    gross_median: float
-    gross_p90: float
-    gross_p95: float
-    gross_max: float
+    gross_mean: float | None
+    gross_median: float | None
+    gross_p90: float | None
+    gross_p95: float | None
+    gross_max: float | None
     threshold_hits: int
     positive_net: int
     opportunities: int
+    excluded_market_data: int
+    unverified_market_data: int
     first_timestamp: str
     last_timestamp: str
 
@@ -108,6 +111,7 @@ def read_observations(path):
                     opportunity_triggered=_parse_bool(
                         row["Opportunity_Triggered"], "Opportunity_Triggered", line_number
                     ),
+                    market_data_status=(row.get("Market_Data_Status") or "UNVERIFIED").strip().upper(),
                 )
             )
     if not observations:
@@ -133,19 +137,29 @@ def summarize_observations(observations):
 
     summaries = []
     for symbol, rows in sorted(grouped.items()):
-        spreads = [row.gross_spread for row in rows]
+        valid_rows = [
+            row
+            for row in rows
+            if row.market_data_status in {"OK", "UNVERIFIED", "LEGACY"}
+        ]
+        spreads = [row.gross_spread for row in valid_rows]
         summaries.append(
             SymbolSummary(
                 symbol=symbol,
-                samples=len(rows),
-                gross_mean=statistics.fmean(spreads),
-                gross_median=statistics.median(spreads),
-                gross_p90=_percentile(spreads, 0.90),
-                gross_p95=_percentile(spreads, 0.95),
-                gross_max=max(spreads),
-                threshold_hits=sum(row.threshold_reached for row in rows),
-                positive_net=sum(row.net_positive for row in rows),
-                opportunities=sum(row.opportunity_triggered for row in rows),
+                samples=len(valid_rows),
+                gross_mean=statistics.fmean(spreads) if spreads else None,
+                gross_median=statistics.median(spreads) if spreads else None,
+                gross_p90=_percentile(spreads, 0.90) if spreads else None,
+                gross_p95=_percentile(spreads, 0.95) if spreads else None,
+                gross_max=max(spreads) if spreads else None,
+                threshold_hits=sum(row.threshold_reached for row in valid_rows),
+                positive_net=sum(row.net_positive for row in valid_rows),
+                opportunities=sum(row.opportunity_triggered for row in valid_rows),
+                excluded_market_data=len(rows) - len(valid_rows),
+                unverified_market_data=sum(
+                    row.market_data_status in {"UNVERIFIED", "LEGACY"}
+                    for row in valid_rows
+                ),
                 first_timestamp=min(row.timestamp for row in rows),
                 last_timestamp=max(row.timestamp for row in rows),
             )
@@ -203,18 +217,20 @@ def main(argv=None):
         table.add_column("Seuil atteint", justify="right")
         table.add_column("Net positif", justify="right")
         table.add_column("Déclenché", justify="right")
+        table.add_column("Données exclues", justify="right")
         for summary in summaries:
             table.add_row(
                 summary.symbol,
                 str(summary.samples),
-                f"{summary.gross_mean:.4f}%",
-                f"{summary.gross_median:.4f}%",
-                f"{summary.gross_p90:.4f}%",
-                f"{summary.gross_p95:.4f}%",
-                f"{summary.gross_max:.4f}%",
+                f"{summary.gross_mean:.4f}%" if summary.gross_mean is not None else "—",
+                f"{summary.gross_median:.4f}%" if summary.gross_median is not None else "—",
+                f"{summary.gross_p90:.4f}%" if summary.gross_p90 is not None else "—",
+                f"{summary.gross_p95:.4f}%" if summary.gross_p95 is not None else "—",
+                f"{summary.gross_max:.4f}%" if summary.gross_max is not None else "—",
                 f"{summary.threshold_hits}/{summary.samples}",
                 f"{summary.positive_net}/{summary.samples}",
                 str(summary.opportunities),
+                str(summary.excluded_market_data),
             )
         console.print(table)
         console.print(
@@ -226,6 +242,12 @@ def main(argv=None):
             "[dim]Les statistiques décrivent des observations historiques, "
             "pas une rentabilité exécutable.[/dim]"
         )
+        unverified = sum(summary.unverified_market_data for summary in summaries)
+        if unverified:
+            console.print(
+                f"[yellow]{unverified} observations historiques ne contiennent pas "
+                "de statut de qualité et ne peuvent pas être vérifiées.[/yellow]"
+            )
         if args.output:
             console.print(f"Synthèse CSV écrite dans : {args.output}")
         return 0

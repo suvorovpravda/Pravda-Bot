@@ -2,7 +2,7 @@
 
 A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimates cross-exchange spreads, applies basic price and fee guards, and can ask a locally hosted model through LM Studio to analyze qualifying spreads.
 
-> **Important:** This project monitors public ticker data only. It does not place, simulate, or manage trades. `TRADING_MODE` is displayed as a label; it does not change execution behavior. Spread estimates are not executable profit estimates or financial advice.
+> **Important:** This project uses public last-trade ticker data only and never places real orders. The paper simulator tracks virtual positions by default using these prices; estimates are not executable profit estimates, fills, or financial advice. `TRADING_MODE` is a display label and does not change execution behavior.
 
 ---
 
@@ -15,13 +15,16 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
   * Estimates net spread by subtracting a fixed 0.36% fee estimate from the absolute gross spread.
   * Uses a configurable minimum gross spread threshold (default `0.05%`) and rejects invalid threshold settings at startup.
   * Skips LLM analysis when the estimated net spread is zero or negative.
+  * Requires a candidate spread to remain profitable for a configurable confirmation interval and uses hysteresis before rearming alerts.
+  * Rejects stale or excessively desynchronized exchange prices before spread evaluation.
 * **Local LLM Analysis**: Sends qualifying symbol and price data to the configured `LM_STUDIO_API_BASE` chat-completions endpoint. Use a trusted local LM Studio endpoint if the data must remain on your network.
 * **Price-Movement Alerts**: Detects ticker changes over WebSockets. ntfy notifications have a default five-second per-pair cooldown and a ten-second global send interval. Ticks suppressed by the global limit are not queued.
 * **Arbitrage Alerts and Logging**: Sends a separate alert and logs an LLM analysis only when the estimated net spread becomes positive. `spread_observations.csv` records sampled numeric spread data (default every 10 seconds per pair), including threshold and fee values, for later offline analysis with `analyze_spreads.py`.
+* **Paper Simulator**: Tracks a virtual portfolio or fixed-size positions without sending exchange orders. It estimates spread-capture P&L after configured fees and records closed simulations in `paper_trades.csv`; this is not a fill-accurate backtest.
 * **Centralized Configuration Validation**: Validates endpoints, required model settings, and numeric intervals at startup with actionable errors.
 * **No Order Placement**: The script does not use exchange API keys and contains no order-placement calls.
 
-The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. The gross spread uses an absolute price difference, so it does not determine which exchange is cheaper to buy from and which is more expensive to sell on. The threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
+The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. The gross spread uses an absolute price difference; the paper simulator uses the signed difference between last prices to estimate spread capture, but does not model order books, fills, funding, borrowing, or exchange constraints. The threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
 
 Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, configure a private, randomly generated topic URL in your local `.env`; never commit or share that topic. ntfy.sh topics are unlisted, not access-controlled, so anyone who learns the topic name may be able to read or publish notifications. After HTTP 429, sends pause according to `Retry-After` or an exponential backoff starting at 60 seconds (up to 15 minutes). `PRICE_ALERT_COOLDOWN_SECONDS=0` disables the per-pair cooldown but does not remove the global limit or server backoff.
 
@@ -63,11 +66,21 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    $env:MIN_SPREAD_THRESHOLD = "0.05"
    $env:SPREAD_LOG_INTERVAL_SECONDS = "10"
    $env:DASHBOARD_INTERVAL_SECONDS = "30"
+   $env:ALERT_CONFIRMATION_SECONDS = "3"
+   $env:ALERT_REARM_HYSTERESIS_PERCENT = "0.05"
+   $env:MARKET_DATA_STALE_SECONDS = "15"
+   $env:MARKET_DATA_MAX_SKEW_SECONDS = "3"
+   $env:PAPER_MODE = "portfolio"
+   $env:PAPER_STARTING_BALANCE_USDT = "1000"
+   $env:PAPER_POSITION_PERCENT = "10"
+   $env:PAPER_FIXED_POSITION_USDT = "100"
+   $env:PAPER_EXIT_SPREAD_PERCENT = "0.05"
+   $env:PAPER_MAX_HOLD_SECONDS = "3600"
    ```
 
    Replace the endpoint and model name with the values shown by your LM Studio server. The defaults are `http://192.168.1.146:1234/v1`, `qwen/qwen3.5-9b`, and `paper`.
 
-   Settings can also be placed in the ignored local `.env` file; `.env.example` lists the available options. Startup validates the LM Studio URL, model name, optional HTTPS ntfy URL, spread threshold, and notification/dashboard/log intervals. Invalid values stop startup with an error. The Rich dashboard reports live prices and sampled per-pair spread statistics at the configured interval. The original `arbitrage_log.csv` remains an opportunity/LLM log; sampled numeric market observations are written separately to `spread_observations.csv`.
+   Settings can also be placed in the ignored local `.env` file; `.env.example` lists the available options. Startup validates endpoints, mode selectors, spread threshold, confirmation/hysteresis, data-quality, paper sizing, and notification/dashboard/log intervals. Invalid values stop startup with an error. The dashboard reports live prices and sampled per-pair spread statistics at the configured interval, including data ages and freshness status. The original `arbitrage_log.csv` remains an opportunity/LLM log; sampled numeric market observations are written separately to `spread_observations.csv`.
 
 5. **Optionally configure private ntfy notifications** (PowerShell). This creates a random topic in the ignored local `.env` file; do not publish that file or share the topic:
    ```powershell
@@ -91,6 +104,10 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    ```
 
    The report includes per-pair mean, median, 90th/95th percentile, maximum, threshold-hit counts, positive estimated-net counts, and triggered opportunities. These historical statistics are diagnostic only and do not establish executable profitability.
+
+   `ALERT_CONFIRMATION_SECONDS` is the uninterrupted time the spread must remain profitable before triggering. After an alert, the spread must fall below the trigger level minus `ALERT_REARM_HYSTERESIS_PERCENT` before another alert can trigger. A signal is evaluated only while both exchange prices are fresh and their local receive times are within the maximum skew.
+
+   Simulation settings: `PAPER_MODE=portfolio` sizes each virtual position as a percentage of available cash; `PAPER_MODE=fixed` uses `PAPER_FIXED_POSITION_USDT`, capped by available cash. The default portfolio starts with 1,000 USDT and allocates 10% of available cash per position. Virtual positions are closed when the spread returns to the configured target in the simulated trade direction or reaches the maximum holding time. Estimated round-trip fees are deducted at close. This simplified paper ledger uses last-trade prices and is not a realistic execution backtest. Restarting the bot resets the in-memory paper balance and open positions; closed-position history remains in `paper_trades.csv`.
 
 ## 🧪 Tests
 
