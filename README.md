@@ -21,7 +21,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 
 The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. The gross spread uses an absolute price difference, so it does not determine which exchange is cheaper to buy from and which is more expensive to sell on.
 
-The ntfy topic is hosted by `ntfy.sh` by default, so price and spread notifications are sent to that external service. Set `NTFY_TOPIC_URL` to a different topic URL if preferred. After HTTP 429, sends pause according to `Retry-After` or an exponential backoff starting at 60 seconds (up to 15 minutes). `PRICE_ALERT_COOLDOWN_SECONDS=0` disables the per-pair cooldown but does not remove the global limit or server backoff.
+Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, configure a private, randomly generated topic URL in your local `.env`; never commit or share that topic. ntfy.sh topics are unlisted, not access-controlled, so anyone who learns the topic name may be able to read or publish notifications. After HTTP 429, sends pause according to `Retry-After` or an exponential backoff starting at 60 seconds (up to 15 minutes). `PRICE_ALERT_COOLDOWN_SECONDS=0` disables the per-pair cooldown but does not remove the global limit or server backoff.
 
 ---
 
@@ -58,12 +58,19 @@ The ntfy topic is hosted by `ntfy.sh` by default, so price and spread notificati
    $env:LM_STUDIO_API_BASE = "http://127.0.0.1:1234/v1"
    $env:LM_MODEL_NAME = "qwen/qwen3.5-9b"
    $env:TRADING_MODE = "paper"
-   $env:NTFY_TOPIC_URL = "https://ntfy.sh/pravda_bot_vincent_9832"
    ```
 
    Replace the endpoint and model name with the values shown by your LM Studio server. The defaults are `http://192.168.1.146:1234/v1`, `qwen/qwen3.5-9b`, and `paper`.
 
-5. **Run the monitor**:
+5. **Optionally configure private ntfy notifications** (PowerShell). This creates a random topic in the ignored local `.env` file; do not publish that file or share the topic:
+   ```powershell
+   $topic = [guid]::NewGuid().ToString("N")
+   "NTFY_TOPIC_URL=https://ntfy.sh/$topic" | Set-Content -Encoding ascii .env
+   ```
+
+   If `NTFY_TOPIC_URL` is not set, notifications stay disabled. The public topic previously shown in repository history should be treated as exposed; use only a newly generated topic.
+
+6. **Run the monitor**:
    ```powershell
    python main.py
    ```

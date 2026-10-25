@@ -33,7 +33,7 @@ SYMBOLS = ['BTC/USDT', 'ETH/USDT', 'SOL/USDT']
 BINANCE_SYMBOLS = {symbol.replace('/', ''): symbol for symbol in SYMBOLS}
 LOG_FILE = "arbitrage_log.csv"
 LOG_HEADERS = ["Timestamp", "Symbol", "Kraken_Price", "Binance_Price", "Spread_Percent", "Net_Spread_Estimated", "LLM_Analysis"]
-NTFY_TOPIC_URL = os.getenv("NTFY_TOPIC_URL", "https://ntfy.sh/pravda_bot_vincent_9832")
+NTFY_TOPIC_URL = os.getenv("NTFY_TOPIC_URL", "").strip()
 
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, mode='w', newline='', encoding='utf-8') as f:
@@ -88,6 +88,9 @@ def retry_after_seconds(value):
 
 def send_ntfy_notification(title, message):
     global ntfy_blocked_until, ntfy_backoff_seconds
+
+    if not NTFY_TOPIC_URL:
+        return False
 
     with ntfy_lock:
         now = time.monotonic()
@@ -265,7 +268,11 @@ async def run_stream_with_reconnect(exchange_name, stream_function):
 async def monitor_markets():
     print(f"=== Pravda-Bot Temps Réel (Mode: {TRADING_MODE}) ===")
     print(f"Paires surveillées : {', '.join(SYMBOLS)}")
-    print(f"Notifications ntfy : {NTFY_TOPIC_URL}")
+    print(
+        "Notifications ntfy : configurées"
+        if NTFY_TOPIC_URL
+        else "Notifications ntfy : désactivées (NTFY_TOPIC_URL absent)"
+    )
     print(f"Délai anti-rafale par paire : {PRICE_ALERT_COOLDOWN_SECONDS:g}s\n")
     print(f"Délai global ntfy : {NTFY_GLOBAL_COOLDOWN_SECONDS:g}s; backoff initial après 429 : {NTFY_INITIAL_BACKOFF_SECONDS:g}s\n")
     await asyncio.gather(
