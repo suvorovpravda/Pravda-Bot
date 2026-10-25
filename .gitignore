@@ -6,3 +6,4 @@ __pycache__/
 /arbitrage_log.csv
 /spread_observations.csv
 /paper_trades.csv
+/lng_observations.csv

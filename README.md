@@ -123,6 +123,14 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    python dashboard.py --csv .\spread_observations.csv --port 8081 --threshold 0.05 --stale-after 30
    ```
 
+9. **Write sample LNG benchmark observations** (standalone; no live quotes or shipping data are fetched):
+   ```powershell
+   python lng_observations.py
+   python lng_observations.py --csv .\data\lng_samples.csv
+   ```
+
+   This appends sample TTF, JKM, and Henry Hub values to `lng_observations.csv` with status `SIMULATED`. These hard-coded examples are not current market prices, investment data, or vessel-tracking observations. The default local CSV is ignored by Git.
+
 ## 🧪 Tests
 
 Run the unit tests locally with Python 3.12:
