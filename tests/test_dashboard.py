@@ -196,10 +196,14 @@ class DashboardTests(unittest.TestCase):
     def test_unified_dashboard_template_has_crypto_and_lng_sections(self):
         template_text = html.unescape(HTML_TEMPLATE)
         self.assertIn("PRAVDA", template_text)
-        self.assertIn("Gaz, flux & risques", template_text)
+        self.assertIn("Marchés, énergie & risques", template_text)
         self.assertIn("Réseau gazier européen", template_text)
         self.assertIn("Actualités & risques géopolitiques", template_text)
-        self.assertIn("Aucun cours live configuré", template_text)
+        self.assertIn("TTF · aucune cotation vérifiée", template_text)
+        self.assertIn("Prix et unité non affichés", template_text)
+        self.assertIn('<option>EUR</option><option>CHF</option>', template_text)
+        self.assertIn("convertQuote(price, currency)", template_text)
+        self.assertNotIn("Contrat futures néerlandais · EUR/MWh", template_text)
 
     def test_european_flows_endpoint_serves_official_payload(self):
         expected = {
