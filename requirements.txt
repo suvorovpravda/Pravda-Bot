@@ -1,0 +1,4 @@
+ccxt
+pydantic
+requests
+python-dotenv
