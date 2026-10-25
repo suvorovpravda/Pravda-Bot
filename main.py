@@ -18,8 +18,13 @@ from alert_gate import AlertGate
 from bot_config import load_config
 from bot_dashboard import SpreadSummary, build_dashboard
 from csv_schema import ensure_csv_schema
-from market_data_health import assess_market_data
+from market_data_health import MarketDataHealth, assess_market_data
 from paper_simulator import PaperSimulator
+from security_and_fees import (
+    DEFAULT_ESTIMATED_FEES_PERCENT,
+    check_security_guardrails,
+    calculate_net_spread,
+)
 
 load_dotenv()
 
@@ -41,7 +46,8 @@ ALERT_CONFIRMATION_SECONDS = CONFIG.alert_confirmation_seconds
 ALERT_REARM_HYSTERESIS_PERCENT = CONFIG.alert_rearm_hysteresis_percent
 MARKET_DATA_STALE_SECONDS = CONFIG.market_data_stale_seconds
 MARKET_DATA_MAX_SKEW_SECONDS = CONFIG.market_data_max_skew_seconds
-ESTIMATED_FEES = 0.36
+MAX_ALLOWED_SPREAD_PERCENT = CONFIG.max_allowed_spread_percent
+ESTIMATED_FEES = DEFAULT_ESTIMATED_FEES_PERCENT
 PRICE_ALERT_COOLDOWN_SECONDS = CONFIG.price_alert_cooldown_seconds
 NTFY_GLOBAL_COOLDOWN_SECONDS = CONFIG.ntfy_global_cooldown_seconds
 NTFY_INITIAL_BACKOFF_SECONDS = 60.0
@@ -279,7 +285,13 @@ async def handle_price_update(exchange_name, symbol, raw_price):
     if market_health.status != "OK":
         alert_gate.reset_candidate(symbol)
         spread = abs(price_kraken - price_binance) / min(price_kraken, price_binance) * 100
-        net_spread = spread - ESTIMATED_FEES
+        if not math.isfinite(spread):
+            console.print(
+                f"[bold yellow]Spread non fini ignoré pour {symbol} "
+                f"(état du flux : {market_health.status}).[/bold yellow]"
+            )
+            return
+        net_spread = calculate_net_spread(spread, ESTIMATED_FEES)
         last_logged_at = last_spread_log_at.get(symbol)
         if last_logged_at is None or now - last_logged_at >= SPREAD_LOG_INTERVAL_SECONDS:
             last_spread_log_at[symbol] = now
@@ -302,7 +314,45 @@ async def handle_price_update(exchange_name, symbol, raw_price):
         return
 
     spread = abs(price_kraken - price_binance) / min(price_kraken, price_binance) * 100
-    net_spread = spread - ESTIMATED_FEES
+    if spread != 0 and not check_security_guardrails(
+        spread, MAX_ALLOWED_SPREAD_PERCENT
+    ):
+        alert_gate.reset_candidate(symbol)
+        if not math.isfinite(spread):
+            console.print(
+                f"[bold yellow]Spread non fini ignoré pour {symbol}; "
+                "aucune simulation ni alerte arbitrage ne sera déclenchée.[/bold yellow]"
+            )
+            return
+        net_spread = calculate_net_spread(spread, ESTIMATED_FEES)
+        anomaly_health = MarketDataHealth(
+            "ANOMALY",
+            market_health.kraken_age_seconds,
+            market_health.binance_age_seconds,
+            market_health.exchange_skew_seconds,
+        )
+        last_logged_at = last_spread_log_at.get(symbol)
+        if last_logged_at is None or now - last_logged_at >= SPREAD_LOG_INTERVAL_SECONDS:
+            last_spread_log_at[symbol] = now
+            try:
+                await asyncio.to_thread(
+                    log_spread_observation,
+                    symbol,
+                    price_kraken,
+                    price_binance,
+                    spread,
+                    net_spread,
+                    spread >= MIN_SPREAD_THRESHOLD,
+                    False,
+                    anomaly_health,
+                )
+            except OSError as error:
+                console.print(
+                    f"[bold red]Échec de journalisation du spread anormal : {error}[/bold red]"
+                )
+        return
+
+    net_spread = calculate_net_spread(spread, ESTIMATED_FEES)
     threshold_reached = spread >= MIN_SPREAD_THRESHOLD
     is_profitable = threshold_reached and net_spread > 0
     rearm_spread = max(
@@ -459,6 +509,7 @@ async def monitor_markets():
     print(f"=== Pravda-Bot Temps Réel (Mode: {TRADING_MODE}) ===")
     print(f"Paires surveillées : {', '.join(SYMBOLS)}")
     print(f"Seuil de déclenchement : {MIN_SPREAD_THRESHOLD:g}%")
+    print(f"Spread maximum accepté : {MAX_ALLOWED_SPREAD_PERCENT:g}%")
     print(f"Échantillonnage des spreads : {SPREAD_LOG_INTERVAL_SECONDS:g}s par paire")
     print(f"Tableau de bord Rich : toutes les {DASHBOARD_INTERVAL_SECONDS:g}s")
     print(

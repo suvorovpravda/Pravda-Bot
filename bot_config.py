@@ -11,6 +11,7 @@ class BotConfig:
     trading_mode: str
     model_name: str
     min_spread_threshold: float
+    max_allowed_spread_percent: float
     spread_log_interval_seconds: float
     price_alert_cooldown_seconds: float
     ntfy_global_cooldown_seconds: float
@@ -89,6 +90,9 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
         model_name=model_name,
         min_spread_threshold=_float_setting(
             values, "MIN_SPREAD_THRESHOLD", 0.05, allow_zero=True
+        ),
+        max_allowed_spread_percent=_float_setting(
+            values, "MAX_ALLOWED_SPREAD_PERCENT", 5.0, allow_zero=False
         ),
         spread_log_interval_seconds=_float_setting(
             values, "SPREAD_LOG_INTERVAL_SECONDS", 10, allow_zero=False

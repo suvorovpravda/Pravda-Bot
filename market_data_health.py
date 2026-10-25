@@ -5,7 +5,7 @@ from typing import Literal
 
 @dataclass(frozen=True)
 class MarketDataHealth:
-    status: Literal["WAITING", "STALE", "DESYNC", "OK"]
+    status: Literal["WAITING", "STALE", "DESYNC", "ANOMALY", "OK"]
     kraken_age_seconds: float | None
     binance_age_seconds: float | None
     exchange_skew_seconds: float | None

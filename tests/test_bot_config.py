@@ -7,6 +7,7 @@ class BotConfigTests(unittest.TestCase):
     def test_defaults_preserve_expected_behavior(self):
         config = load_config({})
         self.assertEqual(config.min_spread_threshold, 0.05)
+        self.assertEqual(config.max_allowed_spread_percent, 5.0)
         self.assertEqual(config.spread_log_interval_seconds, 10)
         self.assertEqual(config.dashboard_interval_seconds, 30)
         self.assertEqual(config.price_alert_cooldown_seconds, 5)
@@ -41,6 +42,8 @@ class BotConfigTests(unittest.TestCase):
         for key, value in (
             ("MIN_SPREAD_THRESHOLD", "-0.1"),
             ("MIN_SPREAD_THRESHOLD", "nan"),
+            ("MAX_ALLOWED_SPREAD_PERCENT", "0"),
+            ("MAX_ALLOWED_SPREAD_PERCENT", "nan"),
             ("SPREAD_LOG_INTERVAL_SECONDS", "0"),
             ("DASHBOARD_INTERVAL_SECONDS", "inf"),
             ("PRICE_ALERT_COOLDOWN_SECONDS", "-1"),

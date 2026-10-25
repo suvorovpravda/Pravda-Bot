@@ -15,6 +15,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
   * Rejects prices that are missing, non-finite, zero, or negative.
   * Estimates net spread by subtracting a fixed 0.36% fee estimate from the absolute gross spread.
   * Uses a configurable minimum gross spread threshold (default `0.05%`) and rejects invalid threshold settings at startup.
+  * Rejects non-finite, non-positive, or anomalously large spreads (default maximum `5%`) before paper simulation, arbitrage alerts, or LLM analysis. Finite rejected anomalies are logged with the `ANOMALY` status and excluded from offline spread statistics.
   * Skips LLM analysis when the estimated net spread is zero or negative.
   * Requires a candidate spread to remain profitable for a configurable confirmation interval and uses hysteresis before rearming alerts.
   * Rejects stale or excessively desynchronized exchange prices before spread evaluation.
@@ -25,7 +26,7 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 * **Centralized Configuration Validation**: Validates endpoints, required model settings, and numeric intervals at startup with actionable errors.
 * **No Order Placement**: The script does not use exchange API keys and contains no order-placement calls.
 
-The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. The gross spread uses an absolute price difference; the paper simulator uses the signed difference between last prices to estimate spread capture, but does not model order books, fills, funding, borrowing, or exchange constraints. The threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
+The 0.36% fee estimate is fixed and approximate. It does not account for slippage, withdrawal/network costs, latency, or exchange-specific fee tiers. No network fee is currently included in the net spread. The gross spread uses an absolute price difference; the paper simulator uses the signed difference between last prices to estimate spread capture, but does not model order books, fills, funding, borrowing, or exchange constraints. The gross spread safety cap is configurable with `MAX_ALLOWED_SPREAD_PERCENT` (default `5.0%`). The minimum trigger threshold is configurable, not automatically optimized; use the observations as historical diagnostics rather than as evidence of executable profitability.
 
 Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, configure a private, randomly generated topic URL in your local `.env`; never commit or share that topic. ntfy.sh topics are unlisted, not access-controlled, so anyone who learns the topic name may be able to read or publish notifications. After HTTP 429, sends pause according to `Retry-After` or an exponential backoff starting at 60 seconds (up to 15 minutes). `PRICE_ALERT_COOLDOWN_SECONDS=0` disables the per-pair cooldown but does not remove the global limit or server backoff.
 
@@ -65,6 +66,7 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    $env:LM_MODEL_NAME = "qwen/qwen3.5-9b"
    $env:TRADING_MODE = "paper"
    $env:MIN_SPREAD_THRESHOLD = "0.05"
+   $env:MAX_ALLOWED_SPREAD_PERCENT = "5.0"
    $env:SPREAD_LOG_INTERVAL_SECONDS = "10"
    $env:DASHBOARD_INTERVAL_SECONDS = "30"
    $env:ALERT_CONFIRMATION_SECONDS = "3"

@@ -82,6 +82,27 @@ class AnalyzeSpreadsTests(unittest.TestCase):
                 self.assertEqual(summary.gross_max, 0.1)
                 self.assertEqual(summary.excluded_market_data, 1)
 
+    def test_excludes_anomalous_spreads_from_statistics(self):
+        rows = [
+            observation("2026-01-01T00:00:00Z", "BTC/USDT", 0.1, -0.26, 0.05, True, False, False),
+            observation("2026-01-01T00:00:10Z", "BTC/USDT", 5.1, 4.74, 0.05, True, True, False),
+        ]
+        rows[0]["Market_Data_Status"] = "OK"
+        rows[1]["Market_Data_Status"] = "ANOMALY"
+        headers = sorted(REQUIRED_COLUMNS | {
+            "Kraken_Price",
+            "Binance_Price",
+            "Estimated_Fees_Percent",
+            "Market_Data_Status",
+        })
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "spreads.csv"
+            self.write_csv(path, rows, headers)
+            summary = summarize_observations(read_observations(path))[0]
+        self.assertEqual(summary.samples, 1)
+        self.assertEqual(summary.gross_max, 0.1)
+        self.assertEqual(summary.excluded_market_data, 1)
+
     def test_rejects_missing_columns_invalid_boolean_and_nonfinite_values(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "spreads.csv"
