@@ -7,6 +7,17 @@ DEFAULT_ESTIMATED_FEES_PERCENT = 0.36
 DEFAULT_MAX_ALLOWED_SPREAD_PERCENT = 5.0
 
 
+def parse_positive_price(raw_price: object) -> float:
+    """Parse a finite positive market price received from an exchange stream."""
+    try:
+        price = float(raw_price)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise ValueError("price must be finite and positive") from error
+    if not math.isfinite(price) or price <= 0:
+        raise ValueError("price must be finite and positive")
+    return price
+
+
 def calculate_net_spread(
     gross_spread_percent: float,
     estimated_fees_percent: float = DEFAULT_ESTIMATED_FEES_PERCENT,

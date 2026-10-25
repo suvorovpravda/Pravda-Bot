@@ -104,9 +104,10 @@ Notifications are disabled when `NTFY_TOPIC_URL` is unset. To enable them, confi
    ```powershell
    python analyze_spreads.py
    python analyze_spreads.py .\spread_observations.csv --output .\spread_summary.csv
+   python analyze_paper_results.py
    ```
 
-   The report includes per-pair mean, median, 90th/95th percentile, maximum, threshold-hit counts, positive estimated-net counts, and triggered opportunities. These historical statistics are diagnostic only and do not establish executable profitability.
+   `analyze_spreads.py` reports per-pair mean, median, 90th/95th percentile, maximum, threshold-hit counts, positive estimated-net counts, and triggered opportunities. `analyze_paper_results.py` reports valid observations, triggered opportunities, anomalies, and other health statuses using the `Market_Data_Status` column. These historical statistics are diagnostic only and do not establish executable profitability.
 
    `ALERT_CONFIRMATION_SECONDS` is the uninterrupted time the spread must remain profitable before triggering. After an alert, the spread must fall below the trigger level minus `ALERT_REARM_HYSTERESIS_PERCENT` before another alert can trigger. A signal is evaluated only while both exchange prices are fresh and their local receive times are within the maximum skew.
 

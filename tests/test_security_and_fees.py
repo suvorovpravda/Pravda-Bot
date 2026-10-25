@@ -4,10 +4,30 @@ from unittest.mock import patch
 from security_and_fees import (
     calculate_net_spread,
     check_security_guardrails,
+    parse_positive_price,
 )
 
 
 class SecurityAndFeesTests(unittest.TestCase):
+    def test_price_parser_accepts_finite_positive_prices(self):
+        self.assertEqual(parse_positive_price("123.45"), 123.45)
+        self.assertEqual(parse_positive_price(1), 1.0)
+
+    def test_price_parser_rejects_invalid_or_overflowing_values(self):
+        invalid_values = (
+            ("none", None),
+            ("non-numeric", "not-a-price"),
+            ("infinity", "inf"),
+            ("nan", "nan"),
+            ("zero", 0),
+            ("negative", -1),
+            ("overflowing integer", 10**10000),
+        )
+        for label, value in invalid_values:
+            with self.subTest(value=label):
+                with self.assertRaisesRegex(ValueError, "finite and positive"):
+                    parse_positive_price(value)
+
     def test_net_spread_uses_existing_fee_estimate_in_percentage_points(self):
         self.assertAlmostEqual(calculate_net_spread(0.5), 0.14)
         self.assertAlmostEqual(calculate_net_spread(0.1), -0.26)

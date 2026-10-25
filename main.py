@@ -24,6 +24,7 @@ from security_and_fees import (
     DEFAULT_ESTIMATED_FEES_PERCENT,
     check_security_guardrails,
     calculate_net_spread,
+    parse_positive_price,
 )
 
 load_dotenv()
@@ -244,11 +245,12 @@ async def handle_price_update(exchange_name, symbol, raw_price):
     global price_updates_count, opportunities_count
 
     try:
-        price = float(raw_price)
-        if not math.isfinite(price) or price <= 0:
-            raise ValueError("price must be finite and positive")
-    except (TypeError, ValueError):
-        print(f"  ⚠️ [GARDE-FOU] Prix invalide reçu de {exchange_name} pour {symbol}: {raw_price}")
+        price = parse_positive_price(raw_price)
+    except ValueError:
+        console.print(
+            f"[bold yellow][GARDE-FOU] Prix invalide reçu de "
+            f"{exchange_name} pour {symbol}; mise à jour ignorée.[/bold yellow]"
+        )
         return
 
     previous_price = latest_prices[exchange_name].get(symbol)

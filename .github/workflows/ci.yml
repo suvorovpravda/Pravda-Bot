@@ -26,8 +26,8 @@ jobs:
 
       - name: Verify syntax and imports
         run: |
-          python -m compileall -q main.py alert_gate.py bot_config.py bot_dashboard.py csv_schema.py market_data_health.py paper_simulator.py analyze_spreads.py dashboard.py security_and_fees.py
-          python -c "import alert_gate, analyze_spreads, bot_config, bot_dashboard, csv_schema, dashboard, market_data_health, paper_simulator, security_and_fees; print('Imports passed.')"
+          python -m compileall -q main.py alert_gate.py bot_config.py bot_dashboard.py csv_schema.py market_data_health.py paper_simulator.py analyze_spreads.py analyze_paper_results.py dashboard.py security_and_fees.py
+          python -c "import alert_gate, analyze_spreads, analyze_paper_results, bot_config, bot_dashboard, csv_schema, dashboard, market_data_health, paper_simulator, security_and_fees; print('Imports passed.')"
           python analyze_spreads.py --help
 
       - name: Run unit tests
