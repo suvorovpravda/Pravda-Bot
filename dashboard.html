@@ -38,6 +38,8 @@
         .brand-title { margin: 0; font-size: 17px; letter-spacing: .12em; }
         .brand-sub { color: var(--muted); font-size: 12px; }
         .top-actions { display: flex; align-items: center; gap: 12px; }
+        .language-picker { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12px; }
+        .language-picker select { border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; background: var(--panel-raised); color: var(--text); }
         .clock { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
         .clock strong { display: block; color: var(--text); font-size: 15px; }
         .button { border: 1px solid var(--line); border-radius: 9px; padding: 9px 13px; background: var(--panel-raised); color: var(--text); cursor: pointer; }
@@ -155,110 +157,296 @@
     <header class="topbar">
         <div class="brand">
             <div class="brand-mark">P</div>
-            <div><h2 class="brand-title">PRAVDA <span style="color:var(--cyan)">/</span> MARKET</h2><div class="brand-sub">Terminal marchés &amp; énergie</div></div>
+            <div><h2 class="brand-title">PRAVDA <span style="color:var(--cyan)">/</span> MARKET</h2><div class="brand-sub" data-i18n="brandSubtitle">Terminal marchés &amp; énergie</div></div>
         </div>
         <div class="top-actions">
-            <div class="clock"><strong id="clock">--:--:--</strong>Heure locale · rafraîchissement auto</div>
-            <button class="button" id="refresh-button" type="button">↻ Actualiser</button>
+            <label class="language-picker" for="language-select"><span data-i18n="language">Langue</span>
+                <select id="language-select" aria-label="Langue d’affichage" data-i18n-aria="languageAria">
+                    <option value="fr">Français</option>
+                    <option value="ru">Русский</option>
+                    <option value="en">English</option>
+                </select>
+            </label>
+            <div class="clock"><strong id="clock">--:--:--</strong><span data-i18n="clockCaption">Heure locale · rafraîchissement auto</span></div>
+            <button class="button" id="refresh-button" type="button" data-i18n="refresh">↻ Actualiser</button>
         </div>
     </header>
 
     <section class="intro">
-        <div><p class="eyebrow">Terminal de marché · données sourcées</p><h1>Marchés, énergie &amp; risques</h1></div>
-        <p>Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.</p>
+        <div><p class="eyebrow" data-i18n="eyebrow">Terminal de marché · données sourcées</p><h1 data-i18n="pageTitle">Marchés, énergie &amp; risques</h1></div>
+        <p data-i18n="intro">Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.</p>
     </section>
 
-    <section class="grid" aria-label="Marchés en direct">
+    <section class="grid" aria-label="Marchés en direct" data-i18n-aria="marketsAria">
         <article class="card crypto-live-card">
             <div class="card-head">
-                <div><h2>Marchés crypto · cotations live</h2><p>Ticks Kraken et Binance · conversions indicatives en EUR et CHF</p></div>
-                <span class="status pending" id="market-feed-status"><i class="dot"></i>En attente du bot</span>
+                <div><h2 data-i18n="cryptoTitle">Marchés crypto · cotations live</h2><p data-i18n="cryptoSubtitle">Ticks Kraken et Binance · conversions indicatives en EUR et CHF</p></div>
+                <span class="status pending" id="market-feed-status"><i class="dot"></i><span data-i18n="waitingBot">En attente du bot</span></span>
             </div>
             <div class="card-body">
                 <div class="market-grid">
                     <div>
                         <div class="market-controls">
-                            <label for="chart-symbol">Actif</label>
+                            <label for="chart-symbol" data-i18n="asset">Actif</label>
                             <select id="chart-symbol"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select>
-                            <label for="chart-exchange">Flux</label>
+                            <label for="chart-exchange" data-i18n="exchange">Flux</label>
                             <select id="chart-exchange"><option>Binance</option><option>Kraken</option></select>
-                            <label for="chart-currency">Devise</label>
+                            <label for="chart-currency" data-i18n="currency">Devise</label>
                             <select id="chart-currency"><option>EUR</option><option>CHF</option></select>
                         </div>
-                        <canvas class="market-chart" id="price-chart" aria-label="Graphique de prix crypto live"></canvas>
-                        <div class="market-caption"><span id="chart-price">—</span><span id="chart-age">Démarre le bot pour recevoir les ticks.</span></div>
+                        <canvas class="market-chart" id="price-chart" aria-label="Graphique de prix crypto live" data-i18n-aria="chartAria"></canvas>
+                        <div class="market-caption"><span id="chart-price">—</span><span id="chart-age" data-i18n="chartWaiting">Démarre le bot pour recevoir les ticks.</span></div>
                     </div>
                     <div class="table-wrap">
                         <table class="quote-table">
-                            <thead><tr><th>Actif</th><th>Binance · EUR / CHF</th><th>Kraken · EUR / CHF</th><th>Écart</th></tr></thead>
-                            <tbody id="crypto-quotes"><tr><td colspan="5">Démarre le bot pour charger les prix.</td></tr></tbody>
+                            <thead><tr><th data-i18n="asset">Actif</th><th>Binance · EUR / CHF</th><th>Kraken · EUR / CHF</th><th data-i18n="spread">Écart</th></tr></thead>
+                            <tbody id="crypto-quotes"><tr><td colspan="4" data-i18n="startBotPrices">Démarre le bot pour charger les prix.</td></tr></tbody>
                         </table>
-                        <p class="fine-print">Prix du dernier échange public, pas un prix d’achat garanti. Conversion indicative depuis USDT≈USD avec les taux de référence quotidiens BCE. Le graphique conserve les ticks reçus depuis l’ouverture de la page.</p>
+                        <p class="fine-print" data-i18n="cryptoDisclaimer">Prix du dernier échange public, pas un prix d’achat garanti. Conversion indicative depuis USDT≈USD avec les taux de référence quotidiens BCE. Le graphique conserve les ticks reçus depuis l’ouverture de la page.</p>
                     </div>
                 </div>
             </div>
         </article>
         <article class="card fx-live-card">
-            <div class="card-head"><div><h2>Devises fiduciaires</h2><p>Unités de devise pour 1 EUR</p></div><span class="status pending" id="fx-status"><i class="dot"></i>Chargement</span></div>
+            <div class="card-head"><div><h2 data-i18n="fiatTitle">Devises fiduciaires</h2><p data-i18n="fiatSubtitle">Unités de devise pour 1 EUR</p></div><span class="status pending" id="fx-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body">
-                <div class="fx-list" id="fx-rates"><div class="empty">Chargement des taux de référence…</div></div>
-                <div class="market-caption"><span id="fx-asof">—</span><span>Référence quotidienne</span></div>
-                <p class="fine-print">Taux de référence BCE via Frankfurter — ce ne sont pas des cotations Forex tick par tick.</p>
-                <div class="source-line"><a href="https://data.ecb.europa.eu/data/datasets/EXR" target="_blank" rel="noopener noreferrer">BCE · taux de change ↗</a></div>
+                <div class="fx-list" id="fx-rates"><div class="empty" data-i18n="loadingFx">Chargement des taux de référence…</div></div>
+                <div class="market-caption"><span id="fx-asof">—</span><span data-i18n="dailyReference">Référence quotidienne</span></div>
+                <p class="fine-print" data-i18n="fxDisclaimer">Taux de référence BCE via Frankfurter — ce ne sont pas des cotations Forex tick par tick.</p>
+                <div class="source-line"><a href="https://data.ecb.europa.eu/data/datasets/EXR" target="_blank" rel="noopener noreferrer" data-i18n="ecbLink">BCE · taux de change ↗</a></div>
             </div>
         </article>
     </section>
 
     <section class="grid">
         <div class="metrics">
-            <article class="card metric"><div class="metric-label">Flux entrants observés</div><div class="metric-value" id="entry-count">—</div><div class="metric-foot" id="entry-foot">Chargement ENTSOG…</div></article>
-            <article class="card metric"><div class="metric-label">Flux sortants observés</div><div class="metric-value" id="exit-count">—</div><div class="metric-foot" id="exit-foot">Chargement ENTSOG…</div></article>
-            <article class="card metric"><div class="metric-label">Dernière publication source</div><div class="metric-value" style="font-size:18px" id="source-update">—</div><div class="metric-foot" id="flow-status">Connexion à ENTSOG…</div></article>
+            <article class="card metric"><div class="metric-label" data-i18n="inboundFlows">Flux entrants observés</div><div class="metric-value" id="entry-count">—</div><div class="metric-foot" id="entry-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric"><div class="metric-label" data-i18n="outboundFlows">Flux sortants observés</div><div class="metric-value" id="exit-count">—</div><div class="metric-foot" id="exit-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric"><div class="metric-label" data-i18n="latestSource">Dernière publication source</div><div class="metric-value" style="font-size:18px" id="source-update">—</div><div class="metric-foot" id="flow-status">Connexion à ENTSOG…</div></article>
         </div>
 
         <article class="card map-card">
-            <div class="card-head"><div><h2>Réseau gazier européen</h2><p>Points transfrontaliers et sens des observations publiées</p></div><span class="status pending" id="map-status"><i class="dot"></i>Chargement</span></div>
+            <div class="card-head"><div><h2 data-i18n="networkTitle">Réseau gazier européen</h2><p data-i18n="networkSubtitle">Points transfrontaliers et sens des observations publiées</p></div><span class="status pending" id="map-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body">
                 <div class="map-wrap">
-                    <svg id="flow-map" viewBox="0 0 800 430" role="img" aria-label="Carte schématique des points de flux gazier ENTSOG">
-                        <text x="400" y="210" text-anchor="middle" class="map-axis">Chargement des points ENTSOG…</text>
+                    <svg id="flow-map" viewBox="0 0 800 430" role="img" aria-label="Carte schématique des points de flux gazier ENTSOG" data-i18n-aria="mapAria">
+                        <text x="400" y="210" text-anchor="middle" class="map-axis" data-i18n="loadingPoints">Chargement des points ENTSOG…</text>
                     </svg>
-                    <div class="map-legend"><span class="legend-key"><i></i>Entrée</span><span class="legend-key exit"><i></i>Sortie</span></div>
+                    <div class="map-legend"><span class="legend-key"><i></i><span data-i18n="entry">Entrée</span></span><span class="legend-key exit"><i></i><span data-i18n="exit">Sortie</span></span></div>
                 </div>
-                <p class="map-caption">Schéma de positions publié par ENTSOG, pas une carte de routes de pipelines. Les données sont des observations de points, pas des totaux nationaux.</p>
+                <p class="map-caption" data-i18n="mapDisclaimer">Schéma de positions publié par ENTSOG, pas une carte de routes de pipelines. Les données sont des observations de points, pas des totaux nationaux.</p>
             </div>
         </article>
 
         <article class="card news-card">
-            <div class="card-head"><div><h2>Actualités &amp; risques géopolitiques</h2><p id="news-source">Mentions liées au gaz · dernières 24 h</p></div><span class="status pending" id="news-status"><i class="dot"></i>Chargement</span></div>
-            <div class="card-body"><div class="news-list" id="news-list"><div class="empty">Chargement des sources…</div></div><div class="source-line">Les articles sont des informations rapportées, non des incidents vérifiés ni des prédictions.</div></div>
+            <div class="card-head"><div><h2 data-i18n="newsTitle">Actualités &amp; risques géopolitiques</h2><p id="news-source">Mentions liées au gaz · dernières 24 h</p></div><span class="status pending" id="news-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body"><div class="news-list" id="news-list"><div class="empty" data-i18n="loadingSources">Chargement des sources…</div></div><div class="source-line" data-i18n="newsDisclaimer">Les articles sont des informations rapportées, non des incidents vérifiés ni des prédictions.</div></div>
         </article>
 
         <article class="card price-card">
-            <div class="card-head"><div><h2>TTF · aucune cotation vérifiée</h2><p>Prix du gaz européen — fournisseur de marché requis</p></div><span class="status stale"><i class="dot"></i>Indisponible</span></div>
+            <div class="card-head"><div><h2 data-i18n="ttfTitle">TTF · aucune cotation vérifiée</h2><p data-i18n="ttfSubtitle">Prix du gaz européen — fournisseur de marché requis</p></div><span class="status stale"><i class="dot"></i><span data-i18n="unavailable">Indisponible</span></span></div>
             <div class="card-body">
-                <div class="price-state"><strong>Prix et unité non affichés</strong><p>Aucune cotation TTF vérifiable n’est connectée. Le tableau de bord n’invente ni cours ni unité de cotation. Les spécifications ICE décrivent le contrat, elles ne fournissent pas un flux de prix.</p></div>
-                <div class="source-line">Référence du contrat uniquement : <a href="https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures" target="_blank" rel="noopener noreferrer">ICE Dutch TTF ↗</a></div>
+                <div class="price-state"><strong data-i18n="ttfUnavailableTitle">Prix et unité non affichés</strong><p data-i18n="ttfUnavailableText">Aucune cotation TTF vérifiable n’est connectée. Le tableau de bord n’invente ni cours ni unité de cotation. Les spécifications ICE décrivent le contrat, elles ne fournissent pas un flux de prix.</p></div>
+                <div class="source-line"><span data-i18n="ttfSource">Référence du contrat uniquement :</span> <a href="https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures" target="_blank" rel="noopener noreferrer" data-i18n="iceLink">ICE Dutch TTF ↗</a></div>
             </div>
         </article>
 
         <article class="card flows-card">
-            <div class="card-head"><div><h2>Dernières observations de flux</h2><p>Valeurs publiées au point · unité native de la source</p></div><a class="status" href="https://transparency.entsog.eu/" target="_blank" rel="noopener noreferrer">Source ENTSOG ↗</a></div>
+            <div class="card-head"><div><h2 data-i18n="flowsTitle">Dernières observations de flux</h2><p data-i18n="flowsSubtitle">Valeurs publiées au point · unité native de la source</p></div><a class="status" href="https://transparency.entsog.eu/" target="_blank" rel="noopener noreferrer" data-i18n="entsogLink">Source ENTSOG ↗</a></div>
             <div class="card-body">
-                <div class="flow-row flow-header"><span>Point / opérateur</span><span>Sens</span><span>Valeur publiée</span><span class="flow-updated">Période / mise à jour</span></div>
-                <div class="rows" id="flow-rows"><div class="empty">En attente des données ENTSOG.</div></div>
-                <p class="fine-print" id="flow-notice">Les valeurs aux points ne sont ni dédoublonnées ni équivalentes aux importations nettes d’un pays.</p>
+                <div class="flow-row flow-header"><span data-i18n="pointOperator">Point / opérateur</span><span data-i18n="direction">Sens</span><span data-i18n="publishedValue">Valeur publiée</span><span class="flow-updated" data-i18n="periodUpdated">Période / mise à jour</span></div>
+                <div class="rows" id="flow-rows"><div class="empty" data-i18n="waitingFlows">En attente des données ENTSOG.</div></div>
+                <p class="fine-print" id="flow-notice" data-i18n="flowDisclaimer">Les valeurs aux points ne sont ni dédoublonnées ni équivalentes aux importations nettes d’un pays.</p>
             </div>
         </article>
 
         <article class="card secondary-card">
-            <div class="card-head"><div><h2>Surveillance crypto</h2><p>Résumé du bot Kraken / Binance · panneau secondaire</p></div><span class="status pending" id="bot-status"><i class="dot"></i>Chargement</span></div>
-            <div class="card-body table-wrap" id="crypto-data">Lecture des observations locales…</div>
+            <div class="card-head"><div><h2 data-i18n="cryptoMonitor">Surveillance crypto</h2><p data-i18n="cryptoMonitorSubtitle">Résumé du bot Kraken / Binance · panneau secondaire</p></div><span class="status pending" id="bot-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body table-wrap" id="crypto-data" data-i18n="readingLocal">Lecture des observations locales…</div>
         </article>
     </section>
-    <p class="fine-print">Données gaz : ENTSOG Transparency Platform. Actualités : GDELT ou flux BBC World de repli, avec liens vers les éditeurs d’origine. Les flux peuvent être publiés avec retard et les actualités nécessitent une vérification indépendante.</p>
+    <p class="fine-print" data-i18n="footerDisclaimer">Données gaz : ENTSOG Transparency Platform. Actualités : GDELT ou flux BBC World de repli, avec liens vers les éditeurs d’origine. Les flux peuvent être publiés avec retard et les actualités nécessitent une vérification indépendante.</p>
 </main>
 <script>
+    const translations = {
+        fr: {
+            language: "Langue", languageAria: "Langue d’affichage", brandSubtitle: "Terminal marchés & énergie", clockCaption: "Heure locale · rafraîchissement auto", refresh: "↻ Actualiser",
+            eyebrow: "Terminal de marché · données sourcées", pageTitle: "Marchés, énergie & risques",
+            intro: "Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.",
+            marketsAria: "Marchés en direct", cryptoTitle: "Marchés crypto · cotations live", cryptoSubtitle: "Ticks Kraken et Binance · conversions indicatives en EUR et CHF",
+            waitingBot: "En attente du bot", asset: "Actif", exchange: "Flux", currency: "Devise", chartAria: "Graphique de prix crypto live",
+            chartWaiting: "Démarre le bot pour recevoir les ticks.", startBotPrices: "Démarre le bot pour charger les prix.",
+            spread: "Écart", cryptoDisclaimer: "Prix du dernier échange public, pas un prix d’achat garanti. Conversion indicative depuis USDT≈USD avec les taux de référence quotidiens BCE. Le graphique conserve les ticks reçus depuis l’ouverture de la page.",
+            fiatTitle: "Devises fiduciaires", fiatSubtitle: "Unités de devise pour 1 EUR", loading: "Chargement", loadingFx: "Chargement des taux de référence…",
+            dailyReference: "Référence quotidienne", fxDisclaimer: "Taux de référence BCE via Frankfurter — ce ne sont pas des cotations Forex tick par tick.",
+            ecbLink: "BCE · taux de change ↗", inboundFlows: "Flux entrants observés", outboundFlows: "Flux sortants observés", latestSource: "Dernière publication source",
+            networkTitle: "Réseau gazier européen", networkSubtitle: "Points transfrontaliers et sens des observations publiées", loadingPoints: "Chargement des points ENTSOG…",
+            mapAria: "Carte schématique des points de flux gazier ENTSOG", entry: "Entrée", exit: "Sortie",
+            mapDisclaimer: "Schéma de positions publié par ENTSOG, pas une carte de routes de pipelines. Les données sont des observations de points, pas des totaux nationaux.",
+            newsTitle: "Actualités & risques géopolitiques", newsWindow: "Actualités · dernières 24 h", loadingSources: "Chargement des sources…",
+            newsDisclaimer: "Les articles sont des informations rapportées, non des incidents vérifiés ni des prédictions.",
+            ttfTitle: "TTF · aucune cotation vérifiée", ttfSubtitle: "Prix du gaz européen — fournisseur de marché requis", unavailable: "Indisponible",
+            ttfUnavailableTitle: "Prix et unité non affichés", ttfUnavailableText: "Aucune cotation TTF vérifiable n’est connectée. Le tableau de bord n’invente ni cours ni unité de cotation. Les spécifications ICE décrivent le contrat, elles ne fournissent pas un flux de prix.",
+            ttfSource: "Référence du contrat uniquement :", iceLink: "ICE Dutch TTF ↗", flowsTitle: "Dernières observations de flux",
+            flowsSubtitle: "Valeurs publiées au point · unité native de la source", entsogLink: "Source ENTSOG ↗",
+            pointOperator: "Point / opérateur", direction: "Sens", publishedValue: "Valeur publiée", periodUpdated: "Période / mise à jour",
+            waitingFlows: "En attente des données ENTSOG.", flowDisclaimer: "Les valeurs aux points ne sont ni dédoublonnées ni équivalentes aux importations nettes d’un pays.",
+            cryptoMonitor: "Surveillance crypto", cryptoMonitorSubtitle: "Résumé du bot Kraken / Binance · panneau secondaire", readingLocal: "Lecture des observations locales…",
+            footerDisclaimer: "Données gaz : ENTSOG Transparency Platform. Actualités : GDELT ou flux BBC World de repli, avec liens vers les éditeurs d’origine. Les flux peuvent être publiés avec retard et les actualités nécessitent une vérification indépendante.",
+            waitingTicks: "En attente des ticks de marché…", waitingFx: "En attente des taux de conversion…", ticks: "ticks",
+            utc: "UTC", pair: "Paire", grossSpread: "Spread brut", health: "Santé",
+            allPricesFresh: "Tous les prix récents", partialPrices: "Prix récents partiels", startBot: "Démarre le bot", stalePrices: "Prix périmés",
+            unavailableFeed: "Flux indisponible", fxAvailable: "Taux BCE disponibles", fxUnavailable: "Taux indisponibles",
+            publishedOn: "Publié le {date}", reference: "EUR / {currency}", inverseReference: "CHF / EUR",
+            inboundNote: "observations de points (pas un total national)", outboundNote: "observations de points (pas un total national)",
+            recentPublication: "Publication récente reçue", oldPublication: "Dernière publication ancienne", noUsableObservation: "Aucune observation exploitable",
+            recentSourceData: "Données source récentes", delayedSourceData: "Données retardées / absentes",
+            noMapPoints: "Aucun point géographique exploitable dans les données récentes",
+            staleFlowUnavailable: "La source ENTSOG ne fournit pas de valeur récente exploitable. Réessaie plus tard.",
+            noFlowObservation: "Aucune observation de flux n’est actuellement disponible.", entryDirection: "↙ Entrée", exitDirection: "↗ Sortie",
+            sourceUpdate: "Mise à jour source : {date}", officialEntsog: "Données officielles ENTSOG.",
+            fxFailure: "Impossible de charger les taux de change. Le serveur réessaiera automatiquement.",
+            flowFailure: "Impossible de charger les données ENTSOG. Le serveur réessaiera automatiquement.",
+            noArticles: "Aucun article correspondant dans la fenêtre de recherche.", mediaSource: "Source média",
+            newsFailure: "Impossible de charger les actualités. Le flux sera réessayé automatiquement.",
+            noCryptoObservation: "Aucune observation crypto locale.", cryptoLogUnavailable: "Journal indisponible",
+            botStatusFresh: "Données récentes", botStatusStale: "Données obsolètes", botStatusNone: "Aucune observation",
+            chartNoPrice: "prix indisponible", chartStale: "dernier prix périmé", chartReceived: "Reçu", chartLastTickStale: "Périmé · dernier tick reçu",
+            conversionUnavailable: "Conversion EUR/CHF indisponible", conversionUnavailableShort: "conversion indisponible",
+            staleAge: "Périmé · {age}s", receivedAge: "Reçu il y a {age}s", staleAgeLabel: "Périmé · dernier tick reçu il y a {age}s",
+            unknownError: "Erreur inattendue"
+        },
+        ru: {
+            language: "Язык", languageAria: "Язык интерфейса", brandSubtitle: "Терминал рынков и энергетики", clockCaption: "Местное время · автообновление", refresh: "↻ Обновить",
+            eyebrow: "Рыночный терминал · данные с источниками", pageTitle: "Рынки, энергетика и риски",
+            intro: "Цены показаны в EUR и CHF. Указаны периодичность, источники и ограничения, чтобы отличать текущие котировки от ежедневных справочных курсов.",
+            marketsAria: "Рынки в реальном времени", cryptoTitle: "Крипторынки · текущие котировки", cryptoSubtitle: "Тики Kraken и Binance · ориентировочная конвертация в EUR и CHF",
+            waitingBot: "Ожидание запуска бота", asset: "Актив", exchange: "Биржа", currency: "Валюта", chartAria: "График цены криптовалюты в реальном времени",
+            chartWaiting: "Запустите бота, чтобы получать тики.", startBotPrices: "Запустите бота, чтобы загрузить цены.",
+            spread: "Спред", cryptoDisclaimer: "Цена последней публичной сделки, а не гарантированная цена покупки. Ориентировочная конвертация из USDT≈USD использует ежедневные справочные курсы ЕЦБ. На графике сохраняются тики с момента открытия страницы.",
+            fiatTitle: "Фиатные валюты", fiatSubtitle: "Количество единиц валюты за 1 EUR", loading: "Загрузка", loadingFx: "Загрузка справочных курсов…",
+            dailyReference: "Ежедневный справочный курс", fxDisclaimer: "Справочные курсы ЕЦБ через Frankfurter — это не потоковые Forex-котировки.",
+            ecbLink: "ЕЦБ · валютные курсы ↗", inboundFlows: "Наблюдаемые входящие потоки", outboundFlows: "Наблюдаемые исходящие потоки", latestSource: "Последняя публикация источника",
+            networkTitle: "Европейская газовая сеть", networkSubtitle: "Трансграничные точки и направления опубликованных наблюдений", loadingPoints: "Загрузка точек ENTSOG…",
+            mapAria: "Схематическая карта точек газовых потоков ENTSOG", entry: "Вход", exit: "Выход",
+            mapDisclaimer: "Схема позиций ENTSOG, а не карта маршрутов газопроводов. Это наблюдения в точках, а не национальные итоги.",
+            newsTitle: "Новости и геополитические риски", newsWindow: "Новости · последние 24 ч", loadingSources: "Загрузка источников…",
+            newsDisclaimer: "Это сообщения СМИ, а не проверенные инциденты или прогнозы.",
+            ttfTitle: "TTF · проверенная котировка отсутствует", ttfSubtitle: "Цена европейского газа — требуется поставщик рыночных данных", unavailable: "Недоступно",
+            ttfUnavailableTitle: "Цена и единица не указаны", ttfUnavailableText: "Проверенный источник котировок TTF не подключён. Панель не выдумывает цену или единицу котировки. Спецификация ICE описывает контракт, но не предоставляет поток цен.",
+            ttfSource: "Только спецификация контракта:", iceLink: "ICE Dutch TTF ↗", flowsTitle: "Последние наблюдения потоков",
+            flowsSubtitle: "Опубликованные значения в точке · исходная единица", entsogLink: "Источник ENTSOG ↗",
+            pointOperator: "Точка / оператор", direction: "Направление", publishedValue: "Опубликованное значение", periodUpdated: "Период / обновление",
+            waitingFlows: "Ожидание данных ENTSOG.", flowDisclaimer: "Значения в точках не дедуплицированы и не равны чистому национальному импорту.",
+            cryptoMonitor: "Мониторинг криптовалют", cryptoMonitorSubtitle: "Сводка бота Kraken / Binance · дополнительная панель", readingLocal: "Чтение локальных наблюдений…",
+            footerDisclaimer: "Газовые данные: платформа прозрачности ENTSOG. Новости: GDELT или резервный RSS BBC World со ссылками на издателей. Данные могут публиковаться с задержкой; новости требуют независимой проверки.",
+            waitingTicks: "Ожидание рыночных тиков…", waitingFx: "Ожидание курсов конвертации…", ticks: "тиков",
+            utc: "UTC", pair: "Пара", grossSpread: "Валовый спред", health: "Состояние",
+            allPricesFresh: "Все цены актуальны", partialPrices: "Часть цен актуальна", startBot: "Запустите бота", stalePrices: "Цены устарели",
+            unavailableFeed: "Поток недоступен", fxAvailable: "Доступны курсы ЕЦБ", fxUnavailable: "Курсы недоступны",
+            publishedOn: "Опубликовано: {date}", reference: "EUR / {currency}", inverseReference: "CHF / EUR",
+            inboundNote: "наблюдения в точках (не национальный итог)", outboundNote: "наблюдения в точках (не национальный итог)",
+            recentPublication: "Получена свежая публикация", oldPublication: "Последняя публикация устарела", noUsableObservation: "Нет доступных наблюдений",
+            recentSourceData: "Свежие данные источника", delayedSourceData: "Данные задержаны / отсутствуют",
+            noMapPoints: "В недавних данных нет доступных географических точек",
+            staleFlowUnavailable: "В ENTSOG нет доступных свежих значений. Попробуйте позже.",
+            noFlowObservation: "Сейчас нет доступных наблюдений потоков.", entryDirection: "↙ Вход", exitDirection: "↗ Выход",
+            sourceUpdate: "Обновление источника: {date}", officialEntsog: "Официальные данные ENTSOG.",
+            fxFailure: "Не удалось загрузить валютные курсы. Сервер повторит попытку автоматически.",
+            flowFailure: "Не удалось загрузить данные ENTSOG. Сервер повторит попытку автоматически.",
+            noArticles: "За выбранный период подходящих статей нет.", mediaSource: "Источник СМИ",
+            newsFailure: "Не удалось загрузить новости. Будет выполнена повторная попытка.",
+            noCryptoObservation: "Нет локальных наблюдений криптовалют.", cryptoLogUnavailable: "Журнал недоступен",
+            botStatusFresh: "Свежие данные", botStatusStale: "Данные устарели", botStatusNone: "Нет наблюдений",
+            chartNoPrice: "цена недоступна", chartStale: "последняя цена устарела", chartReceived: "Получено", chartLastTickStale: "Устарело · последний тик",
+            conversionUnavailable: "Конвертация EUR/CHF недоступна", conversionUnavailableShort: "конвертация недоступна",
+            staleAge: "Устарело · {age}с", receivedAge: "{age}с назад", staleAgeLabel: "Устарело · последний тик {age}с назад",
+            unknownError: "Непредвиденная ошибка"
+        },
+        en: {
+            language: "Language", languageAria: "Display language", clockCaption: "Local time · auto-refresh", refresh: "↻ Refresh",
+            brandSubtitle: "Markets & energy terminal",
+            eyebrow: "Market terminal · sourced data", pageTitle: "Markets, energy & risk",
+            intro: "Prices are shown in EUR and CHF. Cadence, sources, and limitations distinguish live quotes from daily reference rates.",
+            marketsAria: "Live markets", cryptoTitle: "Crypto markets · live quotes", cryptoSubtitle: "Kraken and Binance ticks · indicative EUR and CHF conversions",
+            waitingBot: "Waiting for bot", asset: "Asset", exchange: "Exchange", currency: "Currency", chartAria: "Live crypto price chart",
+            chartWaiting: "Start the bot to receive market ticks.", startBotPrices: "Start the bot to load prices.",
+            spread: "Spread", cryptoDisclaimer: "Public last-trade price, not a guaranteed purchase price. Indicative conversion assumes USDT≈USD and uses daily ECB reference rates. The chart retains ticks received since this page was opened.",
+            fiatTitle: "Fiat currencies", fiatSubtitle: "Currency units per 1 EUR", loading: "Loading", loadingFx: "Loading reference rates…",
+            dailyReference: "Daily reference", fxDisclaimer: "ECB reference rates via Frankfurter — these are not tick-by-tick Forex quotes.",
+            ecbLink: "ECB · exchange rates ↗", inboundFlows: "Observed inbound flows", outboundFlows: "Observed outbound flows", latestSource: "Latest source publication",
+            networkTitle: "European gas network", networkSubtitle: "Cross-border points and direction of published observations", loadingPoints: "Loading ENTSOG points…",
+            mapAria: "Schematic map of ENTSOG gas-flow points", entry: "Entry", exit: "Exit",
+            mapDisclaimer: "Schematic of ENTSOG point locations, not a pipeline-route map. These are point observations, not national totals.",
+            newsTitle: "News & geopolitical risks", newsWindow: "News · last 24 hours", loadingSources: "Loading sources…",
+            newsDisclaimer: "Articles are reported information, not verified incidents or predictions.",
+            ttfTitle: "TTF · no verified quote", ttfSubtitle: "European gas price — market-data provider required", unavailable: "Unavailable",
+            ttfUnavailableTitle: "Price and unit not shown", ttfUnavailableText: "No verifiable TTF quote feed is connected. The dashboard does not invent a price or quote unit. ICE specifications describe the contract; they do not provide a price feed.",
+            ttfSource: "Contract reference only:", iceLink: "ICE Dutch TTF ↗", flowsTitle: "Latest flow observations",
+            flowsSubtitle: "Values published at the point · source-native unit", entsogLink: "ENTSOG source ↗",
+            pointOperator: "Point / operator", direction: "Direction", publishedValue: "Published value", periodUpdated: "Period / update",
+            waitingFlows: "Waiting for ENTSOG data.", flowDisclaimer: "Point values are not deduplicated and are not equivalent to a country's net imports.",
+            cryptoMonitor: "Crypto monitoring", cryptoMonitorSubtitle: "Kraken / Binance bot summary · secondary panel", readingLocal: "Reading local observations…",
+            footerDisclaimer: "Gas data: ENTSOG Transparency Platform. News: GDELT or BBC World RSS fallback, linked to original publishers. Source data may be delayed and news requires independent verification.",
+            waitingTicks: "Waiting for market ticks…", waitingFx: "Waiting for conversion rates…", ticks: "ticks",
+            utc: "UTC", pair: "Pair", grossSpread: "Gross spread", health: "Status",
+            allPricesFresh: "All prices up to date", partialPrices: "Some prices up to date", startBot: "Start the bot", stalePrices: "Prices stale",
+            unavailableFeed: "Feed unavailable", fxAvailable: "ECB rates available", fxUnavailable: "Rates unavailable",
+            publishedOn: "Published {date}", reference: "EUR / {currency}", inverseReference: "CHF / EUR",
+            inboundNote: "point observations (not a national total)", outboundNote: "point observations (not a national total)",
+            recentPublication: "Recent publication received", oldPublication: "Latest publication is old", noUsableObservation: "No usable observations",
+            recentSourceData: "Recent source data", delayedSourceData: "Data delayed / unavailable",
+            noMapPoints: "No usable geographic points in recent data",
+            staleFlowUnavailable: "ENTSOG has no recent usable value. Please try again later.",
+            noFlowObservation: "No flow observations are currently available.", entryDirection: "↙ Entry", exitDirection: "↗ Exit",
+            sourceUpdate: "Source update: {date}", officialEntsog: "Official ENTSOG data.",
+            fxFailure: "Could not load exchange rates. The server will retry automatically.",
+            flowFailure: "Could not load ENTSOG data. The server will retry automatically.",
+            noArticles: "No matching articles in the search window.", mediaSource: "Media source",
+            newsFailure: "Could not load news. The feed will be retried automatically.",
+            noCryptoObservation: "No local crypto observations.", cryptoLogUnavailable: "Log unavailable",
+            botStatusFresh: "Recent data", botStatusStale: "Data is stale", botStatusNone: "No observations",
+            chartNoPrice: "price unavailable", chartStale: "last price is stale", chartReceived: "Received", chartLastTickStale: "Stale · last tick",
+            conversionUnavailable: "EUR/CHF conversion unavailable", conversionUnavailableShort: "conversion unavailable",
+            staleAge: "Stale · {age}s", receivedAge: "{age}s ago", staleAgeLabel: "Stale · last tick {age}s ago",
+            unknownError: "Unexpected error"
+        }
+    };
+    const supportedLanguages = Object.keys(translations);
+    const languageLocales = { fr: "fr-FR", ru: "ru-RU", en: "en-GB" };
+    let currentLanguage = "fr";
+    try {
+        const savedLanguage = localStorage.getItem("pravda-dashboard-language");
+        if (supportedLanguages.includes(savedLanguage)) currentLanguage = savedLanguage;
+    } catch {
+        currentLanguage = "fr";
+    }
+
+    function t(key, values = {}) {
+        const template = translations[currentLanguage][key] || translations.fr[key] || key;
+        return template.replace(/\{(\w+)\}/g, (_, name) => safeText(values[name]));
+    }
+
+    function applyLanguage() {
+        document.documentElement.lang = currentLanguage;
+        document.title = {
+            fr: "Pravda | Terminal marchés & énergie",
+            ru: "Pravda | Рынки и энергетика",
+            en: "Pravda | Markets & Energy"
+        }[currentLanguage];
+        for (const element of document.querySelectorAll("[data-i18n]")) {
+            const key = element.dataset.i18n;
+            element.textContent = t(key);
+        }
+        for (const element of document.querySelectorAll("[data-i18n-aria]")) {
+            element.setAttribute("aria-label", t(element.dataset.i18nAria));
+        }
+        $("language-select").value = currentLanguage;
+        updateClock();
+        if (latestMarket) renderMarket(latestMarket);
+        if (latestFx) renderFx(latestFx);
+    }
+
     const $ = (id) => document.getElementById(id);
     const safeText = (value) => value == null ? "" : String(value);
     const setStatus = (element, state, label) => {
@@ -271,10 +459,10 @@
     const formatDate = (value) => {
         if (!value) return "—";
         const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? safeText(value) : date.toLocaleString("fr-FR");
+        return Number.isNaN(date.getTime()) ? safeText(value) : date.toLocaleString(languageLocales[currentLanguage]);
     };
-    const numericFormat = (value) => new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 }).format(value);
-    const formatCurrency = (value, currency) => new Intl.NumberFormat("fr-FR", {
+    const numericFormat = (value) => new Intl.NumberFormat(languageLocales[currentLanguage], { maximumFractionDigits: 2 }).format(value);
+    const formatCurrency = (value, currency) => new Intl.NumberFormat(languageLocales[currentLanguage], {
         style: "currency",
         currency,
         maximumFractionDigits: 2
@@ -321,7 +509,7 @@
         if (convertedHistory.length < 2) {
             context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted").trim();
             context.font = "13px Segoe UI";
-            context.fillText(latestFx ? "En attente des ticks de marché…" : "En attente des taux de conversion…", 18, height / 2);
+            context.fillText(latestFx ? t("waitingTicks") : t("waitingFx"), 18, height / 2);
             return;
         }
         const prices = convertedHistory.map(point => point.convertedPrice);
@@ -346,7 +534,7 @@
             ? getComputedStyle(document.documentElement).getPropertyValue("--green").trim()
             : getComputedStyle(document.documentElement).getPropertyValue("--red").trim();
         context.font = "12px Segoe UI";
-        context.fillText(`${change >= 0 ? "+" : ""}${change.toFixed(3)}% · ${convertedHistory.length} ticks`, padding, 16);
+        context.fillText(`${change >= 0 ? "+" : ""}${change.toFixed(3)}% · ${convertedHistory.length} ${t("ticks")}`, padding, 16);
         context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted").trim(); context.textAlign = "right";
         context.fillText(formatCurrency(max, currency), width - padding, 16);
         context.fillText(formatCurrency(min, currency), width - padding, height - 5);
@@ -378,10 +566,10 @@
         const allQuotes = Object.values(symbols).flatMap(quotes => Object.values(quotes));
         const liveQuoteCount = allQuotes.filter(quote => quote.status === "live").length;
         if (liveQuoteCount > 0) {
-            const label = liveQuoteCount === allQuotes.length ? "Tous les prix récents" : "Prix récents partiels";
+            const label = liveQuoteCount === allQuotes.length ? t("allPricesFresh") : t("partialPrices");
             setStatus($("market-feed-status"), "live", label);
         } else {
-            setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? "Démarre le bot" : "Prix périmés");
+            setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? t("startBot") : t("stalePrices"));
         }
         const tbody = $("crypto-quotes");
         tbody.replaceChildren();
@@ -405,7 +593,7 @@
                         cell.className = "quote-stale";
                         cell.title = `Dernier tick reçu il y a ${quote.age_seconds}s`;
                         const stale = document.createElement("small");
-                        stale.textContent = `Périmé · ${quote.age_seconds}s`;
+                        stale.textContent = t("staleAge", { age: quote.age_seconds });
                         values.append(stale);
                     }
                 } else {
@@ -428,33 +616,35 @@
         const selectedPrice = hasPrice ? convertQuote(quote.price, currency) : null;
         const dualCurrencyPrice = hasPrice && euroPrice !== null && chfPrice !== null
             ? `${formatCurrency(euroPrice, "EUR")} · ${formatCurrency(chfPrice, "CHF")}`
-            : "Conversion EUR/CHF indisponible";
+            : t("conversionUnavailable");
         $("chart-price").textContent = hasPrice
-            ? `${symbol} · ${exchange} · ${dualCurrencyPrice}${quote.status === "live" ? "" : " · dernier prix périmé"}`
-            : `${symbol} · ${exchange} · prix indisponible`;
-        $("price-chart").setAttribute("aria-label", `Graphique de prix crypto live en ${currency}`);
+            ? `${symbol} · ${exchange} · ${dualCurrencyPrice}${quote.status === "live" ? "" : ` · ${t("chartStale")}`}`
+            : `${symbol} · ${exchange} · ${t("chartNoPrice")}`;
+        $("price-chart").setAttribute("aria-label", `${t("chartAria")} · ${currency}`);
         $("price-chart").dataset.selectedCurrency = currency;
-        if (selectedPrice === null && hasPrice) $("chart-price").textContent += " · conversion indisponible";
-        $("chart-age").textContent = quote ? `${quote.status === "live" ? "Reçu" : "Périmé · dernier tick reçu"} il y a ${quote.age_seconds}s · ${formatDate(quote.received_at)}` : "Lance le bot pour recevoir les ticks.";
+        if (selectedPrice === null && hasPrice) $("chart-price").textContent += ` · ${t("conversionUnavailableShort")}`;
+        $("chart-age").textContent = quote
+            ? `${quote.status === "live" ? t("receivedAge", { age: quote.age_seconds }) : t("staleAgeLabel", { age: quote.age_seconds })} · ${formatDate(quote.received_at)}`
+            : t("chartWaiting");
         drawPriceChart();
     }
 
     function renderFx(payload) {
         latestFx = payload;
-        setStatus($("fx-status"), "live", "Taux BCE disponibles");
-        $("fx-asof").textContent = `Publié le ${formatDate(payload.date)}`;
+        setStatus($("fx-status"), "live", t("fxAvailable"));
+        $("fx-asof").textContent = t("publishedOn", { date: formatDate(payload.date) });
         const rates = $("fx-rates");
         rates.replaceChildren();
         for (const [currency, value] of Object.entries(payload.rates || {})) {
             const row = document.createElement("div"); row.className = "fx-row";
-            const code = document.createElement("span"); code.textContent = `EUR / ${currency}`;
+            const code = document.createElement("span"); code.textContent = t("reference", { currency });
             const rate = document.createElement("strong"); rate.textContent = numericFormat(value);
             row.append(code, rate); rates.append(row);
         }
         const chfToEur = payload.rates?.CHF;
         if (Number.isFinite(chfToEur) && chfToEur > 0) {
             const row = document.createElement("div"); row.className = "fx-row";
-            const code = document.createElement("span"); code.textContent = "CHF / EUR";
+            const code = document.createElement("span"); code.textContent = t("inverseReference");
             const rate = document.createElement("strong"); rate.textContent = numericFormat(1 / chfToEur);
             row.append(code, rate); rates.append(row);
         }
@@ -470,7 +660,7 @@
             const text = document.createElementNS(NS, "text");
             text.setAttribute("x", "400"); text.setAttribute("y", "210");
             text.setAttribute("text-anchor", "middle"); text.setAttribute("class", "map-axis");
-            text.textContent = "Aucun point géographique exploitable dans les données récentes";
+            text.textContent = t("noMapPoints");
             svg.append(text);
             return;
         }
@@ -492,7 +682,8 @@
             circle.setAttribute("r", String(Math.max(4, Math.min(11, 4 + Math.log10(Math.abs(row.value) + 1)))));
             circle.setAttribute("class", `map-point ${row.direction === "exit" ? "exit" : "entry"}`);
             const title = document.createElementNS(NS, "title");
-            title.textContent = `${row.point} · ${row.direction} · ${numericFormat(row.value)} ${row.unit}`;
+            const directionLabel = row.direction === "exit" ? t("exit") : t("entry");
+            title.textContent = `${row.point} · ${directionLabel} · ${numericFormat(row.value)} ${row.unit}`;
             circle.append(title); svg.append(circle);
         }
     }
@@ -503,19 +694,19 @@
         const exits = rows.filter(row => row.direction === "exit");
         $("entry-count").textContent = numericFormat(payload.entry_count ?? entries.length);
         $("exit-count").textContent = numericFormat(payload.exit_count ?? exits.length);
-        $("entry-foot").textContent = "observations de points (pas un total national)";
-        $("exit-foot").textContent = "observations de points (pas un total national)";
+        $("entry-foot").textContent = t("inboundNote");
+        $("exit-foot").textContent = t("outboundNote");
         $("source-update").textContent = formatDate(payload.latest_source_update);
-        $("flow-status").textContent = payload.status === "live" ? "Publication récente reçue" : payload.status === "stale" ? "Dernière publication ancienne" : "Aucune observation exploitable";
-        setStatus($("map-status"), payload.status === "live" ? "live" : "stale", payload.status === "live" ? "Données source récentes" : "Données retardées / absentes");
-        $("flow-notice").textContent = payload.notice || "Données officielles ENTSOG.";
+        $("flow-status").textContent = payload.status === "live" ? t("recentPublication") : payload.status === "stale" ? t("oldPublication") : t("noUsableObservation");
+        setStatus($("map-status"), payload.status === "live" ? "live" : "stale", payload.status === "live" ? t("recentSourceData") : t("delayedSourceData"));
+        $("flow-notice").textContent = t("flowDisclaimer");
         drawMap(rows);
         const container = $("flow-rows");
         container.replaceChildren();
         if (!rows.length) {
             const empty = document.createElement("div");
             empty.className = "empty";
-            empty.textContent = payload.status === "stale" ? "La source ENTSOG ne fournit pas de valeur récente exploitable. Réessaie plus tard." : "Aucune observation de flux n’est actuellement disponible.";
+            empty.textContent = payload.status === "stale" ? t("staleFlowUnavailable") : t("noFlowObservation");
             container.append(empty);
             return;
         }
@@ -528,14 +719,14 @@
             name.title = `${row.operator || ""} ${row.country || ""}`.trim();
             const direction = document.createElement("span");
             direction.className = `direction ${row.direction === "exit" ? "exit" : ""}`;
-            direction.textContent = row.direction === "exit" ? "↗ Sortie" : "↙ Entrée";
+            direction.textContent = row.direction === "exit" ? t("exitDirection") : t("entryDirection");
             const value = document.createElement("span");
             value.className = "flow-value";
             value.textContent = `${numericFormat(row.value)} ${row.unit}`;
             const time = document.createElement("span");
             time.className = "flow-sub flow-updated";
             time.textContent = formatDate(row.period_from);
-            time.title = `Mise à jour source : ${formatDate(row.updated_at)}`;
+            time.title = t("sourceUpdate", { date: formatDate(row.updated_at) });
             item.append(name, direction, value, time);
             container.append(item);
         }
@@ -550,34 +741,35 @@
     async function refreshMarket() {
         try { renderMarket(await fetchJson("/api/market")); }
         catch (error) {
-            setStatus($("market-feed-status"), "error", "Flux indisponible");
-            $("chart-age").textContent = error.message;
+            setStatus($("market-feed-status"), "error", t("unavailableFeed"));
+            $("chart-age").textContent = t("unknownError");
         }
     }
     async function refreshFx() {
         try { renderFx(await fetchJson("/api/fx")); }
         catch (error) {
-            setStatus($("fx-status"), "error", "Taux indisponibles");
-            $("fx-rates").textContent = error.message;
+            setStatus($("fx-status"), "error", t("fxUnavailable"));
+            $("fx-rates").textContent = t("fxFailure");
         }
     }
     async function refreshFlows() {
         try { renderFlows(await fetchJson("/api/eu/flows")); }
         catch (error) {
-            setStatus($("map-status"), "error", "Source indisponible");
-            $("flow-status").textContent = error.message;
-            $("flow-rows").textContent = "Impossible de charger les données ENTSOG. Le serveur réessaiera automatiquement.";
+            setStatus($("map-status"), "error", t("unavailable"));
+            $("flow-status").textContent = t("unavailable");
+            $("flow-rows").textContent = t("flowFailure");
         }
     }
     async function refreshNews() {
         const list = $("news-list");
         try {
             const payload = await fetchJson("/api/geopolitics");
-            setStatus($("news-status"), "live", `${payload.source} · ${payload.articles.length}`);
-            $("news-source").textContent = `${payload.notice} · Mis à jour ${formatDate(payload.retrieved_at)}`;
+            const sourceName = payload.source?.startsWith("BBC") ? "BBC World" : "GDELT";
+            setStatus($("news-status"), "live", `${sourceName} · ${payload.articles.length}`);
+            $("news-source").textContent = `${t("newsWindow")} · ${t("publishedOn", { date: formatDate(payload.retrieved_at) })}`;
             list.replaceChildren();
             if (!payload.articles.length) {
-                list.textContent = "Aucun article correspondant dans la fenêtre de recherche.";
+                list.textContent = t("noArticles");
                 return;
             }
             for (const article of payload.articles) {
@@ -594,25 +786,30 @@
                 const meta = document.createElement("div");
                 meta.className = "news-meta";
                 const source = document.createElement("span");
-                source.textContent = article.source || "Source média";
+                source.textContent = article.source || t("mediaSource");
                 const date = document.createElement("time");
                 date.textContent = formatDate(article.published_at);
                 meta.append(source, date); item.append(link, meta); list.append(item);
             }
         } catch (error) {
-            setStatus($("news-status"), "error", "Flux indisponible");
-            list.textContent = `${error.message}. Le flux sera réessayé automatiquement.`;
+            setStatus($("news-status"), "error", t("unavailableFeed"));
+            list.textContent = t("newsFailure");
         }
     }
     async function refreshCrypto() {
         try {
             const payload = await fetchJson("/data");
-            setStatus($("bot-status"), payload.status === "Données récentes" ? "live" : "stale", payload.status);
+            const botStatusKey = {
+                "Données récentes": "botStatusFresh",
+                "Données obsolètes": "botStatusStale",
+                "Aucune observation": "botStatusNone"
+            }[payload.status] || "botStatusStale";
+            setStatus($("bot-status"), payload.status === "Données récentes" ? "live" : "stale", t(botStatusKey));
             const rows = payload.observations || [];
-            if (!rows.length) { $("crypto-data").textContent = "Aucune observation crypto locale."; return; }
+            if (!rows.length) { $("crypto-data").textContent = t("noCryptoObservation"); return; }
             const table = document.createElement("table");
             const header = table.createTHead().insertRow();
-            for (const label of ["UTC", "Paire", "Kraken · EUR / CHF", "Binance · EUR / CHF", "Spread brut", "Santé"]) {
+            for (const label of [t("utc"), t("pair"), "Kraken · EUR / CHF", "Binance · EUR / CHF", t("grossSpread"), t("health")]) {
                 const cell = document.createElement("th"); cell.textContent = label; header.append(cell);
             }
             const body = table.createTBody();
@@ -636,18 +833,29 @@
             }
             $("crypto-data").replaceChildren(table);
         } catch (error) {
-            setStatus($("bot-status"), "error", "Journal indisponible");
-            $("crypto-data").textContent = error.message;
+            setStatus($("bot-status"), "error", t("cryptoLogUnavailable"));
+            $("crypto-data").textContent = t("unknownError");
         }
     }
-    function updateClock() { $("clock").textContent = new Date().toLocaleTimeString("fr-FR"); }
+    function updateClock() { $("clock").textContent = new Date().toLocaleTimeString(languageLocales[currentLanguage]); }
     async function refreshAll() { await Promise.all([refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto()]); }
     $("refresh-button").addEventListener("click", refreshAll);
+    $("language-select").addEventListener("change", () => {
+        currentLanguage = supportedLanguages.includes($("language-select").value) ? $("language-select").value : "fr";
+        try {
+            localStorage.setItem("pravda-dashboard-language", currentLanguage);
+        } catch {
+            $("language-select").value = currentLanguage;
+        }
+        applyLanguage();
+        refreshAll();
+    });
     $("chart-symbol").addEventListener("change", drawPriceChart);
     $("chart-exchange").addEventListener("change", drawPriceChart);
     $("chart-currency").addEventListener("change", drawPriceChart);
     window.addEventListener("resize", drawPriceChart);
-    updateClock(); refreshAll();
+    applyLanguage();
+    refreshAll();
     setInterval(updateClock, 1000);
     setInterval(refreshMarket, 1000);
     setInterval(refreshFx, 21600000);

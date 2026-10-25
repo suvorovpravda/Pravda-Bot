@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 
 from alert_gate import AlertGate
 from market_data_health import assess_market_data_snapshot
+from orderbook_execution import ExecutionEstimate
 
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -77,6 +78,14 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
         self.bot.opportunities_count = 0
         self.bot.paper_simulator = Mock()
         self.bot.paper_simulator.update.return_value = None
+        self.bot.paper_simulator.next_position_notional_usdt = 100
+        self.bot.fetch_public_execution_estimate = Mock(
+            return_value=ExecutionEstimate(
+                status="estimate_only",
+                reason="test estimate",
+                inventory_verified=False,
+            )
+        )
         self.bot.notify_opportunity = Mock()
         self.bot.ask_llm_analysis = Mock(return_value="analysis")
         self.bot.log_opportunity = Mock()
@@ -101,6 +110,10 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(thread_patch.stop)
 
     async def run_thread_call(self, function, *args, **kwargs):
+        if function is self.bot.fetch_public_execution_estimate:
+            return function(*args, **kwargs)
+        if function is self.bot.log_paper_execution_estimate:
+            return None
         if function is self.bot.log_spread_observation:
             self.log_calls += 1
             self.logged_spread_rows.append(args)

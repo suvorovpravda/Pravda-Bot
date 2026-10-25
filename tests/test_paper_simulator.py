@@ -60,6 +60,21 @@ class PaperSimulatorTests(unittest.TestCase):
             self.assertEqual(result["notional_usdt"], 40)
             self.assertEqual(simulator.cash_usdt, 0)
 
+    def test_execution_rejection_prevents_opening_a_new_position(self):
+        with tempfile.TemporaryDirectory() as directory:
+            simulator = self.make_simulator(directory)
+            result = simulator.update(
+                "BTC/USDT",
+                100.5,
+                100,
+                opportunity_confirmed=True,
+                execution_approved=False,
+                now=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            )
+            self.assertIsNone(result)
+            self.assertEqual(simulator.cash_usdt, 1000)
+            self.assertEqual(simulator.positions, {})
+
     def test_short_spread_direction_and_maximum_holding_exit(self):
         with tempfile.TemporaryDirectory() as directory:
             simulator = self.make_simulator(directory)

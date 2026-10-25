@@ -26,6 +26,9 @@ class BotConfig:
     paper_fixed_position_usdt: float
     paper_exit_spread_percent: float
     paper_max_hold_seconds: float
+    paper_taker_fee_percent: float
+    paper_max_slippage_percent: float
+    paper_orderbook_max_age_seconds: float
     ntfy_topic_url: str
 
 
@@ -129,6 +132,15 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
         ),
         paper_max_hold_seconds=_float_setting(
             values, "PAPER_MAX_HOLD_SECONDS", 3600, allow_zero=False
+        ),
+        paper_taker_fee_percent=_float_setting(
+            values, "PAPER_TAKER_FEE_PERCENT", 0.1, allow_zero=True
+        ),
+        paper_max_slippage_percent=_float_setting(
+            values, "PAPER_MAX_SLIPPAGE_PERCENT", 0.5, allow_zero=True
+        ),
+        paper_orderbook_max_age_seconds=_float_setting(
+            values, "PAPER_ORDERBOOK_MAX_AGE_SECONDS", 2, allow_zero=False
         ),
         ntfy_topic_url=ntfy_topic_url,
     )

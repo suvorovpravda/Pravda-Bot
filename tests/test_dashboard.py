@@ -205,6 +205,21 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("convertQuote(price, currency)", template_text)
         self.assertNotIn("Contrat futures néerlandais · EUR/MWh", template_text)
 
+    def test_dashboard_language_selector_supports_and_persists_three_languages(self):
+        template_text = html.unescape(HTML_TEMPLATE)
+        self.assertIn('id="language-select"', template_text)
+        for language, display_name in (
+            ("fr", "Français"),
+            ("ru", "Русский"),
+            ("en", "English"),
+        ):
+            with self.subTest(language=language):
+                self.assertIn(f'<option value="{language}">{display_name}</option>', template_text)
+                self.assertIn(f"{language}: {{", template_text)
+        self.assertIn('localStorage.setItem("pravda-dashboard-language"', template_text)
+        self.assertIn('document.documentElement.lang = currentLanguage', template_text)
+        self.assertIn('new Intl.NumberFormat(languageLocales[currentLanguage]', template_text)
+
     def test_european_flows_endpoint_serves_official_payload(self):
         expected = {
             "status": "live",

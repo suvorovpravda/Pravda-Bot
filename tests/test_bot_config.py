@@ -16,6 +16,9 @@ class BotConfigTests(unittest.TestCase):
         self.assertEqual(config.paper_mode, "portfolio")
         self.assertEqual(config.paper_starting_balance_usdt, 1000)
         self.assertEqual(config.paper_position_percent, 10)
+        self.assertEqual(config.paper_taker_fee_percent, 0.1)
+        self.assertEqual(config.paper_max_slippage_percent, 0.5)
+        self.assertEqual(config.paper_orderbook_max_age_seconds, 2)
         self.assertEqual(config.alert_confirmation_seconds, 3)
         self.assertEqual(config.market_data_stale_seconds, 4.0)
 
@@ -37,6 +40,26 @@ class BotConfigTests(unittest.TestCase):
         self.assertEqual(config.spread_log_interval_seconds, 3)
         self.assertEqual(config.dashboard_interval_seconds, 15)
         self.assertEqual(config.price_alert_cooldown_seconds, 0)
+
+    def test_paper_execution_constraints_are_configurable_and_validated(self):
+        config = load_config(
+            {
+                "PAPER_TAKER_FEE_PERCENT": "0.2",
+                "PAPER_MAX_SLIPPAGE_PERCENT": "0.25",
+                "PAPER_ORDERBOOK_MAX_AGE_SECONDS": "3",
+            }
+        )
+        self.assertEqual(config.paper_taker_fee_percent, 0.2)
+        self.assertEqual(config.paper_max_slippage_percent, 0.25)
+        self.assertEqual(config.paper_orderbook_max_age_seconds, 3)
+        for key, value in (
+            ("PAPER_TAKER_FEE_PERCENT", "-0.1"),
+            ("PAPER_MAX_SLIPPAGE_PERCENT", "nan"),
+            ("PAPER_ORDERBOOK_MAX_AGE_SECONDS", "0"),
+        ):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(ValueError, key):
+                    load_config({key: value})
 
     def test_invalid_numeric_settings_are_rejected(self):
         for key, value in (

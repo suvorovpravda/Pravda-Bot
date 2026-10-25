@@ -4,7 +4,7 @@
 
 **Langues : Français · [Русский](#russian) · [English](#english)**
 
-> **Avertissement important :** le bot ne passe aucun ordre et ne nécessite aucune clé d’échange. Il lit des prix de dernier échange, pas des prix acheteur/vendeur exécutables. La simulation papier est indicative : elle ne modélise pas les carnets, les exécutions, le slippage ni toutes les contraintes d’une vraie stratégie. Ce projet ne fournit pas de conseil financier.
+> **Avertissement important :** le bot ne passe aucun ordre et ne nécessite aucune clé d’échange. Les signaux utilisent les prix de dernier échange. Lors d’un signal confirmé, une estimation séparée consulte les carnets publics et estime la profondeur, le prix moyen, les frais taker configurés, le slippage et les minima de marché. Cette estimation ne vérifie pas les soldes, l’inventaire, la marge, les emprunts, les frais réels du compte, les délais d’exécution ou les transferts ; elle ne constitue donc pas une preuve d’exécutabilité. Ce projet ne fournit pas de conseil financier.
 
 ## Sommaire
 
@@ -34,19 +34,21 @@
 - Alertes de mouvement de prix et d’opportunité via ntfy, si un sujet privé est configuré.
 - Analyse facultative des opportunités admissibles avec un serveur local compatible LM Studio.
 - Simulateur papier en portefeuille ou à taille fixe ; aucune transaction réelle n’est envoyée.
+- Estimation au signal confirmé d’un achat et d’une vente au marché sur les carnets publics Kraken/Binance : balayage de profondeur, VWAP, remplissage partiel, frais taker, slippage et limites/precision de quantité fournies par CCXT. Une estimation rejetée, partielle ou indisponible n’ouvre pas de nouvelle position papier.
 
 ### Tableau de bord local
 
 - Cotations crypto reçues du bot et graphique des ticks observés depuis l’ouverture de la page.
 - Prix crypto convertis et présentés en **EUR et CHF**, avec choix de devise pour le graphique. Les conversions utilisent les taux de référence quotidiens BCE diffusés par Frankfurter et l’hypothèse indicative USDT ≈ USD.
+- Sélecteur d’interface **Français / Русский / English**, mémorisé localement dans le navigateur.
 - État et ancienneté visibles par flux ; un prix périmé est signalé et ne doit pas être considéré comme une cotation actuelle.
 - Observations de flux physiques transfrontaliers fournies par ENTSOG, actualités trouvées par GDELT avec repli sur BBC World RSS, et sources/dates affichées.
-- Interface locale en français avec une palette bleu, blanc et rouge.
 - Le serveur écoute sur `127.0.0.1` par défaut ; les autres appareils du réseau n’y ont pas accès par défaut.
 
 ## Ce que le projet ne fait pas
 
 - **Pas d’ordres réels :** la surveillance des marchés et le simulateur papier ne sont pas un système de trading automatisé.
+- **Pas de validation de compte :** les carnets publics ne révèlent ni soldes ni inventaire spot. L’estimation d’exécution indique explicitement que ces éléments ne sont pas vérifiés ; elle ne modélise pas non plus marge, emprunt, transferts, limites de risque propres au compte ou latence de placement.
 - **Pas de cours TTF :** aucun fournisseur de prix de marché autorisé n’est connecté. Le tableau de bord ne présente donc ni cours TTF ni unité de cotation comme s’ils étaient disponibles. Le lien ICE est une référence aux spécifications du contrat, pas un flux de prix.
 - **Pas de carte de tracés réels de pipelines :** la visualisation ENTSOG représente des observations à des points transfrontaliers et leurs coordonnées publiées ; ce n’est pas un réseau routier ou un tracé de conduite.
 - **Pas de suivi AIS des navires gaziers :** aucune position ou route commerciale de navire n’est récupérée. Il faut intégrer un fournisseur AIS et respecter ses clés, licences et droits de redistribution avant d’afficher ces données.
@@ -229,8 +231,11 @@ Les paramètres peuvent être définis dans `.env` ou dans l’environnement du 
 | `PAPER_FIXED_POSITION_USDT` | `100` | Taille maximale de position en mode `fixed`, limitée au cash disponible. |
 | `PAPER_EXIT_SPREAD_PERCENT` | `0.05` | Seuil de clôture simulée selon le sens du trade. |
 | `PAPER_MAX_HOLD_SECONDS` | `3600` | Durée maximale de détention simulée avant clôture. |
+| `PAPER_TAKER_FEE_PERCENT` | `0.1` | Frais taker estimés **par jambe** de l’estimation d’exécution ; remplacez-les selon vos tarifs, car le bot ne lit pas les frais privés du compte. |
+| `PAPER_MAX_SLIPPAGE_PERCENT` | `0.5` | Slippage cumulé maximal estimé entre les deux jambes. |
+| `PAPER_ORDERBOOK_MAX_AGE_SECONDS` | `2` | Âge local maximal autorisé des snapshots de carnet récupérés via REST. |
 
-Le simulateur travaille en USDT en interne. Les montants d’état du portefeuille et les CSV du simulateur ne sont pas convertis en EUR/CHF par le tableau de bord.
+Le simulateur travaille en USDT en interne. Les carnets sont des instantanés publics REST avec heure de réception locale, pas un flux L2 continu. `estimate_only` signifie que profondeur, minima et contrôles configurés passent, pas que les soldes sont suffisants ; une estimation partielle n’ouvre pas de position papier. Cette vérification porte sur l’entrée du simulateur ; les positions et leur clôture dans `paper_trades.csv` utilisent encore le spread ticker, pas des remplissages réels de carnets. L’estimation n’intègre ni frais privés exacts, ni frais réseau/retrait, ni mouvements de portefeuille. Les montants du simulateur ne sont pas convertis en EUR/CHF par le tableau de bord.
 
 ### Paramètres du tableau de bord
 
@@ -252,6 +257,7 @@ Le bot et le serveur ont deux seuils de fraîcheur distincts : `MARKET_DATA_STAL
 | `arbitrage_log.csv` | Opportunités et analyses LLM retenues. | Non |
 | `spread_observations.csv` | Échantillons numériques de spreads, seuils, état et horodatages. | Non |
 | `paper_trades.csv` | Transactions virtuelles clôturées et résultats estimés. | Non |
+| `paper_execution_estimates.csv` | Résultats détaillés des estimations d’exécution et rejets de carnets. | Non |
 | `market_snapshot.json` | Derniers prix reçus des flux d’échange pour le dashboard local. | Non |
 | `lng_observations.csv` | Exemples locaux produits par l’outil GNL autonome. | Non |
 | `.env` | Configuration et éventuelles URL privées. | Non |
@@ -260,7 +266,7 @@ Ces fichiers sont ignorés par `.gitignore`. Ne forcez pas leur ajout au dépôt
 
 ### Spread, frais et interprétation
 
-Le taux de frais estimé est fixe à **0,36 %** et sert uniquement à un calcul indicatif du spread net. Il ne prend pas en compte le slippage, les frais réseau/retrait, les délais ou les tarifs particuliers des plateformes.
+Le détecteur de signal conserve un taux simplifié fixe à **0,36 %** pour son estimation de spread net. Le contrôle d’exécution utilise séparément `PAPER_TAKER_FEE_PERCENT` pour chacune des deux jambes, les niveaux visibles du carnet, les limites de slippage et les minima de marché publics. Le taux de frais réel du compte n’est pas récupéré. Les frais réseau/retrait, les délais, les soldes, les emprunts et les éventuels changements de carnet pendant l’envoi ne sont pas simulés.
 
 Le détecteur calcule le spread brut absolu comme `abs(Kraken - Binance) / min(Kraken, Binance)`. Le simulateur papier utilise un spread signé différent, `(Kraken - Binance) / Binance`. Leurs pourcentages ne sont donc pas directement comparables. Les observations historiques aident à diagnostiquer les données et le comportement du bot ; elles ne démontrent pas qu’une opération serait exécutable ou rentable.
 
@@ -354,6 +360,7 @@ Pravda-Bot/
 ├── alert_gate.py            # Confirmation et hystérésis des alertes
 ├── reconnect.py             # Reconnexion WebSocket avec backoff
 ├── paper_simulator.py       # Simulation de portefeuille sans ordres
+├── orderbook_execution.py  # Estimation publique des remplissages et de la profondeur
 ├── security_and_fees.py     # Contrôles de prix et calculs de spread
 ├── csv_schema.py            # Schéma des observations
 ├── bot_dashboard.py         # Résumé Rich du terminal
@@ -388,7 +395,7 @@ Aucun fichier de licence n’est actuellement fourni dans ce dépôt. En attenda
 
 **Pravda-Bot** — локальный Python-проект для мониторинга крипторынка и европейской энергетики. Он получает публичные котировки Kraken и Binance, измеряет спреды, сохраняет наблюдения для анализа и предоставляет локальную веб-панель.
 
-> **Важно:** бот не размещает реальные ордера и не требует ключей бирж. Он использует цены последних сделок, а не исполнимые цены покупки/продажи. Бумажный симулятор носит справочный характер и не моделирует стаканы, исполнение, проскальзывание и все ограничения реальной стратегии. Это не финансовая рекомендация.
+> **Важно:** бот не размещает реальные ордера и не требует ключей бирж. Сигналы используют цены последних сделок. При подтверждении сигнала отдельная оценка запрашивает публичные стаканы и рассчитывает глубину, среднюю цену, заданную комиссию taker, проскальзывание и минимальные параметры рынка. Она не проверяет балансы, спотовый инвентарь, маржу, займы, фактические комиссии аккаунта, задержки исполнения или переводы и не доказывает исполнимость сделки. Это не финансовая рекомендация.
 
 ## Возможности
 
@@ -400,6 +407,7 @@ Aucun fichier de licence n’est actuellement fourni dans ce dépôt. En attenda
 - Уведомления о движении цены и возможностях через ntfy при настройке темы.
 - Необязательный анализ прошедших проверки сигналов через локальный сервер, совместимый с LM Studio.
 - Бумажная симуляция портфеля или фиксированного размера; реальные сделки не отправляются.
+- При подтверждённом сигнале оцениваются рыночные заявки по публичным стаканам Kraken/Binance: глубина, VWAP, частичное исполнение, комиссия taker, проскальзывание, лимиты количества и точность из CCXT. Отклонённая, частичная или недоступная оценка не открывает новую бумажную позицию.
 
 ### Локальная панель
 
@@ -407,12 +415,13 @@ Aucun fichier de licence n’est actuellement fourni dans ce dépôt. En attenda
 - Цены криптовалют в **EUR и CHF**: пересчёт использует ежедневные справочные курсы ЕЦБ через Frankfurter и приближение USDT ≈ USD.
 - Статус и возраст каждого биржевого потока; устаревшая цена отмечается и не выдаётся за текущую.
 - Наблюдения за физическими трансграничными потоками газа ENTSOG и новости GDELT с резервным RSS BBC World.
-- Локальный интерфейс в сине-бело-красной палитре.
+- Локальный интерфейс на французском, русском и английском языках; выбор запоминается браузером. Палитра сине-бело-красная.
 - По умолчанию сервер доступен только на `127.0.0.1`.
 
 ## Ограничения и данные, которых пока нет
 
 - **Реальные ордера не размещаются.** Мониторинг и бумажная симуляция не являются торговым роботом.
+- **Счёт не проверяется.** Публичные стаканы не показывают балансы и спотовые активы. Оценка явно отмечает их как непроверенные; она также не моделирует маржу, займы, переводы, лимиты аккаунта или задержку отправки ордера.
 - **Котировки TTF нет.** Не подключён лицензированный поставщик рыночных цен. Панель не показывает цену или единицу котировки TTF. Ссылка ICE описывает спецификации контракта, а не предоставляет поток котировок.
 - **Нет реальной карты трубопроводов.** Схема ENTSOG показывает точки трансграничных наблюдений, а не трассы газопроводов.
 - **Нет отслеживания газовозов по AIS.** Для отображения позиций и маршрутов необходим поставщик AIS, его ключ и права на хранение и распространение данных.
@@ -530,8 +539,12 @@ CHF = EUR × (CHF за 1 EUR)
 | `PAPER_FIXED_POSITION_USDT` | `100` |
 | `PAPER_EXIT_SPREAD_PERCENT` | `0.05` |
 | `PAPER_MAX_HOLD_SECONDS` | `3600` |
+| `PAPER_TAKER_FEE_PERCENT` | `0.1` |
+| `PAPER_MAX_SLIPPAGE_PERCENT` | `0.5` |
+| `PAPER_ORDERBOOK_MAX_AGE_SECONDS` | `2` |
 
-Симулятор ведёт учёт в USDT. Баланс и CSV симулятора не конвертируются панелью в EUR/CHF.
+Первые два параметра стакана настраивают комиссию taker **за каждую сторону** и максимальное суммарное проскальзывание; задайте комиссию согласно тарифу своего аккаунта. Максимальный возраст относится ко времени локального получения REST-снимка, а не к гарантированному времени биржи. `estimate_only` означает лишь, что видимая глубина, публичные минимумы и настройки прошли проверку; баланс не проверяется. Частичная оценка не открывает позицию. Комиссии аккаунта, сеть/вывод, задержки, изменение стакана при отправке и движения портфеля не моделируются. Учёт ведётся в USDT, без конвертации в EUR/CHF.
+Проверка стакана применяется только при входном сигнале; позиции и их закрытие в `paper_trades.csv` пока рассчитываются по тикерному спреду, а не по фактическим исполнениям. Комиссии аккаунта, сеть/вывод, задержки, изменение стакана при отправке и движения портфеля не моделируются. Учёт ведётся в USDT, без конвертации в EUR/CHF.
 
 ### Панель
 
@@ -541,7 +554,7 @@ CHF = EUR × (CHF за 1 EUR)
 
 ## Файлы и анализ
 
-Локальные `arbitrage_log.csv`, `spread_observations.csv`, `paper_trades.csv`, `market_snapshot.json`, `lng_observations.csv` и `.env` исключены из Git. Не добавляйте их принудительно, если они содержат личные данные или секреты.
+Локальные `arbitrage_log.csv`, `spread_observations.csv`, `paper_trades.csv`, `paper_execution_estimates.csv`, `market_snapshot.json`, `lng_observations.csv` и `.env` исключены из Git. Не добавляйте их принудительно, если они содержат личные данные или секреты.
 
 Команды анализа не подключаются к сети:
 
@@ -590,7 +603,7 @@ GitHub Actions запускает проверку импортов/синтак
 
 **Pravda-Bot** is a local Python project for monitoring crypto markets and European energy data. It consumes public Kraken and Binance ticker streams, measures spreads, records observations for analysis, and serves a local web dashboard.
 
-> **Important:** the bot does not place real orders and does not need exchange API keys. It reads last-trade prices, not executable bid/ask prices. Paper simulation is indicative and does not model order books, fills, slippage, or all real-world strategy constraints. This project is not financial advice.
+> **Important:** the bot does not place real orders and does not need exchange API keys. Signals use last-trade prices. On a confirmed signal, a separate estimate fetches public order books and models visible depth, VWAP, configured taker fees, slippage, and public market minimums. It does not verify balances, spot inventory, margin, borrowing, actual account fees, execution latency, or transfers, so it cannot prove a trade is executable. This project is not financial advice.
 
 ## Features
 
@@ -602,6 +615,7 @@ GitHub Actions запускает проверку импортов/синтак
 - Price-movement and opportunity notifications through ntfy when configured.
 - Optional analysis of eligible signals via a local LM Studio-compatible server.
 - Portfolio or fixed-size paper simulator; no live trades are submitted.
+- On confirmed signals, estimates market orders against public Kraken/Binance books, including depth, VWAP, partial fills, taker fees, slippage, and CCXT amount precision/limits. Rejected, partial, or unavailable estimates do not open a new paper position.
 
 ### Local dashboard
 
@@ -609,12 +623,13 @@ GitHub Actions запускает проверку импортов/синтак
 - Crypto prices converted and displayed in **EUR and CHF**, using daily ECB reference rates distributed by Frankfurter and the indicative assumption USDT ≈ USD.
 - Per-feed status and age; stale prices are identified and must not be treated as current.
 - ENTSOG cross-border physical-flow observations and GDELT news, with BBC World RSS fallback.
-- French-language local interface with a blue, white, and red palette.
+- French, Russian, and English UI, with the selected language saved in the browser; blue, white, and red palette.
 - The server binds to `127.0.0.1` by default.
 
 ## What this project does not do
 
 - **No live order placement:** monitoring and paper simulation are not an automated trading system.
+- **No account validation:** public books do not reveal balances or spot inventory. The estimate marks these as unverified and does not model margin, borrowing, transfers, account-specific risk limits, or order-submission latency.
 - **No TTF quote:** no licensed market-price provider is connected. The dashboard therefore shows neither a TTF price nor a quote unit as if one were available. The ICE link describes contract specifications; it is not a price feed.
 - **No actual pipeline-route map:** the ENTSOG schematic shows cross-border observation points, not pipeline paths.
 - **No LNG carrier AIS tracking:** vessel positions and trade routes require a suitable AIS provider, credentials, and storage/redistribution rights.
@@ -732,8 +747,11 @@ Settings may be placed in `.env` or in the process environment; existing environ
 | `PAPER_FIXED_POSITION_USDT` | `100` |
 | `PAPER_EXIT_SPREAD_PERCENT` | `0.05` |
 | `PAPER_MAX_HOLD_SECONDS` | `3600` |
+| `PAPER_TAKER_FEE_PERCENT` | `0.1` |
+| `PAPER_MAX_SLIPPAGE_PERCENT` | `0.5` |
+| `PAPER_ORDERBOOK_MAX_AGE_SECONDS` | `2` |
 
-The simulator accounts in USDT. Dashboard EUR/CHF conversion does not convert the simulator balance or paper-trade CSV.
+The fee and slippage settings apply per taker leg and cumulatively across both legs, respectively; set fees to your account's tier. Book age is measured from local REST response receipt, not a guaranteed exchange timestamp. `estimate_only` means only that visible depth, public minimums, and configured limits passed; balances remain unverified. Partial estimates do not open a position. The book check applies only at entry; positions and closures in `paper_trades.csv` still use ticker spread rather than actual book fills. Account-specific fees, network/withdrawal fees, latency, book changes during submission, and portfolio movements are not modeled. The simulator accounts in USDT, not dashboard EUR/CHF.
 
 ### Dashboard
 
@@ -743,7 +761,7 @@ Freshness settings differ: `MARKET_DATA_STALE_SECONDS` protects bot signal evalu
 
 ## Files and offline analysis
 
-Local `arbitrage_log.csv`, `spread_observations.csv`, `paper_trades.csv`, `market_snapshot.json`, `lng_observations.csv`, and `.env` are ignored by Git. Do not force-add local files containing private data or secrets.
+Local `arbitrage_log.csv`, `spread_observations.csv`, `paper_trades.csv`, `paper_execution_estimates.csv`, `market_snapshot.json`, `lng_observations.csv`, and `.env` are ignored by Git. Do not force-add local files containing private data or secrets.
 
 Analysis scripts do not connect to the network:
 

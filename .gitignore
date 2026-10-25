@@ -6,6 +6,7 @@ __pycache__/
 /arbitrage_log.csv
 /spread_observations.csv
 /paper_trades.csv
+/paper_execution_estimates.csv
 /lng_observations.csv
 /market_snapshot.json
 /market_snapshot.json.tmp

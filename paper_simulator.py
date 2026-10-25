@@ -98,6 +98,11 @@ class PaperSimulator:
             return min(self.fixed_position_usdt, self.cash_usdt)
         return self.cash_usdt * self.position_percent / 100
 
+    @property
+    def next_position_notional_usdt(self) -> float:
+        with self._lock:
+            return self._position_size()
+
     def _log_closed_position(
         self,
         position: PaperPosition,
@@ -133,6 +138,7 @@ class PaperSimulator:
         binance_price: float,
         *,
         opportunity_confirmed: bool = False,
+        execution_approved: bool = True,
         now: datetime | None = None,
     ) -> dict[str, str | float] | None:
         if not math.isfinite(kraken_price) or kraken_price <= 0:
@@ -181,7 +187,7 @@ class PaperSimulator:
                     "reason": close_reason,
                 }
 
-            if not opportunity_confirmed:
+            if not opportunity_confirmed or not execution_approved:
                 return None
 
             notional = self._position_size()

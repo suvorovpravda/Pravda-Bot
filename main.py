@@ -8,6 +8,7 @@ import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
+import ccxt
 import requests
 import websockets
 from dotenv import load_dotenv
@@ -25,6 +26,7 @@ from market_data_health import (
     event_time_to_monotonic,
 )
 from live_market_data import write_market_snapshot
+from orderbook_execution import ExecutionEstimate, fetch_public_execution_estimate
 from paper_simulator import PaperSimulator
 from reconnect import ExponentialBackoff, run_with_reconnect
 from security_and_fees import (
@@ -66,6 +68,25 @@ BINANCE_SYMBOLS = {symbol.replace('/', ''): symbol for symbol in SYMBOLS}
 LOG_FILE = "arbitrage_log.csv"
 LOG_HEADERS = ["Timestamp", "Symbol", "Kraken_Price", "Binance_Price", "Spread_Percent", "Net_Spread_Estimated", "LLM_Analysis"]
 SPREAD_LOG_FILE = "spread_observations.csv"
+PAPER_EXECUTION_FILE = "paper_execution_estimates.csv"
+PAPER_EXECUTION_HEADERS = [
+    "Timestamp_UTC",
+    "Symbol",
+    "Status",
+    "Reason",
+    "Buy_Exchange",
+    "Buy_Amount",
+    "Buy_VWAP_USDT",
+    "Buy_Slippage_Percent",
+    "Sell_Exchange",
+    "Sell_Amount",
+    "Sell_VWAP_USDT",
+    "Sell_Slippage_Percent",
+    "Gross_PnL_USDT",
+    "Fees_USDT",
+    "Net_PnL_USDT",
+    "Inventory_Verified",
+]
 SPREAD_LOG_HEADERS = [
     "Timestamp_UTC",
     "Symbol",
@@ -101,6 +122,7 @@ ensure_csv_schema(
         "Exchange_Time_Skew_Seconds": "",
     },
 )
+ensure_csv_schema(PAPER_EXECUTION_FILE, PAPER_EXECUTION_HEADERS)
 
 paper_simulator = PaperSimulator(
     mode=CONFIG.paper_mode,
@@ -123,6 +145,7 @@ price_updates_count = 0
 opportunities_count = 0
 ntfy_lock = threading.Lock()
 spread_log_lock = threading.Lock()
+paper_execution_lock = threading.Lock()
 ntfy_blocked_until = 0.0
 ntfy_backoff_seconds = NTFY_INITIAL_BACKOFF_SECONDS
 
@@ -179,6 +202,32 @@ def log_spread_observation(
     with spread_log_lock:
         with open(SPREAD_LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=SPREAD_LOG_HEADERS)
+            writer.writerow(row)
+
+def log_paper_execution_estimate(symbol, estimate, *, reason=None):
+    buy = estimate.buy
+    sell = estimate.sell
+    row = [
+        datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+        symbol,
+        estimate.status,
+        reason or estimate.reason,
+        buy.exchange if buy else "",
+        f"{buy.amount:.10f}" if buy else "",
+        f"{buy.average_price:.10f}" if buy else "",
+        f"{buy.slippage_percent:.8f}" if buy else "",
+        sell.exchange if sell else "",
+        f"{sell.amount:.10f}" if sell else "",
+        f"{sell.average_price:.10f}" if sell else "",
+        f"{sell.slippage_percent:.8f}" if sell else "",
+        f"{estimate.gross_pnl:.8f}",
+        f"{estimate.fees:.8f}",
+        f"{estimate.net_pnl:.8f}",
+        str(estimate.inventory_verified).lower(),
+    ]
+    with paper_execution_lock:
+        with open(PAPER_EXECUTION_FILE, mode="a", newline="", encoding="utf-8") as target:
+            writer = csv.writer(target)
             writer.writerow(row)
 
 def retry_after_seconds(value):
@@ -558,12 +607,69 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         return
 
     opportunities_count += 1
+    execution_estimate = None
+    execution_error = None
+    try:
+        execution_estimate = await asyncio.to_thread(
+            fetch_public_execution_estimate,
+            symbol,
+            target_notional=paper_simulator.next_position_notional_usdt,
+            taker_fee_percent=CONFIG.paper_taker_fee_percent,
+            max_slippage_percent=CONFIG.paper_max_slippage_percent,
+            max_book_age_seconds=CONFIG.paper_orderbook_max_age_seconds,
+        )
+        await asyncio.to_thread(log_paper_execution_estimate, symbol, execution_estimate)
+    except (ccxt.BaseError, OSError, ValueError) as error:
+        execution_error = (
+            str(error) if isinstance(error, ValueError) else request_error_summary(error)
+        )
+        unavailable_estimate = ExecutionEstimate(
+            status="unavailable",
+            reason=execution_error,
+        )
+        try:
+            await asyncio.to_thread(
+                log_paper_execution_estimate,
+                symbol,
+                unavailable_estimate,
+            )
+        except OSError as log_error:
+            console.print(
+                f"[bold red]Échec de journalisation de l’estimation d’exécution : "
+                f"{log_error}[/bold red]"
+            )
+        console.print(
+            f"[bold yellow]Simulation d’exécution indisponible pour {symbol} : "
+            f"{escape(execution_error)}. Aucun trade papier ouvert.[/bold yellow]"
+        )
+
+    latest_execution_health = current_market_data_health(market_data_snapshot, symbol)
+    execution_approved = (
+        execution_estimate is not None
+        and execution_estimate.status == "estimate_only"
+        and latest_execution_health is not None
+        and latest_execution_health.status == "OK"
+    )
+    if execution_estimate is not None:
+        console.print(
+            f"[cyan][CARNET] {symbol} : {execution_estimate.status} — "
+            f"{execution_estimate.reason}; PnL net estimé "
+            f"{execution_estimate.net_pnl:+.4f} USDT. "
+            "Inventaires des comptes non vérifiés; estimation papier uniquement.[/cyan]"
+        )
+    elif latest_execution_health is None or latest_execution_health.status != "OK":
+        console.print(
+            f"[bold yellow]Signal papier ignoré pour {symbol} : les cotations "
+            "sont devenues obsolètes pendant l’analyse des carnets.[/bold yellow]"
+        )
+
     try:
         paper_result = paper_simulator.update(
             symbol,
             price_kraken,
             price_binance,
             opportunity_confirmed=True,
+            execution_approved=execution_approved,
             now=datetime.now(timezone.utc),
         )
     except OSError as error:
@@ -577,7 +683,7 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         console.print(
             f"[cyan][PAPER] Position virtuelle ouverte : "
             f"{paper_result['notional_usdt']:.2f} USDT sur {symbol} "
-            f"(aucun ordre envoyé).[/cyan]"
+            f"(aucun ordre envoyé; soldes d’échange non vérifiés).[/cyan]"
         )
     try:
         await asyncio.to_thread(
