@@ -4,3 +4,4 @@ requests
 python-dotenv
 websockets>=13.1
 rich
+psutil

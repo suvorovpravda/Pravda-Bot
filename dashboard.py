@@ -4,6 +4,7 @@ import json
 import logging
 import math
 import os
+import time
 from collections import deque
 from datetime import datetime, timezone
 from functools import partial
@@ -12,6 +13,21 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from dotenv import load_dotenv
+import psutil
+
+
+START_TIME = time.monotonic()
+
+
+def get_system_metrics():
+    process = psutil.Process(os.getpid())
+    memory_mb = process.memory_info().rss / (1024 * 1024)
+    cpu_percent = process.cpu_percent(interval=None)
+    return {
+        "memory_rss_mb": round(memory_mb, 2),
+        "cpu_percent": round(cpu_percent, 1),
+        "uptime_seconds": round(time.monotonic() - START_TIME, 1),
+    }
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -220,6 +236,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         request_path = urlsplit(self.path).path
+        if request_path == "/api/metrics":
+            try:
+                payload = {
+                    "status": "success",
+                    "system": get_system_metrics(),
+                    "timestamp": time.time(),
+                }
+            except psutil.Error as error:
+                logging.warning(
+                    "Unable to collect dashboard process metrics (%s)",
+                    type(error).__name__,
+                )
+                payload = {
+                    "status": "error",
+                    "error": "System metrics unavailable",
+                    "timestamp": time.time(),
+                }
+                body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+                self.send_response(503)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if request_path == "/":
             body = HTML_TEMPLATE.encode("utf-8")
             self.send_response(200)

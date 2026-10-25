@@ -10,6 +10,9 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import urlopen
+from unittest.mock import patch
+
+import psutil
 
 from dashboard import DashboardHandler, HTML_TEMPLATE, read_dashboard_data
 
@@ -110,6 +113,36 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(payload["threshold"], 0.25)
         self.assertEqual(payload["observations"][0]["Gross_Spread_Percent"], "0.4")
         self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+    def test_metrics_endpoint_returns_dashboard_process_metrics(self):
+        base_url = self.serve()
+
+        with urlopen(f"{base_url}/api/metrics") as response:
+            payload = json.load(response)
+
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["status"], "success")
+        self.assertEqual(
+            set(payload["system"]),
+            {"memory_rss_mb", "cpu_percent", "uptime_seconds"},
+        )
+        self.assertGreaterEqual(payload["system"]["memory_rss_mb"], 0)
+        self.assertGreaterEqual(payload["system"]["cpu_percent"], 0)
+        self.assertGreaterEqual(payload["system"]["uptime_seconds"], 0)
+        self.assertIsInstance(payload["timestamp"], (int, float))
+        self.assertEqual(response.headers["Cache-Control"], "no-store")
+
+    def test_metrics_endpoint_returns_service_unavailable_on_collection_error(self):
+        base_url = self.serve()
+
+        with patch("dashboard.get_system_metrics", side_effect=psutil.AccessDenied):
+            with self.assertRaises(HTTPError) as error:
+                urlopen(f"{base_url}/api/metrics")
+
+        self.assertEqual(error.exception.code, 503)
+        payload = json.load(error.exception)
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "System metrics unavailable")
 
     def test_missing_csv_files_return_empty_success_payloads(self):
         base_url = self.serve()

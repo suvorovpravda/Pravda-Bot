@@ -9,8 +9,9 @@ A Python cryptocurrency market-monitoring bot for Kraken and Binance. It estimat
 ## 🚀 Key Features
 
 * **Real-Time Multi-Exchange Monitoring**: Subscribes to public ticker WebSockets for BTC/USDT, ETH/USDT, and SOL/USDT on Kraken and Binance. It monitors last-trade prices, not order-book bid/ask prices.
+* **Resilient WebSocket Reconnection**: Retries interrupted exchange streams with exponential backoff, bounded to 30 seconds with jitter; the delay resets after a stable connection.
 * **Rich Dashboard**: Refreshes a compact per-symbol market and sampled-spread summary at a configurable interval instead of printing every ticker update.
-* **Local Web Dashboard**: Serves recent spread observations from `spread_observations.csv` over localhost, with a configurable threshold and an observation freshness indicator.
+* **Local Web Dashboard**: Serves recent spread observations from `spread_observations.csv` over localhost, with a configurable threshold and an observation freshness indicator. The `/api/metrics` endpoint reports the dashboard process's RSS memory, CPU usage, and uptime.
 * **Safety Guards**:
   * Rejects prices that are missing, non-finite, zero, or negative.
   * Resets pending alert confirmation when a price tick is invalid and logs only the exception type/HTTP status for ntfy request errors.
