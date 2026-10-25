@@ -143,7 +143,7 @@ Never include `.env`, API keys, private ntfy topic URLs, credentials, or unredac
    - Keep both windows open while using the dashboard. Closing the bot window stops the live exchange feeds; closing the dashboard window stops the web page server. The bot needs an internet connection for public exchange feeds. Local `.env` settings are loaded as usual.
    - To keep a one-click entry in Google Chrome, bookmark `http://127.0.0.1:8080` after launching it. The bookmark opens only while the bot and dashboard are running on this same PC; it is not a public/cloud-hosted website.
 
-   The launcher uses `.venv\Scripts\python.exe` when available, otherwise it looks for Python 3.12 via the Windows `py` launcher. If dependencies are missing, install them once with `python -m pip install -r requirements.txt`.
+   The launcher uses `.venv\Scripts\python.exe` when available, otherwise it looks for Python 3.12 via the Windows `py` launcher. It enables UTF-8 mode for Windows terminal output. If dependencies are missing, install them once with `python -m pip install -r requirements.txt`.
 
    To start only the dashboard manually (in a second PowerShell window, from the repository directory):
    ```powershell

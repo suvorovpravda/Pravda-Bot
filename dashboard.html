@@ -184,10 +184,10 @@
                     </div>
                     <div class="table-wrap">
                         <table class="quote-table">
-                            <thead><tr><th>Actif</th><th>Binance</th><th>Kraken</th><th>Écart</th></tr></thead>
-                            <tbody id="crypto-quotes"><tr><td colspan="4">Démarre le bot pour charger les prix.</td></tr></tbody>
+                            <thead><tr><th>Actif</th><th>Binance</th><th>Kraken</th><th>≈ EUR</th><th>Écart</th></tr></thead>
+                            <tbody id="crypto-quotes"><tr><td colspan="5">Démarre le bot pour charger les prix.</td></tr></tbody>
                         </table>
-                        <p class="fine-print">Prix du dernier échange public, pas un prix d’achat garanti. Le graphique conserve les ticks reçus depuis l’ouverture de la page.</p>
+                        <p class="fine-print">Prix du dernier échange public, pas un prix d’achat garanti. L’estimation EUR convertit USDT≈USD avec le taux quotidien BCE. Le graphique conserve les ticks reçus depuis l’ouverture de la page.</p>
                     </div>
                 </div>
             </div>
@@ -340,10 +340,15 @@
                 }
             }
             let spread = "—";
+            const referenceUsdRate = latestFx?.rates?.USD;
+            const liveQuote = binance?.status === "live" ? binance : kraken?.status === "live" ? kraken : null;
+            const euroValue = liveQuote && Number.isFinite(referenceUsdRate) && referenceUsdRate > 0
+                ? numericFormat(liveQuote.price / referenceUsdRate)
+                : "—";
             if (binance?.status === "live" && kraken?.status === "live") {
                 spread = `${(((kraken.price - binance.price) / ((kraken.price + binance.price) / 2)) * 100).toFixed(3)}%`;
             }
-            rows.push({ symbol, binance, kraken, spread });
+            rows.push({ symbol, binance, kraken, spread, euroValue });
         }
         const latestAge = Math.min(...Object.values(symbols).flatMap(quotes =>
             Object.values(quotes).filter(quote => quote.status === "live").map(quote => quote.age_seconds)
@@ -360,13 +365,20 @@
             const sym = document.createElement("td"); sym.className = "quote-symbol"; sym.textContent = row.symbol;
             const b = document.createElement("td"); b.textContent = row.binance?.status === "live" ? numericFormat(row.binance.price) : "—";
             const k = document.createElement("td"); k.textContent = row.kraken?.status === "live" ? numericFormat(row.kraken.price) : "—";
+            const euro = document.createElement("td"); euro.textContent = row.euroValue;
             const s = document.createElement("td"); s.textContent = row.spread;
             if (row.spread !== "—") s.className = parseFloat(row.spread) >= 0 ? "positive" : "negative";
-            tr.append(sym, b, k, s); tbody.append(tr);
+            tr.append(sym, b, k, euro, s); tbody.append(tr);
         }
         const symbol = $("chart-symbol").value, exchange = $("chart-exchange").value;
         const quote = symbols[symbol]?.[exchange];
-        $("chart-price").textContent = quote?.status === "live" ? `${symbol} · ${exchange} · ${numericFormat(quote.price)} ${symbol.split("/")[1]}` : `${symbol} · ${exchange} · prix indisponible`;
+        const fxUsdRate = latestFx?.rates?.USD;
+        const euroEstimate = quote?.status === "live" && Number.isFinite(fxUsdRate) && fxUsdRate > 0
+            ? ` · ≈ ${numericFormat(quote.price / fxUsdRate)} EUR`
+            : "";
+        $("chart-price").textContent = quote?.status === "live"
+            ? `${symbol} · ${exchange} · ${numericFormat(quote.price)} ${symbol.split("/")[1]}${euroEstimate}`
+            : `${symbol} · ${exchange} · prix indisponible`;
         $("chart-age").textContent = quote ? `Reçu il y a ${quote.age_seconds}s · ${formatDate(quote.received_at)}` : "Lance le bot pour recevoir les ticks.";
         drawPriceChart();
     }
