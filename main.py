@@ -14,34 +14,28 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.markup import escape
 
+from bot_config import load_config
+from bot_dashboard import SpreadSummary, build_dashboard
+
 load_dotenv()
 
 console = Console()
 
-LM_URL = os.getenv("LM_STUDIO_API_BASE", "http://192.168.1.146:1234/v1")
-TRADING_MODE = os.getenv("TRADING_MODE", "paper")
-MODEL_NAME = os.getenv("LM_MODEL_NAME", "qwen/qwen3.5-9b")
+try:
+    CONFIG = load_config()
+except ValueError as error:
+    console.print(f"[bold red]Configuration invalide : {error}[/bold red]")
+    raise SystemExit(2) from error
 
-def nonnegative_float_setting(name, default):
-    try:
-        value = float(os.getenv(name, str(default)))
-    except ValueError as e:
-        raise ValueError(f"{name} must be a finite non-negative number") from e
-    if not math.isfinite(value) or value < 0:
-        raise ValueError(f"{name} must be a finite non-negative number")
-    return value
-
-def positive_float_setting(name, default):
-    value = nonnegative_float_setting(name, default)
-    if value == 0:
-        raise ValueError(f"{name} must be greater than zero")
-    return value
-
-MIN_SPREAD_THRESHOLD = nonnegative_float_setting("MIN_SPREAD_THRESHOLD", 0.05)
-SPREAD_LOG_INTERVAL_SECONDS = positive_float_setting("SPREAD_LOG_INTERVAL_SECONDS", 10)
+LM_URL = CONFIG.lm_url
+TRADING_MODE = CONFIG.trading_mode
+MODEL_NAME = CONFIG.model_name
+MIN_SPREAD_THRESHOLD = CONFIG.min_spread_threshold
+SPREAD_LOG_INTERVAL_SECONDS = CONFIG.spread_log_interval_seconds
+DASHBOARD_INTERVAL_SECONDS = CONFIG.dashboard_interval_seconds
 ESTIMATED_FEES = 0.36
-PRICE_ALERT_COOLDOWN_SECONDS = max(0.0, float(os.getenv("PRICE_ALERT_COOLDOWN_SECONDS", "5")))
-NTFY_GLOBAL_COOLDOWN_SECONDS = max(1.0, float(os.getenv("NTFY_GLOBAL_COOLDOWN_SECONDS", "10")))
+PRICE_ALERT_COOLDOWN_SECONDS = CONFIG.price_alert_cooldown_seconds
+NTFY_GLOBAL_COOLDOWN_SECONDS = CONFIG.ntfy_global_cooldown_seconds
 NTFY_INITIAL_BACKOFF_SECONDS = 60.0
 NTFY_MAX_BACKOFF_SECONDS = 900.0
 STREAM_RECONNECT_SECONDS = 5
@@ -64,7 +58,7 @@ SPREAD_LOG_HEADERS = [
     "Net_Spread_Positive",
     "Opportunity_Triggered",
 ]
-NTFY_TOPIC_URL = os.getenv("NTFY_TOPIC_URL", "").strip()
+NTFY_TOPIC_URL = CONFIG.ntfy_topic_url
 
 if not os.path.exists(LOG_FILE):
     with open(LOG_FILE, mode='w', newline='', encoding='utf-8') as f:
@@ -79,6 +73,7 @@ if not os.path.exists(SPREAD_LOG_FILE) or os.path.getsize(SPREAD_LOG_FILE) == 0:
 latest_prices = {"Kraken": {}, "Binance": {}}
 last_movement_notification_at = {}
 last_spread_log_at = {}
+spread_summaries = {symbol: SpreadSummary() for symbol in SYMBOLS}
 last_profitable_state = {symbol: False for symbol in SYMBOLS}
 price_updates_count = 0
 opportunities_count = 0
@@ -214,12 +209,6 @@ async def handle_price_update(exchange_name, symbol, raw_price):
 
     if previous_price is not None and price != previous_price:
         change_pct = (price - previous_price) / previous_price * 100
-        console.print(
-            f"[bold cyan][Pravda-Bot][/bold cyan] [MOUVEMENT] "
-            f"{exchange_name} {symbol}: {previous_price} -> {price} "
-            f"({change_pct:+.4f}%)"
-        )
-
         now = time.monotonic()
         if now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
             last_movement_notification_at[symbol] = now
@@ -262,33 +251,21 @@ async def handle_price_update(exchange_name, symbol, raw_price):
                 threshold_reached,
                 opportunity_triggered,
             )
+            spread_summaries[symbol].record(
+                spread,
+                net_spread,
+                threshold_reached,
+                opportunity_triggered,
+            )
         except OSError as e:
             console.print(f"[bold red]Échec de journalisation du spread : {e}[/bold red]")
 
-    console.print(
-        f"[bold cyan][Pravda-Bot][/bold cyan] Analyse du marché en cours... "
-        f"Paire: [yellow]{symbol}[/yellow]"
-    )
-    console.print(
-        f"  -> Kraken : [green]{price_kraken}[/green] | "
-        f"Binance : [green]{price_binance}[/green]"
-    )
-    console.print(
-        f"  -> Écart brut : [magenta]{spread:.4f}%[/magenta] "
-        f"(Seuil : {MIN_SPREAD_THRESHOLD}%)"
-    )
-
     if not threshold_reached:
         last_profitable_state[symbol] = False
-        console.print("[dim]💤 Écart trop faible, on surveille le prochain tick...[/dim]")
         return
 
     if net_spread <= 0:
         last_profitable_state[symbol] = False
-        console.print(
-            f"  [yellow]🛡️ Opportunité écartée sur {symbol} : "
-            f"spread net après frais négatif ({net_spread:.4f}%).[/yellow]"
-        )
         return
 
     if last_profitable_state[symbol]:
@@ -296,10 +273,7 @@ async def handle_price_update(exchange_name, symbol, raw_price):
 
     last_profitable_state[symbol] = True
     opportunities_count += 1
-    console.print(
-        "[bold green]🎯 Opportunité détectée ! "
-        "Transmission à l'IA pour analyse...[/bold green]"
-    )
+    console.print(f"[bold green]🎯 Opportunité détectée : {symbol} ({net_spread:.4f}% net estimé)[/bold green]")
     await asyncio.to_thread(notify_opportunity, symbol, net_spread)
     analysis = await asyncio.to_thread(ask_llm_analysis, symbol, price_kraken, price_binance, spread)
     console.print(f"  [green]🤖 LLM: {escape(analysis)}[/green]")
@@ -348,11 +322,26 @@ async def run_stream_with_reconnect(exchange_name, stream_function):
             print(f"  ⚠️ Flux {exchange_name} interrompu : {e}. Reconnexion dans {STREAM_RECONNECT_SECONDS}s.")
             await asyncio.sleep(STREAM_RECONNECT_SECONDS)
 
+async def render_dashboard_periodically():
+    while True:
+        await asyncio.sleep(DASHBOARD_INTERVAL_SECONDS)
+        console.print(
+            build_dashboard(
+                SYMBOLS,
+                latest_prices,
+                spread_summaries,
+                threshold=MIN_SPREAD_THRESHOLD,
+                updates=price_updates_count,
+                opportunities=opportunities_count,
+            )
+        )
+
 async def monitor_markets():
     print(f"=== Pravda-Bot Temps Réel (Mode: {TRADING_MODE}) ===")
     print(f"Paires surveillées : {', '.join(SYMBOLS)}")
     print(f"Seuil de déclenchement : {MIN_SPREAD_THRESHOLD:g}%")
     print(f"Échantillonnage des spreads : {SPREAD_LOG_INTERVAL_SECONDS:g}s par paire")
+    print(f"Tableau de bord Rich : toutes les {DASHBOARD_INTERVAL_SECONDS:g}s")
     print(f"Observations CSV : {SPREAD_LOG_FILE}")
     print(
         "Notifications ntfy : configurées"
@@ -363,7 +352,8 @@ async def monitor_markets():
     print(f"Délai global ntfy : {NTFY_GLOBAL_COOLDOWN_SECONDS:g}s; backoff initial après 429 : {NTFY_INITIAL_BACKOFF_SECONDS:g}s\n")
     await asyncio.gather(
         run_stream_with_reconnect("Kraken", stream_kraken_tickers),
-        run_stream_with_reconnect("Binance", stream_binance_tickers)
+        run_stream_with_reconnect("Binance", stream_binance_tickers),
+        render_dashboard_periodically(),
     )
 
 try:
