@@ -28,6 +28,11 @@ jobs:
             python -m pip install -r requirements.txt
           fi
 
+      - name: Audit dependencies
+        run: |
+          python -m pip install pip-audit
+          pip-audit --desc
+
       - name: Verify syntax and imports
         run: |
           python -m compileall -q main.py alert_gate.py bot_config.py bot_dashboard.py csv_schema.py market_data_health.py paper_simulator.py analyze_spreads.py analyze_paper_results.py dashboard.py lng_observations.py security_and_fees.py
