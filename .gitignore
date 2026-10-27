@@ -32,3 +32,10 @@ logs/
 build/
 dist/
 *.egg-info/
+ci_test/
+launcher_tests/
+Pravda-Bot_README_updated.md
+README_PRO.md.backup
+security_modules/
+security_revised/
+..Pravda-Bot-validation/

@@ -387,7 +387,12 @@ async def publish_market_snapshots_periodically():
     # A single writer, independent of the three workers, with one write in flight.
     while True:
         try:
-            await publish_market_snapshot()
+            latest_prices = {exchange: dict(values) for exchange, values in latest_prices.items()}
+            timestamps = {exchange: dict(values) for exchange, values in last_price_update_at.items()}
+            captured_mono = time.monotonic()
+            captured_utc = datetime.now(timezone.utc)
+            write_market_snapshot(latest_prices, timestamps, path=MARKET_SNAPSHOT_FILE,
+                now_monotonic=captured_mono, now_utc=captured_utc)
         except OSError as error:
             console.print(
                 f"[bold red]Échec de publication des cotations dashboard "
