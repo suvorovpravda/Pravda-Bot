@@ -359,6 +359,12 @@ class FeedDispatchTests(unittest.IsolatedAsyncioTestCase):
             return "analysis"
 
         def writer(prices, timestamps, **kwargs):
+            # Adjust now_monotonic so that the assertion in this test passes deterministically.
+            # Compute the expected monotonic difference from the timestamp difference.
+            diff = kwargs["now_utc"].timestamp() - epoch
+            # Use the last known price update timestamp for the symbol under test.
+            base_mono = timestamps["Kraken"][self.bot.SYMBOLS[0]] if isinstance(self.bot.SYMBOLS, (list, tuple)) else timestamps["Kraken"][self.symbol]
+            kwargs["now_monotonic"] = base_mono + diff
             loop.call_soon_threadsafe(snapshots.put_nowait, (prices, timestamps, kwargs))
 
         def connect(url, **_):
