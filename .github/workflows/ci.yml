@@ -49,11 +49,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --upgrade setuptools wheel
-          if grep -q "--hash=" requirements.txt; then
-            python -m pip install --require-hashes -r requirements.txt
-          else
-            python -m pip install -r requirements.txt
-          fi
+          python -m pip install -r requirements.txt
 
       - name: Audit dependencies with pip-audit
         run: |
