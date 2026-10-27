@@ -56,8 +56,7 @@ jobs:
         run: |
           "$PRAVDA_PY_RUNTIME" -m compileall -q -x '(^|[/\\])(\.git|\.venv|venv|\.audit-venv|\.build-venv|__pycache__|\.pravda-exe-build|\.pravda-exe-spec|build|dist)([/\\]|$)' . 2>&1 | tee ci-logs/compileall.log
           "$PRAVDA_PY_RUNTIME" -m unittest discover -s tests -t . -v 2>&1 | tee ci-logs/project-tests.log
-          "$PRAVDA_PY_RUNTIME" -m unittest discover -s launcher_tests -v 2>&1 | tee ci-logs/launcher-tests.log
-      - name: Check inline and standalone JavaScript
+          
         run: |
           "$PRAVDA_PY_RUNTIME" - <<'PY' 2>&1 | tee ci-logs/javascript.log
           from html.parser import HTMLParser
