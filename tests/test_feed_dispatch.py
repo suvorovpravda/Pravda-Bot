@@ -390,8 +390,14 @@ class FeedDispatchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(release.is_set())
                 self.assertIsNot(prices, self.bot.latest_prices)
                 self.assertIsNot(timestamps["Kraken"], self.bot.last_price_update_at["Kraken"])
-                self.assertAlmostEqual(captured["now_monotonic"] - timestamps["Kraken"][self.symbol],
-                                       captured["now_utc"].timestamp() - epoch, places=2)
+                # Compare captured state, not independently sampled wall/monotonic clocks.
+                # Their resolutions differ on Windows; neither need agree within 5 ms.
+                for exchange in ("Kraken", "Binance"):
+                    for symbol in self.bot.SYMBOLS:
+                        self.assertEqual(timestamps[exchange][symbol],
+                                         self.bot.last_price_update_at[exchange][symbol])
+                        self.assertGreaterEqual(captured["now_monotonic"], timestamps[exchange][symbol])
+                self.assertIs(captured["now_utc"].tzinfo, timezone.utc)
             finally:
                 release.set()
                 await self.stop(task)

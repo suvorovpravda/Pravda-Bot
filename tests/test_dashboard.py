@@ -615,17 +615,24 @@ class DashboardTests(unittest.TestCase):
         for _ in range(math.ceil(minute_requests) + 10):
             self.assertEqual(limiter.retry_after("local", now=100), 0)
 
-    def test_csv_limits_and_strict_parser_do_not_return_partial_data(self):
+    def test_data_endpoint_stays_available_after_50001_rows(self):
+        self.write_rows({"Timestamp_UTC": "2026-10-27T00:00:00Z", "Symbol": str(index)}
+                        for index in range(50001))
+        with urlopen(self.serve() + "/data") as response:
+            payload = json.load(response)
+            self.assertEqual(response.status, 200)
+        self.assertEqual(len(payload["observations"]), 20)
+        self.assertEqual(payload["observations"][0]["Symbol"], "50000")
+
+    def test_csv_record_limits_and_strict_parser_do_not_return_partial_data(self):
         self.csv_path.write_bytes(b"x" * 129)
         with patch("dashboard.MAX_CSV_BYTES", 128), self.assertRaisesRegex(ValueError, "byte limit"):
             read_dashboard_data(self.csv_path, stale_after_seconds=30)
         self.write_rows([{"Timestamp_UTC": "2026-01-01T00:00:00Z", "Symbol": "BTC/USDT"}] * 3)
         base_url = self.serve()
-        with patch("dashboard.MAX_CSV_ROWS", 2), self.assertRaises(HTTPError) as error:
-            urlopen(base_url + "/data")
-        payload = json.load(error.exception)
-        self.assertEqual(payload["status"], "unavailable")
-        self.assertEqual(payload["observations"], [])
+        with patch("dashboard.MAX_CSV_ROWS", 2), urlopen(base_url + "/data") as response:
+            payload = json.load(response)
+        self.assertEqual(len(payload["observations"]), 3)
         self.csv_path.write_text('Timestamp_UTC,Symbol\nnow,"unfinished\n', encoding="utf-8")
         with self.assertRaises(csv.Error):
             read_dashboard_data(self.csv_path, stale_after_seconds=30)

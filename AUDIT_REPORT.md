@@ -1,3 +1,7 @@
+> Mise à jour après publication : la PR nº 2 contient les correctifs. La CI du commit b7eb7fc a réussi sur Windows/Python 3.12.10 et Linux/Python 3.12.15 : 177 tests du projet sur chaque OS ; 14 tests lanceur réussis sur Windows, 12 réussis et deux ignorés sur Linux. Audits CVE/Bandit et construction EXE Windows ont réussi sur ce SHA.
+>
+> Correctif complémentaire en cours de publication : lecture CSV récente bornée préservant les champs multilignes au-delà de 50 000 lignes/8 Mio, régression P2 issue de la revue Codex, et assertion de snapshot indépendante d'une comparaison d'horloges à quelques millisecondes. Les 183 tests du projet passent localement ; la CI doit être confirmée sur le nouveau SHA. README/SECURITY sont réécrits FR → RU → EN sans licence MIT ou garanties de sécurité inventées.
+
 # Revue indépendante du commit e292a37 — 27 octobre 2026
 
 ## Français

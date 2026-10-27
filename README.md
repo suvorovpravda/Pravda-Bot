@@ -1,89 +1,276 @@
-# Pravda-Bot
+<div align="center">
+
+# 📊 Pravda-Bot
+
+### Un observatoire local pour comprendre les marchés et la qualité des données
+
+*Surveillance publique · Simulation papier · Historique traçable*
+
+[![CI de la branche candidate](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/ci.yml/badge.svg?branch=fix%2Frestore-history-and-hardening)](https://github.com/suvorovpravda/Pravda-Bot/pull/2/checks)
+[![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square&logo=python&logoColor=white)](https://www.python.org/)
+[![Mode papier](https://img.shields.io/badge/Mode-paper-0F766E?style=flat-square)](#français)
+[![Politique de sécurité](https://img.shields.io/badge/Security-policy-64748B?style=flat-square)](SECURITY.md)
+
+[Français](#français) · [Русский](#русский) · [English](#english)
+
+</div>
+
+---
 
 ## Français
 
-**Observer les marchés, conserver les preuves et tester des hypothèses sans passer d’ordres.**
+> **Surveillance et simulation uniquement.** Aucun ordre réel n'est envoyé. Aucun solde, inventaire, emprunt ou transfert de compte n'est vérifié. Une estimation de spread ou d'exécution ne constitue pas une promesse de rendement.
 
-Pravda-Bot est un observatoire Python local : tickers publics Kraken/Binance pour BTC/USDT, ETH/USDT et SOL/USDT, comparaison de prix, simulateur papier, tableau de bord et historique SQLite. Il permet d'étudier la qualité des flux, les spreads après frais simplifiés et les erreurs de traitement asynchrone. Les connexions privées et le trading réel ne sont pas implémentés.
+### Pourquoi utiliser Pravda-Bot ?
 
-### État de cette branche
+Pravda-Bot rassemble des observations publiques et leurs limites dans un outil Python exécuté localement. Il permet d'étudier les écarts de prix entre Kraken et Binance, de conserver des échantillons dans SQLite, de tester des hypothèses en simulation et de repérer les données obsolètes avant de leur attribuer une signification.
 
-Cette correction part du `main` public `e292a37` et réintègre le véritable historique SQLite du ZIP transmis par Vincent : historique persistant, alertes locales, exports journaliers et lanceur Windows. Les artefacts privés du ZIP (`.env`, CSV, SQLite, venv et EXE) sont exclus. Les nouveaux modules `geospatial_mapper.py`, `maritime_proxy.py`, `osint_pipeline.py`, `ais_stream_connector.py` et `enhanced_terminal.py` du dépôt sont conservés. Leur présence ne démontre pas une connexion réelle, une licence de données ou une validation opérationnelle. Le dashboard récent est conservé ; les endpoints AIS annoncent une indisponibilité tant que leur fournisseur est un stub.
+Le même travail sur les horloges, les files d'attente, la provenance et les erreurs peut servir à d'autres projets : observatoires locaux, tableaux de bord de qualité des données et expériences de traitement d'événements. Les contributions utiles améliorent ces propriétés mesurables.
 
-**Branche candidate, vérification en cours.** Les résultats locaux seront rapportés pour le commit concerné ; la CI Windows/Linux et la revue Gemini restent distinctes. Une PR en brouillon n'est pas une release validée. La moitié de l'équipe est en vacances ; reprise progressive prévue vers le **2 novembre 2026**.
+### Fonctions et périmètre
 
-### Fonctions et limites
-
-| Fonction | Utilité | Limite |
+| Domaine | Ce que fournit le code maintenu | Limite à garder visible |
 |---|---|---|
-| Tickers et spread | Observer les écarts entre deux places | Un dernier prix n'est pas un prix d'exécution garanti |
-| Simulation papier | Comparer des hypothèses et journaliser des positions virtuelles | État du portefeuille en mémoire ; remise à zéro au redémarrage |
-| Historique SQLite | Courbes et exports des observations conservées | Ne transforme pas une observation passée en signal actuel ; stockage à surveiller |
-| Carnets publics | Estimation de liquidité et de frais | Aucun solde, inventaire, emprunt, transfert ou placement d'ordre validé |
-| ENTSOG | Observations de flux aux points transfrontaliers | Pas de tracés réels de conduites ni preuve d'état opérationnel |
-| BCE / Frankfurter | Conversions EUR/CHF à taux de référence | Données quotidiennes ; pas de Forex tick par tick ; USDT n'est pas garanti égal à USD |
-| GDELT / BBC | Consulter des titres rapportés | Pas d'incidents vérifiés ni de prédictions géopolitiques |
-| LM Studio | Analyse textuelle locale facultative | Modèle à charger séparément ; aucun fallback cloud automatique |
+| 📈 Crypto | Tickers publics Kraken/Binance pour BTC/USDT, ETH/USDT et SOL/USDT | Un dernier prix n'est pas une offre d'exécution garantie |
+| 🧮 Détection | Spread, estimation de frais, confirmation, hystérésis et rejet des anomalies | L'opportunité reste théorique ; aucun compte privé connecté |
+| 🧪 Simulation | Portefeuille papier et estimations sur carnets publics : VWAP, profondeur, frais et contraintes | Pas de remplissage réel, inventaire, marge, emprunt ou latence de placement |
+| 🗃️ Historique | SQLite, vues jour/semaine/mois, résumés et exports CSV | Échantillons sélectionnés par les workers ; des ticks intermédiaires peuvent être coalescés |
+| 🔔 Alertes | Seuils locaux EUR/CHF ; ntfy optionnel | FX quotidien ; ntfy utilise un service externe s'il est activé |
+| ⚡ Énergie | Observations ENTSOG à des points transfrontaliers | Ni tracés de conduites ni état opérationnel vérifié |
+| 💱 Devises | Taux de référence BCE via Frankfurter, source et âge affichés | Pas de Forex tick par tick ; l'assimilation USDT/USD reste une hypothèse de conversion |
+| 📰 Actualités | GDELT, avec repli RSS BBC | Informations rapportées, pas incidents vérifiés ou prévisions |
+| 🖥️ Interface | Serveur HTTP local, historique, rapports et état des sources | Sans authentification ; doit rester sur 127.0.0.1 |
+| 🤖 Analyse | LM Studio facultatif, limité à une destination loopback | Modèle à charger séparément ; aucun fallback GPT/Gemini automatique |
 
-Aucun fournisseur de cours TTF licencié ni suivi AIS opérationnel vérifié n'est intégré dans cette copie. Le lien ICE décrit un contrat, pas un prix. Les projets GEM/AIS, Kafka Docker Playground et Spotify restent des pistes à rapprocher d'une sauvegarde vérifiable avant réintégration. Pas de promesse de confidentialité totale, de continuité garantie ou de performance comparable aux modèles cloud.
+Le portefeuille papier en mémoire est réinitialisé au redémarrage. L'historique SQLite conserve les observations enregistrées ; il ne devient pas automatiquement un état de portefeuille restauré.
 
-Les frais simplifiés restent **0,36 %** : `0.0036` en fraction, `0.36` en points de pourcentage. Exemple : `1.20 % - 0.36 point = 0.84 %` net estimé. Le détecteur d'écart absolu et le spread directionnel d'achat/vente sont distincts ; un spread directionnel négatif conserve son signe. Le plafond brut par défaut de 5 % rejette des anomalies ; il ne prouve pas qu'un arbitrage est réalisable. Les coûts fixes de réseau/retrait et un véritable modèle de remplissage restent absents.
+### Architecture et fraîcheur
 
-### Installation et lancement
+```mermaid
+flowchart TD
+    A["Kraken et Binance publics"] --> B["Réception immédiate : prix, temps et génération"]
+    B --> C["Workers par symbole : attente coalescée et bornée"]
+    C --> D["Filtres et simulation papier"]
+    C --> E["Échantillons SQLite"]
+    B --> F["Snapshot périodique indépendant"]
+    D --> G["CSV et actions optionnelles ntfy / LM Studio"]
+    F --> H["Dashboard local"]
+    E --> H
+```
 
-Cible : Python 3.12, Windows principal et Linux de validation. Le correctif exact peut varier selon la distribution Windows/Linux ; la CI journalise la version réellement utilisée. La demande stricte de 3.12.14 échouait sur le runner Windows et a été remplacée par la série 3.12. Utiliser `.venv`, attendu par le lanceur. Dans la copie choisie du dépôt :
+Les lecteurs ne doivent pas attendre SQLite, REST, ntfy ou le LLM avant de recevoir la frame suivante. Avant les effets différés, les générations et la santé des cotations sont revérifiées. Le snapshot destiné au dashboard possède son propre producteur, indépendant des trois workers.
+
+La lecture des observations CSV conserve les dernières lignes logiques, y compris les champs entre guillemets avec retours à la ligne. Elle utilise une fenêtre de lecture bornée : la croissance normale du journal au-delà de 50 000 lignes ou 8 Mio ne désactive plus `/data`. Une ligne individuelle qui ne tient pas dans le budget, un schéma incompatible ou un CSV invalide dans la fenêtre lue produit une erreur contrôlée. Le préfixe hors fenêtre n'est pas validé. La taille des fichiers sur disque doit toujours être surveillée.
+
+Les régressions de concurrence utilisent des événements de synchronisation. Une comparaison fragile entre horloges murale et monotone à quelques millisecondes près n'est pas utilisée pour valider le fonctionnement du producteur de snapshots.
+
+### Calculs : des unités explicites
+
+Les frais simplifiés sont **0,36 %**, soit `0.0036` en fraction ou `0.36` point de pourcentage :
+
+```text
+Spread brut       1,20 %
+Frais estimés   − 0,36 point
+Spread net        0,84 %
+```
+
+Le helper robuste retourne une fraction ; le bot convertit explicitement en pourcentage pour ses seuils et journaux. Le détecteur d'écart absolu et le spread directionnel achat/vente ont des usages distincts : un résultat directionnel négatif conserve son signe. Le plafond brut par défaut de **5 %** écarte des anomalies sans démontrer la faisabilité économique. Les frais fixes réseau/retrait et un véritable modèle de remplissage ne sont pas inclus.
+
+### Installation — Windows
+
+Pour une **nouvelle copie**, avec Python 3.12 installé :
 
 ```powershell
+git clone https://github.com/suvorovpravda/Pravda-Bot.git
+Set-Location Pravda-Bot
+# Avant fusion, le correctif est disponible sur la branche de la PR nº 2 :
+git switch fix/restore-history-and-hardening
 py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-bootstrap.txt
 .\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
 .\.venv\Scripts\python.exe -m pip check
 if (-not (Test-Path '.env')) { Copy-Item '.env.example' '.env' }
+```
+
+Dans une copie existante, relever d'abord `git status --short --branch` et conserver les modifications locales avant de changer de branche. L'activation du venv n'est pas obligatoire : les commandes ci-dessus appellent son interpréteur explicitement.
+
+### Installation — Linux
+
+```bash
+git clone https://github.com/suvorovpravda/Pravda-Bot.git
+cd Pravda-Bot
+git switch fix/restore-history-and-hardening
+python3.12 -m venv .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-bootstrap.txt
+.venv/bin/python -m pip install --require-hashes -r requirements.txt
+.venv/bin/python -m pip check
+[ -f .env ] || cp .env.example .env
+```
+
+Le projet cible la série **3.12**. La CI enregistre le correctif réellement installé sur chaque OS ; elle ne demande pas une version exacte absente du runner Windows. Runtime, outils d'audit et outils de construction utilisent des verrous distincts. Leur régénération utilise `uv pip compile --universal --python-version 3.12 --generate-hashes --no-build` et doit être revue.
+
+### Lancer et vérifier
+
+Dans un premier terminal Windows :
+
+```powershell
 $env:NTFY_TOPIC_URL=''
+$env:LM_STUDIO_ENABLED='false'
+.\.venv\Scripts\python.exe main.py
+```
+
+Dans un second terminal du même dossier :
+
+```powershell
+.\.venv\Scripts\python.exe dashboard.py --port 8080
+```
+
+Ouvrir [http://127.0.0.1:8080](http://127.0.0.1:8080). Si le port est occupé, utiliser par exemple `--port 8081`. Sous Linux, remplacer l'interpréteur par `.venv/bin/python`.
+
+`Installer_et_lancer.cmd` automatise installation et lancement. `Construire_Pravda_EXE.cmd` construit **le lanceur**, qui utilise les sources et le `.venv` voisins. L'EXE n'est pas un bot autonome : contrôler son dossier, la copie réellement ouverte par l'éditeur et le commit utilisé. La CI teste la construction Windows et le démarrage `--help` ; cela ne valide pas à elle seule une session de flux réels sur le PC de l'utilisateur.
+
+| Variable | Valeur / rôle |
+|---|---|
+| `TRADING_MODE` | `paper` uniquement |
+| `NTFY_TOPIC_URL` | Vide par défaut ; destination HTTPS publique explicite si activée |
+| `LM_STUDIO_ENABLED` | `false` dans l'exemple ; `true` active l'analyse locale |
+| `LM_STUDIO_API_BASE` | Exemple : `http://127.0.0.1:1234/v1` |
+| `LM_MODEL_NAME` | Identifiant effectivement exposé par LM Studio |
+| `DASHBOARD_RATE_LIMIT_PER_MINUTE` | 240 par IP par défaut ; le polling normal dépasse 60/minute |
+| `MARKET_HISTORY_DB` | Chemin SQLite local, par défaut `market_history.sqlite3` |
+| `MARKET_DATA_STALE_SECONDS` | Seuil de fraîcheur des cotations, 4 s par défaut |
+
+Les données de marché et d'actualité nécessitent le réseau, même si les traitements et l'inférence sont locaux. « Local » ne signifie pas « entièrement hors ligne ».
+
+### Vérification et sécurité
+
+```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -t . -v
+.\.venv\Scripts\python.exe -m unittest discover -s launcher_tests -v
+.\.venv\Scripts\python.exe -m pip check
+node --test tests_js/dashboard-security.test.cjs
 ```
 
-Démarrer `main.py` et `dashboard.py --port 8080` avec ce même Python, dans deux terminaux. Ouvrir http://127.0.0.1:8080/. Laisser LM Studio désactivé pour un essai sans modèle. Sous Linux : `python3.12 -m venv .venv`, puis `.venv/bin/python` pour les mêmes commandes.
+La [CI](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/ci.yml) effectue une installation hashée, compile les modules Python publiés, contrôle le JavaScript, exécute les deux suites et lance les audits CVE et Bandit. Les journaux associent leurs résultats à un SHA, un OS et une version Python. Les tests ignorés restent distingués des tests réussis. Un résultat CI positif ne constitue pas un audit exhaustif ni une validation des fournisseurs réels.
 
-`Pravda_Lanceur.exe` reste un lanceur : il utilise les sources et le `.venv` voisins. Vérifier le dossier réellement lancé ; une copie `.copilot/repos` n'est pas automatiquement synchronisée. Le code du lanceur est revu ; aucun nouvel EXE Windows n'est annoncé comme compilé par une simple validation Linux. Les builds et audits utilisent des environnements séparés.
+Lire [SECURITY.md](SECURITY.md) pour les contrôles, le périmètre et le signalement. Les erreurs des chemins HTTP maintenus sont génériques ; les exports de texte externe sont protégés contre les formules. Le dashboard est sans authentification et reste **strictement local**. Une écoute loopback, un masque de logs ou une analyse statique ne garantissent pas l'absence de vulnérabilité.
 
-### Sécurité et vérifications
+### Modules expérimentaux et travaux en cours
 
-Le dashboard reste sur **127.0.0.1**, sans authentification : ne pas l'exposer sur Internet. Le serveur vérifie Host/Origin, borne les requêtes et les lectures CSV, limite les requêtes et renvoie des erreurs génériques. La limite est configurable : le polling de l'interface de ce ZIP dépasse 60 requêtes/minute, d'où un défaut de 240 par IP. Les exports de texte externe sont protégés contre les formules de tableur.
+| Chantier | État |
+|---|---|
+| Historique, alertes, exports, réception bornée | Implémentés ; vérifier les journaux du commit examiné |
+| STALE de 25–29 s | Causes logicielles couvertes par régressions ; mesure des flux réels encore nécessaire |
+| Géographie ENTSOG et proxy maritime | Modules conservés ; leurs points/segments ne prouvent pas des tracés réels |
+| AIS | Connecteur expérimental ; le proxy vide n'est pas un fournisseur opérationnel et les endpoints signalent l'indisponibilité |
+| Données GEM | À réintégrer avec source, licence, attribution et précision documentées |
+| OSINT à plusieurs niveaux | Utilitaire expérimental ; aucun incident n'est déclaré vérifié sur la seule présence d'une URL officielle |
+| TTF licencié / Forex continu / comptes privés | Non intégrés |
+| Archivage et rétention SQLite/CSV | À définir ; lecture bornée et stockage borné sont deux propriétés différentes |
+| Kafka Docker Playground | Piste d'expérimentation ; aucune dépendance Kafka déployée |
 
-`secure_http.py` applique des hôtes exacts, HTTPS public, l'exception HTTP loopback pour LM Studio, des délais, des réponses lues sous plafond et des redirections interdites. Les POST ne sont pas rejoués. La vérification DNS préalable n'est pas un verrouillage de l'IP de connexion ; CCXT et WebSockets conservent leurs transports propres. Les secrets, logs et fichiers de données restent locaux. Une vérification de dépendances ne garantit pas l'absence de code malveillant.
+[Kafka Docker Playground](https://github.com/vdesabou/kafka-docker-playground), proposé par le cousin du porteur du projet, peut aider à expérimenter producteurs/consommateurs, diagnostic et rejeu. Il ne fournit pas de données ni de licences et ne corrige pas automatiquement la latence. [Alfred Spotify Mini Player](https://github.com/vdesabou/alfred-spotify-mini-player) est un projet lié ; son workflow macOS n'est pas incorporé dans cette copie. Les conditions d'un fournisseur AIS ou musical doivent être vérifiées avant utilisation et redistribution.
 
-```text
-python -m unittest discover -s tests -t . -v
-python -m unittest discover -s launcher_tests -v
-python -m compileall -q -x "(^|[/\\])(.git|.venv|venv|build|dist)([/\\]|$)" .
-python -m pip check
-```
+### Une organisation de développement vérifiable
 
-La CI proposée contrôle la syntaxe de tous les modules publiés, y compris `src`, les tests, les dépendances et leurs audits. Validation locale du candidat : 177 tests du projet réussis sous Linux ; ce résultat ne remplace pas la CI du SHA qui sera publié. Le diagnostic du retard STALE de 25–29 s demande encore une mesure des flux réels ; les régressions simulées ne mesurent pas le transit réseau.
+Vincent fixe les orientations et accepte les travaux. Les rôles ci-dessous organisent la revue ; ils ne sont pas des agents autonomes exécutés par le bot.
 
-### Organisation agentique et participation
+| Étape | Responsable | Preuve attendue |
+|---|---|---|
+| 1. Maîtrise d'ouvrage technique | GPT | Périmètre, priorités, critères d'acceptation |
+| 2. Pilotage | Gemini | Plan et première validation de projet |
+| 3. Vérification | Vérificateur | Défaut reproductible sur un SHA identifié |
+| 4. Comparaison | Comparateur | Différences entre versions et cohérence des preuves |
+| 5. Correction | Implémenteur | Patch et tests de régression |
+| 6. Contre-vérification | Vérificateur → comparateur | Résultats du candidat corrigé |
+| 7. Visa et livraison | Gemini → GPT → Vincent | Avis réel, CI du commit, contrôle humain avant fusion/release |
 
-Vincent fixe les objectifs et accepte les travaux. **GPT : maîtrise d'ouvrage technique ; Gemini : pilotage et première validation ; vérificateur : défauts reproductibles ; comparateur : versions et preuves ; implémenteur : corrections et tests.** La boucle est correction → vérificateur → comparateur → premier visa Gemini → validation GPT → livraison et contrôle Vincent. Une approbation non obtenue n'est jamais attribuée à un modèle. Cette organisation de développement n'est pas une architecture d'agents autonomes dans le bot.
+Une approbation non obtenue n'est jamais attribuée à un modèle. Une modification retourne en correction si un cas reproductible l'invalide. Les récapitulatifs promotionnels ne remplacent pas le code ni les journaux.
 
-Les contributions recherchées : bugs reproductibles, tests asynchrones, accessibilité, traductions, qualité des données et connecteurs autorisés. Commencer par une issue et une PR limitée, avec provenance et limites. Le projet peut servir de base à d'autres observatoires locaux et outils de fiabilité des données. [Kafka Docker Playground](https://github.com/vdesabou/kafka-docker-playground), proposé par le cousin du porteur du projet, peut aider à expérimenter production/consommation/rejeu ; il ne fournit ni données ni correction automatique de latence. Aucune licence générale du code n'est supposée ; vérifier les licences des composants avant redistribution.
+> **Vie du projet :** la moitié de l'équipe est en vacances ; reprise progressive annoncée vers le **2 novembre 2026**.
+
+### Contribuer et réutiliser
+
+Les contributions recherchées : bugs reproductibles, tests asynchrones, accessibilité, traductions, provenance des données et connecteurs autorisés. Ouvrir une issue avec un exemple minimal, puis une PR limitée indiquant changements, tests et limites. Les secrets, bases, journaux privés et environnements Python restent hors de Git.
+
+Les modules principaux sont `main.py` (flux et orchestration), `market_history.py` (SQLite), `dashboard.py` / `dashboard.html` (interface), `energy_data.py` / `live_market_data.py` (sources), `security_config.py` / `secure_http.py` (politiques réseau) et `tests/` / `launcher_tests/` (régressions). Les utilitaires `src/` ont leur propre périmètre ; leur présence ne démontre pas leur intégration.
+
+**Licence :** aucune licence MIT n'est annoncée tant qu'un fichier `LICENSE` validé n'est pas publié. Les bibliothèques et données tierces conservent leurs licences et conditions respectives.
+
+---
 
 ## Русский
 
-Pravda-Bot — локальный Python-инструмент наблюдения за публичными котировками Kraken/Binance, бумажной симуляции и анализа качества данных. Архив добавляет SQLite-историю, уведомления внутри интерфейса, CSV-экспорт и Windows-лаунчер. Реальные ордера, приватные счета, лицензированные цены TTF, AIS и непрерывный Forex в этой копии не реализованы. ENTSOG публикует наблюдения в точках, BCE — ежедневные справочные курсы; новости не являются подтверждёнными происшествиями.
+### Назначение
 
-Комиссия модели — 0,36 процентного пункта; порог аномалий — 5 %. Это упрощённая оценка, а не гарантия доходности или исполнения. Бумажный портфель обнуляется при перезапуске; SQLite хранит историю наблюдений. Старая локальная модернизация была потеряна при обслуживании временного хранилища и не считается частью этой ветки без восстановления и проверки.
+**Pravda-Bot** — локальный Python-инструмент для наблюдения за публичными котировками Kraken/Binance, качества данных и бумажной симуляции. Он хранит выбранные наблюдения в SQLite и показывает историю, отчёты и состояние источников. Реальные ордера и проверка балансов не реализованы.
 
-Python 3.12, `.venv`, установка bootstrap/runtime с `--require-hashes`, затем `pip check` и тесты. Dashboard — только 127.0.0.1 без аутентификации. LM Studio необязателен, только loopback, без облачного fallback. HTTP-политики ограничивают адреса, перенаправления, размер и время ответов; DNS-проверка не закрепляет IP соединения. Секреты, БД, журналы и EXE не публикуются. Статус — локальный кандидат на базе `e292a37`: 177 тестов прошли; CI и независимая проверка ещё требуют подтверждения на соответствующем SHA. Новые модули географии, AIS и OSINT сохранены; stub истории заменён настоящим SQLite-модулем.
+| Возможность | Ограничение |
+|---|---|
+| BTC/USDT, ETH/USDT, SOL/USDT | Последняя цена не гарантирует исполнение |
+| Комиссия 0,36 %, подтверждение и гистерезис | Модель упрощена; `1,20 % − 0,36 п.п. = 0,84 %` |
+| Бумажный портфель и публичные стаканы | Нет реального исполнения, заёмных средств или проверки инвентаря |
+| SQLite, день/неделя/месяц, CSV и уведомления | История содержит выбранные образцы; промежуточные ticks могут объединяться |
+| ENTSOG, BCE/Frankfurter, GDELT/BBC | Точки наблюдения, ежедневные курсы и сообщённые новости, а не проверенные инциденты |
+| LM Studio | Необязателен, только loopback; облачного fallback нет |
 
-Половина команды в отпуске, возвращение к работе ожидается около **2 ноября 2026 года**. Vincent определяет цели и принимает результат; GPT координирует техническую работу, Gemini руководит проектом, проверяющий и сравнивающий агенты оценивают доказательства, исполнитель исправляет код. Подтверждённые ошибки, тесты и полезные коннекторы приветствуются; происхождение данных и ограничения обязательны.
+При перезапуске бумажный портфель сбрасывается; сохранённые наблюдения SQLite остаются. Порог аномалий 5 % не доказывает экономическую выполнимость. Лицензированные цены TTF, непрерывный Forex и приватные счета не подключены. Экспериментальные AIS/географические/OSINT-модули не являются доказательством оперативной готовности или лицензии на данные.
+
+### Запуск и проверка
+
+Используйте Python 3.12 и отдельный `.venv`. Команды Windows/Linux приведены выше; до слияния нужен код ветки `fix/restore-history-and-hardening`. Bootstrap и runtime устанавливаются с `--require-hashes`, затем выполняется `pip check`. Аудит и сборка используют отдельные окружения.
+
+Запустите `main.py` и `dashboard.py --port 8080` в двух терминалах с Python вашего venv. Dashboard: [http://127.0.0.1:8080](http://127.0.0.1:8080), без аутентификации, только локально. В примере `.env` модель и ntfy выключены. `Pravda_Lanceur.exe` — лаунчер соседних исходников и venv, а не самостоятельный торговый бинарный файл. Публичным источникам всё равно нужен интернет.
+
+Проверка: `python -m unittest discover -s tests -t . -v`, отдельно `python -m unittest discover -s launcher_tests -v`, затем `python -m pip check`. CI выполняет Windows/Linux, синтаксис, JavaScript, тесты и аудиты; число тестов, пропуски и версия Python относятся к конкретному SHA. Тесты не отключаются только потому, что сравнение часов нестабильно.
+
+### Надёжность и ограничения
+
+Чтение последних логических CSV-записей ограничено объёмом, поддерживает кавычки и переносы строк; обычный рост файла не отключает dashboard. При этом хранение CSV/SQLite не ограничено политикой автоматического удаления. Требуются мониторинг размера и план архивирования.
+
+HTTP/RSS и происхождение запросов проверяются в поддерживаемых путях; DNS-проверка не закрепляет IP соединения. Подробности и безопасное сообщение об уязвимости — в [SECURITY.md](SECURITY.md). Не публикуйте `.env`, базы и частные журналы. Полная безопасность и наличие MIT-лицензии не заявляются без соответствующих доказательств и файла `LICENSE`.
+
+### Участие и управление
+
+Vincent определяет цели и принимает результат. GPT отвечает за техническую координацию, Gemini — за управление проектом, проверяющий и сравнивающий агенты изучают доказательства, исполнитель исправляет код. Цикл: исправление → проверка → сравнение → Gemini → GPT → контроль Vincent. Это организация разработки, а не встроенная сеть автономных агентов.
+
+Половина команды в отпуске; работа постепенно возобновляется около **2 ноября 2026 года**. Полезны воспроизводимые ошибки, тесты, доступность, переводы и разрешённые источники. Kafka Docker Playground рассматривается для экспериментов, но не установлен. Проект может стать основой других локальных инструментов наблюдения и качества данных.
+
+---
 
 ## English
 
-Pravda-Bot is a local Python observatory for public Kraken/Binance tickers, paper simulation and data-quality analysis. The supplied archive adds SQLite history, local dashboard alerts, CSV reports and a Windows launcher. This copy has no real orders, private-account validation, licensed TTF prices, AIS feed or streaming Forex. ENTSOG observations are points, ECB rates are daily references, and reported news is not verified intelligence.
+### Purpose
 
-The simplified fee estimate subtracts 0.36 percentage points; the gross anomaly cap defaults to 5%. Neither establishes profitability or executable fills. Paper portfolio state resets on restart; SQLite retains observations. Earlier unpushed modernization was lost during temporary-workspace maintenance and is not claimed as part of this branch without recovery and verification.
+**Pravda-Bot** is a local Python observatory for public Kraken/Binance tickers, data quality and paper simulation. It retains selected observations in SQLite and exposes history, reports and source status. It sends no real orders and does not validate exchange balances.
 
-Use Python 3.12 and `.venv`; install the hashed bootstrap and runtime, then run `pip check` and both test suites. The unauthenticated dashboard must stay on 127.0.0.1. LM Studio is optional, loopback-only, without a cloud fallback. HTTP policies restrict destinations, redirects, time and response sizes; a preliminary DNS check does not pin the connection IP. Secrets, runtime databases/logs and executables are excluded from Git. This is a local candidate on `e292a37`; 177 project tests passed. The newer geography, AIS, OSINT and terminal modules are retained; the broken history stub is replaced with the real SQLite implementation. Remote CI and independent review must be confirmed for the actual published SHA.
+| Capability | Evidence boundary |
+|---|---|
+| BTC/USDT, ETH/USDT, SOL/USDT | Last trade prices do not guarantee executable quotes |
+| 0.36% fee estimate, confirmation and hysteresis | Simplified model: `1.20% − 0.36 percentage points = 0.84%` |
+| Paper portfolio and public order books | No real fills, borrowing, inventory validation or placement latency |
+| SQLite, day/week/month views, CSV and local alerts | Selected samples; intermediate ticks may be coalesced |
+| ENTSOG, ECB/Frankfurter, GDELT/BBC | Point observations, daily reference rates and reported news, not verified incidents |
+| Optional LM Studio | Loopback-only; no automatic cloud fallback |
 
-Half the team is on holiday; work is expected to resume around **2 November 2026**. Vincent sets direction and accepts the work; GPT coordinates technical ownership, Gemini manages the project, verifiers/comparators examine evidence, and implementers provide fixes and regressions. Contributions should include reproducible examples, tests, provenance and limits. This foundation can support other local observatories and data-reliability projects. Kafka Docker Playground is under consideration, not deployed.
+The paper portfolio resets on restart; SQLite observations remain. The 5% gross anomaly cap is not proof of feasibility. Licensed TTF, tick-by-tick Forex and private account integration are absent. Experimental AIS/geography/OSINT modules do not establish operational readiness, global coverage or data rights.
+
+### Setup and verification
+
+Use Python 3.12 and a dedicated `.venv`. The Windows and Linux commands above install the hashed bootstrap/runtime and run `pip check`. Until merge, use branch `fix/restore-history-and-hardening`. Audit and build tools have separate environments and locks. CI records each platform's actual Python patch version.
+
+Run `main.py` and `dashboard.py --port 8080` in separate terminals using that venv. Open [http://127.0.0.1:8080](http://127.0.0.1:8080). The unauthenticated server must remain local. The example disables ntfy and model calls. `Pravda_Lanceur.exe` launches adjacent sources with their own venv; it is not a self-contained trading executable. Public feeds still require network access.
+
+Run `python -m unittest discover -s tests -t . -v`, separately `python -m unittest discover -s launcher_tests -v`, then `python -m pip check`. CI covers Windows/Linux, Python/JavaScript syntax, tests, dependency auditing and Bandit. Counts and skipped checks belong to a specific SHA. Clock-resolution differences are addressed with deterministic assertions rather than skipping the test.
+
+### Reliability and limitations
+
+CSV observation reading uses a bounded tail of complete logical records, preserving quoting and embedded newlines. Normal log growth no longer disables the endpoint. This does not bound on-disk CSV/SQLite storage: monitor size and define retention separately.
+
+Maintained HTTP/RSS paths enforce target/origin policies and bounds. DNS prechecks do not pin the connection IP. Read [SECURITY.md](SECURITY.md) for scope, residual risks and reporting. Keep `.env`, databases and private logs out of Git. Neither complete security nor an MIT licence is asserted without evidence and a validated `LICENSE` file.
+
+### Contributing and governance
+
+Vincent sets direction and accepts the work. GPT coordinates technical ownership, Gemini manages the project, verifiers/comparators examine evidence and implementers supply fixes. The loop is correction → verification → comparison → Gemini → GPT → Vincent's delivery review. These are development roles, not autonomous agents embedded in the bot.
+
+Half the team is on holiday, with work expected to resume around **2 November 2026**. Contributions should include minimal reproductions, tests, provenance and limitations. Kafka Docker Playground is under consideration for event-processing experiments; it is not deployed. This work can support other useful local observatories and data-quality projects.
