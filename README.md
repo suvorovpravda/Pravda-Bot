@@ -113,6 +113,8 @@ Priorité 3 : veille géopolitique prudente avec provenance et indicateurs expli
 - `dashboard.py` : serveur HTTP local
 - `live_market_data.py` : adaptateurs marché
 - `energy_data.py` : ENTSOG, GDELT/BBC
+- `geospatial_mapper.py` : rendu cartographique proxy ENTSOG, sans AIS commercial
+- `osint_pipeline.py` : collecte OSINT deux niveaux Reporting / Validé, qualification croisée
 - `bot_config.py` : validation config
 - `tests/` : 106 tests unitaires
 
