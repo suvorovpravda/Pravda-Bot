@@ -40,7 +40,11 @@ pub fn calculate_spread(first: f64, second: f64, fee_rate: f64) -> Result<Spread
     }
     let gross: f64 = (first - second).abs() / first.min(second);
     let net: f64 = gross - fee_rate;
-    if !gross.is_finite() || !net.is_finite() || !(gross * 100.0_f64).is_finite() {
+    if !gross.is_finite()
+        || !net.is_finite()
+        || !(gross * 100.0_f64).is_finite()
+        || !(net * 100.0_f64).is_finite()
+    {
         return Err(MarketError::NonFiniteSpread);
     }
     Ok(Spread {
@@ -93,6 +97,10 @@ mod tests {
         }
         assert_eq!(
             calculate_spread(f64::MIN_POSITIVE, f64::MAX, 0.0_f64),
+            Err(MarketError::NonFiniteSpread)
+        );
+        assert_eq!(
+            calculate_spread(1.0_f64, 1.0_f64, f64::MAX),
             Err(MarketError::NonFiniteSpread)
         );
     }
