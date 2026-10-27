@@ -44,7 +44,7 @@ Cette complexité est volontaire : éviter les hallucinations de données, signa
 ## Ce que le projet ne fait PAS, et pourquoi
 - **Pas d’ordres réels, pas de clés d’échange** : surveillance publique uniquement, simulation papier uniquement.
 - **Pas de cours TTF licencié, pas de Forex tick par tick** : les taux utilisés sont les références BCE quotidiennes via Frankfurter, pas un flux interbancaire en temps réel. Aucun fournisseur de prix de marché TTF n’est connecté.
-- **Pas de carte de tracés de pipelines réels, pas de suivi AIS sans fournisseur autorisé** : la visualisation ENTSOG montre des points transfrontaliers publiés, pas des tracés de conduites. Le suivi AIS de navires GNL nécessite un fournisseur autorisé avec clés et droits de redistribution.
+- **Pas de carte de tracés de pipelines réels, pas de suivi AIS commercial** : la visualisation ENTSOG montre des points transfrontaliers publiés, pas des tracés de conduites. Le suivi AIS est limité à des proxies non-commerciaux (aisstream.io, openwaters.io, données gouvernementales ouvertes) marqués `non-commercial proxy`, couverture terrestre uniquement, pas de redistribution, pas de données satellite. Aucun fournisseur AIS payant n’est intégré.
 - **Pas de renseignement géopolitique opérationnel, les articles restent à vérifier** : les actualités GDELT/BBC sont des informations rapportées, pas des incidents vérifiés ni des évaluations de menace.
 
 Ces limites sont volontaires : elles préservent la simplicité locale, évitent les dépendances licenciées et garantissent la traçabilité source → règle → affichage.

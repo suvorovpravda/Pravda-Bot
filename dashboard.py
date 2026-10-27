@@ -26,6 +26,12 @@ from energy_data import (
 )
 from live_market_data import get_reference_fx_rates, read_market_snapshot
 from market_history import get_market_store
+try:
+    from ais_proxy import get_ais_recent
+    AIS_AVAILABLE = True
+except Exception:
+    AIS_AVAILABLE = False
+    get_ais_recent = None
 
 
 START_TIME = time.monotonic()
@@ -513,6 +519,55 @@ class DashboardHandler(BaseHTTPRequestHandler):
 
         if request_path == "/api/gas-price":
             self._send_json(get_ttf_price_status())
+            return
+
+        if request_path == "/api/ais/recent":
+            if not AIS_AVAILABLE:
+                self._send_json({"status":"unavailable","error":"AIS proxy not configured"},503)
+                return
+            limit = int(query.get("limit",[100])[0] or 100)
+            msgs = get_ais_recent(limit)
+            self._send_json({
+                "status":"available",
+                "source":"aisstream.io",
+                "usage":"non-commercial proxy",
+                "badge":"non-commercial proxy",
+                "note":"Couverture terrestre uniquement, pas de données satellite, quota API. Données non vérifiées.",
+                "count":len(msgs),
+                "messages":[{
+                    "mmsi":m.mmsi,
+                    "lat":m.lat,
+                    "lon":m.lon,
+                    "sog":m.sog,
+                    "cog":m.cog,
+                    "timestamp":m.timestamp,
+                    "source":m.source
+                } for m in msgs]
+            })
+            return
+
+        if request_path == "/api/ais/geojson":
+            if not AIS_AVAILABLE:
+                self._send_json({"status":"unavailable","error":"AIS proxy not configured"},503)
+                return
+            limit = int(query.get("limit",[200])[0] or 200)
+            msgs = get_ais_recent(limit)
+            features = []
+            for m in msgs:
+                features.append({
+                    "type":"Feature",
+                    "geometry":{"type":"Point","coordinates":[m.lon,m.lat]},
+                    "properties":{
+                        "mmsi":m.mmsi,
+                        "sog":m.sog,
+                        "cog":m.cog,
+                        "timestamp":m.timestamp,
+                        "source":m.source,
+                        "badge":"non-commercial proxy"
+                    }
+                })
+            geojson = {"type":"FeatureCollection","features":features}
+            self._send_json(geojson)
             return
 
         if request_path == "/api/metrics":

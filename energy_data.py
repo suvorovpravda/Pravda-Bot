@@ -39,6 +39,17 @@ def _cached_json(cache_key, url, *, params=None, ttl_seconds, timeout_seconds=15
         response.raise_for_status()
         payload = response.json()
     except (requests.RequestException, ValueError) as error:
+        # Fallback to stale cache to avoid hard failure in UI
+        with _cache_lock:
+            cached = _cache.get(cache_key)
+            if cached:
+                age_seconds = now - cached[0]
+                # Return stale data with a flag
+                stale_payload = cached[1].copy() if isinstance(cached[1], dict) else cached[1]
+                if isinstance(stale_payload, dict):
+                    stale_payload.setdefault("_stale", True)
+                    stale_payload.setdefault("_stale_age_seconds", int(age_seconds))
+                return stale_payload
         raise EnergyDataError(f"Public data source request failed ({type(error).__name__})") from error
 
     if not isinstance(payload, dict):
@@ -66,6 +77,7 @@ def get_entsog_flows(*, now=None):
         params={"limit": 10000},
         ttl_seconds=CONNECTION_POINT_CACHE_SECONDS,
     )
+    points_stale = bool(points_payload.get("_stale"))
     point_rows = points_payload.get("connectionpoints")
     if not isinstance(point_rows, list):
         raise EnergyDataError("ENTSOG connection-point response has an invalid schema")
@@ -90,6 +102,7 @@ def get_entsog_flows(*, now=None):
         },
         ttl_seconds=ENTSOG_CACHE_SECONDS,
     )
+    flows_stale = bool(flow_payload.get("_stale"))
     raw_flows = flow_payload.get("operationalData")
     if not isinstance(raw_flows, list):
         raise EnergyDataError("ENTSOG flow response has an invalid schema")
@@ -134,17 +147,22 @@ def get_entsog_flows(*, now=None):
         except ValueError:
             is_fresh = False
 
+    # Determine overall status with cache staleness
+    cache_stale = points_stale or flows_stale
+    status = "unavailable" if not records else ("live" if is_fresh and not cache_stale else "stale")
     return {
-        "status": "live" if records and is_fresh else "stale" if records else "unavailable",
+        "status": status,
         "source": "ENTSOG Transparency Platform",
         "source_url": "https://transparency.entsog.eu/",
         "retrieved_at": current.isoformat(timespec="seconds"),
         "latest_source_update": latest_update,
         "entry_count": sum(row["direction"] == "entry" for row in records),
         "exit_count": sum(row["direction"] == "exit" for row in records),
+        "cache_stale": cache_stale,
         "notice": (
             "Physical-flow observations reported by cross-border points. "
-            "Records are not deduplicated or equivalent to national net imports."
+            "Records are not deduplicated or equivalent to national net imports. "
+            "Data may be stale if source is unreachable."
         ),
         "observations": records[:500],
     }

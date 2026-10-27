@@ -29,3 +29,15 @@ Security issues: open issue with label security, no public disclosure of secrets
 
 ## Compliance
 OWASP Top 10 mitigations applied where relevant for local app.
+
+## AIS / Maritime data legal limits
+Pravda-Bot may ingest AIS data via non-commercial proxies such as aisstream.io, openwaters.io and open government feeds.
+
+* Usage is strictly non-commercial. No redistribution of raw AIS feeds.
+* Coverage is terrestrial only – no satellite data. Positions disappear over open ocean.
+* Rate limits and quotas apply. Do not poll aggressively.
+* Data is not verified. Positions are marked `non-commercial proxy` and must never be presented as `live_verified`.
+* No commercial AIS provider is integrated. If a provider requires a paid license, integration is blocked by design.
+* API keys, if used, must be stored in `.env` and never committed. Rotate keys if exposed.
+* AIS data is stored in memory only by default. No persistent logging of vessel identities without explicit user consent.
+* Respect local privacy and maritime regulations. Do not correlate AIS with personal data.
