@@ -1210,13 +1210,17 @@
     window.addEventListener("resize", drawPriceChart);
     applyLanguage();
     refreshAll();
-    setInterval(updateClock, 1000);
-    setInterval(refreshMarket, 1000);
-    setInterval(refreshFx, 21600000);
-    setInterval(refreshFlows, 300000);
-    setInterval(refreshNews, 900000);
-    setInterval(refreshCrypto, 5000);
-    setInterval(refreshSources, 60000);
+    function startPolling() {
+        setInterval(updateClock, 1000);
+        setInterval(refreshMarket, 1000);
+        setInterval(refreshFx, 21600000);
+        setInterval(refreshFlows, 300000);
+        setInterval(refreshNews, 900000);
+        setInterval(refreshCrypto, 5000);
+        setInterval(refreshSources, 60000);
+        setInterval(checkPriceAlerts, 5000);
+    }
+    startPolling();
     
     // Tabs filtering
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -1240,6 +1244,6 @@
     // Default to all
     applyTab('all');
 
-    
+</script>
 </body>
 </html>

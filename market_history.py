@@ -7,6 +7,7 @@ import math
 import os
 import sqlite3
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,6 +17,9 @@ SUPPORTED_SYMBOLS = {"BTC/USDT", "ETH/USDT", "SOL/USDT"}
 SUPPORTED_EXCHANGES = {"Binance", "Kraken"}
 PERIODS = {"day": timedelta(days=1), "week": timedelta(days=7), "month": timedelta(days=30)}
 _schema_lock = threading.Lock()
+WRITE_ATTEMPTS = 5
+WRITE_BUSY_TIMEOUT_MS = 100
+WRITE_RETRY_BASE_SECONDS = 0.025
 
 
 class MarketStore:
@@ -68,15 +72,15 @@ class MarketStore:
                     "ALTER TABLE price_alerts ADD COLUMN exchange TEXT NOT NULL DEFAULT 'Binance'"
                 )
 
-    def _connect(self):
-        connection = sqlite3.connect(self.path, timeout=5)
+    def _connect(self, *, busy_timeout_ms=5000):
+        connection = sqlite3.connect(self.path, timeout=busy_timeout_ms / 1000)
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout=5000")
+        connection.execute(f"PRAGMA busy_timeout={int(busy_timeout_ms)}")
         return connection
 
     @contextmanager
-    def _connection(self):
-        connection = self._connect()
+    def _connection(self, *, busy_timeout_ms=5000):
+        connection = self._connect(busy_timeout_ms=busy_timeout_ms)
         try:
             yield connection
             connection.commit()
@@ -85,6 +89,33 @@ class MarketStore:
             raise
         finally:
             connection.close()
+
+    def _write_with_retry(self, operation):
+        """Replay a complete, rolled-back transaction on transient contention only.
+
+        Callbacks must only perform database work. Five short busy waits and
+        four exponential delays bound lock waiting to roughly 0.9 seconds.
+        Persistent contention is reported to the caller, never silently lost.
+        """
+        for attempt in range(WRITE_ATTEMPTS):
+            try:
+                with self._connection(busy_timeout_ms=WRITE_BUSY_TIMEOUT_MS) as connection:
+                    connection.execute("BEGIN IMMEDIATE")
+                    result = operation(connection)
+                return result
+            except sqlite3.OperationalError as error:
+                code = getattr(error, "sqlite_errorcode", None)
+                transient = code is not None and (code & 0xff) in (
+                    sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED
+                )
+                if not transient or attempt + 1 == WRITE_ATTEMPTS:
+                    raise
+                time.sleep(WRITE_RETRY_BASE_SECONDS * 2 ** attempt)
+
+    @staticmethod
+    def _positive_number(value):
+        return (isinstance(value, (int, float)) and not isinstance(value, bool)
+                and math.isfinite(value) and value > 0)
 
     @staticmethod
     def _timestamp(value):
@@ -99,13 +130,16 @@ class MarketStore:
     def record_tick(self, symbol, exchange, price, *, timestamp=None):
         if symbol not in SUPPORTED_SYMBOLS or exchange not in SUPPORTED_EXCHANGES:
             raise ValueError("unsupported market symbol or exchange")
-        if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
+        if not self._positive_number(price):
             raise ValueError("market tick price must be finite and positive")
-        with self._connection() as connection:
+        timestamp_text = self._timestamp(timestamp)
+
+        def write(connection):
             connection.execute(
                 "INSERT INTO market_ticks(timestamp_utc, symbol, exchange, price) VALUES (?, ?, ?, ?)",
-                (self._timestamp(timestamp), symbol, exchange, float(price)),
+                (timestamp_text, symbol, exchange, float(price)),
             )
+        self._write_with_retry(write)
 
     def history(self, symbol, exchange, period, *, now=None):
         if symbol not in SUPPORTED_SYMBOLS or exchange not in SUPPORTED_EXCHANGES:
@@ -217,9 +251,11 @@ class MarketStore:
             raise ValueError("unsupported market exchange")
         if currency not in {"EUR", "CHF"} or direction not in {"above", "below"}:
             raise ValueError("unsupported alert currency or direction")
-        if not isinstance(target, (int, float)) or not math.isfinite(target) or target <= 0:
+        if not self._positive_number(target):
             raise ValueError("alert target must be finite and positive")
-        with self._connection() as connection:
+        created_at = self._timestamp(None)
+
+        def write(connection):
             count = connection.execute("SELECT COUNT(*) FROM price_alerts").fetchone()[0]
             if count >= 50:
                 raise ValueError("at most 50 alerts may be configured")
@@ -234,16 +270,20 @@ class MarketStore:
                     currency,
                     direction,
                     float(target),
-                    self._timestamp(None),
+                    created_at,
                 ),
             )
-            alert_id = cursor.lastrowid
-        return next(alert for alert in self.list_alerts() if alert["id"] == alert_id)
+            return dict(connection.execute(
+                "SELECT id, symbol, exchange, currency, direction, target, enabled FROM price_alerts WHERE id = ?",
+                (cursor.lastrowid,),
+            ).fetchone())
+        return self._write_with_retry(write)
 
     def delete_alert(self, alert_id):
-        with self._connection() as connection:
+        def write(connection):
             cursor = connection.execute("DELETE FROM price_alerts WHERE id = ?", (alert_id,))
-        return cursor.rowcount > 0
+            return cursor.rowcount > 0
+        return self._write_with_retry(write)
 
     def record_source_events(self, kind, source, rows, *, retrieved_at=None):
         if kind not in {"energy_flow_observation", "reported_news"}:
@@ -251,38 +291,37 @@ class MarketStore:
         if not isinstance(source, str) or not source:
             raise ValueError("source name must not be empty")
         fetched = self._timestamp(retrieved_at)
-        stored = 0
-        with self._connection() as connection:
-            for row in rows:
-                if not isinstance(row, dict):
-                    continue
-                serialized = json.dumps(
-                    {"source": source, **row},
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                    allow_nan=False,
-                )
-                fingerprint = hashlib.sha256(
-                    f"{kind}\0{source}\0{serialized}".encode("utf-8")
-                ).hexdigest()
-                event_at = (
-                    row.get("updated_at")
-                    or row.get("period_from")
-                    or row.get("published_at")
-                    or row.get("event_at")
-                )
-                event_at = self._normalize_event_timestamp(event_at)
+        prepared = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            serialized = json.dumps(
+                {"source": source, **row}, ensure_ascii=False, sort_keys=True,
+                separators=(",", ":"), allow_nan=False,
+            )
+            fingerprint = hashlib.sha256(
+                f"{kind}\0{source}\0{serialized}".encode("utf-8")
+            ).hexdigest()
+            event_at = self._normalize_event_timestamp(
+                row.get("updated_at") or row.get("period_from")
+                or row.get("published_at") or row.get("event_at")
+            )
+            prepared.append((kind, source, event_at, fetched, fingerprint, serialized))
+
+        def write(connection):
+            stored = 0
+            for parameters in prepared:
                 cursor = connection.execute(
                     """
                     INSERT OR IGNORE INTO source_observations
                         (kind, source, event_at, first_seen_at, fingerprint, payload_json)
                     VALUES (?, ?, ?, ?, ?, ?)
                     """,
-                    (kind, source, event_at, fetched, fingerprint, serialized),
+                    parameters,
                 )
                 stored += cursor.rowcount
-        return stored
+            return stored
+        return self._write_with_retry(write)
 
     @staticmethod
     def _normalize_event_timestamp(value):
@@ -343,12 +382,12 @@ class MarketStore:
         ]
 
     def check_alerts(self, snapshot, fx_rates):
-        triggered = []
         symbols = snapshot.get("symbols", {})
         rates = fx_rates.get("rates", {})
         usd_per_eur = rates.get("USD")
         chf_per_eur = rates.get("CHF")
-        with self._connection() as connection:
+        def write(connection):
+            triggered = []
             alerts = connection.execute(
                 "SELECT * FROM price_alerts WHERE enabled = 1"
             ).fetchall()
@@ -357,11 +396,8 @@ class MarketStore:
                 if (
                     not isinstance(quote, dict)
                     or quote.get("status") != "live"
-                    or not isinstance(quote.get("price"), (int, float))
-                    or not math.isfinite(quote["price"])
-                    or quote["price"] <= 0
-                    or not isinstance(usd_per_eur, (int, float))
-                    or usd_per_eur <= 0
+                    or not self._positive_number(quote.get("price"))
+                    or not self._positive_number(usd_per_eur)
                 ):
                     continue
                 eur_price = quote["price"] / usd_per_eur
@@ -369,10 +405,10 @@ class MarketStore:
                     eur_price
                     if alert["currency"] == "EUR"
                     else eur_price * chf_per_eur
-                    if isinstance(chf_per_eur, (int, float)) and chf_per_eur > 0
+                    if self._positive_number(chf_per_eur)
                     else None
                 )
-                if value is None:
+                if not self._positive_number(value):
                     continue
                 condition = (
                     value >= alert["target"]
@@ -395,7 +431,8 @@ class MarketStore:
                     "UPDATE price_alerts SET condition_met = ? WHERE id = ?",
                     (int(condition), alert["id"]),
                 )
-        return triggered
+            return triggered
+        return self._write_with_retry(write)
 
 
 _market_store = None

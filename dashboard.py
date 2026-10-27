@@ -16,6 +16,7 @@ import time
 from collections import OrderedDict, deque
 from datetime import datetime, timezone
 from functools import partial
+from importlib.resources import files
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -46,7 +47,9 @@ MAX_HEADER_LINE_BYTES = 8 * 1024
 MAX_REQUEST_TARGET_BYTES = 2048
 MAX_REQUEST_BODY_BYTES = 4096
 MAX_CSV_BYTES = 8 * 1024 * 1024
-MAX_CSV_ROWS = 50000
+MAX_CSV_ROWS = 50000  # Daily report export cap; observation reads use a bounded tail.
+CSV_TAIL_CHUNK_BYTES = 64 * 1024
+MAX_CSV_HEADER_BYTES = 16 * 1024
 
 
 def rate_limit_setting(value):
@@ -103,6 +106,51 @@ class _LimitedHeaderReader:
         return line
 
 
+def _read_csv_tail(source, *, start, end, keep, budget):
+    """Read recent complete RFC-style CSV records backwards within a byte budget.
+
+    A quote changes state in either direction; doubled quotes change it twice.
+    This preserves embedded newlines produced by csv.writer. Only complete
+    records are parsed when the beginning of the byte window cuts a record.
+    """
+    parts = []
+    position = end
+    loaded = 0
+    quoted = False
+    has_content = False
+    records = 0
+    selected_start = None
+    while position > start and loaded < budget:
+        width = min(CSV_TAIL_CHUNK_BYTES, position - start, budget - loaded)
+        position -= width
+        source.seek(position)
+        block = source.read(width)
+        if len(block) != width:
+            raise ValueError("Observation log changed during reading")
+        parts.append(block)
+        loaded += width
+        for index in range(len(block) - 1, -1, -1):
+            value = block[index]
+            if value == 34:
+                quoted = not quoted
+            if value == 10 and not quoted:
+                if has_content:
+                    records += 1
+                    selected_start = position + index + 1
+                    if records >= keep:
+                        return b"".join(reversed(parts))[selected_start - position:]
+                has_content = False
+            elif value not in (10, 13):
+                has_content = True
+    if position == start:
+        if quoted:
+            raise csv.Error("unexpected end of data in quoted observation")
+        return b"".join(reversed(parts))
+    if selected_start is None:
+        raise ValueError("Observation record exceeds the byte limit")
+    return b"".join(reversed(parts))[selected_start - position:]
+
+
 def _read_observation_rows(csv_path, *, keep, required_columns):
     observations = deque(maxlen=keep)
     try:
@@ -113,20 +161,24 @@ def _read_observation_rows(csv_path, *, keep, required_columns):
         metadata = os.fstat(source.fileno())
         if not stat.S_ISREG(metadata.st_mode):
             raise ValueError("Observation log must be a regular file")
-        if metadata.st_size > MAX_CSV_BYTES:
-            raise ValueError("Observation log exceeds the byte limit")
-        content = source.read(MAX_CSV_BYTES + 1)
-    if len(content) > MAX_CSV_BYTES:
-        raise ValueError("Observation log exceeds the byte limit")
-    if not content:
-        return observations
-    reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig"), newline=""), strict=True)
-    if (reader.fieldnames is None or len(set(reader.fieldnames)) != len(reader.fieldnames)
-            or not required_columns.issubset(reader.fieldnames)):
-        raise ValueError("Observation log has an incompatible schema")
-    for count, row in enumerate(reader, start=1):
-        if count > MAX_CSV_ROWS:
-            raise ValueError("Observation log exceeds the row limit")
+        if not metadata.st_size:
+            return observations
+        header_limit = min(MAX_CSV_HEADER_BYTES, MAX_CSV_BYTES)
+        header = source.readline(header_limit + 1)
+        if len(header) > header_limit:
+            raise ValueError("Observation header exceeds the byte limit")
+        fields = next(csv.reader(io.StringIO(header.decode("utf-8-sig"), newline=""), strict=True), None)
+        if (fields is None or len(set(fields)) != len(fields)
+                or not required_columns.issubset(fields)):
+            raise ValueError("Observation log has an incompatible schema")
+        if metadata.st_size == len(header):
+            return observations
+        content = _read_csv_tail(
+            source, start=len(header), end=metadata.st_size, keep=keep,
+            budget=MAX_CSV_BYTES - len(header),
+        )
+    reader = csv.DictReader(io.StringIO(content.decode("utf-8"), newline=""), fieldnames=fields, strict=True)
+    for row in reader:
         if None in row or any(row.get(column) is None for column in required_columns):
             raise ValueError("Observation log contains an incomplete row")
         observations.append(row)
@@ -158,7 +210,11 @@ def get_system_metrics():
     }
 
 
-HTML_TEMPLATE = Path(__file__).with_name("dashboard.html").read_text(encoding="utf-8")
+_template_path = Path(__file__).with_name("dashboard.html")
+HTML_TEMPLATE = (
+    _template_path.read_text(encoding="utf-8") if _template_path.is_file()
+    else files("pravda_resources").joinpath("dashboard.html").read_text(encoding="utf-8")
+)
 INLINE_SCRIPT_HASHES = " ".join(
     "'sha256-" + base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii") + "'"
     for script in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script\s*>", HTML_TEMPLATE, re.I | re.S)

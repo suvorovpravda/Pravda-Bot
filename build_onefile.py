@@ -2,7 +2,7 @@
 """
 Build a single-file executable for Pravda-Bot.
 Usage:
-    python build_onefile.py --name PravdaBot
+    python build_onefile.py
 Builds a PyInstaller onefile for the current platform.
 """
 import argparse
@@ -16,31 +16,32 @@ def run(cmd):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="PravdaBot")
+    parser.add_argument("--name", default="Pravda_Lanceur")
     parser.add_argument("--entry", default="pravda_launcher.py")
     args = parser.parse_args()
 
-    root = Path(__file__).parent
+    root = Path(__file__).resolve().parent
     entry = root / args.entry
     if not entry.exists():
-        # fallback to main.py
-        entry = root / "main.py"
+        parser.error("entry point does not exist: " + str(entry))
 
     # Ensure requirements-build are installed
     # PyInstaller must be available
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--onefile",
+        "--console",
+        "--noupx",
         "--name", args.name,
         "--clean",
         "--noconfirm",
-        "--distpath", str(root / "dist"),
-        "--workpath", str(root / ".build"),
-        "--specpath", str(root / ".build"),
+        "--distpath", str(root),
+        "--workpath", str(root / ".pravda-exe-build"),
+        "--specpath", str(root / ".pravda-exe-spec"),
         str(entry)
     ]
     run(cmd)
-    print(f"Built {root / 'dist' / args.name}")
+    print(f"Built launcher in {root}; keep it beside main.py and .venv.")
 
 if __name__ == "__main__":
     main()

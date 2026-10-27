@@ -1,10 +1,13 @@
 name: CI
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [main, "fix/**"]
   pull_request:
     branches: [main]
+permissions:
+  contents: read
 jobs:
   validate:
     strategy:
@@ -56,10 +59,7 @@ jobs:
         run: |
           "$PRAVDA_PY_RUNTIME" -m compileall -q -x '(^|[/\\])(\.git|\.venv|venv|\.audit-venv|\.build-venv|__pycache__|\.pravda-exe-build|\.pravda-exe-spec|build|dist)([/\\]|$)' . 2>&1 | tee ci-logs/compileall.log
           "$PRAVDA_PY_RUNTIME" -m unittest discover -s tests -t . -v 2>&1 | tee ci-logs/project-tests.log
-      
-      - name: Build single-file executable
-        run: |
-          "$PRAVDA_PY_RUNTIME" build_onefile.py --name Pravda_Lanceur --entry pravda_launcher.py
+          "$PRAVDA_PY_RUNTIME" -m unittest discover -s launcher_tests -v 2>&1 | tee ci-logs/launcher-tests.log
       - name: JavaScript syntax check
         run: |
           "$PRAVDA_PY_RUNTIME" - <<'PY' 2>&1 | tee ci-logs/javascript.log
@@ -83,6 +83,38 @@ jobs:
           if tests: subprocess.run(["node", "--test", *map(str, tests)], check=True)
           print(f"JavaScript syntax: {len(parser.scripts)} inline script(s); {len(tests)} test file(s).")
           PY
+      - name: Install separate hashed build tools
+        run: |
+          python -m venv .build-venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then subdir=Scripts; exe=python.exe; else subdir=bin; exe=python; fi
+          export PRAVDA_PY_BUILD=".build-venv/$subdir/$exe"
+          echo "PRAVDA_PY_BUILD=$PRAVDA_PY_BUILD" >> "$GITHUB_ENV"
+          "$PRAVDA_PY_BUILD" -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt 2>&1 | tee ci-logs/build-bootstrap.log
+          "$PRAVDA_PY_BUILD" -m pip install --require-hashes --only-binary=:all: -r requirements-build.txt 2>&1 | tee ci-logs/build-install.log
+          "$PRAVDA_PY_BUILD" -m pip check | tee ci-logs/build-pip-check.log
+      - name: Build and validate the source distribution and wheel
+        run: |
+          "$PRAVDA_PY_BUILD" -m build --no-isolation 2>&1 | tee ci-logs/package-build.log
+          "$PRAVDA_PY_BUILD" -m twine check --strict dist/*.tar.gz dist/*.whl 2>&1 | tee ci-logs/package-check.log
+          "$PRAVDA_PY_RUNTIME" tools/check_distribution.py 2>&1 | tee ci-logs/wheel-smoke.log
+      - name: Build the Windows launcher and smoke-check help
+        if: runner.os == 'Windows'
+        run: |
+          "$PRAVDA_PY_BUILD" build_onefile.py 2>&1 | tee ci-logs/build.log
+          ./Pravda_Lanceur.exe --help 2>&1 | tee ci-logs/frozen-help.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.os }}
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: runner.os == 'Windows'
+        with:
+          name: windows-launcher
+          path: Pravda_Lanceur.exe
+          if-no-files-found: error
       - name: Install separate hashed audit tools
         id: tools
         if: ${{ always() && steps.runtime.outcome == 'success' }}

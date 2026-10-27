@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pravda-bot"
+version = "0.2.0"
+description = "Local public-market monitoring and paper simulation with a loopback dashboard"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dynamic = ["dependencies"]
+
+[project.urls]
+Repository = "https://github.com/suvorovpravda/Pravda-Bot"
+Issues = "https://github.com/suvorovpravda/Pravda-Bot/issues"
+
+[project.scripts]
+pravda-bot = "pravda_cli:main"
+pravda-dashboard = "dashboard:main"
+
+[tool.setuptools]
+packages = ["pravda_resources"]
+py-modules = [
+  "ais_proxy", "ais_stream_connector", "alert_gate", "analyze_paper_results",
+  "analyze_spreads", "bot_config", "bot_dashboard", "csv_schema", "dashboard",
+  "energy_data", "enhanced_terminal", "geospatial_mapper", "live_market_data",
+  "lng_observations", "main", "maritime_proxy", "market_data_health",
+  "market_history", "orderbook_execution", "osint_pipeline", "paper_simulator",
+  "pravda_cli", "pravda_launcher", "reconnect", "secure_http",
+  "security_and_fees", "security_config",
+]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.in"]}

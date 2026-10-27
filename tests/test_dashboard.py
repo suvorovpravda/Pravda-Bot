@@ -506,9 +506,13 @@ class DashboardTests(unittest.TestCase):
         self.assertNotIn("'unsafe-inline'", script_policy)
         scripts = re.findall(r"<script>(.*?)</script>", page, re.S)
         self.assertTrue(scripts)
+        self.assertEqual(len(scripts), page.count("<script>"))
+        self.assertNotRegex(page, r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
+        expected_hashes = set()
         for script in scripts:
             digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
-            self.assertIn("'sha256-" + digest + "'", script_policy)
+            expected_hashes.add("'sha256-" + digest + "'")
+        self.assertEqual(set(re.findall(r"'sha256-[^']+'", script_policy)), expected_hashes)
         self.assertIn("frame-src https://open.spotify.com", policy)
         with self.assertRaises(HTTPError) as error:
             urlopen(base_url + "/missing-secret-path")
@@ -607,6 +611,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(error.exception.code, 429)
         self.assertGreaterEqual(int(error.exception.headers["Retry-After"]), 1)
         periods = dict(re.findall(r"setInterval\((\w+),\s*(\d+)\)", HTML_TEMPLATE))
+        self.assertIn("checkPriceAlerts", periods)
         minute_requests = sum(60000 / int(periods[name]) for name in (
             "refreshMarket", "refreshFx", "refreshFlows", "refreshNews", "refreshCrypto", "refreshSources", "checkPriceAlerts"
         ))
@@ -615,17 +620,24 @@ class DashboardTests(unittest.TestCase):
         for _ in range(math.ceil(minute_requests) + 10):
             self.assertEqual(limiter.retry_after("local", now=100), 0)
 
-    def test_csv_limits_and_strict_parser_do_not_return_partial_data(self):
+    def test_data_endpoint_stays_available_after_50001_rows(self):
+        self.write_rows({"Timestamp_UTC": "2026-10-27T00:00:00Z", "Symbol": str(index)}
+                        for index in range(50001))
+        with urlopen(self.serve() + "/data") as response:
+            payload = json.load(response)
+            self.assertEqual(response.status, 200)
+        self.assertEqual(len(payload["observations"]), 20)
+        self.assertEqual(payload["observations"][0]["Symbol"], "50000")
+
+    def test_csv_record_limits_and_strict_parser_do_not_return_partial_data(self):
         self.csv_path.write_bytes(b"x" * 129)
         with patch("dashboard.MAX_CSV_BYTES", 128), self.assertRaisesRegex(ValueError, "byte limit"):
             read_dashboard_data(self.csv_path, stale_after_seconds=30)
         self.write_rows([{"Timestamp_UTC": "2026-01-01T00:00:00Z", "Symbol": "BTC/USDT"}] * 3)
         base_url = self.serve()
-        with patch("dashboard.MAX_CSV_ROWS", 2), self.assertRaises(HTTPError) as error:
-            urlopen(base_url + "/data")
-        payload = json.load(error.exception)
-        self.assertEqual(payload["status"], "unavailable")
-        self.assertEqual(payload["observations"], [])
+        with patch("dashboard.MAX_CSV_ROWS", 2), urlopen(base_url + "/data") as response:
+            payload = json.load(response)
+        self.assertEqual(len(payload["observations"]), 3)
         self.csv_path.write_text('Timestamp_UTC,Symbol\nnow,"unfinished\n', encoding="utf-8")
         with self.assertRaises(csv.Error):
             read_dashboard_data(self.csv_path, stale_after_seconds=30)
