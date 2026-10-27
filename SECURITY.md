@@ -23,7 +23,7 @@ Pravda-Bot observe des sources publiques et effectue une simulation papier. Aucu
 - Le client HTTP maintenu limite les hôtes exacts, impose HTTPS public et interdit les redirections. LM Studio utilise une exception HTTP loopback. Réponses bornées pendant la lecture et POST non rejoués. Le contrôle DNS préalable n'est pas un pinning IP ; DNS et en-têtes lents ne sont pas annulables de façon absolue par ce client synchrone.
 - Les sources RSS utilisent defusedxml avec DTD, entités et références externes interdites.
 - Le texte de modèle et les cellules texte des rapports sont bornés et protégés contre les formules de tableur. Les erreurs des chemins HTTP maintenus sont génériques ; aucun masquage ne garantit la confidentialité d'une sortie arbitraire.
-- `.env`, bases SQLite/WAL, CSV privés, venvs, journaux et EXE restent hors de Git. `.env.example` ne contient pas de secret et désactive ntfy par défaut.
+- `.env`, bases SQLite/WAL, CSV privés, venvs, journaux et EXE restent hors de Git. `.env.example` ne contient pas de secret et désactive ntfy par défaut. `AIS_API_KEY` est affichée une seule fois sur aisstream.io/account : la stocker uniquement dans une variable d’environnement ou un secret manager, jamais dans le code ou le repo.
 - Bootstrap, runtime, audit et build utilisent des verrous séparés avec hashes. Les mises à jour demandent une revue et une installation propre ; l'audit CVE doit échouer en cas de vulnérabilité ou de résultat inconcluant. Aucun `|| true` ne doit transformer l'échec de pip-audit en succès.
 - Fraîcheur et génération des cotations sont vérifiées avant les effets différés. Un résultat papier n'est ni une autorisation de trading ni une preuve de rentabilité.
 

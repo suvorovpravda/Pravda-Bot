@@ -24,7 +24,11 @@ python -m venv .venv
 # or .venv/bin/activate    # Linux/Mac
 pip install --require-hashes -r requirements.txt
 ```
-Create `.env` from `.env.example` if you want to enable notifications (`NTFY_TOPIC_URL`) or LM‑Studio analysis.
+Create `.env` from `.env.example` if you want to enable notifications (`NTFY_TOPIC_URL`), LM‑Studio analysis, or AIS proxy.
+
+**Secrets**
+* Ne jamais committer `.env`. `AIS_API_KEY` est affichée une seule fois sur aisstream.io/account : stocke-la uniquement dans une variable d’environnement ou un secret manager, jamais dans le code ni dans le repo.
+* Le fichier `.env.example` contient les clés sans valeur.
 
 Run:
 ```bash
