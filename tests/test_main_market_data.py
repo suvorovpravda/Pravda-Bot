@@ -57,6 +57,15 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
     def tearDownClass(cls):
         cls.temporary_directory.cleanup()
         sys.modules.pop("_pravda_main_market_data_test", None)
+        # Close global market store to release SQLite file on Windows
+        try:
+            import market_history
+            if hasattr(market_history, "_market_store"):
+                store = market_history._market_store
+                if hasattr(store, "_pool"):
+                    store._pool.closeall()
+        except Exception:
+            pass
 
     def setUp(self):
         self.symbol = "BTC/USDT"

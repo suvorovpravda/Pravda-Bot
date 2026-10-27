@@ -15,6 +15,14 @@ class MarketStoreTests(unittest.TestCase):
         self.store = MarketStore(Path(self.directory.name) / "history.sqlite3")
         self.now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
 
+    def tearDown(self):
+        # Close SQLite connections to avoid file locks on Windows
+        try:
+            if hasattr(self.store, "_pool"):
+                self.store._pool.closeall()
+        except Exception:
+            pass
+
     def test_market_history_persists_and_groups_day_week_and_month(self):
         self.store.record_tick(
             "BTC/USDT", "Binance", 100, timestamp=self.now - timedelta(minutes=2)

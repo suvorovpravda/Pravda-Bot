@@ -279,3 +279,19 @@ La version candidate 0.2.0 construit un paquet source et un wheel avec `python -
 La publication PyPI exige une CI réussie, un tag correspondant exactement à la version, la configuration du Trusted Publisher et l’activation explicite de `PYPI_PUBLISH_ENABLED`. La propriété du nom PyPI doit être vérifiée avant toute publication. Aucune publication n’est garantie par la seule création d’un tag.
 
 SQLite utilise WAL et retente les transactions sur contention temporaire avec un nombre limité d’essais. Un verrou persistant reste une erreur ; surveiller la taille et sauvegarder la base.
+
+## Migration Rust / Миграция Rust / Rust migration
+
+**FR :** Migration en cours. `rust/market-core` contient les calculs de spread, la validation des prix, les timestamps Kraken/Binance, la fraîcheur et les générations de snapshot. Il reste indépendant du bot Python : les flux, la persistance, le dashboard et le lanceur restent à migrer et aucune parité complète n'est revendiquée. Vérification : `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, puis `cargo test --locked --workspace`.
+
+**RU :** Миграция продолжается. `rust/market-core` содержит расчёт спреда, проверку цен и времени, свежести и поколений снимков; он ещё не подключён к боту. Потоки, SQLite, dashboard и запуск остаются на Python. Полная эквивалентность пока не подтверждена.
+
+**EN:** Migration is in progress. `rust/market-core` provides spread calculation, price and timestamp validation, freshness and snapshot-generation checks; it is not yet connected to the bot. Feeds, SQLite, dashboard and launcher remain in Python. Full behavioural parity has not been established.
+
+### SQLite Rust expérimental / Экспериментальный SQLite / Experimental SQLite
+
+**FR :** `MarketStore::create_new` crée une base distincte à un chemin qui n'existe pas encore : il refuse toute base existante et ne migre pas les données du bot. Un pool de quatre connexions utilise WAL et un délai d'attente configurable par connexion. Si la contention dépasse ce délai, l'erreur est renvoyée à l'appelant ; WAL ne permet qu'un seul écrivain à la fois. Fermer toutes les copies du pool avant de supprimer la base. Une initialisation interrompue peut laisser le fichier créé. Rust **1.89** minimum est déclaré et vérifié séparément en CI.
+
+**RU :** Экспериментальный `MarketStore::create_new` создаёт отдельную базу только по новому пути; существующая база бота не открывается и не мигрируется. Пул из четырёх соединений использует WAL и настраиваемое время ожидания. При длительной блокировке вызывающая сторона получает ошибку. Перед удалением базы необходимо освободить все копии пула. Минимальная версия Rust — 1.89.
+
+**EN:** Experimental `MarketStore::create_new` creates a separate database only at a new path; it does not open or migrate the bot's existing database. A four-connection pool uses WAL and a configurable per-connection busy timeout. Persistent contention returns an error; WAL still allows only one writer at a time. Drop all pool clones before removing the database. An interrupted initialization may leave the newly created file. The declared minimum Rust version is 1.89.
