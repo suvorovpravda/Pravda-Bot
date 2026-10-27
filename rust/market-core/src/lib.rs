@@ -1,6 +1,8 @@
 //! Validated market calculations for the Rust migration. Not wired to the bot.
 #![forbid(unsafe_code)]
 
+pub mod health;
+
 /// Fee estimate expressed as a fraction: 0.0036 = 0.36%.
 pub const DEFAULT_FEE_RATE: f64 = 0.0036;
 /// Maximum gross spread expressed in percentage points.
@@ -12,6 +14,15 @@ pub enum MarketError {
     InvalidFee,
     InvalidLimit,
     NonFiniteSpread,
+}
+
+/// Validate a price supplied as text by a public feed.
+pub fn parse_positive_price(raw: &str) -> Result<f64, MarketError> {
+    let price: f64 = raw.trim().parse().map_err(|_| MarketError::InvalidPrice)?;
+    if !price.is_finite() || price <= 0.0_f64 {
+        return Err(MarketError::InvalidPrice);
+    }
+    Ok(price)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -63,7 +74,17 @@ pub fn allowed_spread(gross_percent: f64, maximum_percent: f64) -> Result<bool, 
 
 #[cfg(test)]
 mod tests {
-    use super::{allowed_spread, calculate_spread, MarketError, DEFAULT_FEE_RATE};
+    use super::{
+        allowed_spread, calculate_spread, parse_positive_price, MarketError, DEFAULT_FEE_RATE,
+    };
+
+    #[test]
+    fn prices_from_text_must_be_finite_and_positive() {
+        assert_eq!(parse_positive_price(" 100.25 "), Ok(100.25_f64));
+        for raw in ["", "true", "NaN", "inf", "0", "-1", "1e999"] {
+            assert_eq!(parse_positive_price(raw), Err(MarketError::InvalidPrice));
+        }
+    }
 
     #[test]
     fn fees_use_fraction_and_percentage_points_correctly() {

@@ -282,8 +282,8 @@ SQLite utilise WAL et retente les transactions sur contention temporaire avec un
 
 ## Migration Rust / Миграция Rust / Rust migration
 
-**FR :** Migration en cours. Le module `rust/market-core` contient un premier calcul de spread et un garde-fou, encore indépendant du bot Python. Les flux, SQLite, le dashboard et le lanceur restent à migrer. Aucune parité complète n'est revendiquée. Vérification : `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, puis `cargo test --workspace`.
+**FR :** Migration en cours. `rust/market-core` contient les calculs de spread, la validation des prix, les timestamps Kraken/Binance, la fraîcheur et les générations de snapshot. Il reste indépendant du bot Python : les flux, la persistance, le dashboard et le lanceur restent à migrer et aucune parité complète n'est revendiquée. Vérification : `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, puis `cargo test --locked --workspace`.
 
-**RU :** Миграция продолжается. `rust/market-core` содержит первый расчёт спреда и защитную проверку; он ещё не подключён к боту. Потоки, SQLite, dashboard и запуск остаются на Python. Полная эквивалентность пока не подтверждена.
+**RU :** Миграция продолжается. `rust/market-core` содержит расчёт спреда, проверку цен и времени, свежести и поколений снимков; он ещё не подключён к боту. Потоки, SQLite, dashboard и запуск остаются на Python. Полная эквивалентность пока не подтверждена.
 
-**EN:** Migration is in progress. `rust/market-core` provides an initial spread calculation and guardrail and is not yet connected to the bot. Feeds, SQLite, dashboard and launcher remain in Python. Full behavioural parity has not been established.
+**EN:** Migration is in progress. `rust/market-core` provides spread calculation, price and timestamp validation, freshness and snapshot-generation checks; it is not yet connected to the bot. Feeds, SQLite, dashboard and launcher remain in Python. Full behavioural parity has not been established.
