@@ -1,14 +1,19 @@
 import argparse
+import base64
 import csv
+import hashlib
+import http.client
 import io
 import json
 import logging
 import math
 import os
+import re
 import sqlite3
+import stat
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from datetime import datetime, timezone
 from functools import partial
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -26,31 +31,126 @@ from energy_data import (
 )
 from live_market_data import get_reference_fx_rates, read_market_snapshot
 from market_history import get_market_store
-try:
-    from ais_proxy import get_ais_recent
-    AIS_AVAILABLE = True
-except Exception:
-    AIS_AVAILABLE = False
-    get_ais_recent = None
+from ais_proxy import get_ais_recent
+from security_and_fees import csv_safe_text
 
 
 START_TIME = time.monotonic()
 SYSTEM_METRICS_PROCESS = None
 SYSTEM_METRICS_PROCESS_LOCK = threading.Lock()
+RATE_LIMITER_CREATION_LOCK = threading.Lock()
+DEFAULT_RATE_LIMIT_PER_MINUTE = 240  # The 1 Hz UI plus logs/alerts uses over 85 requests/minute.
+MAX_HEADER_COUNT = 64
+MAX_HEADER_BYTES = 16 * 1024
+MAX_HEADER_LINE_BYTES = 8 * 1024
+MAX_REQUEST_TARGET_BYTES = 2048
+MAX_REQUEST_BODY_BYTES = 4096
+MAX_CSV_BYTES = 8 * 1024 * 1024
+MAX_CSV_ROWS = 50000
+
+
+def rate_limit_setting(value):
+    try:
+        if isinstance(value, bool) or not isinstance(value, (str, int)):
+            raise ValueError
+        limit = int(value)
+    except (TypeError, ValueError, OverflowError) as error:
+        raise argparse.ArgumentTypeError("must be an integer between 1 and 10000") from error
+    if not 1 <= limit <= 10000:
+        raise argparse.ArgumentTypeError("must be an integer between 1 and 10000")
+    return limit
+
+
+class RequestRateLimiter:
+    def __init__(self, limit, *, max_clients=128):
+        self.limit = rate_limit_setting(limit)
+        if isinstance(max_clients, bool) or not isinstance(max_clients, int) or not 1 <= max_clients <= 128:
+            raise ValueError("max_clients must be between 1 and 128")
+        self.max_clients = max_clients
+        self._clients = OrderedDict()
+        self._lock = threading.Lock()
+
+    def retry_after(self, client, *, now=None):
+        current = time.monotonic() if now is None else now
+        with self._lock:
+            requests = self._clients.pop(client, deque())
+            while requests and requests[0] <= current - 60:
+                requests.popleft()
+            while len(self._clients) >= self.max_clients:
+                self._clients.popitem(last=False)
+            self._clients[client] = requests
+            if len(requests) >= self.limit:
+                return max(1, math.ceil(requests[0] + 60 - current))
+            requests.append(current)
+            return 0
+
+
+class _LimitedHeaderReader:
+    def __init__(self, source):
+        self.source = source
+        self.count = 0
+        self.total = 0
+
+    def readline(self, limit):
+        line = self.source.readline(min(limit, MAX_HEADER_LINE_BYTES + 1))
+        if len(line) > MAX_HEADER_LINE_BYTES:
+            raise http.client.LineTooLong("header line")
+        self.total += len(line)
+        if line not in (b"\r\n", b"\n", b""):
+            self.count += 1
+        if self.count > MAX_HEADER_COUNT or self.total > MAX_HEADER_BYTES:
+            raise http.client.HTTPException("request headers exceed dashboard limits")
+        return line
+
+
+def _read_observation_rows(csv_path, *, keep, required_columns):
+    observations = deque(maxlen=keep)
+    try:
+        descriptor = os.open(csv_path, os.O_RDONLY | getattr(os, "O_NONBLOCK", 0))
+    except FileNotFoundError:
+        return observations
+    with os.fdopen(descriptor, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if not stat.S_ISREG(metadata.st_mode):
+            raise ValueError("Observation log must be a regular file")
+        if metadata.st_size > MAX_CSV_BYTES:
+            raise ValueError("Observation log exceeds the byte limit")
+        content = source.read(MAX_CSV_BYTES + 1)
+    if len(content) > MAX_CSV_BYTES:
+        raise ValueError("Observation log exceeds the byte limit")
+    if not content:
+        return observations
+    reader = csv.DictReader(io.StringIO(content.decode("utf-8-sig"), newline=""), strict=True)
+    if (reader.fieldnames is None or len(set(reader.fieldnames)) != len(reader.fieldnames)
+            or not required_columns.issubset(reader.fieldnames)):
+        raise ValueError("Observation log has an incompatible schema")
+    for count, row in enumerate(reader, start=1):
+        if count > MAX_CSV_ROWS:
+            raise ValueError("Observation log exceeds the row limit")
+        if None in row or any(row.get(column) is None for column in required_columns):
+            raise ValueError("Observation log contains an incomplete row")
+        observations.append(row)
+    return observations
+
+
+def _csv_safe_cell(value):
+    return csv_safe_text(value) if isinstance(value, str) else value
 
 
 def get_system_metrics():
     global SYSTEM_METRICS_PROCESS
 
-    if SYSTEM_METRICS_PROCESS is None:
-        with SYSTEM_METRICS_PROCESS_LOCK:
-            if SYSTEM_METRICS_PROCESS is None:
-                process = psutil.Process(os.getpid())
-                process.cpu_percent(interval=None)
-                SYSTEM_METRICS_PROCESS = process
-
-    memory_mb = SYSTEM_METRICS_PROCESS.memory_info().rss / (1024 * 1024)
-    cpu_percent = SYSTEM_METRICS_PROCESS.cpu_percent(interval=None)
+    with SYSTEM_METRICS_PROCESS_LOCK:
+        if SYSTEM_METRICS_PROCESS is None:
+            process = psutil.Process(os.getpid())
+            process.cpu_percent(interval=None)
+            SYSTEM_METRICS_PROCESS = process
+        try:
+            memory_mb = SYSTEM_METRICS_PROCESS.memory_info().rss / (1024 * 1024)
+            cpu_percent = SYSTEM_METRICS_PROCESS.cpu_percent(interval=None)
+        except psutil.NoSuchProcess:
+            SYSTEM_METRICS_PROCESS = None
+            raise
     return {
         "memory_rss_mb": round(memory_mb, 2),
         "cpu_percent": round(cpu_percent, 1),
@@ -59,13 +159,14 @@ def get_system_metrics():
 
 
 HTML_TEMPLATE = Path(__file__).with_name("dashboard.html").read_text(encoding="utf-8")
+INLINE_SCRIPT_HASHES = " ".join(
+    "'sha256-" + base64.b64encode(hashlib.sha256(script.encode("utf-8")).digest()).decode("ascii") + "'"
+    for script in re.findall(r"<script(?:\s[^>]*)?>(.*?)</script\s*>", HTML_TEMPLATE, re.I | re.S)
+)
 
 
 def read_dashboard_data(csv_path: Path, *, stale_after_seconds: float, now=None):
-    observations = deque(maxlen=20)
-    if csv_path.exists():
-        with csv_path.open("r", encoding="utf-8-sig", newline="") as source:
-            observations.extend(csv.DictReader(source))
+    observations = _read_observation_rows(csv_path, keep=20, required_columns={"Timestamp_UTC", "Symbol"})
 
     ordered_observations = list(reversed(observations))
     last_observation = (
@@ -98,14 +199,9 @@ def read_dashboard_data(csv_path: Path, *, stale_after_seconds: float, now=None)
 
 
 def read_lng_dashboard_data(csv_path: Path):
-    observations = deque(maxlen=10)
-    if csv_path.exists():
-        with csv_path.open("r", encoding="utf-8-sig", newline="") as source:
-            reader = csv.DictReader(source)
-            required_columns = {"Timestamp_UTC", "Benchmark", "Price_USD", "Status", "Note"}
-            if reader.fieldnames is None or not required_columns.issubset(reader.fieldnames):
-                raise ValueError("LNG CSV has an incompatible schema")
-            observations.extend(reader)
+    observations = _read_observation_rows(
+        csv_path, keep=10, required_columns={"Timestamp_UTC", "Benchmark", "Price_USD", "Status", "Note"}
+    )
 
     return {
         "status": (
@@ -135,9 +231,19 @@ def daily_report_csv(report_date, *, store=None):
     output = io.StringIO(newline="")
     writer = csv.DictWriter(output, fieldnames=columns)
     writer.writeheader()
+    row_count = 0
+
+    def write_row(row):
+        nonlocal row_count
+        row_count += 1
+        if row_count > MAX_CSV_ROWS:
+            raise ValueError("Daily report exceeds the row limit")
+        writer.writerow({key: _csv_safe_cell(value) for key, value in row.items()})
+        if output.tell() > MAX_CSV_BYTES:
+            raise ValueError("Daily report exceeds the size limit")
 
     def write_source_error(source, error):
-        writer.writerow(
+        write_row(
             {
                 "record_type": "source_status",
                 "date_utc": report_date.isoformat(),
@@ -150,7 +256,7 @@ def daily_report_csv(report_date, *, store=None):
     for summary in store.daily_market_summary(report_date):
         opening, closing = summary["open"], summary["close"]
         change = (closing - opening) / opening * 100 if opening else None
-        writer.writerow(
+        write_row(
             {
                 "record_type": "market_summary",
                 "date_utc": report_date.isoformat(),
@@ -188,7 +294,7 @@ def daily_report_csv(report_date, *, store=None):
     for event in store.source_events("energy_flow_observation", report_date):
         flow = event["payload"]
         source_timestamp = event["event_at"] or event["first_seen_at"]
-        writer.writerow(
+        write_row(
             {
                 "record_type": "energy_flow_observation",
                 "date_utc": source_timestamp,
@@ -218,7 +324,7 @@ def daily_report_csv(report_date, *, store=None):
         write_source_error("GDELT / BBC World", error)
     for event in store.source_events("reported_news", report_date):
         article = event["payload"]
-        writer.writerow(
+        write_row(
             {
                 "record_type": "reported_news",
                 "date_utc": event["event_at"] or event["first_seen_at"],
@@ -314,6 +420,30 @@ def source_status_report(*, market_snapshot_path):
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    default_request_version = "HTTP/1.0"
+    connection_timeout_seconds = 5.0
+
+    def log_message(self, format, *args):
+        logging.info("Dashboard HTTP request handled")
+
+    def log_error(self, format, *args):
+        logging.warning("Dashboard HTTP request interrupted")
+
+    def setup(self):
+        self.request.settimeout(self.connection_timeout_seconds)
+        super().setup()
+
+    def version_string(self):
+        return "PravdaDashboard"
+
+    def end_headers(self):
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+        self.send_header("Content-Security-Policy", f"default-src 'self'; script-src 'self' {INLINE_SCRIPT_HASHES}; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; frame-src https://open.spotify.com; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+        super().end_headers()
+
     def __init__(
         self,
         *args,
@@ -325,6 +455,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         market_history_store=None,
         threshold=0.05,
         stale_after_seconds=30.0,
+        rate_limit_per_minute=None,
         **kwargs,
     ):
         self.csv_path = Path(csv_path)
@@ -333,19 +464,40 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.market_history_store = market_history_store or get_market_store()
         self.threshold = threshold
         self.stale_after_seconds = stale_after_seconds
+        self.rate_limit_per_minute = rate_limit_setting(
+            rate_limit_per_minute if rate_limit_per_minute is not None else
+            os.environ.get("DASHBOARD_RATE_LIMIT_PER_MINUTE", str(DEFAULT_RATE_LIMIT_PER_MINUTE))
+        )
+        self._response_started = False
         super().__init__(*args, **kwargs)
 
-    def _send_json(self, payload, status=200):
+    def send_response(self, code, message=None):
+        self._response_started = True
+        super().send_response(code, message)
+
+    def send_error(self, code, message=None, explain=None):
+        self.close_connection = True
+        self._send_json({"status": "unavailable" if code >= 500 else "error",
+                         "error": self.responses.get(code, ("Request failed",))[0]}, code)
+
+    def _send_json(self, payload, status=200, *, headers=None):
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Cache-Control", "no-store")
         self.send_header("Content-Length", str(len(body)))
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
         self.end_headers()
-        self.wfile.write(body)
+        if self.command != "HEAD":
+            self.wfile.write(body)
 
     def _send_csv(self, payload, filename):
         body = payload.encode("utf-8")
+        if len(body) > MAX_CSV_BYTES:
+            self._send_json({"status": "unavailable", "error": "CSV export exceeds the size limit"}, 503)
+            return
+        filename = re.sub(r"[^A-Za-z0-9._-]", "_", filename)
         self.send_response(200)
         self.send_header("Content-Type", "text/csv; charset=utf-8")
         self.send_header("Content-Disposition", f'attachment; filename="{filename}"')
@@ -355,17 +507,112 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _same_origin_request(self):
-        origin = self.headers.get("Origin")
-        host = self.headers.get("Host")
-        if not origin:
-            return True
         try:
-            parsed = urlsplit(origin)
+            hosts = self.headers.get_all("Host", [])
+            origins = self.headers.get_all("Origin", [])
+            if len(hosts) != 1 or len(origins) != 1:
+                return False
+            authority = urlsplit("//" + hosts[0])
+            origin = urlsplit(origins[0])
+            return (
+                origin.scheme == "http" and origin.hostname == authority.hostname
+                and (origin.port if origin.port is not None else 80) == self.server.server_port
+                and origin.username is None and origin.password is None
+                and not (origin.path or origin.query or origin.fragment)
+                and not any(character.isspace() for character in origins[0])
+            )
         except ValueError:
             return False
-        return parsed.scheme in {"http", "https"} and parsed.netloc == host
+
+    def parse_request(self):
+        original = self.rfile
+        self.rfile = _LimitedHeaderReader(original)
+        try:
+            if not super().parse_request():
+                return False
+        finally:
+            self.rfile = original
+        if len(self.path.encode("iso-8859-1")) > MAX_REQUEST_TARGET_BYTES:
+            self.send_error(414)
+            return False
+        try:
+            hosts = self.headers.get_all("Host", [])
+            if len(hosts) != 1 or not hosts[0] or any(character.isspace() for character in hosts[0]):
+                raise ValueError
+            authority = urlsplit("//" + hosts[0])
+            if (authority.hostname not in {"localhost", "127.0.0.1", "::1"}
+                    or authority.username is not None or authority.password is not None
+                    or authority.path or authority.query or authority.fragment
+                    or (authority.port if authority.port is not None else 80) != self.server.server_port):
+                raise ValueError
+            origins = self.headers.get_all("Origin", [])
+            if len(origins) > 1 or (origins and not self._same_origin_request()):
+                raise ValueError
+            if self.command in {"POST", "DELETE"} and not self._same_origin_request():
+                raise ValueError
+            fetch_sites = self.headers.get_all("Sec-Fetch-Site", [])
+            if len(fetch_sites) > 1 or (fetch_sites and fetch_sites[0] not in {"same-origin", "none"}):
+                raise ValueError
+            # This legacy GET changes each alert's latch, so it needs browser-origin proof too.
+            if (self.command == "GET" and self.path.partition("?")[0] == "/api/alerts/check"
+                    and not self._same_origin_request() and fetch_sites != ["same-origin"]):
+                raise ValueError
+        except ValueError:
+            self._send_json({"status": "forbidden", "error": "Local origin required"}, 403)
+            self.close_connection = True
+            return False
+        lengths = self.headers.get_all("Content-Length", [])
+        if len(lengths) > 1 or self.headers.get_all("Transfer-Encoding", []):
+            self.send_error(400)
+            return False
+        if lengths:
+            length = lengths[0]
+            if not length.isascii() or not length.isdigit() or len(length) > 10:
+                self.send_error(400)
+                return False
+            allowed = MAX_REQUEST_BODY_BYTES if self.command == "POST" else 0
+            if int(length) > allowed:
+                self.send_error(413)
+                return False
+        with RATE_LIMITER_CREATION_LOCK:
+            if not hasattr(self.server, "dashboard_rate_limiter"):
+                self.server.dashboard_rate_limiter = RequestRateLimiter(self.rate_limit_per_minute)
+            limiter = self.server.dashboard_rate_limiter
+        retry_after = limiter.retry_after(self.client_address[0])
+        if retry_after:
+            self._send_json({"status": "unavailable", "error": "Too many requests"}, 429,
+                            headers={"Retry-After": str(retry_after)})
+            self.close_connection = True
+            return False
+        try:
+            target = urlsplit(self.path)
+            if target.scheme or target.netloc or target.fragment or not self.path.startswith("/"):
+                raise ValueError
+            parse_qs(target.query, max_num_fields=32)
+        except ValueError:
+            self.send_error(400)
+            return False
+        return True
+
+    def _run_route(self, callback):
+        try:
+            callback()
+        except TimeoutError:
+            self.close_connection = True
+            if not self._response_started:
+                self.send_error(408)
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+        except Exception as error:
+            logging.warning("Dashboard request unavailable (%s)", type(error).__name__)
+            self.close_connection = True
+            if not self._response_started:
+                self._send_json({"status": "unavailable", "error": "Dashboard data unavailable"}, 500)
 
     def do_GET(self):
+        self._run_route(self._serve_GET)
+
+    def _serve_GET(self):
         parsed_request = urlsplit(self.path)
         request_path = parsed_request.path
         query = parse_qs(parsed_request.query)
@@ -376,7 +623,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 points = self.market_history_store.history(symbol, exchange, period)
             except ValueError as error:
-                self._send_json({"status": "error", "error": str(error)}, 400)
+                self._send_json({"status": "error", "error": "Invalid history query"}, 400)
                 return
             self._send_json(
                 {
@@ -397,7 +644,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 payload = self.market_history_store.export_history(symbol, exchange, period)
             except ValueError as error:
-                self._send_json({"status": "error", "error": str(error)}, 400)
+                self._send_json({"status": "error", "error": "Invalid history query"}, 400)
                 return
             filename = f"market-history-{symbol.replace('/', '-')}-{exchange.lower()}-{period}.csv"
             self._send_csv(payload, filename)
@@ -414,7 +661,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return
             try:
                 payload = daily_report_csv(report_date, store=self.market_history_store)
-            except (OSError, sqlite3.Error) as error:
+            except (OSError, sqlite3.Error, ValueError) as error:
                 logging.warning("Daily report unavailable (%s)", type(error).__name__)
                 self._send_json({"status": "error", "error": "Daily report unavailable"}, 500)
                 return
@@ -490,7 +737,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     {"status": "unavailable", "error": "ENTSOG data unavailable"}, 502
                 )
             except (OSError, sqlite3.Error, ValueError) as error:
-                logging.exception("Unable to persist ENTSOG observations")
+                logging.warning("Unable to persist ENTSOG observations (%s)", type(error).__name__)
                 self._send_json(
                     {"status": "error", "error": "Unable to persist energy observations"}, 500
                 )
@@ -510,8 +757,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self._send_json(
                     {"status": "unavailable", "error": "News feed unavailable"}, 502
                 )
-            except (OSError, sqlite3.Error, ValueError):
-                logging.exception("Unable to persist news provenance")
+            except (OSError, sqlite3.Error, ValueError) as error:
+                logging.warning("Unable to persist news provenance (%s)", type(error).__name__)
                 self._send_json(
                     {"status": "error", "error": "Unable to persist news provenance"}, 500
                 )
@@ -521,53 +768,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send_json(get_ttf_price_status())
             return
 
-        if request_path == "/api/ais/recent":
-            if not AIS_AVAILABLE:
-                self._send_json({"status":"unavailable","error":"AIS proxy not configured"},503)
+        if request_path in {"/api/ais/recent", "/api/ais/geojson"}:
+            try:
+                limit = int(query.get("limit", [100])[0])
+                if not 1 <= limit <= 2000:
+                    raise ValueError
+            except (ValueError, TypeError):
+                self._send_json({"status": "error", "error": "limit must be between 1 and 2000"}, 400)
                 return
-            limit = int(query.get("limit",[100])[0] or 100)
-            msgs = get_ais_recent(limit)
-            self._send_json({
-                "status":"available",
-                "source":"aisstream.io",
-                "usage":"non-commercial proxy",
-                "badge":"non-commercial proxy",
-                "note":"Couverture terrestre uniquement, pas de données satellite, quota API. Données non vérifiées.",
-                "count":len(msgs),
-                "messages":[{
-                    "mmsi":m.mmsi,
-                    "lat":m.lat,
-                    "lon":m.lon,
-                    "sog":m.sog,
-                    "cog":m.cog,
-                    "timestamp":m.timestamp,
-                    "source":m.source
-                } for m in msgs]
-            })
-            return
-
-        if request_path == "/api/ais/geojson":
-            if not AIS_AVAILABLE:
-                self._send_json({"status":"unavailable","error":"AIS proxy not configured"},503)
+            messages = get_ais_recent(limit)
+            if not messages:
+                self._send_json({"status": "unavailable", "error": "No verified AIS provider connected"}, 503)
                 return
-            limit = int(query.get("limit",[200])[0] or 200)
-            msgs = get_ais_recent(limit)
-            features = []
-            for m in msgs:
-                features.append({
-                    "type":"Feature",
-                    "geometry":{"type":"Point","coordinates":[m.lon,m.lat]},
-                    "properties":{
-                        "mmsi":m.mmsi,
-                        "sog":m.sog,
-                        "cog":m.cog,
-                        "timestamp":m.timestamp,
-                        "source":m.source,
-                        "badge":"non-commercial proxy"
-                    }
-                })
-            geojson = {"type":"FeatureCollection","features":features}
-            self._send_json(geojson)
+            rows = [{"mmsi": m.mmsi, "lat": m.lat, "lon": m.lon, "sog": m.sog,
+                     "cog": m.cog, "timestamp": m.timestamp, "source": m.source} for m in messages]
+            if request_path.endswith("geojson"):
+                self._send_json({"type": "FeatureCollection", "features": [
+                    {"type": "Feature", "geometry": {"type": "Point", "coordinates": [m["lon"], m["lat"]]},
+                     "properties": m} for m in rows]})
+            else:
+                self._send_json({"status": "available", "count": len(rows), "messages": rows})
             return
 
         if request_path == "/api/metrics":
@@ -618,8 +838,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 payload = read_lng_dashboard_data(self.lng_csv_path)
             except (OSError, csv.Error, UnicodeDecodeError, ValueError):
-                logging.exception("Unable to read LNG dashboard CSV %s", self.lng_csv_path)
-                self.send_error(500, "Unable to read LNG observation log")
+                logging.warning("LNG observation log unavailable")
+                self._send_json({"status": "unavailable", "error": "LNG observation log unavailable", "observations": []}, 500)
                 return
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
             self.send_response(200)
@@ -636,9 +856,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     self.csv_path,
                     stale_after_seconds=self.stale_after_seconds,
                 )
-            except (OSError, csv.Error, UnicodeDecodeError) as error:
-                logging.exception("Unable to read dashboard CSV %s", self.csv_path)
-                self.send_error(500, "Unable to read observation log")
+            except (OSError, csv.Error, UnicodeDecodeError, ValueError):
+                logging.warning("Observation log unavailable")
+                self._send_json({"status": "unavailable", "error": "Observation log unavailable", "observations": []}, 500)
                 return
             payload["threshold"] = self.threshold
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
@@ -653,6 +873,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         self.send_error(404)
 
     def do_POST(self):
+        self._run_route(self._serve_POST)
+
+    def _serve_POST(self):
         if urlsplit(self.path).path != "/api/alerts":
             self.send_error(404)
             return
@@ -666,7 +889,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             content_length = int(self.headers.get("Content-Length", "0"))
             if not 0 < content_length <= 4096:
                 raise ValueError("request body size must be between 1 and 4096 bytes")
-            payload = json.loads(self.rfile.read(content_length))
+            content = self.rfile.read(content_length)
+            if len(content) != content_length:
+                raise ValueError("incomplete body")
+            payload = json.loads(content)
             if not isinstance(payload, dict):
                 raise ValueError("alert payload must be a JSON object")
             alert = self.market_history_store.create_alert(
@@ -676,16 +902,19 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 payload.get("direction"),
                 payload.get("target"),
             )
-        except (ValueError, json.JSONDecodeError) as error:
-            self._send_json({"status": "error", "error": str(error)}, 400)
+        except (ValueError, UnicodeDecodeError, json.JSONDecodeError):
+            self._send_json({"status": "error", "error": "Invalid alert payload"}, 400)
             return
         except (OSError, sqlite3.Error) as error:
-            logging.exception("Unable to persist price alert")
+            logging.warning("Unable to persist price alert (%s)", type(error).__name__)
             self._send_json({"status": "error", "error": "Unable to save price alert"}, 500)
             return
         self._send_json({"status": "created", "alert": alert}, 201)
 
     def do_DELETE(self):
+        self._run_route(self._serve_DELETE)
+
+    def _serve_DELETE(self):
         if not self._same_origin_request():
             self._send_json({"status": "error", "error": "Cross-origin requests are not allowed"}, 403)
             return
@@ -759,6 +988,11 @@ def main():
         default=os.environ.get("DASHBOARD_STALE_AFTER_SECONDS", "30"),
         help="Seconds after which the latest observation is considered stale",
     )
+    parser.add_argument(
+        "--rate-limit", type=rate_limit_setting,
+        default=os.environ.get("DASHBOARD_RATE_LIMIT_PER_MINUTE", str(DEFAULT_RATE_LIMIT_PER_MINUTE)),
+        help="Requests per minute per client (default: 240, for the dashboard's 1 Hz polling)",
+    )
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error("--port must be between 1 and 65535")
@@ -769,6 +1003,7 @@ def main():
         lng_csv_path=args.lng_csv,
         threshold=args.threshold,
         stale_after_seconds=args.stale_after,
+        rate_limit_per_minute=args.rate_limit,
     )
     server = ThreadingHTTPServer(("127.0.0.1", args.port), handler)
     try:

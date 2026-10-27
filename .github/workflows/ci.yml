@@ -1,74 +1,128 @@
 name: CI
-
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "fix/**"]
   pull_request:
     branches: [main]
-
 jobs:
-  test:
-    runs-on: ubuntu-24.04
-
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    env:
+      NTFY_TOPIC_URL: ""
+      AIS_PROVIDER: "off"
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: "utf-8"
+      PIP_DISABLE_PIP_VERSION_CHECK: "1"
+      PIP_NO_INPUT: "1"
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - name: Record runner environment
+        run: |
+          mkdir -p ci-logs
+          echo "Runner: $RUNNER_OS" > ci-logs/runner.txt
+      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          python -m pip install -r requirements.txt
-
-      - name: Verify syntax and imports
-        run: |
-          python -m compileall -q main.py alert_gate.py bot_config.py bot_dashboard.py csv_schema.py market_data_health.py paper_simulator.py analyze_spreads.py analyze_paper_results.py dashboard.py lng_observations.py security_and_fees.py
-          python -c "import alert_gate, analyze_spreads, analyze_paper_results, bot_config, bot_dashboard, csv_schema, dashboard, lng_observations, market_data_health, paper_simulator, security_and_fees; print('Imports passed.')"
-          python analyze_spreads.py --help
-
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -t . -v
-
-  security-audit:
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+          python-version-file: .python-version
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
-
-      - name: Install dependencies
+          node-version: "24"
+      - name: Install a clean hashed runtime
+        id: runtime
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install --upgrade setuptools wheel
-          if grep -q "--hash=" requirements.txt; then
-            python -m pip install --require-hashes -r requirements.txt
-          else
-            python -m pip install -r requirements.txt
-          fi
-
-      - name: Audit dependencies with pip-audit
+          mkdir -p ci-logs
+          python -m venv .venv
+          if [[ "$RUNNER_OS" == "Windows" ]]; then subdir=Scripts; exe=python.exe; else subdir=bin; exe=python; fi
+          export PRAVDA_PY_RUNTIME=".venv/$subdir/$exe" PRAVDA_PY_AUDIT=".audit-venv/$subdir/$exe"
+          echo "PRAVDA_PY_RUNTIME=$PRAVDA_PY_RUNTIME" >> "$GITHUB_ENV"
+          echo "PRAVDA_PY_AUDIT=$PRAVDA_PY_AUDIT" >> "$GITHUB_ENV"
+          "$PRAVDA_PY_RUNTIME" -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt 2>&1 | tee ci-logs/bootstrap.log
+          "$PRAVDA_PY_RUNTIME" -m pip install --require-hashes --only-binary=:all: -r requirements.txt 2>&1 | tee ci-logs/runtime-install.log
+          "$PRAVDA_PY_RUNTIME" --version | tee ci-logs/python-version.log
+          "$PRAVDA_PY_RUNTIME" -m pip --version | tee ci-logs/pip-version.log
+          "$PRAVDA_PY_RUNTIME" -m pip check | tee ci-logs/pip-check.log
+          "$PRAVDA_PY_RUNTIME" -m pip list --format=freeze > ci-logs/runtime-inventory.txt
+      - name: Compile all source modules and run Python tests
         run: |
-          python -m pip install pip-audit
-          pip-audit --desc || true
-
-      - name: Verify requirements hashes
+          "$PRAVDA_PY_RUNTIME" -m compileall -q -x '(^|[/\\])(\.git|\.venv|venv|\.audit-venv|\.build-venv|__pycache__|\.pravda-exe-build|\.pravda-exe-spec|build|dist)([/\\]|$)' . 2>&1 | tee ci-logs/compileall.log
+          "$PRAVDA_PY_RUNTIME" -m unittest discover -s tests -t . -v 2>&1 | tee ci-logs/project-tests.log
+          
         run: |
-          echo "Requirements hashes verification skipped - using committed requirements.txt"
-
-      - name: Verify syntax and imports
+          "$PRAVDA_PY_RUNTIME" - <<'PY' 2>&1 | tee ci-logs/javascript.log
+          from html.parser import HTMLParser
+          from pathlib import Path
+          import subprocess
+          class Scripts(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.active = False; self.parts = []; self.scripts = []
+              def handle_starttag(self, tag, attrs):
+                  attrs = dict(attrs)
+                  if tag == "script": self.active = "src" not in attrs and attrs.get("type", "text/javascript") in {"text/javascript", "application/javascript", "module"}; self.parts = []
+              def handle_data(self, data):
+                  if self.active: self.parts.append(data)
+              def handle_endtag(self, tag):
+                  if tag == "script" and self.active: self.scripts.append("".join(self.parts)); self.active = False
+          parser = Scripts(); parser.feed(Path("dashboard.html").read_text(encoding="utf-8"))
+          for source in parser.scripts: subprocess.run(["node", "--check"], input=source, text=True, check=True)
+          for path in Path("assets").glob("*.js"): subprocess.run(["node", "--check", str(path)], check=True)
+          tests = sorted(Path("tests_js").glob("*.cjs"))
+          if tests: subprocess.run(["node", "--test", *map(str, tests)], check=True)
+          print(f"JavaScript syntax: {len(parser.scripts)} inline script(s); {len(tests)} test file(s).")
+          PY
+      - name: Install separate hashed audit tools
+        id: tools
+        if: ${{ always() && steps.runtime.outcome == 'success' }}
         run: |
-          python -m compileall -q main.py alert_gate.py bot_config.py bot_dashboard.py csv_schema.py market_data_health.py paper_simulator.py analyze_spreads.py analyze_paper_results.py dashboard.py lng_observations.py security_and_fees.py
-          python -c "import alert_gate, analyze_spreads, analyze_paper_results, bot_config, bot_dashboard, csv_schema, dashboard, lng_observations, market_data_health, paper_simulator, security_and_fees; print('Imports passed.')"
-          python analyze_spreads.py --help
-
-      - name: Run unit tests
-        run: python -m unittest discover -s tests -t . -v
+          python -m venv .audit-venv
+          "$PRAVDA_PY_AUDIT" -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt 2>&1 | tee ci-logs/audit-bootstrap.log
+          "$PRAVDA_PY_AUDIT" -m pip install --require-hashes --only-binary=:all: -r requirements-dev.txt 2>&1 | tee ci-logs/audit-install.log
+          "$PRAVDA_PY_AUDIT" -m pip check | tee ci-logs/audit-pip-check.log
+      - name: Strict CVE audit of installed runtime and locks
+        if: ${{ always() && steps.tools.outcome == 'success' }}
+        run: |
+          for file in ci-logs/runtime-inventory.txt requirements-bootstrap.txt requirements.txt requirements-dev.txt requirements-build.txt; do
+            name=$(basename "$file" .txt)
+            "$PRAVDA_PY_AUDIT" -m pip_audit --strict --no-deps --disable-pip --progress-spinner=off --timeout 30 -r "$file" -f json -o "ci-logs/cve-$name.json" 2>&1 | tee "ci-logs/cve-$name.log"
+          done
+          "$PRAVDA_PY_AUDIT" - <<'PY'
+          import json
+          from pathlib import Path
+          reports = list(Path("ci-logs").glob("cve-*.json"))
+          if len(reports) != 5: raise SystemExit("Incomplete CVE audit reports")
+          for path in reports:
+              rows = json.loads(path.read_text())["dependencies"]
+              if not rows or any("skip_reason" in row or not row.get("version") or row.get("vulns") for row in rows): raise SystemExit(f"Failed or inconclusive audit: {path}")
+          expected = {tuple(line.split("==", 1)) for line in Path("ci-logs/runtime-inventory.txt").read_text().lower().replace("_", "-").splitlines()}
+          actual = {(row["name"].lower().replace("_", "-"), row["version"].lower()) for row in json.loads(Path("ci-logs/cve-runtime-inventory.json").read_text())["dependencies"]}
+          if actual != expected: raise SystemExit("Incomplete runtime inventory audit")
+          PY
+      - name: Bandit source audit, medium and high severity
+        if: ${{ always() && steps.tools.outcome == 'success' }}
+        run: |
+          "$PRAVDA_PY_AUDIT" -m bandit -r . -x '*/.git/*,*/.venv/*,*/venv/*,*/.audit-venv/*,*/.build-venv/*,*/.pravda-exe-build/*,*/.pravda-exe-spec/*,*/tests/*,*/launcher_tests/*' --severity-level medium -f json -o ci-logs/bandit.json 2>&1 | tee ci-logs/bandit.log
+      - name: Build the Windows launcher and smoke-check help
+        if: ${{ always() && runner.os == 'Windows' && steps.runtime.outcome == 'success' }}
+        run: |
+          python -m venv .build-venv
+          .build-venv/Scripts/python.exe -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt 2>&1 | tee ci-logs/build-bootstrap.log
+          .build-venv/Scripts/python.exe -m pip install --require-hashes --only-binary=:all: -r requirements-build.txt 2>&1 | tee ci-logs/build-install.log
+          .build-venv/Scripts/python.exe -m pip check | tee ci-logs/build-pip-check.log
+          .build-venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --onefile --console --noupx --name Pravda_Lanceur --distpath dist --workpath .pravda-exe-build --specpath .pravda-exe-spec pravda_launcher.py 2>&1 | tee ci-logs/build.log
+          ./dist/Pravda_Lanceur.exe --help 2>&1 | tee ci-logs/frozen-help.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: validation-${{ matrix.os }}
+          path: ci-logs/
+          if-no-files-found: error
+          retention-days: 14

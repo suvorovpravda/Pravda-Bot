@@ -1,6 +1,6 @@
 import unittest
-from datetime import datetime, timezone
-from unittest.mock import Mock, patch
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 
 import energy_data
 
@@ -60,17 +60,17 @@ class EnergyDataTests(unittest.TestCase):
         }
         responses = [points, flows]
         with patch.dict(energy_data._cache, {}, clear=True), patch(
-            "energy_data.requests.get"
+            "energy_data.get_json"
         ) as get:
-            get.side_effect = [
-                self.response(payload) for payload in responses
-            ]
+            get.side_effect = responses
             result = energy_data.get_entsog_flows(now=now)
 
         self.assertEqual(result["status"], "live")
         self.assertEqual(len(result["observations"]), 1)
         self.assertEqual(result["observations"][0]["value"], 1250000.0)
         self.assertEqual(result["observations"][0]["country"], "France")
+        self.assertTrue(all(call.kwargs["allowed_hosts"] == frozenset({"transparency.entsog.eu"})
+                            for call in get.call_args_list))
 
     def test_stale_source_update_is_not_labelled_live(self):
         now = datetime(2026, 10, 25, 12, tzinfo=timezone.utc)
@@ -91,9 +91,9 @@ class EnergyDataTests(unittest.TestCase):
             ]
         }
         with patch.dict(energy_data._cache, {}, clear=True), patch(
-            "energy_data.requests.get"
+            "energy_data.get_json"
         ) as get:
-            get.side_effect = [self.response(points), self.response(flows)]
+            get.side_effect = [points, flows]
             result = energy_data.get_entsog_flows(now=now)
 
         self.assertEqual(result["status"], "stale")
@@ -113,24 +113,82 @@ class EnergyDataTests(unittest.TestCase):
             <link>https://example.org/sports</link>
           </item>
         </channel></rss>"""
-        response = Mock()
-        response.text = rss
-        response.raise_for_status.return_value = None
         with patch.dict(energy_data._cache, {}, clear=True), patch(
             "energy_data._cached_json", side_effect=energy_data.EnergyDataError("offline")
-        ), patch("energy_data.requests.get", return_value=response):
+        ), patch("energy_data.get_text", return_value=rss) as get:
             result = energy_data.get_geopolitical_news()
 
         self.assertEqual(result["source"], "BBC News · World")
         self.assertEqual(len(result["articles"]), 1)
         self.assertEqual(result["articles"][0]["title"], "Pipeline supply disruption reported")
+        self.assertEqual(get.call_args.kwargs["allowed_hosts"], frozenset({"feeds.bbci.co.uk"}))
 
-    @staticmethod
-    def response(payload):
-        response = Mock()
-        response.json.return_value = payload
-        response.raise_for_status.return_value = None
-        return response
+    def test_entsog_future_source_dates_are_not_live(self):
+        now = datetime(2026, 10, 26, tzinfo=timezone.utc)
+        points = {"connectionpoints": [{"pointKey": "A", "isCrossBorder": True}]}
+        for offset, expected in ((1, "stale"), (0, "live"), (-48 * 3600, "live"),
+                                 (-48 * 3600 - 1, "stale")):
+            updated = (now + timedelta(seconds=offset)).isoformat()
+            flows = {"operationalData": [{"pointKey": "A", "value": "12",
+                                         "lastUpdateDateTime": updated}]}
+            with self.subTest(offset=offset), patch(
+                "energy_data._cached_json", side_effect=[points, flows]
+            ):
+                self.assertEqual(energy_data.get_entsog_flows(now=now)["status"], expected)
+
+    def test_cache_is_bounded_across_ninety_daily_windows(self):
+        now = datetime(2026, 10, 26, tzinfo=timezone.utc)
+        with patch.dict(energy_data._cache, {}, clear=True), patch(
+            "energy_data.time.monotonic", return_value=100
+        ), patch("energy_data.get_json") as get:
+            get.side_effect = lambda url, **kwargs: (
+                {"connectionpoints": []} if url.endswith("/connectionpoints") else {"operationalData": []}
+            )
+            for day in range(90):
+                energy_data.get_entsog_flows(now=now + timedelta(days=day))
+            self.assertLessEqual(len(energy_data._cache), 8)
+            self.assertEqual(get.call_count, 91)
+            energy_data.get_entsog_flows(now=now + timedelta(days=89))
+            self.assertEqual(get.call_count, 91)
+            energy_data.get_entsog_flows(now=now)
+            self.assertEqual(get.call_count, 92)
+
+    def test_rss_dtd_and_entities_fail_closed_without_caching(self):
+        documents = (
+            '<!DOCTYPE rss><rss><channel/></rss>',
+            '<!DOCTYPE rss [<!ENTITY x "gas">]><rss><channel><item><title>&x;</title></item></channel></rss>',
+            '<!DOCTYPE rss [<!ENTITY x SYSTEM "file:///private-file">]><rss><channel>&x;</channel></rss>',
+            '<!DOCTYPE rss SYSTEM "https://private.invalid/a.dtd"><rss><channel/></rss>',
+            '<rss><channel>',
+        )
+        for content in documents:
+            with self.subTest(content=content), patch.dict(energy_data._cache, {}, clear=True), patch(
+                "energy_data.get_text", return_value=content
+            ):
+                with self.assertRaises(energy_data.EnergyDataError) as error:
+                    energy_data._get_bbc_world_news()
+                self.assertEqual(str(error.exception), "BBC RSS response has an invalid XML document")
+                self.assertNotIn("bbc_world_rss", energy_data._cache)
+
+    def test_rss_cache_hits_do_not_extend_the_fetch_ttl(self):
+        content = '<rss><channel><item><title>Gas &amp; energy</title><link>https://example.org</link></item></channel></rss>'
+        with patch.dict(energy_data._cache, {}, clear=True), patch(
+            "energy_data.time.monotonic", side_effect=[0, 0, 100, 901, 901]
+        ), patch("energy_data.get_text", return_value=content) as get:
+            self.assertEqual(len(energy_data._get_bbc_world_news()), 1)
+            self.assertEqual(len(energy_data._get_bbc_world_news()), 1)
+            self.assertEqual(len(energy_data._get_bbc_world_news()), 1)
+            self.assertEqual(get.call_count, 2)
+
+    def test_http_errors_expose_no_upstream_details(self):
+        from secure_http import SecureHTTPError
+        with patch.dict(energy_data._cache, {}, clear=True), patch(
+            "energy_data.get_json", side_effect=SecureHTTPError("private-upstream-detail")
+        ):
+            with self.assertRaises(energy_data.EnergyDataError) as error:
+                energy_data.get_entsog_flows()
+            self.assertEqual(str(error.exception), "Public data source request failed")
+            self.assertTrue(error.exception.__suppress_context__)
 
 
 if __name__ == "__main__":

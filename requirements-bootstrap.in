@@ -1,0 +1,2 @@
+# Upgrade the installer before installing application dependencies.
+pip==26.2.2

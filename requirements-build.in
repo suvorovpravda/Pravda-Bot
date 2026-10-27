@@ -1,0 +1,2 @@
+# Separate environment for freezing the standard-library launcher.
+pyinstaller==6.22.3

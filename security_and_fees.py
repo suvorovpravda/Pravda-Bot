@@ -8,6 +8,13 @@ DEFAULT_ESTIMATED_FEES_RATE = DEFAULT_ESTIMATED_FEES_PERCENT / 100
 DEFAULT_MAX_ALLOWED_SPREAD_PERCENT = 5.0
 
 
+def csv_safe_text(value: object, *, max_length: int = 4096) -> str:
+    """Bound untrusted text and prevent formulas when opened in a spreadsheet."""
+    text = str(value)[:max_length]
+    text = "".join(" " if ord(char) < 32 or ord(char) == 127 else char for char in text)
+    return "'" + text if text.lstrip().startswith(("=", "+", "-", "@")) else text
+
+
 def request_error_summary(error: BaseException) -> str:
     """Describe a network error without exposing its URL or request details."""
     exception_name = type(error).__name__
@@ -20,6 +27,8 @@ def request_error_summary(error: BaseException) -> str:
 
 def parse_positive_price(raw_price: object) -> float:
     """Parse a finite positive market price received from an exchange stream."""
+    if isinstance(raw_price, bool):
+        raise ValueError("price must be finite and positive")
     try:
         price = float(raw_price)
     except (TypeError, ValueError, OverflowError) as error:

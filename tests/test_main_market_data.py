@@ -27,9 +27,11 @@ def load_main_without_starting_bot():
     try:
         os.chdir(temporary_directory.name)
         environment = {
+            "LM_STUDIO_API_BASE": "http://127.0.0.1:1234/v1",
             "ALERT_CONFIRMATION_SECONDS": "0",
             "MARKET_DATA_STALE_SECONDS": "4",
             "NTFY_TOPIC_URL": "",
+            "MARKET_HISTORY_DB": str(Path(temporary_directory.name) / "history.sqlite3"),
         }
         with patch.dict(os.environ, environment), patch.object(
             asyncio, "run", side_effect=lambda coroutine: coroutine.close()
@@ -79,6 +81,7 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
         self.bot.paper_simulator = Mock()
         self.bot.paper_simulator.update.return_value = None
         self.bot.paper_simulator.next_position_notional_usdt = 100
+        self.bot.market_store = Mock()
         self.bot.fetch_public_execution_estimate = Mock(
             return_value=ExecutionEstimate(
                 status="estimate_only",
@@ -110,6 +113,8 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(thread_patch.stop)
 
     async def run_thread_call(self, function, *args, **kwargs):
+        if function is self.bot.market_store.record_tick:
+            return None
         if function is self.bot.fetch_public_execution_estimate:
             return function(*args, **kwargs)
         if function is self.bot.log_paper_execution_estimate:
@@ -124,6 +129,18 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
             return None
         if function is self.bot.run_market_data_action:
             action = args[2]
+            if action is self.bot.log_paper_execution_estimate:
+                return self.bot.is_market_data_snapshot_fresh(args[0], args[1]), None
+            if action is self.bot.log_spread_observation:
+                self.log_calls += 1
+                if self.log_calls == 1:
+                    self.log_started.set()
+                    await self.release_log.wait()
+                if not self.bot.is_market_data_snapshot_fresh(args[0], args[1]):
+                    return False, None
+                self.logged_spread_rows.append(args[3:])
+                self.execution_order.append(("spread_log", args[9]))
+                return True, None
             if action is self.bot.notify_opportunity:
                 self.notification_started.set()
                 if self.delay_notification:
@@ -207,12 +224,15 @@ class HandlePriceUpdateFreshnessTests(unittest.IsolatedAsyncioTestCase):
         self.release_log.set()
         self.bot.latest_prices["Kraken"][self.symbol] = 1e-308
         self.bot.last_price_update_at["Kraken"][self.symbol] = time.monotonic()
-        self.bot.last_movement_notification_at[self.symbol] = 0
-
-        await self.bot.handle_price_update("Kraken", self.symbol, 1.7e308)
-
-        self.assertEqual(self.movement_action_calls, [])
-        self.assertFalse(self.notification_started.is_set())
+        self.bot.last_movement_notification_at[self.symbol] = (
+            time.monotonic() - self.bot.PRICE_ALERT_COOLDOWN_SECONDS - 1
+        )
+        # Movement overflows, but the inter-exchange spread remains admissible.
+        with patch.object(self.bot, "current_market_data_health",
+                return_value=self.bot.MarketDataHealth("OK", 0, 0, 0)), patch.object(
+                self.bot, "notify_price_movement") as notifier:
+            await self.bot.handle_price_update("Kraken", self.symbol, 100.0)
+            notifier.assert_not_called()
 
     async def test_ntfy_rechecks_freshness_after_waiting_for_global_lock(self):
         entered_lock = threading.Event()
