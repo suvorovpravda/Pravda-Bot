@@ -41,11 +41,13 @@ Cette complexité est volontaire : éviter les hallucinations de données, signa
 - Interface FR/RU/EN, persistance locale du choix de langue
 - Pas d’authentification, usage local uniquement
 
-## Ce que le projet ne fait PAS
-- Pas d’ordres réels, pas de clés d’échange
-- Pas de cours TTF licencié, pas de Forex tick par tick
-- Pas de carte de tracés de pipelines réels, pas de suivi AIS sans fournisseur autorisé
-- Pas de renseignement géopolitique opérationnel, les articles restent à vérifier
+## Ce que le projet ne fait PAS, et pourquoi
+- **Pas d’ordres réels, pas de clés d’échange** : surveillance publique uniquement, simulation papier uniquement.
+- **Pas de cours TTF licencié, pas de Forex tick par tick** : les taux utilisés sont les références BCE quotidiennes via Frankfurter, pas un flux interbancaire en temps réel. Aucun fournisseur de prix de marché TTF n’est connecté.
+- **Pas de carte de tracés de pipelines réels, pas de suivi AIS sans fournisseur autorisé** : la visualisation ENTSOG montre des points transfrontaliers publiés, pas des tracés de conduites. Le suivi AIS de navires GNL nécessite un fournisseur autorisé avec clés et droits de redistribution.
+- **Pas de renseignement géopolitique opérationnel, les articles restent à vérifier** : les actualités GDELT/BBC sont des informations rapportées, pas des incidents vérifiés ni des évaluations de menace.
+
+Ces limites sont volontaires : elles préservent la simplicité locale, évitent les dépendances licenciées et garantissent la traçabilité source → règle → affichage.
 
 ## Démarrage rapide Windows
 ```powershell
