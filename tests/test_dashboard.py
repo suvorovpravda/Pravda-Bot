@@ -1,9 +1,16 @@
+import argparse
+import base64
 import csv
+import hashlib
 import html
 import io
 import json
+import math
+import re
+import socket
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import partial
 from http.server import ThreadingHTTPServer
@@ -11,6 +18,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
 from urllib.request import ProxyHandler, Request, build_opener
+from urllib.parse import urlsplit
 from unittest.mock import Mock, patch
 
 import psutil
@@ -31,6 +39,9 @@ class DashboardTests(unittest.TestCase):
         self.history_store = MarketStore(
             Path(self.temporary_directory.name) / "history.sqlite3"
         )
+        self.quiet_http_logs = patch.object(DashboardHandler, "log_message")
+        self.quiet_http_logs.start()
+        self.addCleanup(self.quiet_http_logs.stop)
 
     def write_rows(self, rows):
         fields = [
@@ -64,7 +75,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(second["cpu_percent"], 24.0)
         self.assertEqual(process.cpu_percent.call_count, 3)
 
-    def serve(self):
+    def serve(self, **options):
         handler = partial(
             DashboardHandler,
             csv_path=self.csv_path,
@@ -73,6 +84,7 @@ class DashboardTests(unittest.TestCase):
             market_history_store=self.history_store,
             threshold=0.25,
             stale_after_seconds=30,
+            **options,
         )
         server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -81,6 +93,23 @@ class DashboardTests(unittest.TestCase):
         self.addCleanup(thread.join, 2)
         self.addCleanup(server.shutdown)
         return f"http://127.0.0.1:{server.server_port}"
+
+    def raw_request(self, base_url, request):
+        with socket.create_connection(("127.0.0.1", urlsplit(base_url).port), timeout=2) as client:
+            client.sendall(request)
+            client.shutdown(socket.SHUT_WR)
+            chunks = []
+            while True:
+                try:
+                    chunk = client.recv(65536)
+                except ConnectionResetError:
+                    break
+                if not chunk:
+                    break
+                chunks.append(chunk)
+        response = b"".join(chunks)
+        self.assertTrue(response, "Expected a bounded HTTP error response")
+        return int(response.split(b" ", 2)[1]), response
 
     def test_reports_freshness_and_returns_latest_twenty_rows(self):
         now = datetime(2026, 1, 1, tzinfo=timezone.utc)
@@ -143,9 +172,15 @@ class DashboardTests(unittest.TestCase):
 
     def test_metrics_endpoint_returns_dashboard_process_metrics(self):
         base_url = self.serve()
-
-        with urlopen(f"{base_url}/api/metrics") as response:
-            payload = json.load(response)
+        process = Mock()
+        process.memory_info.return_value.rss = 5 * 1024 * 1024
+        process.cpu_percent.side_effect = [0.0, 12.5]
+        with patch.object(dashboard, "SYSTEM_METRICS_PROCESS", None), patch(
+            "dashboard.psutil.Process", return_value=process
+        ) as factory:
+            with urlopen(f"{base_url}/api/metrics") as response:
+                payload = json.load(response)
+            factory.assert_called_once()
 
         self.assertEqual(response.status, 200)
         self.assertEqual(payload["status"], "success")
@@ -456,6 +491,193 @@ class DashboardTests(unittest.TestCase):
             urlopen(f"{base_url}/unknown")
 
         self.assertEqual(error.exception.code, 404)
+
+    def test_security_headers_allow_only_the_actual_inline_script_hash(self):
+        base_url = self.serve()
+        with urlopen(base_url) as response:
+            page = response.read().decode("utf-8")
+            headers = response.headers
+        self.assertEqual(headers["X-Frame-Options"], "DENY")
+        self.assertIn("camera=()", headers["Permissions-Policy"])
+        self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
+        self.assertNotIn("Python", headers["Server"])
+        policy = headers["Content-Security-Policy"]
+        script_policy = next(part for part in policy.split(";") if part.strip().startswith("script-src"))
+        self.assertNotIn("'unsafe-inline'", script_policy)
+        scripts = re.findall(r"<script>(.*?)</script>", page, re.S)
+        self.assertTrue(scripts)
+        for script in scripts:
+            digest = base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()
+            self.assertIn("'sha256-" + digest + "'", script_policy)
+        self.assertIn("frame-src https://open.spotify.com", policy)
+        with self.assertRaises(HTTPError) as error:
+            urlopen(base_url + "/missing-secret-path")
+        self.assertEqual(error.exception.headers["X-Frame-Options"], "DENY")
+        self.assertEqual(json.load(error.exception), {"status": "error", "error": "Not Found"})
+
+    def test_get_host_origin_and_fetch_site_are_checked_against_the_real_port(self):
+        base_url = self.serve()
+        port = urlsplit(base_url).port
+        for headers in (
+            {"Host": "attacker.invalid"}, {"Host": f"127.0.0.1:{port + 1 if port < 65535 else port - 1}"},
+            {"Origin": "https://attacker.invalid"}, {"Origin": base_url + "/path"},
+            {"Origin": base_url + "?secret=1"}, {"Origin": "null"},
+            {"Sec-Fetch-Site": "cross-site"}, {"Sec-Fetch-Site": "same-site"}, {},
+        ):
+            with self.subTest(headers=headers), self.assertRaises(HTTPError) as error:
+                urlopen(Request(base_url + "/api/alerts/check", headers=headers))
+            self.assertEqual(error.exception.code, 403)
+        for host in ("127.0.0.1", "localhost", "[::1]"):
+            origin = f"http://{host}:{port}"
+            with urlopen(Request(base_url + "/api/alerts", headers={"Host": f"{host}:{port}", "Origin": origin})) as response:
+                self.assertEqual(response.status, 200)
+        with patch("dashboard.read_market_snapshot", return_value={"symbols": {}}), patch(
+            "dashboard.get_reference_fx_rates", return_value={"rates": {}}
+        ):
+            with urlopen(Request(base_url + "/api/alerts/check", headers={"Sec-Fetch-Site": "same-origin"})) as response:
+                self.assertEqual(response.status, 200)
+
+    def test_mutations_require_explicit_same_origin_and_delete_stays_available(self):
+        alert = self.history_store.create_alert("BTC/USDT", "Kraken", "CHF", "above", 50000)
+        base_url = self.serve()
+        for method, path, data in (("POST", "/api/alerts", b"{}"), ("DELETE", f"/api/alerts/{alert['id']}", None)):
+            for origin in (None, "https://attacker.invalid", base_url + "/path", "http://secret@" + urlsplit(base_url).netloc):
+                with self.subTest(method=method, origin=origin):
+                    headers = {"Content-Type": "application/json"}
+                    if origin is not None:
+                        headers["Origin"] = origin
+                    with self.assertRaises(HTTPError) as error:
+                        urlopen(Request(base_url + path, data=data, headers=headers, method=method))
+                    self.assertEqual(error.exception.code, 403)
+            self.assertEqual(len(self.history_store.list_alerts()), 1)
+        with urlopen(Request(base_url + f"/api/alerts/{alert['id']}", headers={"Origin": base_url}, method="DELETE")) as response:
+            self.assertEqual(json.load(response)["status"], "deleted")
+        self.assertEqual(self.history_store.list_alerts(), [])
+
+    def test_headers_body_and_request_targets_have_small_independent_limits(self):
+        base_url = self.serve()
+        host = b"Host: " + urlsplit(base_url).netloc.encode() + b"\r\n"
+        origin = b"Origin: " + base_url.encode() + b"\r\n"
+        cases = [
+            (b"GET /api/alerts HTTP/1.1\r\n", b"X-Large: " + b"x" * 8192 + b"\r\n", 431),
+            (b"GET /api/alerts HTTP/1.1\r\n", b"".join(f"X-{i}: x\r\n".encode() for i in range(65)), 431),
+            (b"GET /api/alerts HTTP/1.1\r\n", b"".join(f"X-{i}: ".encode() + b"x" * 4000 + b"\r\n" for i in range(5)), 431),
+            (b"POST /api/alerts HTTP/1.1\r\n", origin + b"Content-Length: 4097\r\n", 413),
+            (b"GET /api/alerts HTTP/1.1\r\n", b"Content-Length: 1\r\n", 413),
+            (b"GET /api/alerts HTTP/1.1\r\n", b"Content-Length: 0\r\nContent-Length: 0\r\n", 400),
+            (b"GET /api/alerts HTTP/1.1\r\n", b"Transfer-Encoding: chunked\r\n", 400),
+            (b"GET /api/alerts HTTP/1.1\r\n", host, 403),
+            (b"GET /" + b"x" * 2048 + b" HTTP/1.1\r\n", b"", 414),
+        ]
+        for index, (line, headers, expected) in enumerate(cases):
+            with self.subTest(case=index):
+                code, _ = self.raw_request(base_url, line + host + headers + b"\r\n")
+                self.assertEqual(code, expected)
+
+    def test_socket_timeout_does_not_block_later_requests(self):
+        base_url = self.serve()
+        with patch.object(DashboardHandler, "connection_timeout_seconds", 0.05):
+            with socket.create_connection(("127.0.0.1", urlsplit(base_url).port), timeout=1) as client:
+                client.sendall(b"GET /api/alerts HTTP/1.1\r\nHost: ")
+                self.assertEqual(client.recv(1), b"")
+        with urlopen(base_url + "/api/alerts") as response:
+            self.assertEqual(response.status, 200)
+
+    def test_rate_limiter_is_validated_atomic_bounded_and_expires(self):
+        for value in ("0", "-1", "1.5", "inf", "10001", True):
+            with self.subTest(value=value), self.assertRaises(argparse.ArgumentTypeError):
+                dashboard.rate_limit_setting(value)
+        limiter = dashboard.RequestRateLimiter(10, max_clients=3)
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            results = list(executor.map(lambda _: limiter.retry_after("local", now=100), range(100)))
+        self.assertEqual(results.count(0), 10)
+        self.assertEqual(limiter.retry_after("local", now=159.9), 1)
+        self.assertEqual(limiter.retry_after("local", now=160), 0)
+        for client in range(20):
+            limiter.retry_after(str(client), now=160)
+        self.assertLessEqual(len(limiter._clients), 3)
+
+    def test_configured_http_limit_and_default_polling_budget(self):
+        base_url = self.serve(rate_limit_per_minute=2)
+        for _ in range(2):
+            with urlopen(base_url + "/api/alerts") as response:
+                self.assertEqual(response.status, 200)
+        with self.assertRaises(HTTPError) as error:
+            urlopen(base_url + "/api/alerts")
+        self.assertEqual(error.exception.code, 429)
+        self.assertGreaterEqual(int(error.exception.headers["Retry-After"]), 1)
+        periods = dict(re.findall(r"setInterval\((\w+),\s*(\d+)\)", HTML_TEMPLATE))
+        minute_requests = sum(60000 / int(periods[name]) for name in (
+            "refreshMarket", "refreshFx", "refreshFlows", "refreshNews", "refreshCrypto", "refreshSources", "checkPriceAlerts"
+        ))
+        self.assertGreater(minute_requests, 85)
+        limiter = dashboard.RequestRateLimiter(dashboard.DEFAULT_RATE_LIMIT_PER_MINUTE)
+        for _ in range(math.ceil(minute_requests) + 10):
+            self.assertEqual(limiter.retry_after("local", now=100), 0)
+
+    def test_csv_limits_and_strict_parser_do_not_return_partial_data(self):
+        self.csv_path.write_bytes(b"x" * 129)
+        with patch("dashboard.MAX_CSV_BYTES", 128), self.assertRaisesRegex(ValueError, "byte limit"):
+            read_dashboard_data(self.csv_path, stale_after_seconds=30)
+        self.write_rows([{"Timestamp_UTC": "2026-01-01T00:00:00Z", "Symbol": "BTC/USDT"}] * 3)
+        base_url = self.serve()
+        with patch("dashboard.MAX_CSV_ROWS", 2), self.assertRaises(HTTPError) as error:
+            urlopen(base_url + "/data")
+        payload = json.load(error.exception)
+        self.assertEqual(payload["status"], "unavailable")
+        self.assertEqual(payload["observations"], [])
+        self.csv_path.write_text('Timestamp_UTC,Symbol\nnow,"unfinished\n', encoding="utf-8")
+        with self.assertRaises(csv.Error):
+            read_dashboard_data(self.csv_path, stale_after_seconds=30)
+
+    def test_daily_report_neutralizes_news_formulas_and_bounds_rows(self):
+        day = datetime(2026, 10, 25, tzinfo=timezone.utc).date()
+        event = {"event_at": "2026-10-25T12:00:00Z", "first_seen_at": "2026-10-25T12:00:00Z",
+                 "source": "=BAD()", "payload": {"title": " \t=HYPERLINK(\"https://evil.invalid\")", "source": "+BAD()", "url": "@BAD()", "language": "-BAD()"}}
+        store = Mock()
+        store.daily_market_summary.return_value = []
+        store.source_events.side_effect = [[], [event]]
+        with patch("dashboard.get_entsog_flows", return_value={}), patch("dashboard.get_geopolitical_news", return_value={}):
+            rows = list(csv.DictReader(io.StringIO(dashboard.daily_report_csv(day, store=store))))
+        for column in ("source", "value", "details", "source_url"):
+            self.assertTrue(rows[0][column].startswith("'"), (column, rows[0]))
+        store.source_events.side_effect = [[], [event, event]]
+        with patch("dashboard.MAX_CSV_ROWS", 1), patch("dashboard.get_entsog_flows", return_value={}), patch("dashboard.get_geopolitical_news", return_value={}):
+            with self.assertRaisesRegex(ValueError, "row limit"):
+                dashboard.daily_report_csv(day, store=store)
+
+    def test_unexpected_errors_and_logs_never_include_exception_details(self):
+        self.quiet_http_logs.stop()
+        base_url = self.serve()
+        marker = "PRIVATE_TOKEN_SECRET"
+        with self.assertLogs(level="INFO") as logs:
+            with urlopen(base_url + "/api/alerts?token=" + marker):
+                pass
+            with patch.object(self.history_store, "list_alerts", side_effect=RuntimeError(marker)), self.assertRaises(HTTPError) as error:
+                urlopen(base_url + "/api/alerts")
+            self.assertEqual(error.exception.code, 500)
+            self.assertNotIn(marker, error.exception.read().decode())
+            code, response = self.raw_request(base_url, f"GET /?token={marker} HTTP/{marker}\r\n\r\n".encode())
+            self.assertEqual(code, 400)
+            self.assertNotIn(marker.encode(), response)
+        self.assertNotIn(marker, "\n".join(logs.output))
+        self.assertNotIn("token=", "\n".join(logs.output))
+
+    def test_missing_metrics_process_is_reset_and_can_recover(self):
+        bad, good = Mock(), Mock()
+        bad.cpu_percent.return_value = 0.0
+        bad.memory_info.side_effect = psutil.NoSuchProcess(123)
+        good.memory_info.return_value.rss = 7 * 1024 * 1024
+        good.cpu_percent.side_effect = [0.0, 4.5]
+        base_url = self.serve()
+        with patch.object(dashboard, "SYSTEM_METRICS_PROCESS", None), patch("dashboard.psutil.Process", side_effect=[bad, good]):
+            with self.assertRaises(HTTPError) as error:
+                urlopen(base_url + "/api/metrics")
+            self.assertEqual(error.exception.code, 503)
+            with urlopen(base_url + "/api/metrics") as response:
+                payload = json.load(response)
+        self.assertEqual(payload["system"]["memory_rss_mb"], 7)
+        self.assertEqual(payload["system"]["cpu_percent"], 4.5)
 
 
 if __name__ == "__main__":

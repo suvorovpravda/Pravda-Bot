@@ -30,6 +30,7 @@ class BotConfig:
     paper_max_slippage_percent: float
     paper_orderbook_max_age_seconds: float
     ntfy_topic_url: str
+    lm_enabled: bool
 
 
 def _float_setting(environment, name, default, *, allow_zero):
@@ -62,17 +63,26 @@ def _validate_url(name, value, *, https_only=False):
 
 def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
     values = os.environ if environment is None else environment
-    lm_url = values.get("LM_STUDIO_API_BASE", "http://192.168.1.146:1234/v1").strip()
+    lm_url = values.get("LM_STUDIO_API_BASE", "http://127.0.0.1:1234/v1").strip()
     model_name = values.get("LM_MODEL_NAME", "qwen/qwen3.5-9b").strip()
     trading_mode = values.get("TRADING_MODE", "paper").strip()
     paper_mode = values.get("PAPER_MODE", "portfolio").strip().lower()
     ntfy_topic_url = values.get("NTFY_TOPIC_URL", "").strip()
 
     _validate_url("LM_STUDIO_API_BASE", lm_url)
+    parsed_lm = urlsplit(lm_url)
+    if (parsed_lm.scheme != "http" or parsed_lm.hostname not in {"127.0.0.1", "localhost", "::1"}
+            or parsed_lm.query or parsed_lm.fragment):
+        raise ValueError("LM_STUDIO_API_BASE must be HTTP on a loopback host without query or fragment")
+    enabled = values.get("LM_STUDIO_ENABLED", "true").strip().lower()
+    if enabled not in {"true", "false"}:
+        raise ValueError("LM_STUDIO_ENABLED must be true or false")
     if not model_name:
         raise ValueError("LM_MODEL_NAME must not be empty")
     if not trading_mode:
         raise ValueError("TRADING_MODE must not be empty")
+    if trading_mode != "paper":
+        raise ValueError("TRADING_MODE must be paper; real trading is not implemented")
     if paper_mode not in {"fixed", "portfolio"}:
         raise ValueError("PAPER_MODE must be either 'fixed' or 'portfolio'")
     if ntfy_topic_url:
@@ -143,4 +153,5 @@ def load_config(environment: Mapping[str, str] | None = None) -> BotConfig:
             values, "PAPER_ORDERBOOK_MAX_AGE_SECONDS", 2, allow_zero=False
         ),
         ntfy_topic_url=ntfy_topic_url,
+        lm_enabled=enabled == "true",
     )

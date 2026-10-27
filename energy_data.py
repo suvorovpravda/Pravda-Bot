@@ -2,10 +2,14 @@ import math
 import re
 import threading
 import time
+from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
-from xml.etree import ElementTree
 
-import requests
+from defusedxml import ElementTree
+from defusedxml.common import DefusedXmlException
+
+from secure_http import SecureHTTPError, get_json, get_text
+from security_config import SERVICE_HOSTS
 
 
 ENTSOG_API = "https://transparency.entsog.eu/api/v1"
@@ -14,7 +18,8 @@ BBC_WORLD_RSS = "https://feeds.bbci.co.uk/news/world/rss.xml"
 ENTSOG_CACHE_SECONDS = 300
 CONNECTION_POINT_CACHE_SECONDS = 86400
 NEWS_CACHE_SECONDS = 900
-_cache = {}
+CACHE_MAX_ENTRIES = 8
+_cache = OrderedDict()
 _cache_lock = threading.Lock()
 
 
@@ -22,44 +27,42 @@ class EnergyDataError(RuntimeError):
     pass
 
 
-def _cached_json(cache_key, url, *, params=None, ttl_seconds, timeout_seconds=15):
+def _store_cached(cache_key, payload):
+    with _cache_lock:
+        _cache[cache_key] = (time.monotonic(), payload)
+        _cache.move_to_end(cache_key)
+        while len(_cache) > CACHE_MAX_ENTRIES:
+            _cache.popitem(last=False)
+
+
+def _cached_json(cache_key, url, *, service, params=None, ttl_seconds, timeout_seconds=15):
     now = time.monotonic()
     with _cache_lock:
         cached = _cache.get(cache_key)
         if cached and now - cached[0] < ttl_seconds:
+            _cache.move_to_end(cache_key)
             return cached[1]
 
     try:
-        response = requests.get(
+        payload = get_json(
             url,
+            allowed_hosts=SERVICE_HOSTS[service],
             params=params,
             headers={"User-Agent": "Pravda-Bot-Energy-Dashboard/1.0"},
             timeout=timeout_seconds,
         )
-        response.raise_for_status()
-        payload = response.json()
-    except (requests.RequestException, ValueError) as error:
-        # Fallback to stale cache to avoid hard failure in UI
-        with _cache_lock:
-            cached = _cache.get(cache_key)
-            if cached:
-                age_seconds = now - cached[0]
-                # Return stale data with a flag
-                stale_payload = cached[1].copy() if isinstance(cached[1], dict) else cached[1]
-                if isinstance(stale_payload, dict):
-                    stale_payload.setdefault("_stale", True)
-                    stale_payload.setdefault("_stale_age_seconds", int(age_seconds))
-                return stale_payload
-        raise EnergyDataError(f"Public data source request failed ({type(error).__name__})") from error
+    except SecureHTTPError:
+        raise EnergyDataError("Public data source request failed") from None
 
     if not isinstance(payload, dict):
         raise EnergyDataError("Public data source returned an invalid response")
-    with _cache_lock:
-        _cache[cache_key] = (time.monotonic(), payload)
+    _store_cached(cache_key, payload)
     return payload
 
 
 def _as_number(value):
+    if isinstance(value, bool):
+        return None
     try:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
@@ -74,10 +77,10 @@ def get_entsog_flows(*, now=None):
     points_payload = _cached_json(
         "entsog_connection_points",
         f"{ENTSOG_API}/connectionpoints",
+        service="entsog",
         params={"limit": 10000},
         ttl_seconds=CONNECTION_POINT_CACHE_SECONDS,
     )
-    points_stale = bool(points_payload.get("_stale"))
     point_rows = points_payload.get("connectionpoints")
     if not isinstance(point_rows, list):
         raise EnergyDataError("ENTSOG connection-point response has an invalid schema")
@@ -93,16 +96,16 @@ def get_entsog_flows(*, now=None):
     flow_payload = _cached_json(
         f"entsog_physical_flows_{start_date}_{end_date}",
         f"{ENTSOG_API}/operationalData",
+        service="entsog",
         params={
             "from": start_date.isoformat(),
             "to": end_date.isoformat(),
             "indicator": "Physical Flow",
             "limit": 10000,
-            "limit": 500
+            "sort": "-lastUpdateDateTime",
         },
         ttl_seconds=ENTSOG_CACHE_SECONDS,
     )
-    flows_stale = bool(flow_payload.get("_stale"))
     raw_flows = flow_payload.get("operationalData")
     if not isinstance(raw_flows, list):
         raise EnergyDataError("ENTSOG flow response has an invalid schema")
@@ -143,26 +146,21 @@ def get_entsog_flows(*, now=None):
             parsed_update = datetime.fromisoformat(latest_update.replace("Z", "+00:00"))
             if parsed_update.tzinfo is None:
                 parsed_update = parsed_update.replace(tzinfo=timezone.utc)
-            is_fresh = (current - parsed_update).total_seconds() <= 48 * 3600
+            is_fresh = 0 <= (current - parsed_update).total_seconds() <= 48 * 3600
         except ValueError:
             is_fresh = False
 
-    # Determine overall status with cache staleness
-    cache_stale = points_stale or flows_stale
-    status = "unavailable" if not records else ("live" if is_fresh and not cache_stale else "stale")
     return {
-        "status": status,
+        "status": "live" if records and is_fresh else "stale" if records else "unavailable",
         "source": "ENTSOG Transparency Platform",
         "source_url": "https://transparency.entsog.eu/",
         "retrieved_at": current.isoformat(timespec="seconds"),
         "latest_source_update": latest_update,
         "entry_count": sum(row["direction"] == "entry" for row in records),
         "exit_count": sum(row["direction"] == "exit" for row in records),
-        "cache_stale": cache_stale,
         "notice": (
             "Physical-flow observations reported by cross-border points. "
-            "Records are not deduplicated or equivalent to national net imports. "
-            "Data may be stale if source is unreachable."
+            "Records are not deduplicated or equivalent to national net imports."
         ),
         "observations": records[:500],
     }
@@ -173,6 +171,7 @@ def get_geopolitical_news():
         payload = _cached_json(
             "gdelt_gas_geopolitics",
             GDELT_API,
+            service="gdelt",
             params={
                 "query": '(natural gas OR LNG OR gas pipeline) (conflict OR war OR sanctions OR attack OR disruption)',
                 "mode": "ArtList",
@@ -225,29 +224,30 @@ def _get_bbc_world_news():
     with _cache_lock:
         cached = _cache.get("bbc_world_rss")
         if cached and now - cached[0] < NEWS_CACHE_SECONDS:
+            _cache.move_to_end("bbc_world_rss")
             content = cached[1]
         else:
             content = None
-    if content is None:
+    fetched = content is None
+    if fetched:
         try:
-            response = requests.get(
+            content = get_text(
                 BBC_WORLD_RSS,
+                allowed_hosts=SERVICE_HOSTS["bbc"],
                 headers={"User-Agent": "Pravda-Bot-Energy-Dashboard/1.0"},
                 timeout=8,
             )
-            response.raise_for_status()
-            content = response.text
-        except requests.RequestException as error:
-            raise EnergyDataError(
-                f"News fallback request failed ({type(error).__name__})"
-            ) from error
-        with _cache_lock:
-            _cache["bbc_world_rss"] = (time.monotonic(), content)
+        except SecureHTTPError:
+            raise EnergyDataError("News fallback request failed") from None
 
     try:
-        root = ElementTree.fromstring(content)
-    except ElementTree.ParseError as error:
-        raise EnergyDataError("BBC RSS response has an invalid XML document") from error
+        root = ElementTree.fromstring(content, forbid_dtd=True, forbid_entities=True,
+                                      forbid_external=True)
+    except (ElementTree.ParseError, DefusedXmlException):
+        raise EnergyDataError("BBC RSS response has an invalid XML document") from None
+    # Invalid XML is never retained in the cache.
+    if fetched:
+        _store_cached("bbc_world_rss", content)
 
     relevant_terms = re.compile(
         r"\b(gas|lng|pipeline|energy|tanker|sanctions?|conflict|war|attack|"

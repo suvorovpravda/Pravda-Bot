@@ -1,5 +1,6 @@
+# Application dependencies, including the hardened RSS parser.
 ccxt==4.5.90
-pydantic==2.14.1
+defusedxml==0.7.1
 requests==2.34.2
 python-dotenv==1.2.4
 websockets==17.3

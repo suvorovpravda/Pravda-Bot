@@ -6,6 +6,9 @@ import os
 import sqlite3
 import threading
 import time
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 
@@ -15,6 +18,7 @@ import websockets
 from dotenv import load_dotenv
 from rich.console import Console
 from rich.markup import escape
+from secure_http import request as secure_request, SecureHTTPError
 
 load_dotenv()
 
@@ -40,6 +44,7 @@ from security_and_fees import (
     calculate_net_spread_safe,
     parse_positive_price,
     request_error_summary,
+    csv_safe_text,
 )
 
 market_store = get_market_store()
@@ -155,27 +160,36 @@ ntfy_blocked_until = 0.0
 ntfy_backoff_seconds = NTFY_INITIAL_BACKOFF_SECONDS
 
 def ask_llm_analysis(symbol, price_kraken, price_binance, spread):
+    if not CONFIG.lm_enabled:
+        return "Analyse LLM désactivée"
     prompt = f"Analyse le spread d'arbitrage pour {symbol}. Kraken: {price_kraken}, Binance: {price_binance}, Écart brut: {spread:.2f}%. Est-ce une opportunité valide après frais d'échange ? Réponds brièvement."
     try:
-        res = requests.post(
+        parsed = urlsplit(LM_URL)
+        res = secure_request(
             f"{LM_URL}/chat/completions",
+            method="POST", allowed_hosts={parsed.hostname}, local_only=True,
+            allowed_ports={parsed.port or 80}, max_bytes=1024 * 1024,
             json={
                 "model": MODEL_NAME,
                 "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.2
+                "temperature": 0.2,
+                "max_tokens": 500,
             },
             timeout=30
         )
         if res.status_code == 200:
-            return res.json()['choices'][0]['message']['content'].replace('\n', ' ')
-    except Exception as e:
-        return f"Erreur LLM : {e}"
+            content = res.json()['choices'][0]['message']['content']
+            if not isinstance(content, str):
+                raise ValueError("Invalid model response")
+            return csv_safe_text(content)
+    except (SecureHTTPError, ValueError, KeyError, IndexError, TypeError):
+        return "Analyse LLM indisponible"
     return "Pas de réponse du modèle"
 
 def log_opportunity(symbol, p_kraken, p_binance, spread, net_spread, analysis):
     with open(LOG_FILE, mode='a', newline='', encoding='utf-8') as f:
         writer = csv.writer(f)
-        writer.writerow([time.strftime('%Y-%m-%d %H:%M:%S'), symbol, p_kraken, p_binance, f"{spread:.4f}%", f"{net_spread:.4f}%", analysis])
+        writer.writerow([time.strftime('%Y-%m-%d %H:%M:%S'), symbol, p_kraken, p_binance, f"{spread:.4f}%", f"{net_spread:.4f}%", csv_safe_text(analysis)])
 
 def log_spread_observation(
     symbol,
@@ -239,7 +253,8 @@ def retry_after_seconds(value):
     if not value:
         return 0.0
     try:
-        return max(0.0, float(value))
+        parsed = float(value)
+        return min(NTFY_MAX_BACKOFF_SECONDS, max(0.0, parsed)) if math.isfinite(parsed) else 0.0
     except ValueError:
         try:
             retry_at = parsedate_to_datetime(value)
@@ -263,13 +278,15 @@ def send_ntfy_notification(title, message, *, pre_send_check=None):
             return False
 
         try:
-            response = requests.post(
+            response = secure_request(
                 NTFY_TOPIC_URL,
+                method="POST", allowed_hosts={urlsplit(NTFY_TOPIC_URL).hostname},
+                max_bytes=64 * 1024,
                 data=message.encode('utf-8'),
                 headers={"Title": title},
                 timeout=5
             )
-        except requests.RequestException as e:
+        except (requests.RequestException, SecureHTTPError) as e:
             ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
             console.print(
                 f"  ⚠️ Échec de la notification ntfy : "
@@ -287,7 +304,7 @@ def send_ntfy_notification(title, message, *, pre_send_check=None):
 
         try:
             response.raise_for_status()
-        except requests.RequestException as e:
+        except (requests.RequestException, SecureHTTPError) as e:
             ntfy_blocked_until = time.monotonic() + NTFY_GLOBAL_COOLDOWN_SECONDS
             console.print(
                 f"  ⚠️ Échec de la notification ntfy : "
@@ -344,15 +361,143 @@ def is_market_data_snapshot_fresh(snapshot, symbol):
     return health is not None and health.status == "OK"
 
 
-def run_market_data_action(snapshot, symbol, action, *args):
+def run_market_data_action(snapshot, symbol, action, *args, **kwargs):
     health = current_market_data_health(snapshot, symbol)
     if health is None or health.status != "OK":
         return False, None
-    return True, action(*args)
+    return True, action(*args, **kwargs)
 
 
-async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=None):
-    global price_updates_count, opportunities_count
+MARKET_SNAPSHOT_INTERVAL_SECONDS = 0.5
+
+
+async def publish_market_snapshot():
+    # Capture together on the loop; threads never receive mutable live state.
+    prices = {exchange: dict(values) for exchange, values in latest_prices.items()}
+    timestamps = {exchange: dict(values) for exchange, values in last_price_update_at.items()}
+    captured_mono = time.monotonic()
+    captured_utc = datetime.now(timezone.utc)
+    return await asyncio.to_thread(
+        write_market_snapshot, prices, timestamps, path=MARKET_SNAPSHOT_FILE,
+        now_monotonic=captured_mono, now_utc=captured_utc,
+    )
+
+
+async def publish_market_snapshots_periodically():
+    # A single writer, independent of the three workers, with one write in flight.
+    while True:
+        try:
+            await publish_market_snapshot()
+        except OSError as error:
+            console.print(
+                f"[bold red]Échec de publication des cotations dashboard "
+                f"({type(error).__name__}).[/bold red]"
+            )
+        await asyncio.sleep(MARKET_SNAPSHOT_INTERVAL_SECONDS)
+
+
+@dataclass(frozen=True)
+class PriceUpdate:
+    exchange_name: str
+    symbol: str
+    previous_price: float | None
+    price: float
+    price_kraken: float | None
+    price_binance: float | None
+    market_data_snapshot: tuple
+    kraken_updated_at: float | None
+    binance_updated_at: float | None
+    event_at: datetime
+
+
+class MarketUpdateDispatcher:
+    """Three workers and one replaceable snapshot per symbol; no per-tick tasks.
+
+    SQLite records selected samples with their exchange event time. Intermediate
+    ticks replaced while a worker is busy are not an exhaustive tick archive.
+    """
+    def __init__(self):
+        self.pending = {}
+        self.events = {symbol: asyncio.Event() for symbol in SYMBOLS}
+        self.workers = [asyncio.create_task(self._work(symbol)) for symbol in SYMBOLS]
+        self.users = 0
+        self.closed = False
+
+    def submit(self, update):
+        if update is not None and not self.closed:
+            self.pending[update.symbol] = update
+            self.events[update.symbol].set()
+
+    async def _work(self, symbol):
+        while True:
+            await self.events[symbol].wait()
+            self.events[symbol].clear()
+            update = self.pending.pop(symbol, None)
+            if update is None:
+                continue
+            try:
+                await process_price_update(update)
+            except asyncio.CancelledError:
+                raise
+            except Exception as error:
+                alert_gate.reset_candidate(symbol)
+                console.print(
+                    f"[bold red]Traitement {symbol} interrompu "
+                    f"({type(error).__name__}).[/bold red]"
+                )
+
+    async def close(self):
+        self.closed = True
+        self.pending.clear()
+        for worker in self.workers:
+            worker.cancel()
+        await asyncio.gather(*self.workers, return_exceptions=True)
+
+
+_feed_dispatcher = None
+
+
+@asynccontextmanager
+async def feed_dispatcher_scope():
+    global _feed_dispatcher
+    if _feed_dispatcher is None:
+        _feed_dispatcher = MarketUpdateDispatcher()
+    dispatcher = _feed_dispatcher
+    dispatcher.users += 1
+    try:
+        yield dispatcher
+    finally:
+        dispatcher.users -= 1
+        if dispatcher.users == 0:
+            _feed_dispatcher = None
+            await dispatcher.close()
+
+
+def invalidate_exchange(exchange_name):
+    for symbol in SYMBOLS:
+        price_update_generation[exchange_name][symbol] = (
+            price_update_generation[exchange_name].get(symbol, 0) + 1
+        )
+        last_price_update_at[exchange_name].pop(symbol, None)
+        alert_gate.reset_candidate(symbol)
+    if _feed_dispatcher is not None:
+        _feed_dispatcher.pending.clear()
+
+
+def record_price_update(exchange_name, symbol, raw_price, event_timestamp=None):
+    """Validate and capture price, event time and generation without awaiting I/O."""
+    global price_updates_count
+    if exchange_name not in latest_prices or symbol not in SYMBOLS:
+        return None
+    received_mono = time.monotonic()
+    received_utc = datetime.now(timezone.utc)
+    previous_health = assess_market_data(
+        last_price_update_at["Kraken"].get(symbol), last_price_update_at["Binance"].get(symbol),
+        now=received_mono, stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+    )
+    if previous_health.status != "OK":
+        alert_gate.reset_candidate(symbol)
 
     try:
         price = parse_positive_price(raw_price)
@@ -369,9 +514,11 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
 
     try:
         updated_at = (
-            time.monotonic()
+            received_mono
             if event_timestamp is None
-            else event_time_to_monotonic(event_timestamp)
+            else event_time_to_monotonic(
+                event_timestamp, now_epoch=received_utc.timestamp(), now_monotonic=received_mono
+            )
         )
     except ValueError as error:
         price_update_generation[exchange_name][symbol] = (
@@ -391,30 +538,6 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         price_update_generation[exchange_name].get(symbol, 0) + 1
     )
     price_updates_count += 1
-    try:
-        market_store.record_tick(
-            symbol,
-            exchange_name,
-            price,
-            timestamp=datetime.now(timezone.utc),
-        )
-    except (OSError, sqlite3.Error, ValueError) as error:
-        console.print(
-            f"[bold red]Échec d’enregistrement de l’historique marché "
-            f"({type(error).__name__}).[/bold red]"
-        )
-    try:
-        write_market_snapshot(
-            latest_prices,
-            last_price_update_at,
-            path=MARKET_SNAPSHOT_FILE,
-        )
-    except OSError as error:
-        console.print(
-            f"[bold red]Échec de publication des cotations dashboard "
-            f"({type(error).__name__}).[/bold red]"
-        )
-
     price_kraken = latest_prices["Kraken"].get(symbol)
     price_binance = latest_prices["Binance"].get(symbol)
     market_data_snapshot = (
@@ -423,31 +546,58 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
     )
     kraken_updated_at = last_price_update_at["Kraken"].get(symbol)
     binance_updated_at = last_price_update_at["Binance"].get(symbol)
-
-    if previous_price is not None and price != previous_price:
-        change_pct = (price - previous_price) / previous_price * 100
-        now = time.monotonic()
-        if not math.isfinite(change_pct):
-            console.print(
-                f"[bold yellow][GARDE-FOU] Variation non finie ignorée pour "
-                f"{exchange_name} {symbol}.[/bold yellow]"
+    health = assess_market_data(
+        kraken_updated_at, binance_updated_at, now=received_mono,
+        stale_after_seconds=MARKET_DATA_STALE_SECONDS,
+        max_skew_seconds=MARKET_DATA_MAX_SKEW_SECONDS,
+    )
+    if price_kraken is None or price_binance is None or health.status != "OK":
+        alert_gate.reset_candidate(symbol)
+    else:
+        spread = abs(price_kraken - price_binance) / min(price_kraken, price_binance) * 100
+        if not math.isfinite(spread) or spread > MAX_ALLOWED_SPREAD_PERCENT:
+            alert_gate.reset_candidate(symbol)
+        elif spread < MIN_SPREAD_THRESHOLD or spread <= ESTIMATED_FEES:
+            # Preserve confirmation interruptions and rearming even when coalesced.
+            alert_gate.update(
+                symbol, profitable=False, spread=spread,
+                rearm_threshold=max(0.0, max(MIN_SPREAD_THRESHOLD, ESTIMATED_FEES)
+                                    - ALERT_REARM_HYSTERESIS_PERCENT), now=received_mono,
             )
-        elif now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
-            if price_kraken is not None and price_binance is not None:
-                sent, _ = await asyncio.to_thread(
-                    run_market_data_action,
-                    market_data_snapshot,
-                    symbol,
-                    notify_price_movement,
-                    exchange_name,
-                    symbol,
-                    previous_price,
-                    price,
-                    change_pct,
-                    market_data_snapshot,
-                )
-                if sent:
-                    last_movement_notification_at[symbol] = time.monotonic()
+    event_at = datetime.fromtimestamp(
+        received_utc.timestamp() - (received_mono - updated_at), timezone.utc
+    )
+    return PriceUpdate(
+        exchange_name, symbol, previous_price, price, price_kraken, price_binance,
+        market_data_snapshot, kraken_updated_at, binance_updated_at, event_at,
+    )
+
+
+async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=None):
+    """Direct API; WebSocket readers submit the immutable update to shared workers."""
+    update = record_price_update(exchange_name, symbol, raw_price, event_timestamp)
+    if update is not None:
+        await process_price_update(update)
+
+
+async def process_price_update(update):
+    global opportunities_count
+    exchange_name, symbol = update.exchange_name, update.symbol
+    previous_price, price = update.previous_price, update.price
+    price_kraken, price_binance = update.price_kraken, update.price_binance
+    market_data_snapshot = update.market_data_snapshot
+    kraken_updated_at, binance_updated_at = update.kraken_updated_at, update.binance_updated_at
+    try:
+        await asyncio.to_thread(
+            market_store.record_tick, symbol, exchange_name, price, timestamp=update.event_at
+        )
+    except (OSError, sqlite3.Error, ValueError) as error:
+        console.print(
+            f"[bold red]Échec d’enregistrement de l’historique marché "
+            f"({type(error).__name__}).[/bold red]"
+        )
+    if current_market_data_health(market_data_snapshot, symbol) is None:
+        return
 
     if price_kraken is None or price_binance is None:
         return
@@ -542,6 +692,22 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         price_binance,
         ESTIMATED_FEES / 100,
     ) * 100
+    if previous_price is not None and price != previous_price:
+        change_pct = (price - previous_price) / previous_price * 100
+        if not math.isfinite(change_pct):
+            console.print(
+                f"[bold yellow][GARDE-FOU] Variation non finie ignorée pour "
+                f"{exchange_name} {symbol}.[/bold yellow]"
+            )
+        elif now - last_movement_notification_at.get(symbol, 0) >= PRICE_ALERT_COOLDOWN_SECONDS:
+            sent, _ = await asyncio.to_thread(
+                run_market_data_action, market_data_snapshot, symbol, notify_price_movement,
+                exchange_name, symbol, previous_price, price, change_pct, market_data_snapshot,
+            )
+            if sent:
+                last_movement_notification_at[symbol] = time.monotonic()
+    if not is_market_data_snapshot_fresh(market_data_snapshot, symbol):
+        return
     threshold_reached = spread >= MIN_SPREAD_THRESHOLD
     is_profitable = threshold_reached and net_spread > 0
     rearm_spread = max(
@@ -596,12 +762,8 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         )
         return
 
-    spread_summaries[symbol].record(
-        spread,
-        net_spread,
-        threshold_reached,
-        opportunity_triggered,
-    )
+    if not opportunity_triggered:
+        spread_summaries[symbol].record(spread, net_spread, threshold_reached, False)
 
     try:
         paper_result = paper_simulator.update(
@@ -623,11 +785,13 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
     if not opportunity_triggered:
         return
 
-    opportunities_count += 1
     execution_estimate = None
     execution_error = None
     try:
-        execution_estimate = await asyncio.to_thread(
+        execution_started, execution_estimate = await asyncio.to_thread(
+            run_market_data_action,
+            market_data_snapshot,
+            symbol,
             fetch_public_execution_estimate,
             symbol,
             target_notional=paper_simulator.next_position_notional_usdt,
@@ -635,7 +799,14 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
             max_slippage_percent=CONFIG.paper_max_slippage_percent,
             max_book_age_seconds=CONFIG.paper_orderbook_max_age_seconds,
         )
-        await asyncio.to_thread(log_paper_execution_estimate, symbol, execution_estimate)
+        if not execution_started or not is_market_data_snapshot_fresh(market_data_snapshot, symbol):
+            if activation_id is not None:
+                alert_gate.cancel_activation(symbol, activation_id)
+            return
+        await asyncio.to_thread(
+            run_market_data_action, market_data_snapshot, symbol,
+            log_paper_execution_estimate, symbol, execution_estimate,
+        )
     except (ccxt.BaseError, OSError, ValueError) as error:
         execution_error = (
             str(error) if isinstance(error, ValueError) else request_error_summary(error)
@@ -646,6 +817,9 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         )
         try:
             await asyncio.to_thread(
+                run_market_data_action,
+                market_data_snapshot,
+                symbol,
                 log_paper_execution_estimate,
                 symbol,
                 unavailable_estimate,
@@ -661,6 +835,13 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         )
 
     latest_execution_health = current_market_data_health(market_data_snapshot, symbol)
+    if latest_execution_health is None or latest_execution_health.status != "OK":
+        alert_gate.reset_candidate(symbol)
+        if activation_id is not None:
+            alert_gate.cancel_activation(symbol, activation_id)
+        return
+    opportunities_count += 1
+    spread_summaries[symbol].record(spread, net_spread, threshold_reached, True)
     execution_approved = (
         execution_estimate is not None
         and execution_estimate.status == "estimate_only"
@@ -704,6 +885,9 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         )
     try:
         await asyncio.to_thread(
+            run_market_data_action,
+            market_data_snapshot,
+            symbol,
             log_spread_observation,
             symbol,
             price_kraken,
@@ -758,55 +942,50 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
             "ont changé ou sont devenus obsolètes avant son exécution.[/bold yellow]"
         )
         return
+    if not is_market_data_snapshot_fresh(market_data_snapshot, symbol):
+        return
     console.print(f"  [green]🤖 LLM: {escape(analysis)}[/green]")
-    await asyncio.to_thread(log_opportunity, symbol, price_kraken, price_binance, spread, net_spread, analysis)
+    await asyncio.to_thread(
+        run_market_data_action, market_data_snapshot, symbol, log_opportunity,
+        symbol, price_kraken, price_binance, spread, net_spread, analysis,
+    )
 
 async def stream_kraken_tickers():
-    async with websockets.connect("wss://ws.kraken.com/v2", ping_interval=20, ping_timeout=20, open_timeout=15) as websocket:
-        await websocket.send(json.dumps({
-            "method": "subscribe",
-            "params": {
-                "channel": "ticker",
-                "symbol": SYMBOLS,
-                "event_trigger": "trades",
-                "snapshot": True
-            },
-            "req_id": 1
-        }))
-
-        async for raw_message in websocket:
-            message = json.loads(raw_message)
-            if message.get("channel") != "ticker":
-                continue
-            for ticker in message.get("data", []):
-                symbol = ticker.get("symbol")
-                if symbol in SYMBOLS and ticker.get("last") is not None:
-                    await handle_price_update(
-                        "Kraken",
-                        symbol,
-                        ticker["last"],
-                        ticker.get("timestamp"),
-                    )
+    async with feed_dispatcher_scope() as dispatcher:
+        try:
+            async with websockets.connect("wss://ws.kraken.com/v2", ping_interval=20, ping_timeout=20, open_timeout=15) as websocket:
+                await websocket.send(json.dumps({
+                    "method": "subscribe",
+                    "params": {"channel": "ticker", "symbol": SYMBOLS,
+                               "event_trigger": "trades", "snapshot": True},
+                    "req_id": 1,
+                }))
+                async for raw_message in websocket:
+                    message = json.loads(raw_message)
+                    if message.get("channel") != "ticker":
+                        continue
+                    for ticker in message.get("data", []):
+                        symbol = ticker.get("symbol")
+                        if symbol in SYMBOLS and ticker.get("last") is not None:
+                            dispatcher.submit(record_price_update(
+                                "Kraken", symbol, ticker["last"], ticker.get("timestamp")))
+        finally:
+            invalidate_exchange("Kraken")
 
 async def stream_binance_tickers():
     streams = "/".join(f"{symbol.replace('/', '').lower()}@ticker" for symbol in SYMBOLS)
     url = f"wss://stream.binance.com:9443/stream?streams={streams}"
-    async with websockets.connect(url, ping_interval=20, ping_timeout=20, open_timeout=15) as websocket:
-        async for raw_message in websocket:
-            message = json.loads(raw_message)
-            ticker = message.get("data", message)
-            symbol = BINANCE_SYMBOLS.get(ticker.get("s"))
-            if (
-                symbol is not None
-                and ticker.get("c") is not None
-                and ticker.get("E") is not None
-            ):
-                await handle_price_update(
-                    "Binance",
-                    symbol,
-                    ticker["c"],
-                    ticker["E"],
-                )
+    async with feed_dispatcher_scope() as dispatcher:
+        try:
+            async with websockets.connect(url, ping_interval=20, ping_timeout=20, open_timeout=15) as websocket:
+                async for raw_message in websocket:
+                    message = json.loads(raw_message)
+                    ticker = message.get("data", message)
+                    symbol = BINANCE_SYMBOLS.get(ticker.get("s"))
+                    if symbol is not None and ticker.get("c") is not None and ticker.get("E") is not None:
+                        dispatcher.submit(record_price_update("Binance", symbol, ticker["c"], ticker["E"]))
+        finally:
+            invalidate_exchange("Binance")
 
 async def run_stream_with_reconnect(exchange_name, stream_function):
     await run_with_reconnect(
@@ -833,16 +1012,15 @@ async def render_dashboard_periodically():
                 paper_simulator=paper_simulator,
             )
         )
+
         counter += 1
-        # Vue enrichie toutes les 5 itérations ~ toutes les 2-3 minutes
         if counter % 5 == 0:
-            console.print("\n=== Vue terminal enrichie ===")
-            print_enhanced_dashboard(latest_prices)
-            # Export quotidien résumé
+            prices_snapshot = {name: dict(values) for name, values in latest_prices.items()}
             try:
-                export_daily_summary_csv("daily_summary.csv")
-            except Exception:
-                pass
+                await asyncio.to_thread(print_enhanced_dashboard, prices_snapshot)
+                await asyncio.to_thread(export_daily_summary_csv, "daily_summary.csv")
+            except (OSError, ValueError, sqlite3.Error) as error:
+                console.print(f"Terminal enrichi indisponible ({type(error).__name__})")
 
 async def monitor_markets():
     print(f"=== Pravda-Bot Temps Réel (Mode: {TRADING_MODE}) ===")
@@ -877,6 +1055,7 @@ async def monitor_markets():
     await asyncio.gather(
         run_stream_with_reconnect("Kraken", stream_kraken_tickers),
         run_stream_with_reconnect("Binance", stream_binance_tickers),
+        publish_market_snapshots_periodically(),
         render_dashboard_periodically(),
     )
 

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import live_market_data
 
@@ -65,12 +65,9 @@ class LiveMarketDataTests(unittest.TestCase):
             {"date": "2026-10-23", "base": "EUR", "quote": quote, "rate": 1.25}
             for quote in live_market_data.FOREX_QUOTES
         ]
-        response = Mock()
-        response.json.return_value = records
-        response.raise_for_status.return_value = None
         with patch.object(live_market_data, "_forex_cache", None), patch.object(
             live_market_data, "_forex_cache_updated_at", 0
-        ), patch("live_market_data.requests.get", return_value=response) as request:
+        ), patch("live_market_data.get_json", return_value=records) as request:
             now = datetime(2026, 10, 25, tzinfo=timezone.utc)
             result = live_market_data.get_reference_fx_rates(now=now)
             cached = live_market_data.get_reference_fx_rates(now=now)
@@ -82,18 +79,16 @@ class LiveMarketDataTests(unittest.TestCase):
         self.assertEqual(result["rates"]["USD"], 1.25)
         self.assertEqual(result["freshness"], "delayed")
         self.assertEqual(result["source_age_days"], 2)
+        self.assertEqual(request.call_args.kwargs["allowed_hosts"], frozenset({"api.frankfurter.dev"}))
 
     def test_cached_reference_rate_becomes_stale_as_source_date_ages(self):
         records = [
             {"date": "2026-10-23", "base": "EUR", "quote": quote, "rate": 1.25}
             for quote in live_market_data.FOREX_QUOTES
         ]
-        response = Mock()
-        response.json.return_value = records
-        response.raise_for_status.return_value = None
         with patch.object(live_market_data, "_forex_cache", None), patch.object(
             live_market_data, "_forex_cache_updated_at", 0
-        ), patch("live_market_data.requests.get", return_value=response):
+        ), patch("live_market_data.get_json", return_value=records):
             live_market_data.get_reference_fx_rates(
                 now=datetime(2026, 10, 25, tzinfo=timezone.utc)
             )
@@ -102,6 +97,44 @@ class LiveMarketDataTests(unittest.TestCase):
             )
         self.assertEqual(stale["freshness"], "stale")
         self.assertEqual(stale["source_age_days"], 7)
+
+    def test_boolean_and_future_quotes_do_not_claim_live_data(self):
+        now = datetime(2026, 10, 26, tzinfo=timezone.utc)
+        for price, received in ((True, now), (False, now),
+                                (100, now + timedelta(seconds=1)),
+                                (100, datetime(2126, 10, 26, tzinfo=timezone.utc))):
+            with self.subTest(price=price, received=received), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "snapshot.json"
+                path.write_text(json.dumps({"symbols": {"BTC/USDT": {"Kraken": {
+                    "price": price, "received_at": received.isoformat(),
+                }}}}), encoding="utf-8")
+                original = path.read_bytes()
+                result = live_market_data.read_market_snapshot(path, now=now)
+                self.assertEqual(result["status"], "waiting")
+                self.assertEqual(result["symbols"], {})
+                self.assertEqual(path.read_bytes(), original)
+
+    def test_writer_omits_boolean_prices_and_invalid_receipt_clocks(self):
+        now = datetime(2026, 10, 26, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "snapshot.json"
+            with patch.object(live_market_data, "_last_snapshot_write", 0):
+                live_market_data.write_market_snapshot(
+                    {"Kraken": {"VALID": 100, "BOOL": True, "FUTURE": 100, "BAD_CLOCK": 100}},
+                    {"Kraken": {"VALID": 99, "BOOL": 99, "FUTURE": 101, "BAD_CLOCK": True}},
+                    path=path, now_monotonic=100, now_utc=now,
+                )
+            self.assertEqual(set(json.loads(path.read_text())["symbols"]), {"VALID"})
+
+    def test_http_error_is_generic(self):
+        from secure_http import SecureHTTPError
+        with patch.object(live_market_data, "_forex_cache", None), patch(
+            "live_market_data.get_json", side_effect=SecureHTTPError("private-upstream-detail")
+        ):
+            with self.assertRaises(RuntimeError) as error:
+                live_market_data.get_reference_fx_rates()
+            self.assertEqual(str(error.exception), "reference FX source unavailable")
+            self.assertTrue(error.exception.__suppress_context__)
 
 
 if __name__ == "__main__":
