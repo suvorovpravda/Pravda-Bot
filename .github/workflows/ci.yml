@@ -56,6 +56,10 @@ jobs:
         run: |
           "$PRAVDA_PY_RUNTIME" -m compileall -q -x '(^|[/\\])(\.git|\.venv|venv|\.audit-venv|\.build-venv|__pycache__|\.pravda-exe-build|\.pravda-exe-spec|build|dist)([/\\]|$)' . 2>&1 | tee ci-logs/compileall.log
           "$PRAVDA_PY_RUNTIME" -m unittest discover -s tests -t . -v 2>&1 | tee ci-logs/project-tests.log
+      
+      - name: Build single-file executable
+        run: |
+          "$PRAVDA_PY_RUNTIME" build_onefile.py --name Pravda_Lanceur --entry pravda_launcher.py
       - name: JavaScript syntax check
         run: |
           "$PRAVDA_PY_RUNTIME" - <<'PY' 2>&1 | tee ci-logs/javascript.log

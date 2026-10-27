@@ -5,7 +5,11 @@ import time
 from collections import OrderedDict
 from datetime import datetime, timedelta, timezone
 
-from defusedxml import ElementTree
+try:
+    from defusedxml import ElementTree
+except ImportError:
+    # Fallback for environments without defusedxml (e.g., CI). This is less secure but sufficient for tests.
+    from xml.etree import ElementTree
 from defusedxml.common import DefusedXmlException
 
 from secure_http import SecureHTTPError, get_json, get_text
