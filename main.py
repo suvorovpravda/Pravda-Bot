@@ -21,6 +21,7 @@ load_dotenv()
 from alert_gate import AlertGate
 from bot_config import load_config
 from bot_dashboard import SpreadSummary, build_dashboard
+from enhanced_terminal import print_enhanced_dashboard, export_daily_summary_csv
 from csv_schema import ensure_csv_schema
 from market_data_health import (
     MarketDataHealth,
@@ -815,6 +816,7 @@ async def run_stream_with_reconnect(exchange_name, stream_function):
     )
 
 async def render_dashboard_periodically():
+    counter = 0
     while True:
         await asyncio.sleep(DASHBOARD_INTERVAL_SECONDS)
         console.print(
@@ -831,6 +833,16 @@ async def render_dashboard_periodically():
                 paper_simulator=paper_simulator,
             )
         )
+        counter += 1
+        # Vue enrichie toutes les 5 itérations ~ toutes les 2-3 minutes
+        if counter % 5 == 0:
+            console.print("\n=== Vue terminal enrichie ===")
+            print_enhanced_dashboard()
+            # Export quotidien résumé
+            try:
+                export_daily_summary_csv("daily_summary.csv")
+            except Exception:
+                pass
 
 async def monitor_markets():
     print(f"=== Pravda-Bot Temps Réel (Mode: {TRADING_MODE}) ===")
