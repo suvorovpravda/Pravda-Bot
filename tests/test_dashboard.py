@@ -43,6 +43,14 @@ class DashboardTests(unittest.TestCase):
         self.quiet_http_logs.start()
         self.addCleanup(self.quiet_http_logs.stop)
 
+    def tearDown(self):
+        # Close SQLite connections to avoid file locks on Windows
+        try:
+            if hasattr(self.history_store, "_pool"):
+                self.history_store._pool.closeall()
+        except Exception:
+            pass
+
     def write_rows(self, rows):
         fields = [
             "Timestamp_UTC",
