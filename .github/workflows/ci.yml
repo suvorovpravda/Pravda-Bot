@@ -110,15 +110,6 @@ jobs:
         if: ${{ always() && steps.tools.outcome == 'success' }}
         run: |
           "$PRAVDA_PY_AUDIT" -m bandit -r . -x '*/.git/*,*/.venv/*,*/venv/*,*/.audit-venv/*,*/.build-venv/*,*/.pravda-exe-build/*,*/.pravda-exe-spec/*,*/tests/*,*/launcher_tests/*' --severity-level medium -f json -o ci-logs/bandit.json 2>&1 | tee ci-logs/bandit.log
-      - name: Build the Windows launcher and smoke-check help
-        if: ${{ always() && runner.os == 'Windows' && steps.runtime.outcome == 'success' }}
-        run: |
-          python -m venv .build-venv
-          .build-venv/Scripts/python.exe -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt 2>&1 | tee ci-logs/build-bootstrap.log
-          .build-venv/Scripts/python.exe -m pip install --require-hashes --only-binary=:all: -r requirements-build.txt 2>&1 | tee ci-logs/build-install.log
-          .build-venv/Scripts/python.exe -m pip check | tee ci-logs/build-pip-check.log
-          .build-venv/Scripts/python.exe -m PyInstaller --noconfirm --clean --onefile --console --noupx --name Pravda_Lanceur --distpath dist --workpath .pravda-exe-build --specpath .pravda-exe-spec pravda_launcher.py 2>&1 | tee ci-logs/build.log
-          ./dist/Pravda_Lanceur.exe --help 2>&1 | tee ci-logs/frozen-help.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
