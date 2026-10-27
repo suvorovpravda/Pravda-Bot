@@ -7,6 +7,12 @@ on:
 permissions:
   contents: read
 jobs:
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.89.0
+      - run: cargo check --locked --workspace --all-targets
   check:
     strategy:
       fail-fast: false

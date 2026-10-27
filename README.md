@@ -287,3 +287,11 @@ SQLite utilise WAL et retente les transactions sur contention temporaire avec un
 **RU :** Миграция продолжается. `rust/market-core` содержит расчёт спреда, проверку цен и времени, свежести и поколений снимков; он ещё не подключён к боту. Потоки, SQLite, dashboard и запуск остаются на Python. Полная эквивалентность пока не подтверждена.
 
 **EN:** Migration is in progress. `rust/market-core` provides spread calculation, price and timestamp validation, freshness and snapshot-generation checks; it is not yet connected to the bot. Feeds, SQLite, dashboard and launcher remain in Python. Full behavioural parity has not been established.
+
+### SQLite Rust expérimental / Экспериментальный SQLite / Experimental SQLite
+
+**FR :** `MarketStore::create_new` crée une base distincte à un chemin qui n'existe pas encore : il refuse toute base existante et ne migre pas les données du bot. Un pool de quatre connexions utilise WAL et un délai d'attente configurable par connexion. Si la contention dépasse ce délai, l'erreur est renvoyée à l'appelant ; WAL ne permet qu'un seul écrivain à la fois. Fermer toutes les copies du pool avant de supprimer la base. Une initialisation interrompue peut laisser le fichier créé. Rust **1.89** minimum est déclaré et vérifié séparément en CI.
+
+**RU :** Экспериментальный `MarketStore::create_new` создаёт отдельную базу только по новому пути; существующая база бота не открывается и не мигрируется. Пул из четырёх соединений использует WAL и настраиваемое время ожидания. При длительной блокировке вызывающая сторона получает ошибку. Перед удалением базы необходимо освободить все копии пула. Минимальная версия Rust — 1.89.
+
+**EN:** Experimental `MarketStore::create_new` creates a separate database only at a new path; it does not open or migrate the bot's existing database. A four-connection pool uses WAL and a configurable per-connection busy timeout. Persistent contention returns an error; WAL still allows only one writer at a time. Drop all pool clones before removing the database. An interrupted initialization may leave the newly created file. The declared minimum Rust version is 1.89.

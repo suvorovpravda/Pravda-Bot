@@ -1,6 +1,7 @@
 //! Validated market calculations for the Rust migration. Not wired to the bot.
 #![forbid(unsafe_code)]
 
+pub mod db;
 pub mod health;
 
 /// Fee estimate expressed as a fraction: 0.0036 = 0.36%.
