@@ -31,7 +31,7 @@ Les frais simplifiés restent **0,36 %** : `0.0036` en fraction, `0.36` en point
 
 ### Installation et lancement
 
-Cible : Python 3.12, Windows principal et Linux de validation. Utiliser `.venv`, attendu par le lanceur. Dans la copie choisie du dépôt :
+Cible : Python 3.12, Windows principal et Linux de validation. Le correctif exact peut varier selon la distribution Windows/Linux ; la CI journalise la version réellement utilisée. La demande stricte de 3.12.14 échouait sur le runner Windows et a été remplacée par la série 3.12. Utiliser `.venv`, attendu par le lanceur. Dans la copie choisie du dépôt :
 
 ```powershell
 py -3.12 -m venv .venv

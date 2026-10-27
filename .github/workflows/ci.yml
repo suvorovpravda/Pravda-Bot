@@ -25,6 +25,10 @@ jobs:
       PIP_NO_INPUT: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Record runner environment
+        run: |
+          mkdir -p ci-logs
+          echo "Runner: $RUNNER_OS" > ci-logs/runner.txt
       - uses: actions/setup-python@v5
         with:
           python-version-file: .python-version
@@ -44,6 +48,7 @@ jobs:
           echo "PRAVDA_PY_AUDIT=$PRAVDA_PY_AUDIT" >> "$GITHUB_ENV"
           "$PRAVDA_PY_RUNTIME" -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt 2>&1 | tee ci-logs/bootstrap.log
           "$PRAVDA_PY_RUNTIME" -m pip install --require-hashes --only-binary=:all: -r requirements.txt 2>&1 | tee ci-logs/runtime-install.log
+          "$PRAVDA_PY_RUNTIME" --version | tee ci-logs/python-version.log
           "$PRAVDA_PY_RUNTIME" -m pip --version | tee ci-logs/pip-version.log
           "$PRAVDA_PY_RUNTIME" -m pip check | tee ci-logs/pip-check.log
           "$PRAVDA_PY_RUNTIME" -m pip list --format=freeze > ci-logs/runtime-inventory.txt

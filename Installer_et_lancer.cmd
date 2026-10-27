@@ -14,7 +14,7 @@ if not exist "%PRAVDA_PY%" (
     py -3.12 -m venv "%~dp0.venv" >> "%PRAVDA_LOG%" 2>&1
     if errorlevel 1 goto erreur
 )
-"%PRAVDA_PY%" -c "from pathlib import Path; import platform,sys; expected=Path('.python-version').read_text().strip(); actual=platform.python_version(); print('Python attendu : '+expected+' / actif : '+actual); sys.exit(0 if actual == expected else 1)" >> "%PRAVDA_LOG%" 2>&1
+"%PRAVDA_PY%" -c "from pathlib import Path; import platform,sys; expected=Path('.python-version').read_text().strip(); actual=platform.python_version(); print('Python attendu : '+expected+' / actif : '+actual); sys.exit(0 if actual.split('.')[:2] == expected.split('.')[:2] else 1)" >> "%PRAVDA_LOG%" 2>&1
 if errorlevel 1 goto erreur
 "%PRAVDA_PY%" -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt >> "%PRAVDA_LOG%" 2>&1
 if errorlevel 1 goto erreur

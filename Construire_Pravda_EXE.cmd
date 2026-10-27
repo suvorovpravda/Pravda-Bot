@@ -15,7 +15,7 @@ if not exist "main.py" goto failed
 if not exist "dashboard.py" goto failed
 if not exist ".python-version" goto failed
 if not exist "%PRAVDA_RUNTIME%" goto failed
-"%PRAVDA_RUNTIME%" -c "from pathlib import Path; import platform,sys; expected=Path('.python-version').read_text().strip(); sys.exit(0 if platform.python_version() == expected else 'Version Python differente de .python-version')" >> "%PRAVDA_LOG%" 2>&1
+"%PRAVDA_RUNTIME%" -c "from pathlib import Path; import platform,sys; expected=Path('.python-version').read_text().strip(); sys.exit(0 if platform.python_version().split('.')[:2] == expected.split('.')[:2] else 'Version Python differente de .python-version')" >> "%PRAVDA_LOG%" 2>&1
 if errorlevel 1 goto failed
 "%PRAVDA_RUNTIME%" -m pip check >> "%PRAVDA_LOG%" 2>&1
 if errorlevel 1 goto failed
@@ -23,7 +23,7 @@ if not exist "%PRAVDA_BUILD%" (
     "%PRAVDA_RUNTIME%" -m venv "%~dp0.build-venv" >> "%PRAVDA_LOG%" 2>&1
     if errorlevel 1 goto failed
 )
-"%PRAVDA_BUILD%" -c "from pathlib import Path; import platform,sys; expected=Path('.python-version').read_text().strip(); sys.exit(0 if platform.python_version() == expected else 'Version Python de construction incorrecte')" >> "%PRAVDA_LOG%" 2>&1
+"%PRAVDA_BUILD%" -c "from pathlib import Path; import platform,sys; expected=Path('.python-version').read_text().strip(); sys.exit(0 if platform.python_version().split('.')[:2] == expected.split('.')[:2] else 'Version Python de construction incorrecte')" >> "%PRAVDA_LOG%" 2>&1
 if errorlevel 1 goto failed
 "%PRAVDA_BUILD%" -m pip install --require-hashes --only-binary=:all: -r requirements-bootstrap.txt >> "%PRAVDA_LOG%" 2>&1
 if errorlevel 1 goto failed
