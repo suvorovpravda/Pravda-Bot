@@ -1,5 +1,6 @@
 import csv
 import html
+import io
 import json
 import threading
 import unittest
@@ -9,13 +10,16 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from urllib.error import HTTPError
-from urllib.request import urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 from unittest.mock import Mock, patch
 
 import psutil
 
 import dashboard
 from dashboard import DashboardHandler, HTML_TEMPLATE, read_dashboard_data
+from market_history import MarketStore
+
+urlopen = build_opener(ProxyHandler({})).open
 
 
 class DashboardTests(unittest.TestCase):
@@ -24,6 +28,9 @@ class DashboardTests(unittest.TestCase):
         self.addCleanup(self.temporary_directory.cleanup)
         self.csv_path = Path(self.temporary_directory.name) / "observations.csv"
         self.lng_csv_path = Path(self.temporary_directory.name) / "lng_observations.csv"
+        self.history_store = MarketStore(
+            Path(self.temporary_directory.name) / "history.sqlite3"
+        )
 
     def write_rows(self, rows):
         fields = [
@@ -63,6 +70,7 @@ class DashboardTests(unittest.TestCase):
             csv_path=self.csv_path,
             lng_csv_path=self.lng_csv_path,
             market_snapshot_path=Path(self.temporary_directory.name) / "market_snapshot.json",
+            market_history_store=self.history_store,
             threshold=0.25,
             stale_after_seconds=30,
         )
@@ -192,6 +200,116 @@ class DashboardTests(unittest.TestCase):
         self.assertIn("function drawMap(rows)", html)
         self.assertIn("/api/eu/flows", html)
         self.assertIn("/api/geopolitics", html)
+
+    def test_history_endpoint_and_csv_export_read_persistent_store(self):
+        now = datetime.now(timezone.utc)
+        self.history_store.record_tick("BTC/USDT", "Binance", 100, timestamp=now)
+        base_url = self.serve()
+
+        with urlopen(
+            f"{base_url}/api/market/history?symbol=BTC%2FUSDT&exchange=Binance&period=day"
+        ) as response:
+            history = json.load(response)
+        with urlopen(
+            f"{base_url}/api/market/history.csv?symbol=BTC%2FUSDT&exchange=Binance&period=day"
+        ) as response:
+            exported = response.read().decode("utf-8")
+            self.assertEqual(response.headers["Content-Type"], "text/csv; charset=utf-8")
+
+        self.assertEqual(history["observations"][0]["price"], 100)
+        self.assertIn("Price_USDT", exported)
+        self.assertIn("100.0", exported)
+
+    def test_alert_api_persists_and_rejects_cross_origin_updates(self):
+        base_url = self.serve()
+        request = Request(
+            f"{base_url}/api/alerts",
+            data=json.dumps(
+                {
+                    "symbol": "BTC/USDT",
+                    "exchange": "Kraken",
+                    "currency": "CHF",
+                    "direction": "above",
+                    "target": 50000,
+                }
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Origin": base_url,
+            },
+            method="POST",
+        )
+        with urlopen(request) as response:
+            created = json.load(response)
+            self.assertEqual(response.status, 201)
+        self.assertEqual(created["alert"]["exchange"], "Kraken")
+
+        with urlopen(f"{base_url}/api/alerts") as response:
+            alerts = json.load(response)["alerts"]
+        self.assertEqual(len(alerts), 1)
+        self.assertEqual(alerts[0]["currency"], "CHF")
+
+        cross_origin = Request(
+            f"{base_url}/api/alerts",
+            data=b'{"symbol":"BTC/USDT","exchange":"Binance","currency":"EUR","direction":"above","target":1}',
+            headers={
+                "Content-Type": "application/json",
+                "Origin": "https://attacker.invalid",
+            },
+            method="POST",
+        )
+        with self.assertRaises(HTTPError) as error:
+            urlopen(cross_origin)
+        self.assertEqual(error.exception.code, 403)
+
+    def test_daily_report_csv_includes_market_and_source_provenance(self):
+        report_date = datetime(2026, 10, 25, tzinfo=timezone.utc).date()
+        self.history_store.record_tick(
+            "BTC/USDT", "Binance", 100,
+            timestamp=datetime(2026, 10, 25, 10, tzinfo=timezone.utc),
+        )
+        with patch(
+            "dashboard.get_entsog_flows",
+            return_value={
+                "status": "live",
+                "source": "ENTSOG",
+                "source_url": "https://entsog.example",
+                "observations": [
+                    {
+                        "updated_at": "2026-10-25T11:00:00Z",
+                        "direction": "entry",
+                        "point": "Test point",
+                        "value": 5,
+                        "unit": "MWh",
+                        "country": "FR",
+                        "operator": "Operator",
+                    }
+                ],
+            },
+        ), patch(
+            "dashboard.get_geopolitical_news",
+            return_value={
+                "source": "GDELT",
+                "articles": [
+                    {
+                        "published_at": "2026-10-25T12:00:00Z",
+                        "source": "Example",
+                        "title": "Reported event",
+                        "url": "https://news.example/article",
+                    }
+                ],
+            },
+        ):
+            report = dashboard.daily_report_csv(report_date, store=self.history_store)
+
+        rows = list(csv.DictReader(io.StringIO(report)))
+        kinds = {row["record_type"] for row in rows}
+        self.assertEqual(
+            kinds,
+            {"market_summary", "energy_flow_observation", "reported_news"},
+        )
+        self.assertEqual(rows[0]["source"], "Binance public ticker")
+        self.assertTrue(any(row["source_url"] == "https://news.example/article" for row in rows))
 
     def test_unified_dashboard_template_has_crypto_and_lng_sections(self):
         template_text = html.unescape(HTML_TEMPLATE)

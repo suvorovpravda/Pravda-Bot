@@ -73,7 +73,17 @@
         .fx-live-card { grid-column: span 4; }
         .market-controls { display: flex; align-items: center; gap: 8px; }
         .market-controls select { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--panel-raised); color: var(--text); }
+        .market-controls a { white-space: nowrap; }
         .market-chart { width: 100%; height: 230px; display: block; border: 1px solid rgba(58,89,112,.45); border-radius: 9px; background: rgba(5,14,24,.45); }
+        .market-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 8px; }
+        .market-tools small { color: var(--muted); }
+        .alert-form { display: flex; flex-wrap: wrap; gap: 7px; margin: 13px 0; }
+        .alert-form select, .alert-form input { min-width: 86px; border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--panel-raised); color: var(--text); }
+        .alert-list, .source-list { display: grid; gap: 7px; }
+        .alert-row, .source-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-bottom: 1px solid rgba(32,53,74,.75); padding: 8px 0; }
+        .alert-row small, .source-row small { color: var(--muted); }
+        .source-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
+        .source-row .status { flex-shrink: 0; }
         .market-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
         .quote-table { width: 100%; border-collapse: collapse; font-size: 12px; }
         .quote-table th, .quote-table td { padding: 9px 7px; border-bottom: 1px solid rgba(32,53,74,.75); text-align: right; white-space: nowrap; }
@@ -193,9 +203,23 @@
                             <select id="chart-exchange"><option>Binance</option><option>Kraken</option></select>
                             <label for="chart-currency" data-i18n="currency">Devise</label>
                             <select id="chart-currency"><option>EUR</option><option>CHF</option></select>
+                            <label for="chart-period" data-i18n="period">Période</label>
+                            <select id="chart-period"><option value="day" data-i18n="day">Jour</option><option value="week" data-i18n="week">Semaine</option><option value="month" data-i18n="month">Mois</option></select>
                         </div>
                         <canvas class="market-chart" id="price-chart" aria-label="Graphique de prix crypto live" data-i18n-aria="chartAria"></canvas>
                         <div class="market-caption"><span id="chart-price">—</span><span id="chart-age" data-i18n="chartWaiting">Démarre le bot pour recevoir les ticks.</span></div>
+                        <div class="market-tools"><small id="history-status" data-i18n="historyLoading">Historique local persistant</small><a class="button" id="history-export" href="/api/market/history.csv" data-i18n="exportHistory">Exporter les ticks CSV</a></div>
+                        <h3 data-i18n="priceAlertsTitle">Alertes de prix EUR / CHF</h3>
+                        <form class="alert-form" id="price-alert-form">
+                            <select id="alert-symbol" aria-label="Actif"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select>
+                            <select id="alert-exchange" aria-label="Plateforme"><option>Binance</option><option>Kraken</option></select>
+                            <select id="alert-direction" aria-label="Condition"><option value="above" data-i18n="above">Au-dessus</option><option value="below" data-i18n="below">En-dessous</option></select>
+                            <input id="alert-target" type="number" min="0" step="any" required aria-label="Seuil de prix" data-i18n-aria="priceThreshold">
+                            <select id="alert-currency" aria-label="Devise"><option>EUR</option><option>CHF</option></select>
+                            <button class="button" type="submit" data-i18n="addAlert">Ajouter l’alerte</button>
+                        </form>
+                        <div class="alert-list" id="price-alerts"><div class="empty" data-i18n="noAlerts">Aucune alerte configurée.</div></div>
+                        <p class="fine-print" id="alert-notice" data-i18n="alertNeedsPage">Les alertes sont évaluées avec les cotations récentes lorsque le dashboard est ouvert.</p>
                     </div>
                     <div class="table-wrap">
                         <table class="quote-table">
@@ -217,6 +241,11 @@
             </div>
         </article>
     </section>
+    <article class="card secondary-card" style="margin-top:15px">
+        <div class="card-head"><div><h2 data-i18n="sourceStatusTitle">État des sources</h2><p data-i18n="sourceStatusSubtitle">Disponibilité et dernier événement observé</p></div><span class="status pending" id="sources-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+        <div class="card-body source-grid" id="source-status-list"><div class="empty" data-i18n="loadingSources">Chargement des sources…</div></div>
+    </article>
+    <div class="market-tools"><span class="fine-print" data-i18n="dailyReportHint">Rapport journalier : cours observés, flux ENTSOG et titres rapportés.</span><a class="button" id="daily-report" href="/api/daily-report.csv" data-i18n="downloadDailyReport">Télécharger le rapport CSV du jour</a></div>
 
     <section class="grid">
         <div class="metrics">
@@ -314,7 +343,20 @@
             chartNoPrice: "prix indisponible", chartStale: "dernier prix périmé", chartReceived: "Reçu", chartLastTickStale: "Périmé · dernier tick reçu",
             conversionUnavailable: "Conversion EUR/CHF indisponible", conversionUnavailableShort: "conversion indisponible",
             staleAge: "Périmé · {age}s", receivedAge: "Reçu il y a {age}s", staleAgeLabel: "Périmé · dernier tick reçu il y a {age}s",
-            unknownError: "Erreur inattendue"
+            unknownError: "Erreur inattendue",
+            period: "Période", day: "Jour", week: "Semaine", month: "Mois",
+            historyLoading: "Historique local persistant", exportHistory: "Exporter les ticks CSV",
+            historyReady: "{count} points agrégés · source USDT", historyEmpty: "Aucun historique enregistré pour cette période.",
+            priceAlertsTitle: "Alertes de prix EUR / CHF", above: "Au-dessus", below: "En-dessous",
+            priceThreshold: "Seuil de prix", addAlert: "Ajouter l’alerte", noAlerts: "Aucune alerte configurée.",
+            alertNeedsPage: "Les alertes sont évaluées avec les cotations récentes lorsque le dashboard est ouvert.",
+            alertTriggered: "{symbol} a franchi le seuil de {target} {currency}.",
+            alertFailure: "Impossible d’enregistrer ou d’évaluer les alertes.",
+            sourceStatusTitle: "État des sources", sourceStatusSubtitle: "Disponibilité et dernier événement observé",
+            sourceRetrieved: "Dernier événement : {date}", live: "Live", delayed: "Retardé", stale: "Périmé",
+            sourceUnavailable: "Indisponible", dailyReportHint: "Rapport journalier : cours observés, flux ENTSOG et titres rapportés.",
+            downloadDailyReport: "Télécharger le rapport CSV du jour", fxAge: "Cours BCE du {date} · âge {age} j · source {source}",
+            deleteAlert: "Supprimer l’alerte"
         },
         ru: {
             language: "Язык", languageAria: "Язык интерфейса", brandSubtitle: "Терминал рынков и энергетики", clockCaption: "Местное время · автообновление", refresh: "↻ Обновить",
@@ -361,7 +403,20 @@
             chartNoPrice: "цена недоступна", chartStale: "последняя цена устарела", chartReceived: "Получено", chartLastTickStale: "Устарело · последний тик",
             conversionUnavailable: "Конвертация EUR/CHF недоступна", conversionUnavailableShort: "конвертация недоступна",
             staleAge: "Устарело · {age}с", receivedAge: "{age}с назад", staleAgeLabel: "Устарело · последний тик {age}с назад",
-            unknownError: "Непредвиденная ошибка"
+            unknownError: "Непредвиденная ошибка",
+            period: "Период", day: "День", week: "Неделя", month: "Месяц",
+            historyLoading: "Сохраняемая локальная история", exportHistory: "Экспорт тиков CSV",
+            historyReady: "{count} агрегированных точек · источник USDT", historyEmpty: "За этот период сохранённых данных нет.",
+            priceAlertsTitle: "Ценовые оповещения EUR / CHF", above: "Выше", below: "Ниже",
+            priceThreshold: "Ценовой порог", addAlert: "Добавить оповещение", noAlerts: "Оповещений пока нет.",
+            alertNeedsPage: "Оповещения проверяются по свежим котировкам, пока панель открыта.",
+            alertTriggered: "{symbol}: достигнут порог {target} {currency}.",
+            alertFailure: "Не удалось сохранить или проверить оповещения.",
+            sourceStatusTitle: "Состояние источников", sourceStatusSubtitle: "Доступность и время последнего события",
+            sourceRetrieved: "Последнее событие: {date}", live: "В реальном времени", delayed: "Задержка", stale: "Устарело",
+            sourceUnavailable: "Недоступно", dailyReportHint: "Дневной отчёт: котировки, потоки ENTSOG и сообщения СМИ.",
+            downloadDailyReport: "Скачать дневной CSV-отчёт", fxAge: "Курс ЕЦБ на {date} · возраст {age} дн. · источник {source}",
+            deleteAlert: "Удалить оповещение"
         },
         en: {
             language: "Language", languageAria: "Display language", clockCaption: "Local time · auto-refresh", refresh: "↻ Refresh",
@@ -409,7 +464,20 @@
             chartNoPrice: "price unavailable", chartStale: "last price is stale", chartReceived: "Received", chartLastTickStale: "Stale · last tick",
             conversionUnavailable: "EUR/CHF conversion unavailable", conversionUnavailableShort: "conversion unavailable",
             staleAge: "Stale · {age}s", receivedAge: "{age}s ago", staleAgeLabel: "Stale · last tick {age}s ago",
-            unknownError: "Unexpected error"
+            unknownError: "Unexpected error",
+            period: "Period", day: "Day", week: "Week", month: "Month",
+            historyLoading: "Persistent local history", exportHistory: "Export ticks as CSV",
+            historyReady: "{count} aggregated points · source USDT", historyEmpty: "No stored history for this period.",
+            priceAlertsTitle: "EUR / CHF price alerts", above: "Above", below: "Below",
+            priceThreshold: "Price threshold", addAlert: "Add alert", noAlerts: "No alerts configured.",
+            alertNeedsPage: "Alerts are evaluated against fresh quotes while the dashboard is open.",
+            alertTriggered: "{symbol} crossed the {target} {currency} threshold.",
+            alertFailure: "Could not save or evaluate alerts.",
+            sourceStatusTitle: "Source status", sourceStatusSubtitle: "Availability and latest observed event",
+            sourceRetrieved: "Latest event: {date}", live: "Live", delayed: "Delayed", stale: "Stale",
+            sourceUnavailable: "Unavailable", dailyReportHint: "Daily report: observed prices, ENTSOG flows, and reported headlines.",
+            downloadDailyReport: "Download today’s CSV report", fxAge: "ECB rate for {date} · age {age} days · source {source}",
+            deleteAlert: "Delete alert"
         }
     };
     const supportedLanguages = Object.keys(translations);
@@ -445,6 +513,8 @@
         updateClock();
         if (latestMarket) renderMarket(latestMarket);
         if (latestFx) renderFx(latestFx);
+        refreshAlerts();
+        refreshSources();
     }
 
     const $ = (id) => document.getElementById(id);
@@ -479,14 +549,9 @@
         const parsed = Number(String(value ?? "").trim().replace(",", "."));
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     };
-    const marketHistory = new Map();
+    let historicalPoints = [];
     let latestMarket = null;
     let latestFx = null;
-
-    function ensureMarketHistory(key) {
-        if (!marketHistory.has(key)) marketHistory.set(key, []);
-        return marketHistory.get(key);
-    }
 
     function drawPriceChart() {
         const canvas = $("price-chart");
@@ -501,15 +566,17 @@
         const symbol = $("chart-symbol").value;
         const exchange = $("chart-exchange").value;
         const currency = $("chart-currency").value;
-        const history = ensureMarketHistory(`${symbol}:${exchange}`).slice(-240);
-        const convertedHistory = history.map(point => ({
+        const rangeMs = { day: 86400000, week: 604800000, month: 2592000000 }[$("chart-period").value];
+        const windowStart = Date.now() - rangeMs;
+        const convertedHistory = historicalPoints.map(point => ({
             ...point,
+            time: new Date(point.timestamp).getTime(),
             convertedPrice: convertQuote(point.price, currency)
         })).filter(point => Number.isFinite(point.convertedPrice));
-        if (convertedHistory.length < 2) {
+        if (!convertedHistory.length) {
             context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted").trim();
             context.font = "13px Segoe UI";
-            context.fillText(latestFx ? t("waitingTicks") : t("waitingFx"), 18, height / 2);
+            context.fillText(latestFx ? t("historyEmpty") : t("waitingFx"), 18, height / 2);
             return;
         }
         const prices = convertedHistory.map(point => point.convertedPrice);
@@ -523,21 +590,35 @@
         }
         context.beginPath();
         convertedHistory.forEach((point, index) => {
-            const x = padding + index * (width - padding * 2) / (convertedHistory.length - 1);
+            const x = padding + Math.max(0, Math.min(1, (point.time - windowStart) / rangeMs)) * (width - padding * 2);
             const y = height - padding - (point.convertedPrice - min) / range * (height - padding * 2);
             if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
         });
         context.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--cyan").trim(); context.lineWidth = 2; context.stroke();
+        if (convertedHistory.length === 1) {
+            const point = convertedHistory[0];
+            const x = padding + Math.max(0, Math.min(1, (point.time - windowStart) / rangeMs)) * (width - padding * 2);
+            const y = height - padding - (point.convertedPrice - min) / range * (height - padding * 2);
+            context.beginPath(); context.arc(x, y, 3, 0, Math.PI * 2);
+            context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--cyan").trim(); context.fill();
+        }
         const first = prices[0], last = prices[prices.length - 1];
         const change = first ? ((last - first) / first * 100) : 0;
         context.fillStyle = change >= 0
             ? getComputedStyle(document.documentElement).getPropertyValue("--green").trim()
             : getComputedStyle(document.documentElement).getPropertyValue("--red").trim();
         context.font = "12px Segoe UI";
-        context.fillText(`${change >= 0 ? "+" : ""}${change.toFixed(3)}% · ${convertedHistory.length} ${t("ticks")}`, padding, 16);
+        const tickCount = convertedHistory.reduce((total, point) => total + (point.ticks || 1), 0);
+        context.fillText(`${change >= 0 ? "+" : ""}${change.toFixed(3)}% · ${tickCount} ${t("ticks")}`, padding, 16);
         context.fillStyle = getComputedStyle(document.documentElement).getPropertyValue("--muted").trim(); context.textAlign = "right";
         context.fillText(formatCurrency(max, currency), width - padding, 16);
         context.fillText(formatCurrency(min, currency), width - padding, height - 5);
+        context.textAlign = "left";
+        const dateOptions = { hour: "2-digit", minute: "2-digit" };
+        if ($("chart-period").value !== "day") dateOptions.month = "short";
+        context.fillText(new Date(windowStart).toLocaleString(languageLocales[currentLanguage], dateOptions), padding, height - 5);
+        context.textAlign = "right";
+        context.fillText(new Date().toLocaleString(languageLocales[currentLanguage], dateOptions), width - padding, height - 5);
         context.textAlign = "left";
     }
 
@@ -548,15 +629,6 @@
         for (const symbol of ["BTC/USDT", "ETH/USDT", "SOL/USDT"]) {
             const quotes = symbols[symbol] || {};
             const binance = quotes.Binance, kraken = quotes.Kraken;
-            for (const [exchange, quote] of Object.entries(quotes)) {
-                if (quote.status !== "live") continue;
-                const history = ensureMarketHistory(`${symbol}:${exchange}`);
-                const last = history[history.length - 1];
-                if (!last || last.price !== quote.price || Date.now() - last.time > 1000) {
-                    history.push({ time: Date.now(), price: quote.price });
-                    if (history.length > 900) history.splice(0, history.length - 900);
-                }
-            }
             let spread = "—";
             if (binance?.status === "live" && kraken?.status === "live") {
                 spread = `${(((kraken.price - binance.price) / ((kraken.price + binance.price) / 2)) * 100).toFixed(3)}%`;
@@ -631,8 +703,12 @@
 
     function renderFx(payload) {
         latestFx = payload;
-        setStatus($("fx-status"), "live", t("fxAvailable"));
-        $("fx-asof").textContent = t("publishedOn", { date: formatDate(payload.date) });
+        setStatus($("fx-status"), payload.freshness === "stale" ? "stale" : "pending", t(payload.freshness || "delayed"));
+        $("fx-asof").textContent = t("fxAge", {
+            date: payload.date,
+            age: payload.source_age_days ?? "—",
+            source: payload.source || "—"
+        });
         const rates = $("fx-rates");
         rates.replaceChildren();
         for (const [currency, value] of Object.entries(payload.rates || {})) {
@@ -649,6 +725,121 @@
             row.append(code, rate); rates.append(row);
         }
         drawPriceChart();
+    }
+
+    async function refreshHistory() {
+        const symbol = $("chart-symbol").value;
+        const exchange = $("chart-exchange").value;
+        const period = $("chart-period").value;
+        const query = new URLSearchParams({ symbol, exchange, period });
+        const exportQuery = new URLSearchParams({ symbol, exchange, period });
+        $("history-export").href = `/api/market/history.csv?${exportQuery}`;
+        try {
+            const payload = await fetchJson(`/api/market/history?${query}`);
+            historicalPoints = payload.observations || [];
+            const ticks = historicalPoints.reduce((total, point) => total + (point.ticks || 1), 0);
+            $("history-status").textContent = historicalPoints.length
+                ? t("historyReady", { count: historicalPoints.length })
+                : t("historyEmpty");
+            drawPriceChart();
+            return ticks;
+        } catch {
+            $("history-status").textContent = t("unavailableFeed");
+            historicalPoints = [];
+            drawPriceChart();
+            return 0;
+        }
+    }
+
+    function renderAlerts(alerts) {
+        const list = $("price-alerts");
+        list.replaceChildren();
+        if (!alerts.length) {
+            list.textContent = t("noAlerts");
+            return;
+        }
+        for (const alert of alerts) {
+            const row = document.createElement("div");
+            row.className = "alert-row";
+            const label = document.createElement("span");
+            label.textContent = `${alert.symbol} · ${alert.exchange} · ${t(alert.direction)} ${formatCurrency(alert.target, alert.currency)}`;
+            const remove = document.createElement("button");
+            remove.className = "button";
+            remove.type = "button";
+            remove.textContent = t("deleteAlert");
+            remove.addEventListener("click", async () => {
+                try {
+                    const response = await fetch(`/api/alerts/${alert.id}`, { method: "DELETE" });
+                    if (!response.ok) throw new Error("alert delete failed");
+                    await refreshAlerts();
+                } catch {
+                    $("alert-notice").textContent = t("alertFailure");
+                }
+            });
+            row.append(label, remove);
+            list.append(row);
+        }
+    }
+
+    async function refreshAlerts() {
+        try {
+            const payload = await fetchJson("/api/alerts");
+            renderAlerts(payload.alerts || []);
+        } catch {
+            $("alert-notice").textContent = t("alertFailure");
+        }
+    }
+
+    async function checkPriceAlerts() {
+        try {
+            const payload = await fetchJson("/api/alerts/check");
+            for (const alert of payload.triggered || []) {
+                const message = t("alertTriggered", {
+                    symbol: alert.symbol,
+                    target: numericFormat(alert.target),
+                    currency: alert.currency
+                });
+                $("alert-notice").textContent = message;
+                if ("Notification" in window && Notification.permission === "granted") {
+                    new Notification("Pravda-Bot", { body: message });
+                }
+            }
+        } catch {
+            $("alert-notice").textContent = t("alertFailure");
+        }
+    }
+
+    function renderSources(payload) {
+        const list = $("source-status-list");
+        list.replaceChildren();
+        const sources = payload.sources || [];
+        setStatus($("sources-status"), sources.some(source => source.status === "unavailable") ? "stale" : "live", `${sources.length}`);
+        for (const source of sources) {
+            const row = document.createElement("div");
+            row.className = "source-row";
+            const detail = document.createElement("div");
+            const name = document.createElement("strong");
+            name.textContent = source.name || t("sourceUnavailable");
+            const time = document.createElement("small");
+            time.textContent = source.last_event_at
+                ? t("sourceRetrieved", { date: formatDate(source.last_event_at) })
+                : source.detail || "—";
+            detail.append(name, document.createElement("br"), time);
+            const status = document.createElement("span");
+            const state = ["live", "delayed", "stale"].includes(source.status) ? source.status : "error";
+            setStatus(status, state, t(source.status === "unavailable" ? "sourceUnavailable" : state));
+            row.append(detail, status);
+            list.append(row);
+        }
+    }
+
+    async function refreshSources() {
+        try {
+            renderSources(await fetchJson("/api/sources"));
+        } catch {
+            setStatus($("sources-status"), "error", t("sourceUnavailable"));
+            $("source-status-list").textContent = t("unavailableFeed");
+        }
     }
 
     function drawMap(rows) {
@@ -739,7 +930,10 @@
         return payload;
     }
     async function refreshMarket() {
-        try { renderMarket(await fetchJson("/api/market")); }
+        try {
+            renderMarket(await fetchJson("/api/market"));
+            await refreshHistory();
+        }
         catch (error) {
             setStatus($("market-feed-status"), "error", t("unavailableFeed"));
             $("chart-age").textContent = t("unknownError");
@@ -838,7 +1032,14 @@
         }
     }
     function updateClock() { $("clock").textContent = new Date().toLocaleTimeString(languageLocales[currentLanguage]); }
-    async function refreshAll() { await Promise.all([refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto()]); }
+    async function refreshAll() {
+        const today = new Date().toISOString().slice(0, 10);
+        $("daily-report").href = `/api/daily-report.csv?date=${today}`;
+        await Promise.all([
+            refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto(),
+            refreshHistory(), refreshAlerts(), refreshSources(), checkPriceAlerts()
+        ]);
+    }
     $("refresh-button").addEventListener("click", refreshAll);
     $("language-select").addEventListener("change", () => {
         currentLanguage = supportedLanguages.includes($("language-select").value) ? $("language-select").value : "fr";
@@ -851,8 +1052,41 @@
         refreshAll();
     });
     $("chart-symbol").addEventListener("change", drawPriceChart);
-    $("chart-exchange").addEventListener("change", drawPriceChart);
+    $("chart-symbol").addEventListener("change", refreshHistory);
+    $("chart-exchange").addEventListener("change", refreshHistory);
+    $("chart-period").addEventListener("change", refreshHistory);
     $("chart-currency").addEventListener("change", drawPriceChart);
+    $("price-alert-form").addEventListener("submit", async event => {
+        event.preventDefault();
+        const target = Number($("alert-target").value);
+        if (!Number.isFinite(target) || target <= 0) {
+            $("alert-notice").textContent = t("priceThreshold");
+            return;
+        }
+        if ("Notification" in window && Notification.permission === "default") {
+            await Notification.requestPermission();
+        }
+        try {
+            const response = await fetch("/api/alerts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    symbol: $("alert-symbol").value,
+                    exchange: $("alert-exchange").value,
+                    direction: $("alert-direction").value,
+                    target,
+                    currency: $("alert-currency").value
+                })
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || "alert save failed");
+            $("alert-target").value = "";
+            $("alert-notice").textContent = t("alertNeedsPage");
+            await refreshAlerts();
+        } catch {
+            $("alert-notice").textContent = t("alertFailure");
+        }
+    });
     window.addEventListener("resize", drawPriceChart);
     applyLanguage();
     refreshAll();
@@ -862,6 +1096,8 @@
     setInterval(refreshFlows, 300000);
     setInterval(refreshNews, 900000);
     setInterval(refreshCrypto, 5000);
+    setInterval(refreshSources, 60000);
+    setInterval(checkPriceAlerts, 5000);
 </script>
 </body>
 </html>

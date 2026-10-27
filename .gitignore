@@ -10,3 +10,6 @@ __pycache__/
 /lng_observations.csv
 /market_snapshot.json
 /market_snapshot.json.tmp
+/market_history.sqlite3
+/market_history.sqlite3-shm
+/market_history.sqlite3-wal
