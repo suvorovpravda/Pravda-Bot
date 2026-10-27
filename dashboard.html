@@ -293,6 +293,15 @@
             <div class="card-head"><div><h2 data-i18n="cryptoMonitor">Surveillance crypto</h2><p data-i18n="cryptoMonitorSubtitle">Résumé du bot Kraken / Binance · panneau secondaire</p></div><span class="status pending" id="bot-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body table-wrap" id="crypto-data" data-i18n="readingLocal">Lecture des observations locales…</div>
         </article>
+
+        <article class="card secondary-card">
+            <div class="card-head"><div><h2 data-i18n="aisTitle">Suivi maritime AIS</h2><p data-i18n="aisSubtitle">Proxy non-commercial · couverture terrestre uniquement</p></div><span class="status pending" id="ais-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body">
+                <p class="fine-print" data-i18n="aisDisclaimer">Données AIS via aisstream.io proxy non-commercial. Pas de redistribution, pas de données satellite, quota API. Marqué <strong>non-commercial proxy</strong> et non vérifié.</p>
+                <div class="table-wrap" id="ais-data"><div class="empty" data-i18n="aisLoading">Chargement des positions AIS…</div></div>
+                <div class="market-tools" style="margin-top:10px"><a class="button" id="ais-geojson" href="/api/ais/geojson" target="_blank" rel="noopener" data-i18n="aisGeojson">Télécharger GeoJSON</a></div>
+            </div>
+        </article>
     </section>
     <p class="fine-print" data-i18n="footerDisclaimer">Données gaz : ENTSOG Transparency Platform. Actualités : GDELT ou flux BBC World de repli, avec liens vers les éditeurs d’origine. Les flux peuvent être publiés avec retard et les actualités nécessitent une vérification indépendante.</p>
 </main>
@@ -356,7 +365,13 @@
             sourceRetrieved: "Dernier événement : {date}", live: "Live", delayed: "Retardé", stale: "Périmé",
             sourceUnavailable: "Indisponible", dailyReportHint: "Rapport journalier : cours observés, flux ENTSOG et titres rapportés.",
             downloadDailyReport: "Télécharger le rapport CSV du jour", fxAge: "Cours BCE du {date} · âge {age} j · source {source}",
-            deleteAlert: "Supprimer l’alerte"
+            deleteAlert: "Supprimer l’alerte",
+            aisTitle: "Suivi maritime AIS",
+            aisSubtitle: "Proxy non-commercial · couverture terrestre uniquement",
+            aisDisclaimer: "Données AIS via aisstream.io proxy non-commercial. Pas de redistribution, pas de données satellite, quota API. Marqué non-commercial proxy et non vérifié.",
+            aisLoading: "Chargement des positions AIS…",
+            aisGeojson: "Télécharger GeoJSON",
+            aisUnavailable: "AIS indisponible"
         },
         ru: {
             language: "Язык", languageAria: "Язык интерфейса", brandSubtitle: "Терминал рынков и энергетики", clockCaption: "Местное время · автообновление", refresh: "↻ Обновить",
@@ -416,7 +431,13 @@
             sourceRetrieved: "Последнее событие: {date}", live: "В реальном времени", delayed: "Задержка", stale: "Устарело",
             sourceUnavailable: "Недоступно", dailyReportHint: "Дневной отчёт: котировки, потоки ENTSOG и сообщения СМИ.",
             downloadDailyReport: "Скачать дневной CSV-отчёт", fxAge: "Курс ЕЦБ на {date} · возраст {age} дн. · источник {source}",
-            deleteAlert: "Удалить оповещение"
+            deleteAlert: "Удалить оповещение",
+            aisTitle: "Морской мониторинг AIS",
+            aisSubtitle: "Некоммерческий прокси · только наземное покрытие",
+            aisDisclaimer: "Данные AIS через aisstream.io некоммерческий прокси. Без перераспространения, без спутниковых данных, лимиты API. Помечено как non-commercial proxy и непроверено.",
+            aisLoading: "Загрузка позиций AIS…",
+            aisGeojson: "Скачать GeoJSON",
+            aisUnavailable: "AIS недоступно"
         },
         en: {
             language: "Language", languageAria: "Display language", clockCaption: "Local time · auto-refresh", refresh: "↻ Refresh",
@@ -477,7 +498,13 @@
             sourceRetrieved: "Latest event: {date}", live: "Live", delayed: "Delayed", stale: "Stale",
             sourceUnavailable: "Unavailable", dailyReportHint: "Daily report: observed prices, ENTSOG flows, and reported headlines.",
             downloadDailyReport: "Download today’s CSV report", fxAge: "ECB rate for {date} · age {age} days · source {source}",
-            deleteAlert: "Delete alert"
+            deleteAlert: "Delete alert",
+            aisTitle: "Maritime AIS tracking",
+            aisSubtitle: "Non-commercial proxy · terrestrial coverage only",
+            aisDisclaimer: "AIS data via aisstream.io non-commercial proxy. No redistribution, no satellite data, API quotas apply. Marked non-commercial proxy and unverified.",
+            aisLoading: "Loading AIS positions…",
+            aisGeojson: "Download GeoJSON",
+            aisUnavailable: "AIS unavailable"
         }
     };
     const supportedLanguages = Object.keys(translations);
@@ -1031,13 +1058,45 @@
             $("crypto-data").textContent = t("unknownError");
         }
     }
+    async function refreshAIS() {
+        try {
+            const payload = await fetchJson("/api/ais/recent?limit=50");
+            setStatus($("ais-status"), "live", `${payload.count} ${t("aisTitle")}`);
+            const container = $("ais-data");
+            container.replaceChildren();
+            if (!payload.messages || !payload.messages.length) {
+                container.textContent = t("aisLoading");
+                return;
+            }
+            const table = document.createElement("table");
+            const head = table.createTHead().insertRow();
+            for (const label of ["MMSI", "Lat", "Lon", "SOG kn", "COG", "Timestamp", "Source"]) {
+                const th = document.createElement("th"); th.textContent = label; head.append(th);
+            }
+            const body = table.createTBody();
+            for (const m of payload.messages.slice(0,20)) {
+                const tr = body.insertRow();
+                tr.insertCell().textContent = m.mmsi ?? "—";
+                tr.insertCell().textContent = m.lat ?? "—";
+                tr.insertCell().textContent = m.lon ?? "—";
+                tr.insertCell().textContent = m.sog ?? "—";
+                tr.insertCell().textContent = m.cog ?? "—";
+                tr.insertCell().textContent = m.timestamp ?? "—";
+                tr.insertCell().textContent = m.source ?? "—";
+            }
+            container.replaceChildren(table);
+        } catch (error) {
+            setStatus($("ais-status"), "error", t("aisUnavailable"));
+            $("ais-data").textContent = t("aisUnavailable");
+        }
+    }
     function updateClock() { $("clock").textContent = new Date().toLocaleTimeString(languageLocales[currentLanguage]); }
     async function refreshAll() {
         const today = new Date().toISOString().slice(0, 10);
         $("daily-report").href = `/api/daily-report.csv?date=${today}`;
         await Promise.all([
             refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto(),
-            refreshHistory(), refreshAlerts(), refreshSources(), checkPriceAlerts()
+            refreshHistory(), refreshAlerts(), refreshSources(), checkPriceAlerts(), refreshAIS()
         ]);
     }
     $("refresh-button").addEventListener("click", refreshAll);
