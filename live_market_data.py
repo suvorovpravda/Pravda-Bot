@@ -147,13 +147,27 @@ def get_reference_fx_rates(*, now=None, force_refresh=False):
     global _forex_cache, _forex_cache_updated_at
 
     current_monotonic = time.monotonic()
+    current_utc = now or datetime.now(timezone.utc)
+    if current_utc.tzinfo is None:
+        raise ValueError("FX reference timestamp must include a timezone")
+    current_utc = current_utc.astimezone(timezone.utc)
+
+    def with_freshness(payload):
+        source_date = datetime.strptime(payload["date"], "%Y-%m-%d").date()
+        source_age_days = max(0, (current_utc.date() - source_date).days)
+        result = dict(payload)
+        result["freshness"] = "stale" if source_age_days > 4 else "delayed"
+        result["source_age_days"] = source_age_days
+        result["source_age_seconds"] = source_age_days * 86400
+        return result
+
     with _forex_lock:
         if (
             not force_refresh
             and _forex_cache is not None
             and current_monotonic - _forex_cache_updated_at < FOREX_CACHE_SECONDS
         ):
-            return _forex_cache
+            return with_freshness(_forex_cache)
 
     try:
         response = requests.get(
@@ -190,16 +204,29 @@ def get_reference_fx_rates(*, now=None, force_refresh=False):
         raise RuntimeError("reference FX source omitted expected currency rates")
 
     as_of = max(dates)
+    try:
+        source_date = datetime.strptime(as_of, "%Y-%m-%d").date()
+    except ValueError as error:
+        raise RuntimeError("reference FX source returned an invalid rate date") from error
+    retrieved_at = current_utc
+    source_age_days = max(0, (retrieved_at.date() - source_date).days)
     result = {
         "status": "available",
+        "freshness": "stale" if source_age_days > 4 else "delayed",
         "base": "EUR",
         "date": as_of,
+        "retrieved_at": retrieved_at.isoformat(timespec="seconds").replace("+00:00", "Z"),
+        "source_age_days": source_age_days,
+        "source_age_seconds": source_age_days * 86400,
         "rates": rates,
         "source": "Frankfurter / European Central Bank reference rates",
         "source_url": "https://www.frankfurter.app/",
-        "notice": "Daily reference rates, not live interbank FX quotes.",
+        "notice": (
+            "Daily reference rates, not live interbank FX quotes. "
+            f"Source date is {source_age_days} calendar days old."
+        ),
     }
     with _forex_lock:
         _forex_cache = result
         _forex_cache_updated_at = time.monotonic()
-    return result
+    return with_freshness(result)

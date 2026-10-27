@@ -3,6 +3,7 @@ import csv
 import json
 import math
 import os
+import sqlite3
 import threading
 import time
 from datetime import datetime, timezone
@@ -15,6 +16,8 @@ from dotenv import load_dotenv
 from rich.console import Console
 from rich.markup import escape
 
+load_dotenv()
+
 from alert_gate import AlertGate
 from bot_config import load_config
 from bot_dashboard import SpreadSummary, build_dashboard
@@ -26,6 +29,7 @@ from market_data_health import (
     event_time_to_monotonic,
 )
 from live_market_data import write_market_snapshot
+from market_history import get_market_store
 from orderbook_execution import ExecutionEstimate, fetch_public_execution_estimate
 from paper_simulator import PaperSimulator
 from reconnect import ExponentialBackoff, run_with_reconnect
@@ -37,7 +41,7 @@ from security_and_fees import (
     request_error_summary,
 )
 
-load_dotenv()
+market_store = get_market_store()
 
 console = Console()
 
@@ -386,6 +390,18 @@ async def handle_price_update(exchange_name, symbol, raw_price, event_timestamp=
         price_update_generation[exchange_name].get(symbol, 0) + 1
     )
     price_updates_count += 1
+    try:
+        market_store.record_tick(
+            symbol,
+            exchange_name,
+            price,
+            timestamp=datetime.now(timezone.utc),
+        )
+    except (OSError, sqlite3.Error, ValueError) as error:
+        console.print(
+            f"[bold red]Échec d’enregistrement de l’historique marché "
+            f"({type(error).__name__}).[/bold red]"
+        )
     try:
         write_market_snapshot(
             latest_prices,
