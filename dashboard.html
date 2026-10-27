@@ -160,7 +160,18 @@
             .flow-row { grid-template-columns: minmax(80px, 1.3fr) .7fr .7fr; }
             .flow-updated { display: none; }
         }
-    </style>
+    
+        /* Tabs */
+        .tabs { display:flex; gap:8px; margin:24px 0 28px; flex-wrap:wrap; align-items:center; }
+        .tab-btn { border:1px solid var(--line); background:var(--panel); padding:9px 14px; border-radius:10px; cursor:pointer; color:var(--muted); font-weight:600; transition:.2s; }
+        .tab-btn:hover { border-color:var(--cyan); color:var(--text); }
+        .tab-btn.active { border-color:var(--cyan); color:var(--text); background:var(--panel-raised); }
+        .grid { gap:20px; }
+        .card { border-radius:16px; }
+        .card-head { padding:20px 22px 14px; }
+        .card-body { padding:0 22px 22px; }
+        .shell { padding:28px clamp(16px,3vw,42px) 60px; }
+</style>
 </head>
 <body>
 <main class="shell">
@@ -187,8 +198,17 @@
         <p data-i18n="intro">Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.</p>
     </section>
 
+    <nav class="tabs" aria-label="Navigation par onglet">
+        <button class="tab-btn active" data-tab="all" data-i18n="tabAll">Tous</button>
+        <button class="tab-btn" data-tab="markets" data-i18n="tabMarkets">Marchés</button>
+        <button class="tab-btn" data-tab="energy" data-i18n="tabEnergy">Énergie</button>
+        <button class="tab-btn" data-tab="risks" data-i18n="tabRisks">Veille</button>
+        <button class="tab-btn" data-tab="ais" data-i18n="tabAIS">AIS</button>
+    </nav>
+
+
     <section class="grid" aria-label="Marchés en direct" data-i18n-aria="marketsAria">
-        <article class="card crypto-live-card">
+        <article class="card crypto-live-card" data-category="markets">
             <div class="card-head">
                 <div><h2 data-i18n="cryptoTitle">Marchés crypto · cotations live</h2><p data-i18n="cryptoSubtitle">Ticks Kraken et Binance · conversions indicatives en EUR et CHF</p></div>
                 <span class="status pending" id="market-feed-status"><i class="dot"></i><span data-i18n="waitingBot">En attente du bot</span></span>
@@ -231,7 +251,7 @@
                 </div>
             </div>
         </article>
-        <article class="card fx-live-card">
+        <article class="card fx-live-card" data-category="markets">
             <div class="card-head"><div><h2 data-i18n="fiatTitle">Devises fiduciaires</h2><p data-i18n="fiatSubtitle">Unités de devise pour 1 EUR</p></div><span class="status pending" id="fx-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body">
                 <div class="fx-list" id="fx-rates"><div class="empty" data-i18n="loadingFx">Chargement des taux de référence…</div></div>
@@ -249,12 +269,12 @@
 
     <section class="grid">
         <div class="metrics">
-            <article class="card metric"><div class="metric-label" data-i18n="inboundFlows">Flux entrants observés</div><div class="metric-value" id="entry-count">—</div><div class="metric-foot" id="entry-foot">Chargement ENTSOG…</div></article>
-            <article class="card metric"><div class="metric-label" data-i18n="outboundFlows">Flux sortants observés</div><div class="metric-value" id="exit-count">—</div><div class="metric-foot" id="exit-foot">Chargement ENTSOG…</div></article>
-            <article class="card metric"><div class="metric-label" data-i18n="latestSource">Dernière publication source</div><div class="metric-value" style="font-size:18px" id="source-update">—</div><div class="metric-foot" id="flow-status">Connexion à ENTSOG…</div></article>
+            <article class="card metric" data-category="energy"><div class="metric-label" data-i18n="inboundFlows">Flux entrants observés</div><div class="metric-value" id="entry-count">—</div><div class="metric-foot" id="entry-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric" data-category="energy"><div class="metric-label" data-i18n="outboundFlows">Flux sortants observés</div><div class="metric-value" id="exit-count">—</div><div class="metric-foot" id="exit-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric" data-category="energy"><div class="metric-label" data-i18n="latestSource">Dernière publication source</div><div class="metric-value" style="font-size:18px" id="source-update">—</div><div class="metric-foot" id="flow-status">Connexion à ENTSOG…</div></article>
         </div>
 
-        <article class="card map-card">
+        <article class="card map-card" data-category="energy">
             <div class="card-head"><div><h2 data-i18n="networkTitle">Réseau gazier européen</h2><p data-i18n="networkSubtitle">Points transfrontaliers et sens des observations publiées</p></div><span class="status pending" id="map-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body">
                 <div class="map-wrap">
@@ -267,12 +287,12 @@
             </div>
         </article>
 
-        <article class="card news-card">
+        <article class="card news-card" data-category="risks">
             <div class="card-head"><div><h2 data-i18n="newsTitle">Actualités &amp; risques géopolitiques</h2><p id="news-source">Mentions liées au gaz · dernières 24 h</p></div><span class="status pending" id="news-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body"><div class="news-list" id="news-list"><div class="empty" data-i18n="loadingSources">Chargement des sources…</div></div><div class="source-line" data-i18n="newsDisclaimer">Les articles sont des informations rapportées, non des incidents vérifiés ni des prédictions.</div></div>
         </article>
 
-        <article class="card price-card">
+        <article class="card price-card" data-category="energy">
             <div class="card-head"><div><h2 data-i18n="ttfTitle">TTF · aucune cotation vérifiée</h2><p data-i18n="ttfSubtitle">Prix du gaz européen — fournisseur de marché requis</p></div><span class="status stale"><i class="dot"></i><span data-i18n="unavailable">Indisponible</span></span></div>
             <div class="card-body">
                 <div class="price-state"><strong data-i18n="ttfUnavailableTitle">Prix et unité non affichés</strong><p data-i18n="ttfUnavailableText">Aucune cotation TTF vérifiable n’est connectée. Le tableau de bord n’invente ni cours ni unité de cotation. Les spécifications ICE décrivent le contrat, elles ne fournissent pas un flux de prix.</p></div>
@@ -280,7 +300,7 @@
             </div>
         </article>
 
-        <article class="card flows-card">
+        <article class="card flows-card" data-category="energy">
             <div class="card-head"><div><h2 data-i18n="flowsTitle">Dernières observations de flux</h2><p data-i18n="flowsSubtitle">Valeurs publiées au point · unité native de la source</p></div><a class="status" href="https://transparency.entsog.eu/" target="_blank" rel="noopener noreferrer" data-i18n="entsogLink">Source ENTSOG ↗</a></div>
             <div class="card-body">
                 <div class="flow-row flow-header"><span data-i18n="pointOperator">Point / opérateur</span><span data-i18n="direction">Sens</span><span data-i18n="publishedValue">Valeur publiée</span><span class="flow-updated" data-i18n="periodUpdated">Période / mise à jour</span></div>
@@ -289,16 +309,20 @@
             </div>
         </article>
 
-        <article class="card secondary-card">
+        <article class="card secondary-card" data-category="markets">
             <div class="card-head"><div><h2 data-i18n="cryptoMonitor">Surveillance crypto</h2><p data-i18n="cryptoMonitorSubtitle">Résumé du bot Kraken / Binance · panneau secondaire</p></div><span class="status pending" id="bot-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body table-wrap" id="crypto-data" data-i18n="readingLocal">Lecture des observations locales…</div>
         </article>
 
-        <article class="card secondary-card">
+        <article class="card secondary-card" data-category="ais">
             <div class="card-head"><div><h2 data-i18n="aisTitle">Suivi maritime AIS</h2><p data-i18n="aisSubtitle">Proxy non-commercial · couverture terrestre uniquement</p></div><span class="status pending" id="ais-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body">
                 <p class="fine-print" data-i18n="aisDisclaimer">Données AIS via aisstream.io proxy non-commercial. Pas de redistribution, pas de données satellite, quota API. Marqué <strong>non-commercial proxy</strong> et non vérifié.</p>
-                <div class="table-wrap" id="ais-data"><div class="empty" data-i18n="aisLoading">Chargement des positions AIS…</div></div>
+                <div class="map-wrap" style="min-height:300px; position:relative; margin-bottom:12px;">
+  <svg id="ais-map" viewBox="0 0 800 430" style="width:100%;height:100%;"></svg>
+  <div class="map-legend" style="left:13px;bottom:12px;"><span class="legend-key"><i></i><span>Vessel</span></span></div>
+</div>
+<div class="table-wrap" id="ais-data"><div class="empty" data-i18n="aisLoading">Chargement des positions AIS…</div></div>
                 <div class="market-tools" style="margin-top:10px"><a class="button" id="ais-geojson" href="/api/ais/geojson" target="_blank" rel="noopener" data-i18n="aisGeojson">Télécharger GeoJSON</a></div>
             </div>
         </article>
@@ -308,7 +332,8 @@
 <script>
     const translations = {
         fr: {
-            language: "Langue", languageAria: "Langue d’affichage", brandSubtitle: "Terminal marchés & énergie", clockCaption: "Heure locale · rafraîchissement auto", refresh: "↻ Actualiser",
+            language: "Langue",
+            tabAll: "Tous", tabMarkets: "Marchés", tabEnergy: "Énergie", tabRisks: "Veille", tabAIS: "AIS", languageAria: "Langue d’affichage", brandSubtitle: "Terminal marchés & énergie", clockCaption: "Heure locale · rafraîchissement auto", refresh: "↻ Actualiser",
             eyebrow: "Terminal de marché · données sourcées", pageTitle: "Marchés, énergie & risques",
             intro: "Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.",
             marketsAria: "Marchés en direct", cryptoTitle: "Marchés crypto · cotations live", cryptoSubtitle: "Ticks Kraken et Binance · conversions indicatives en EUR et CHF",
@@ -374,7 +399,8 @@
             aisUnavailable: "AIS indisponible"
         },
         ru: {
-            language: "Язык", languageAria: "Язык интерфейса", brandSubtitle: "Терминал рынков и энергетики", clockCaption: "Местное время · автообновление", refresh: "↻ Обновить",
+            language: "Язык",
+            tabAll: "Все", tabMarkets: "Рынки", tabEnergy: "Энергия", tabRisks: "Наблюдение", tabAIS: "AIS", languageAria: "Язык интерфейса", brandSubtitle: "Терминал рынков и энергетики", clockCaption: "Местное время · автообновление", refresh: "↻ Обновить",
             eyebrow: "Рыночный терминал · данные с источниками", pageTitle: "Рынки, энергетика и риски",
             intro: "Цены показаны в EUR и CHF. Указаны периодичность, источники и ограничения, чтобы отличать текущие котировки от ежедневных справочных курсов.",
             marketsAria: "Рынки в реальном времени", cryptoTitle: "Крипторынки · текущие котировки", cryptoSubtitle: "Тики Kraken и Binance · ориентировочная конвертация в EUR и CHF",
@@ -440,7 +466,8 @@
             aisUnavailable: "AIS недоступно"
         },
         en: {
-            language: "Language", languageAria: "Display language", clockCaption: "Local time · auto-refresh", refresh: "↻ Refresh",
+            language: "Language",
+            tabAll: "All", tabMarkets: "Markets", tabEnergy: "Energy", tabRisks: "Monitoring", tabAIS: "AIS", languageAria: "Display language", clockCaption: "Local time · auto-refresh", refresh: "↻ Refresh",
             brandSubtitle: "Markets & energy terminal",
             eyebrow: "Market terminal · sourced data", pageTitle: "Markets, energy & risk",
             intro: "Prices are shown in EUR and CHF. Cadence, sources, and limitations distinguish live quotes from daily reference rates.",
@@ -1063,11 +1090,45 @@
             const payload = await fetchJson("/api/ais/recent?limit=50");
             setStatus($("ais-status"), "live", `${payload.count} ${t("aisTitle")}`);
             const container = $("ais-data");
-            container.replaceChildren();
+            const mapSvg = $("ais-map");
             if (!payload.messages || !payload.messages.length) {
                 container.textContent = t("aisLoading");
+                if (mapSvg) { mapSvg.replaceChildren(); }
                 return;
             }
+            if (mapSvg) {
+                const NS = "http://www.w3.org/2000/svg";
+                mapSvg.replaceChildren();
+                const msgs = payload.messages.filter(m => Number.isFinite(parseFloat(m.lat)) && Number.isFinite(parseFloat(m.lon)));
+                if (msgs.length) {
+                    const lats = msgs.map(m=>parseFloat(m.lat));
+                    const lons = msgs.map(m=>parseFloat(m.lon));
+                    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+                    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+                    const pad = 40;
+                    msgs.forEach(m=>{
+                        const lat = parseFloat(m.lat), lon = parseFloat(m.lon);
+                        const x = pad + ((lon - minLon)/(maxLon - minLon || 1)) * (800 - pad*2);
+                        const y = pad + (1 - (lat - minLat)/(maxLat - minLat || 1)) * (430 - pad*2);
+                        const circle = document.createElementNS(NS,"circle");
+                        circle.setAttribute("cx", String(x));
+                        circle.setAttribute("cy", String(y));
+                        circle.setAttribute("r", "4");
+                        circle.setAttribute("fill", "#4d8edc");
+                        circle.setAttribute("stroke", "#07111f");
+                        circle.setAttribute("stroke-width","2");
+                        const title = document.createElementNS(NS,"title");
+                        title.textContent = `${m.mmsi ?? "?"} ${m.lat},${m.lon} ${m.sog ?? ""}kn`;
+                        circle.append(title);
+                        mapSvg.append(circle);
+                    });
+                } else {
+                    const text = document.createElementNS(NS,"text");
+                    text.setAttribute("x","400"); text.setAttribute("y","215"); text.setAttribute("text-anchor","middle"); text.setAttribute("fill","#9eacc2"); text.textContent = t("aisLoading");
+                    mapSvg.append(text);
+                }
+            }
+            container.replaceChildren();
             const table = document.createElement("table");
             const head = table.createTHead().insertRow();
             for (const label of ["MMSI", "Lat", "Lon", "SOG kn", "COG", "Timestamp", "Source"]) {
@@ -1156,7 +1217,29 @@
     setInterval(refreshNews, 900000);
     setInterval(refreshCrypto, 5000);
     setInterval(refreshSources, 60000);
-    setInterval(checkPriceAlerts, 5000);
-</script>
+    
+    // Tabs filtering
+    const tabButtons = document.querySelectorAll('.tab-btn');
+    const allCards = () => Array.from(document.querySelectorAll('.card[data-category]'));
+    function applyTab(tab){
+        tabButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.tab===tab));
+        const cards = allCards();
+        if(tab==='all'){
+            cards.forEach(c=>c.classList.remove('hidden'));
+        } else {
+            cards.forEach(c=>{
+                const cat = c.dataset.category;
+                if(cat===tab) c.classList.remove('hidden');
+                else c.classList.add('hidden');
+            });
+        }
+        // Keep general cards visible
+        document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
+    }
+    tabButtons.forEach(btn=>btn.addEventListener('click',()=>applyTab(btn.dataset.tab)));
+    // Default to all
+    applyTab('all');
+
+    
 </body>
 </html>
