@@ -1,3 +1,5 @@
+> ARCHIVE HISTORIQUE — affirmations et résultats non validés pour la présente branche. Consulter README.md et la CI du SHA concerné.
+
 # 📊 RÉSUMÉ FINAL - PUBLICATION GITHUB PRÊTE À ÊTRE EXÉCUTÉE !
 
 ## ✅ TOUT EST AJOUTÉ AU COMMIT DE GitHub !

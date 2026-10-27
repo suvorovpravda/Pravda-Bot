@@ -6,6 +6,7 @@ from bot_config import load_config
 class BotConfigTests(unittest.TestCase):
     def test_defaults_preserve_expected_behavior(self):
         config = load_config({})
+        self.assertEqual(config.lm_url, "http://127.0.0.1:1234/v1")
         self.assertEqual(config.min_spread_threshold, 0.05)
         self.assertEqual(config.max_allowed_spread_percent, 5.0)
         self.assertEqual(config.spread_log_interval_seconds, 2.0)

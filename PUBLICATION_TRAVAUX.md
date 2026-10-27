@@ -1,3 +1,5 @@
+> ARCHIVE HISTORIQUE — affirmations et résultats non validés pour la présente branche. Consulter README.md et la CI du SHA concerné.
+
 # 📦 PUBLICATION COMPLETE - Pravda-Bot
 
 ## ✅ TOUT CE QUI A ÉTÉ ACCOMPLI

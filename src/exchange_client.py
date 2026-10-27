@@ -21,14 +21,6 @@ class ExchangeClient:
     def __init__(self):
         """Initialiser le client avec chargement des clés API depuis .env."""
         self._exchanges: dict[str, Any] = {}
-        self._api_keys: dict[str, str] = {
-            "kraken": os.getenv("KRAKEN_API_KEY", ""),
-            "binance": os.getenv("BINANCE_API_KEY", ""),
-        }
-        self._api_secrets: dict[str, str] = {
-            "kraken": os.getenv("KRAKEN_SECRET_KEY", ""),
-            "binance": os.getenv("BINANCE_SECRET_KEY", ""),
-        }
 
     def _get_exchange(self, exchange_id: str) -> Any:
         """Obtenir ou créer une instance d'échange ccxt."""
@@ -38,29 +30,16 @@ class ExchangeClient:
                 
                 if exchange_id == "kraken":
                     exchange = ccxt.kraken({
-                        'apiKey': self._api_keys.get("kraken"),
-                        'secret': self._api_secrets.get("kraken"),
                         'enableRateLimit': True,
                         'timeout': 30000,
                     })
                 elif exchange_id == "binance":
                     exchange = ccxt.binance({
-                        'apiKey': self._api_keys.get("binance"),
-                        'secret': self._api_secrets.get("binance"),
                         'enableRateLimit': True,
                         'timeout': 30000,
                     })
                 else:
                     raise ValueError(f"Exchange inconnu : {exchange_id}")
-                
-                # Charger les marchés (optionnel pour le mode public)
-                try:
-                    import asyncio
-                    asyncio.get_event_loop().run_until_complete(
-                        exchange.load_markets()
-                    )
-                except Exception as load_error:
-                    logger.warning("Chargement des marchés ignoré (mode public): %s", load_error)
                 
                 self._exchanges[exchange_id] = exchange
                 
@@ -105,11 +84,10 @@ class ExchangeClient:
             ask_price = float(ticker_buy.get('ask', 0))
             bid_price = float(ticker_sell.get('bid', 0))
 
-            # Calcul du spread brut en pourcentage
-            if bid_price > 0:
-                spread_brut_pct = abs(ask_price - bid_price) / bid_price * 100
-            else:
-                spread_brut_pct = 0.0
+            from security_and_fees import parse_positive_price
+            ask_price = parse_positive_price(ask_price)
+            bid_price = parse_positive_price(bid_price)
+            spread_brut_pct = (bid_price - ask_price) / ask_price * 100
 
             # Frais estimés (typiques par exchange)
             fees_estimee_buy = 0.26  # Kraken ~0.26% spot

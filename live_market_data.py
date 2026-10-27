@@ -6,7 +6,8 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-import requests
+from secure_http import SecureHTTPError, get_json
+from security_config import SERVICE_HOSTS
 
 
 DEFAULT_SNAPSHOT_PATH = Path("market_snapshot.json")
@@ -45,12 +46,15 @@ def write_market_snapshot(
             updated_at = last_price_update_at.get(exchange_name, {}).get(symbol)
             if (
                 isinstance(price, (int, float))
+                and not isinstance(price, bool)
                 and math.isfinite(price)
                 and price > 0
                 and isinstance(updated_at, (int, float))
+                and not isinstance(updated_at, bool)
                 and math.isfinite(updated_at)
+                and updated_at <= monotonic_now
             ):
-                age_seconds = max(0.0, monotonic_now - updated_at)
+                age_seconds = monotonic_now - updated_at
                 received_at = utc_now - timedelta(seconds=age_seconds)
                 quotes[exchange_name] = {
                     "price": price,
@@ -113,7 +117,8 @@ def read_market_snapshot(
                 continue
             price = quote.get("price")
             timestamp = quote.get("received_at")
-            if not isinstance(price, (int, float)) or not math.isfinite(price) or price <= 0:
+            if (isinstance(price, bool) or not isinstance(price, (int, float))
+                    or not math.isfinite(price) or price <= 0):
                 continue
             if not isinstance(timestamp, str):
                 continue
@@ -123,7 +128,9 @@ def read_market_snapshot(
                     received_at = received_at.replace(tzinfo=timezone.utc)
             except ValueError:
                 continue
-            age_seconds = max(0.0, (current - received_at).total_seconds())
+            age_seconds = (current - received_at).total_seconds()
+            if age_seconds < 0:
+                continue
             fresh = age_seconds <= stale_after_seconds
             any_fresh = any_fresh or fresh
             quotes[exchange_name] = {
@@ -170,16 +177,15 @@ def get_reference_fx_rates(*, now=None, force_refresh=False):
             return with_freshness(_forex_cache)
 
     try:
-        response = requests.get(
+        records = get_json(
             FOREX_API_URL,
+            allowed_hosts=SERVICE_HOSTS["fx"],
             params={"base": "EUR", "quotes": ",".join(FOREX_QUOTES)},
             headers={"User-Agent": "Pravda-Bot-Market-Dashboard/1.0"},
             timeout=10,
         )
-        response.raise_for_status()
-        records = response.json()
-    except (requests.RequestException, ValueError) as error:
-        raise RuntimeError(f"reference FX source unavailable ({type(error).__name__})") from error
+    except SecureHTTPError:
+        raise RuntimeError("reference FX source unavailable") from None
     if not isinstance(records, list):
         raise RuntimeError("reference FX source returned an invalid response")
 
@@ -194,6 +200,7 @@ def get_reference_fx_rates(*, now=None, force_refresh=False):
         if (
             quote in FOREX_QUOTES
             and isinstance(rate, (int, float))
+            and not isinstance(rate, bool)
             and math.isfinite(rate)
             and rate > 0
             and isinstance(rate_date, str)

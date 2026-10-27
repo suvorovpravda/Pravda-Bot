@@ -1,3 +1,5 @@
+> ARCHIVE HISTORIQUE — affirmations et résultats non validés pour la présente branche. Consulter README.md et la CI du SHA concerné.
+
 # 🚀 TRAVAIL ACCOMPLI - Pravda-Bot GitHub Release (v1.0.102)
 
 ## ✅ RÉCAPITULATIF DE TOUT CE QUI A ÉTÉ ACCOMPLI

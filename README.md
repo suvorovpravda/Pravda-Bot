@@ -1,126 +1,89 @@
 # Pravda-Bot
 
-**Surveillance locale des marchés crypto, énergie et géopolitique — sans cloud, sans ordre réel**
+## Français
 
-Pravda-Bot est une application Python locale qui agrège des flux publics de marché, d’énergie et d’actualités, les valide, les corrèle et les expose dans un tableau de bord web local. Conçue pour un usage personnel et de recherche, elle fonctionne entièrement sur votre machine : pas de compte d’échange, pas de clé API, pas de données envoyées à l’extérieur.
+**Observer les marchés, conserver les preuves et tester des hypothèses sans passer d’ordres.**
 
-> **Avertissement** : surveillance publique uniquement, simulation papier uniquement. Aucun ordre réel n’est passé. Les estimations d’exécution ne valident pas les soldes, l’inventaire, la marge ou la latence réelle.
+Pravda-Bot est un observatoire Python local : tickers publics Kraken/Binance pour BTC/USDT, ETH/USDT et SOL/USDT, comparaison de prix, simulateur papier, tableau de bord et historique SQLite. Il permet d'étudier la qualité des flux, les spreads après frais simplifiés et les erreurs de traitement asynchrone. Les connexions privées et le trading réel ne sont pas implémentés.
 
-## Pourquoi ce projet est complexe
+### État de cette branche
 
-Pravda-Bot combine plusieurs domaines techniques et sources hétérogènes avec des contraintes fortes :
+Cette correction part du `main` public `e292a37` et réintègre le véritable historique SQLite du ZIP transmis par Vincent : historique persistant, alertes locales, exports journaliers et lanceur Windows. Les artefacts privés du ZIP (`.env`, CSV, SQLite, venv et EXE) sont exclus. Les nouveaux modules `geospatial_mapper.py`, `maritime_proxy.py`, `osint_pipeline.py`, `ais_stream_connector.py` et `enhanced_terminal.py` du dépôt sont conservés. Leur présence ne démontre pas une connexion réelle, une licence de données ou une validation opérationnelle. Le dashboard récent est conservé ; les endpoints AIS annoncent une indisponibilité tant que leur fournisseur est un stub.
 
-* **Flux temps réel multi-sources** : WebSockets Kraken/Binance, REST ENTSOG, GDELT/BBC RSS, Frankfurter BCE. Chaque source a sa propre latence, son propre format et ses propres périodes de disponibilité.
-* **Cohérence et fraîcheur** : horodatage monotone, détection de désynchronisation, invalidation des actions en attente, reconnexion avec backoff exponentiel.
-* **Validation stricte** : refus des booléens comme prix, timestamps futurs, spreads non finis, checksum AIS, validation de schéma Pydantic.
-* **Sécurité locale** : bind `127.0.0.1` uniquement, whitelist de domaines, pas de `shell=True`, pas de secrets dans les logs, `.env` jamais versionné.
-* **Simulation papier** : estimation d’exécution sur carnet public avec VWAP, frais taker, slippage, limites de quantité. Aucune validation de compte.
-* **Tableau de bord sans dépendance externe** : `http.server` natif, interface moderne, état des sources live/delayed/stale/unavailable, conversions EUR/CHF avec âge du taux.
+**Branche candidate, vérification en cours.** Les résultats locaux seront rapportés pour le commit concerné ; la CI Windows/Linux et la revue Gemini restent distinctes. Une PR en brouillon n'est pas une release validée. La moitié de l'équipe est en vacances ; reprise progressive prévue vers le **2 novembre 2026**.
 
-Cette complexité est volontaire : éviter les hallucinations de données, signaler explicitement l’indisponibilité plutôt que simuler, et garder une traçabilité complète source → règle → affichage.
+### Fonctions et limites
 
-## Fonctionnalités clés
+| Fonction | Utilité | Limite |
+|---|---|---|
+| Tickers et spread | Observer les écarts entre deux places | Un dernier prix n'est pas un prix d'exécution garanti |
+| Simulation papier | Comparer des hypothèses et journaliser des positions virtuelles | État du portefeuille en mémoire ; remise à zéro au redémarrage |
+| Historique SQLite | Courbes et exports des observations conservées | Ne transforme pas une observation passée en signal actuel ; stockage à surveiller |
+| Carnets publics | Estimation de liquidité et de frais | Aucun solde, inventaire, emprunt, transfert ou placement d'ordre validé |
+| ENTSOG | Observations de flux aux points transfrontaliers | Pas de tracés réels de conduites ni preuve d'état opérationnel |
+| BCE / Frankfurter | Conversions EUR/CHF à taux de référence | Données quotidiennes ; pas de Forex tick par tick ; USDT n'est pas garanti égal à USD |
+| GDELT / BBC | Consulter des titres rapportés | Pas d'incidents vérifiés ni de prédictions géopolitiques |
+| LM Studio | Analyse textuelle locale facultative | Modèle à charger séparément ; aucun fallback cloud automatique |
 
-### Marchés crypto
-- Flux WebSocket publics Kraken/Binance pour BTC/USDT, ETH/USDT, SOL/USDT
-- Détection déconnexion, gaps, désynchronisation inter-exchanges
-- Calcul spread brut, frais 0.36 %, seuils configurables, hystérésis et confirmation
-- Alertes ntfy locales, analyse LLM optionnelle via LM Studio local
-- Simulateur papier portefeuille ou taille fixe
-- Estimation d’exécution au signal confirmé sur carnet public
+Aucun fournisseur de cours TTF licencié ni suivi AIS opérationnel vérifié n'est intégré dans cette copie. Le lien ICE décrit un contrat, pas un prix. Les projets GEM/AIS, Kafka Docker Playground et Spotify restent des pistes à rapprocher d'une sauvegarde vérifiable avant réintégration. Pas de promesse de confidentialité totale, de continuité garantie ou de performance comparable aux modèles cloud.
 
-### Énergie & actualités
-- Observations ENTSOG transfrontalières, cache LRU borné
-- Actualités GDELT avec repli BBC World RSS
-- Taux BCE via Frankfurter, conversions EUR/CHF indicatives
-- Carte schématique des points ENTSOG, données GEM pour projets gaziers
+Les frais simplifiés restent **0,36 %** : `0.0036` en fraction, `0.36` en points de pourcentage. Exemple : `1.20 % - 0.36 point = 0.84 %` net estimé. Le détecteur d'écart absolu et le spread directionnel d'achat/vente sont distincts ; un spread directionnel négatif conserve son signe. Le plafond brut par défaut de 5 % rejette des anomalies ; il ne prouve pas qu'un arbitrage est réalisable. Les coûts fixes de réseau/retrait et un véritable modèle de remplissage restent absents.
 
-### Tableau de bord local
-- Serveur HTTP sur `127.0.0.1:8080`
-- Prix crypto, EUR/CHF, état des sources, actualités, carte énergie
-- Interface FR/RU/EN, persistance locale du choix de langue
-- Pas d’authentification, usage local uniquement
+### Installation et lancement
 
-## Ce que le projet ne fait PAS, et pourquoi
-- **Pas d’ordres réels, pas de clés d’échange** : surveillance publique uniquement, simulation papier uniquement.
-- **Pas de cours TTF licencié, pas de Forex tick par tick** : les taux utilisés sont les références BCE quotidiennes via Frankfurter, pas un flux interbancaire en temps réel. Aucun fournisseur de prix de marché TTF n’est connecté.
-- **Pas de carte de tracés de pipelines réels, pas de suivi AIS commercial** : la visualisation ENTSOG montre des points transfrontaliers publiés, pas des tracés de conduites. Le suivi AIS est limité à des proxies non-commerciaux (aisstream.io, openwaters.io, données gouvernementales ouvertes) marqués `non-commercial proxy`, couverture terrestre uniquement, pas de redistribution, pas de données satellite. Aucun fournisseur AIS payant n’est intégré.
-- **Pas de renseignement géopolitique opérationnel, les articles restent à vérifier** : les actualités GDELT/BBC sont des informations rapportées, pas des incidents vérifiés ni des évaluations de menace.
+Cible : Python 3.12, Windows principal et Linux de validation. Le correctif exact peut varier selon la distribution Windows/Linux ; la CI journalise la version réellement utilisée. La demande stricte de 3.12.14 échouait sur le runner Windows et a été remplacée par la série 3.12. Utiliser `.venv`, attendu par le lanceur. Dans la copie choisie du dépôt :
 
-Ces limites sont volontaires : elles préservent la simplicité locale, évitent les dépendances licenciées et garantissent la traçabilité source → règle → affichage.
-
-## Démarrage rapide Windows
-```powershell
-git clone https://github.com/suvorovpravda/Pravda-Bot.git
-cd Pravda-Bot
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-Copy-Item .env.example .env
-```
-Double-cliquez sur `Lancer_Pravda_Bot.bat` → bot + dashboard + navigateur.
-
-Manuel :
-```powershell
-python main.py
-python dashboard.py
-```
-Accédez à http://127.0.0.1:8080
-
-## Installation propre et validation
 ```powershell
 py -3.12 -m venv .venv
-.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
-.venv\Scripts\python.exe -m pip check
-.venv\Scripts\python.exe -m unittest discover -s tests -t . -v
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-bootstrap.txt
+.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
+.\.venv\Scripts\python.exe -m pip check
+if (-not (Test-Path '.env')) { Copy-Item '.env.example' '.env' }
+$env:NTFY_TOPIC_URL=''
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t . -v
 ```
-106 tests passent sur une installation propre Python 3.12.
 
-## Architecture de sécurité & fondations roadmap
-La sécurité n’est pas une section isolée, c’est la fondation qui rend les évolutions futures possibles sans réécrire l’architecture.
+Démarrer `main.py` et `dashboard.py --port 8080` avec ce même Python, dans deux terminaux. Ouvrir http://127.0.0.1:8080/. Laisser LM Studio désactivé pour un essai sans modèle. Sous Linux : `python3.12 -m venv .venv`, puis `.venv/bin/python` pour les mêmes commandes.
 
-### Pourquoi c’est efficace aujourd’hui
-- **Exécution locale stricte** : bind `127.0.0.1` uniquement, pas d’exposition réseau. Le dashboard ne peut pas être atteint depuis le réseau, ce qui élimine la surface d’attaque externe par défaut.
-- **Pas de secrets en code** : `.env` ignoré par Git, `.env.example` versionné, `NTFY_TOPIC_URL` forcé vide au démarrage. Aucun secret ne fuite dans les logs.
-- **Contrôle des entrées et des sorties** : whitelist de domaines, `TLS verify=True`, pas de `shell=True`, pas de `eval/exec`. Blocage SSRF et injection de commandes.
-- **Intégrité des dépendances** : `requirements.in` → `pip-compile --generate-hashes` → `requirements.txt` hashé, `pip-audit` en CI, `compileall` et tests unitaires. Toute dérive de paquet est détectée.
-- **Traçabilité et validation** : schémas Pydantic, horodatage monotone, invalidation des données périmées. On signale l’indisponibilité plutôt que de simuler.
+`Pravda_Lanceur.exe` reste un lanceur : il utilise les sources et le `.venv` voisins. Vérifier le dossier réellement lancé ; une copie `.copilot/repos` n'est pas automatiquement synchronisée. Le code du lanceur est revu ; aucun nouvel EXE Windows n'est annoncé comme compilé par une simple validation Linux. Les builds et audits utilisent des environnements séparés.
 
-### À quoi ça sert maintenant
-- Surveillance fiable de sources publiques sans risque d’exposition de clés.
-- Simulation papier sans risque d’ordre réel.
-- Tableau de bord local utilisable en environnement de travail sensible.
-- CI reproductible et auditable pour une équipe distribuée.
+### Sécurité et vérifications
 
-### Comment cela permet des projets plus complexes
-- **Base pour multi-appareils** : la séparation stricte réseau / secrets / validation permet d’ajouter plus tard une API authentifiée, une base de données chiffrée et un serveur hébergé sans réécrire les garde-fous.
-- **Intégrations licenciées** : AIS, prix TTF, flux propriétaires nécessitent gestion de clés, rotation et audit. L’architecture actuelle avec variables d’environnement validées, audit de dépendances et logs sans secret est directement réutilisable.
-- **Conformité et gouvernance** : traçabilité source → règle → affichage, journal de provenance et tests automatisés facilitent la certification et l’audit externe.
-- **Évolutivité** : le modèle de fraîcheur des sources, de backoff exponentiel et de validation stricte est extensible à des centaines de flux sans dégradation de la fiabilité.
+Le dashboard reste sur **127.0.0.1**, sans authentification : ne pas l'exposer sur Internet. Le serveur vérifie Host/Origin, borne les requêtes et les lectures CSV, limite les requêtes et renvoie des erreurs génériques. La limite est configurable : le polling de l'interface de ce ZIP dépasse 60 requêtes/minute, d'où un défaut de 240 par IP. Les exports de texte externe sont protégés contre les formules de tableur.
 
-Cette base sécurisée est la condition préalable aux priorités de la feuille de route : historique persistant chiffré, alertes EUR/CHF, carte d’infrastructures, et veille géopolitique avec provenance.
+`secure_http.py` applique des hôtes exacts, HTTPS public, l'exception HTTP loopback pour LM Studio, des délais, des réponses lues sous plafond et des redirections interdites. Les POST ne sont pas rejoués. La vérification DNS préalable n'est pas un verrouillage de l'IP de connexion ; CCXT et WebSockets conservent leurs transports propres. Les secrets, logs et fichiers de données restent locaux. Une vérification de dépendances ne garantit pas l'absence de code malveillant.
 
-## Feuille de route
-Voir [ROADMAP.md](ROADMAP.md)
+```text
+python -m unittest discover -s tests -t . -v
+python -m unittest discover -s launcher_tests -v
+python -m compileall -q -x "(^|[/\\])(.git|.venv|venv|build|dist)([/\\]|$)" .
+python -m pip check
+```
 
-Priorité 1 : historique prix persistant, prix EUR/CHF lisibles, état sources unifié, résumé quotidien exportable  
-Priorité 2 : carte infrastructures gazières vérifiées, AIS, prix TTF vérifié, contexte énergétique  
-Priorité 3 : veille géopolitique prudente avec provenance et indicateurs explicites
+La CI proposée contrôle la syntaxe de tous les modules publiés, y compris `src`, les tests, les dépendances et leurs audits. Validation locale du candidat : 177 tests du projet réussis sous Linux ; ce résultat ne remplace pas la CI du SHA qui sera publié. Le diagnostic du retard STALE de 25–29 s demande encore une mesure des flux réels ; les régressions simulées ne mesurent pas le transit réseau.
 
-## Structure
-- `main.py` : orchestration flux, dispatcher, simulation papier
-- `dashboard.py` : serveur HTTP local
-- `live_market_data.py` : adaptateurs marché
-- `energy_data.py` : ENTSOG, GDELT/BBC
-- `geospatial_mapper.py` : rendu cartographique proxy ENTSOG, sans AIS commercial
-- `osint_pipeline.py` : collecte OSINT deux niveaux Reporting / Validé, qualification croisée
-- `bot_config.py` : validation config
-- `tests/` : 106 tests unitaires
+### Organisation agentique et participation
 
-## Licence
-MIT. Données tierces sous leurs licences respectives. Voir `THIRD_PARTY_NOTICES.md`.
+Vincent fixe les objectifs et accepte les travaux. **GPT : maîtrise d'ouvrage technique ; Gemini : pilotage et première validation ; vérificateur : défauts reproductibles ; comparateur : versions et preuves ; implémenteur : corrections et tests.** La boucle est correction → vérificateur → comparateur → premier visa Gemini → validation GPT → livraison et contrôle Vincent. Une approbation non obtenue n'est jamais attribuée à un modèle. Cette organisation de développement n'est pas une architecture d'agents autonomes dans le bot.
 
----
+Les contributions recherchées : bugs reproductibles, tests asynchrones, accessibilité, traductions, qualité des données et connecteurs autorisés. Commencer par une issue et une PR limitée, avec provenance et limites. Le projet peut servir de base à d'autres observatoires locaux et outils de fiabilité des données. [Kafka Docker Playground](https://github.com/vdesabou/kafka-docker-playground), proposé par le cousin du porteur du projet, peut aider à expérimenter production/consommation/rejeu ; il ne fournit ni données ni correction automatique de latence. Aucune licence générale du code n'est supposée ; vérifier les licences des composants avant redistribution.
 
-*Application locale, surveillance publique, simulation papier uniquement. La moitié de l’équipe est en vacances, reprise progressive vers le 2 novembre 2026.*
+## Русский
+
+Pravda-Bot — локальный Python-инструмент наблюдения за публичными котировками Kraken/Binance, бумажной симуляции и анализа качества данных. Архив добавляет SQLite-историю, уведомления внутри интерфейса, CSV-экспорт и Windows-лаунчер. Реальные ордера, приватные счета, лицензированные цены TTF, AIS и непрерывный Forex в этой копии не реализованы. ENTSOG публикует наблюдения в точках, BCE — ежедневные справочные курсы; новости не являются подтверждёнными происшествиями.
+
+Комиссия модели — 0,36 процентного пункта; порог аномалий — 5 %. Это упрощённая оценка, а не гарантия доходности или исполнения. Бумажный портфель обнуляется при перезапуске; SQLite хранит историю наблюдений. Старая локальная модернизация была потеряна при обслуживании временного хранилища и не считается частью этой ветки без восстановления и проверки.
+
+Python 3.12, `.venv`, установка bootstrap/runtime с `--require-hashes`, затем `pip check` и тесты. Dashboard — только 127.0.0.1 без аутентификации. LM Studio необязателен, только loopback, без облачного fallback. HTTP-политики ограничивают адреса, перенаправления, размер и время ответов; DNS-проверка не закрепляет IP соединения. Секреты, БД, журналы и EXE не публикуются. Статус — локальный кандидат на базе `e292a37`: 177 тестов прошли; CI и независимая проверка ещё требуют подтверждения на соответствующем SHA. Новые модули географии, AIS и OSINT сохранены; stub истории заменён настоящим SQLite-модулем.
+
+Половина команды в отпуске, возвращение к работе ожидается около **2 ноября 2026 года**. Vincent определяет цели и принимает результат; GPT координирует техническую работу, Gemini руководит проектом, проверяющий и сравнивающий агенты оценивают доказательства, исполнитель исправляет код. Подтверждённые ошибки, тесты и полезные коннекторы приветствуются; происхождение данных и ограничения обязательны.
+
+## English
+
+Pravda-Bot is a local Python observatory for public Kraken/Binance tickers, paper simulation and data-quality analysis. The supplied archive adds SQLite history, local dashboard alerts, CSV reports and a Windows launcher. This copy has no real orders, private-account validation, licensed TTF prices, AIS feed or streaming Forex. ENTSOG observations are points, ECB rates are daily references, and reported news is not verified intelligence.
+
+The simplified fee estimate subtracts 0.36 percentage points; the gross anomaly cap defaults to 5%. Neither establishes profitability or executable fills. Paper portfolio state resets on restart; SQLite retains observations. Earlier unpushed modernization was lost during temporary-workspace maintenance and is not claimed as part of this branch without recovery and verification.
+
+Use Python 3.12 and `.venv`; install the hashed bootstrap and runtime, then run `pip check` and both test suites. The unauthenticated dashboard must stay on 127.0.0.1. LM Studio is optional, loopback-only, without a cloud fallback. HTTP policies restrict destinations, redirects, time and response sizes; a preliminary DNS check does not pin the connection IP. Secrets, runtime databases/logs and executables are excluded from Git. This is a local candidate on `e292a37`; 177 project tests passed. The newer geography, AIS, OSINT and terminal modules are retained; the broken history stub is replaced with the real SQLite implementation. Remote CI and independent review must be confirmed for the actual published SHA.
+
+Half the team is on holiday; work is expected to resume around **2 November 2026**. Vincent sets direction and accepts the work; GPT coordinates technical ownership, Gemini manages the project, verifiers/comparators examine evidence, and implementers provide fixes and regressions. Contributions should include reproducible examples, tests, provenance and limits. This foundation can support other local observatories and data-reliability projects. Kafka Docker Playground is under consideration, not deployed.
