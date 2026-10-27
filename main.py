@@ -391,7 +391,7 @@ async def publish_market_snapshots_periodically():
             timestamps = {exchange: dict(values) for exchange, values in last_price_update_at.items()}
             captured_mono = time.monotonic()
             captured_utc = datetime.now(timezone.utc)
-            write_market_snapshot(latest_prices, timestamps, path=MARKET_SNAPSHOT_FILE,
+            await asyncio.to_thread(write_market_snapshot, latest_prices, timestamps, path=MARKET_SNAPSHOT_FILE,
                 now_monotonic=captured_mono, now_utc=captured_utc)
         except OSError as error:
             console.print(
