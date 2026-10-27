@@ -98,7 +98,7 @@ def get_entsog_flows(*, now=None):
             "to": end_date.isoformat(),
             "indicator": "Physical Flow",
             "limit": 10000,
-            "sort": "-lastUpdateDateTime",
+            "limit": 500
         },
         ttl_seconds=ENTSOG_CACHE_SECONDS,
     )
