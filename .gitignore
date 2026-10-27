@@ -17,6 +17,8 @@ __pycache__/
 .env.*
 !.env.example
 venv/
+.venv/
+.build/
 .audit-venv/
 .build-venv/
 *.sqlite3*
@@ -33,7 +35,6 @@ build/
 dist/
 *.egg-info/
 ci_test/
-launcher_tests/
 Pravda-Bot_README_updated.md
 README_PRO.md.backup
 security_modules/

@@ -1,0 +1,14 @@
+include dashboard.html
+include .env.example
+include README.md SECURITY.md
+include requirements*.in requirements*.txt
+include build_onefile.py
+recursive-include tests *.py
+recursive-include launcher_tests *.py
+recursive-include tests_js *.cjs
+exclude .env
+global-exclude *.sqlite3* *.db *.csv *.exe *.pyc *.log
+prune .venv
+prune .audit-venv
+prune .build-venv
+prune .build

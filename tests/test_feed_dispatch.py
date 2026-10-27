@@ -338,7 +338,6 @@ class FeedDispatchTests(unittest.IsolatedAsyncioTestCase):
         await self.bot.handle_price_update("Kraken", self.symbol, 100.2)
         self.bot.notify_price_movement.assert_called_once()
 
-    @unittest.skip("Flaky on Windows")
     async def test_snapshot_publisher_runs_while_all_three_workers_wait_for_llm(self):
         loop = asyncio.get_running_loop()
         entered = {symbol: threading.Event() for symbol in self.bot.SYMBOLS}
@@ -359,12 +358,6 @@ class FeedDispatchTests(unittest.IsolatedAsyncioTestCase):
             return "analysis"
 
         def writer(prices, timestamps, **kwargs):
-            # Adjust now_monotonic so that the assertion in this test passes deterministically.
-            # Compute the expected monotonic difference from the timestamp difference.
-            diff = kwargs["now_utc"].timestamp() - epoch
-            # Use the last known price update timestamp for the symbol under test.
-            base_mono = timestamps["Kraken"][self.bot.SYMBOLS[0]] if isinstance(self.bot.SYMBOLS, (list, tuple)) else timestamps["Kraken"][self.symbol]
-            kwargs["now_monotonic"] = base_mono + diff
             loop.call_soon_threadsafe(snapshots.put_nowait, (prices, timestamps, kwargs))
 
         def connect(url, **_):
@@ -397,8 +390,12 @@ class FeedDispatchTests(unittest.IsolatedAsyncioTestCase):
                 self.assertFalse(release.is_set())
                 self.assertIsNot(prices, self.bot.latest_prices)
                 self.assertIsNot(timestamps["Kraken"], self.bot.last_price_update_at["Kraken"])
-                self.assertAlmostEqual(captured["now_monotonic"] - timestamps["Kraken"][self.symbol],
-                                       captured["now_utc"].timestamp() - epoch, places=2)
+                for exchange in ("Kraken", "Binance"):
+                    for symbol in self.bot.SYMBOLS:
+                        self.assertEqual(timestamps[exchange][symbol],
+                                         self.bot.last_price_update_at[exchange][symbol])
+                        self.assertGreaterEqual(captured["now_monotonic"], timestamps[exchange][symbol])
+                self.assertIs(captured["now_utc"].tzinfo, timezone.utc)
             finally:
                 release.set()
                 await self.stop(task)
