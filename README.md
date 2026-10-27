@@ -75,12 +75,29 @@ py -3.12 -m venv .venv
 ```
 106 tests passent sur une installation propre Python 3.12.
 
-## Sécurité
-- Dashboard bind `127.0.0.1` uniquement
-- Whitelist domaines, blocage SSRF, TLS verify=True
-- Pas de `shell=True`, pas de `eval/exec`, pas de secrets dans les logs
-- `.env` ignoré par Git, `.env.example` versionné
-- Audit `pip-audit`, `bandit`, `compileall` en CI
+## Architecture de sécurité & fondations roadmap
+La sécurité n’est pas une section isolée, c’est la fondation qui rend les évolutions futures possibles sans réécrire l’architecture.
+
+### Pourquoi c’est efficace aujourd’hui
+- **Exécution locale stricte** : bind `127.0.0.1` uniquement, pas d’exposition réseau. Le dashboard ne peut pas être atteint depuis le réseau, ce qui élimine la surface d’attaque externe par défaut.
+- **Pas de secrets en code** : `.env` ignoré par Git, `.env.example` versionné, `NTFY_TOPIC_URL` forcé vide au démarrage. Aucun secret ne fuite dans les logs.
+- **Contrôle des entrées et des sorties** : whitelist de domaines, `TLS verify=True`, pas de `shell=True`, pas de `eval/exec`. Blocage SSRF et injection de commandes.
+- **Intégrité des dépendances** : `requirements.in` → `pip-compile --generate-hashes` → `requirements.txt` hashé, `pip-audit` en CI, `compileall` et tests unitaires. Toute dérive de paquet est détectée.
+- **Traçabilité et validation** : schémas Pydantic, horodatage monotone, invalidation des données périmées. On signale l’indisponibilité plutôt que de simuler.
+
+### À quoi ça sert maintenant
+- Surveillance fiable de sources publiques sans risque d’exposition de clés.
+- Simulation papier sans risque d’ordre réel.
+- Tableau de bord local utilisable en environnement de travail sensible.
+- CI reproductible et auditable pour une équipe distribuée.
+
+### Comment cela permet des projets plus complexes
+- **Base pour multi-appareils** : la séparation stricte réseau / secrets / validation permet d’ajouter plus tard une API authentifiée, une base de données chiffrée et un serveur hébergé sans réécrire les garde-fous.
+- **Intégrations licenciées** : AIS, prix TTF, flux propriétaires nécessitent gestion de clés, rotation et audit. L’architecture actuelle avec variables d’environnement validées, audit de dépendances et logs sans secret est directement réutilisable.
+- **Conformité et gouvernance** : traçabilité source → règle → affichage, journal de provenance et tests automatisés facilitent la certification et l’audit externe.
+- **Évolutivité** : le modèle de fraîcheur des sources, de backoff exponentiel et de validation stricte est extensible à des centaines de flux sans dégradation de la fiabilité.
+
+Cette base sécurisée est la condition préalable aux priorités de la feuille de route : historique persistant chiffré, alertes EUR/CHF, carte d’infrastructures, et veille géopolitique avec provenance.
 
 ## Feuille de route
 Voir [ROADMAP.md](ROADMAP.md)
