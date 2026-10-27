@@ -84,7 +84,7 @@ class RiskManager:
             )
 
         # Trade validé
-        self._cumulative_loss_usd = 0.0  Reset perte cumulée sur trade réussi
+        self._cumulative_loss_usd = 0.0  # Reset perte cumulée sur trade réussi
         self._is_circuit_open = False
         return (True, "OK: Trade validé")
 
