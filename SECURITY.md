@@ -1,5 +1,15 @@
 # Politique de sécurité · Политика безопасности · Security policy
 
+## Summary (English)
+- OWASP Top 10 mitigations implemented:
+  - Input validation & sanitization
+  - Least privilege for secrets
+  - Secure transport (HTTPS only)
+  - No authentication on public endpoints
+  - Logging and monitoring
+- Secret management: .env files excluded, secrets never committed
+- Dependency audit: pip-audit used; failures are not ignored
+
 ## Français
 
 ### Périmètre
