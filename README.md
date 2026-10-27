@@ -279,3 +279,11 @@ La version candidate 0.2.0 construit un paquet source et un wheel avec `python -
 La publication PyPI exige une CI réussie, un tag correspondant exactement à la version, la configuration du Trusted Publisher et l’activation explicite de `PYPI_PUBLISH_ENABLED`. La propriété du nom PyPI doit être vérifiée avant toute publication. Aucune publication n’est garantie par la seule création d’un tag.
 
 SQLite utilise WAL et retente les transactions sur contention temporaire avec un nombre limité d’essais. Un verrou persistant reste une erreur ; surveiller la taille et sauvegarder la base.
+
+## Migration Rust / Миграция Rust / Rust migration
+
+**FR :** Migration en cours. Le module `rust/market-core` contient un premier calcul de spread et un garde-fou, encore indépendant du bot Python. Les flux, SQLite, le dashboard et le lanceur restent à migrer. Aucune parité complète n'est revendiquée. Vérification : `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, puis `cargo test --workspace`.
+
+**RU :** Миграция продолжается. `rust/market-core` содержит первый расчёт спреда и защитную проверку; он ещё не подключён к боту. Потоки, SQLite, dashboard и запуск остаются на Python. Полная эквивалентность пока не подтверждена.
+
+**EN:** Migration is in progress. `rust/market-core` provides an initial spread calculation and guardrail and is not yet connected to the bot. Feeds, SQLite, dashboard and launcher remain in Python. Full behavioural parity has not been established.
