@@ -17,6 +17,20 @@
 
 ---
 
+## Architecture Local-First Rust
+
+```mermaid
+flowchart TD
+    A[Flux WebSocket Kraken/Binance] --> B[BoundedFeedQueue drop-oldest]
+    B --> C[Calcul spread Rust market-core]
+    C --> D[Simulation papier Python]
+    C --> E[Persistance SQLite WAL rusqlite]
+    E --> F[Dashboard HTTP 127.0.0.1]
+    F --> G[Alertes locales, ntfy optionnel]
+```
+
+Le backend critique de validation, de calcul de spread et de persistance est en cours de migration vers Rust avec `rusqlite` en mode WAL, `busy_timeout=5000ms` et pool r2d2. Aucun ordre réel n'est passé.
+
 ## Français
 
 > **Surveillance et simulation uniquement.** Aucun ordre réel n'est envoyé. Aucun solde, inventaire, emprunt ou transfert de compte n'est vérifié. Une estimation de spread ou d'exécution ne constitue pas une promesse de rendement.

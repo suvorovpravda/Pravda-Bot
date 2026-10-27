@@ -28,6 +28,13 @@ jobs:
       PIP_NO_INPUT: "1"
     steps:
       - uses: actions/checkout@v4
+      - name: Rust check (if workspace present)
+        run: |
+          if [ -f Cargo.toml ]; then
+            echo "Rust workspace detected" > ci-logs/rust-detected.txt
+            rustc --version || true
+            cargo --version || true
+          fi
       - name: Record runner environment
         run: |
           mkdir -p ci-logs
