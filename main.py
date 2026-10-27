@@ -837,7 +837,7 @@ async def render_dashboard_periodically():
         # Vue enrichie toutes les 5 itérations ~ toutes les 2-3 minutes
         if counter % 5 == 0:
             console.print("\n=== Vue terminal enrichie ===")
-            print_enhanced_dashboard()
+            print_enhanced_dashboard(latest_prices)
             # Export quotidien résumé
             try:
                 export_daily_summary_csv("daily_summary.csv")

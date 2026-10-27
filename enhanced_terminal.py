@@ -134,14 +134,104 @@ def export_daily_summary_csv(path="daily_summary.csv"):
     return path
 
 
-def print_enhanced_dashboard():
+def check_price_alerts(latest_prices):
+    store = get_market_store()
+    try:
+        fx = get_reference_fx_rates()
+    except Exception:
+        return []
+    usd_per_eur = fx.get("rates",{}).get("USD",1.0)
+    chf_per_eur = fx.get("rates",{}).get("CHF",1.0)
+    # Convert USDT to EUR/CHF : price_usdt -> price_eur = price_usdt / usd_per_eur ; price_chf = price_eur * chf_per_eur
+    alerts = []
+    with store._connection() as conn:
+        rows = conn.execute("SELECT * FROM price_alerts WHERE enabled=1").fetchall()
+    for row in rows:
+        symbol = row["symbol"]
+        currency = row["currency"]
+        direction = row["direction"]
+        target = row["target"]
+        # pick latest price from Binance or Kraken
+        price_usdt = None
+        for ex in ["Binance","Kraken"]:
+            if ex in latest_prices and symbol in latest_prices[ex]:
+                price_usdt = latest_prices[ex][symbol]
+                break
+        if price_usdt is None:
+            continue
+        if currency == "EUR":
+            price_cur = price_usdt / usd_per_eur
+        else:
+            price_cur = price_usdt / usd_per_eur * chf_per_eur
+        met = (price_cur >= target) if direction == "above" else (price_cur <= target)
+        alerts.append({
+            "symbol": symbol,
+            "currency": currency,
+            "direction": direction,
+            "target": target,
+            "price": price_cur,
+            "met": met,
+        })
+    return alerts
+
+def alerts_panel(latest_prices):
+    alerts = check_price_alerts(latest_prices)
+    if not alerts:
+        return Panel("Aucune alerte configurée", title="Alertes prix")
+    table = Table(box=box.ROUNDED)
+    table.add_column("Symbole")
+    table.add_column("Devise")
+    table.add_column("Cible")
+    table.add_column("Prix actuel")
+    table.add_column("Direction")
+    table.add_column("Statut")
+    for a in alerts:
+        status = "✓ Déclenchée" if a["met"] else "—"
+        table.add_row(
+            a["symbol"],
+            a["currency"],
+            f"{a['target']:.2f}",
+            f"{a['price']:.2f}",
+            a["direction"],
+            status
+        )
+    return Panel(table, title="Alertes prix EUR/CHF")
+
+def crypto_prices_table(latest_prices):
+    try:
+        fx = get_reference_fx_rates()
+    except Exception:
+        return Panel("FX indisponible", title="Prix crypto EUR/CHF")
+    usd_per_eur = fx.get("rates",{}).get("USD",1.0)
+    chf_per_eur = fx.get("rates",{}).get("CHF",1.0)
+    date = fx.get("date","?")
+    age = fx.get("source_age_days", "?")
+    table = Table(box=box.ROUNDED, title=f"Taux source {fx.get('source','')} {date} âge {age}j")
+    table.add_column("Symbole")
+    table.add_column("Exchange")
+    table.add_column("Prix USDT")
+    table.add_column("Prix EUR")
+    table.add_column("Prix CHF")
+    for sym in ["BTC/USDT","ETH/USDT","SOL/USDT"]:
+        for ex in ["Binance","Kraken"]:
+            price = latest_prices.get(ex,{}).get(sym)
+            if price is None:
+                continue
+            price_eur = price / usd_per_eur
+            price_chf = price_eur * chf_per_eur
+            table.add_row(sym, ex, f"{price:,.2f}", f"{price_eur:,.2f}", f"{price_chf:,.2f}")
+    return Panel(table, title="Prix crypto EUR/CHF")
+
+def print_enhanced_dashboard(latest_prices=None):
     fx_panel = Panel(format_fx_info(), title="FX référence BCE", box=box.ROUNDED)
     sources_panel = Panel(source_status_view(), title="Sources")
+    alerts_p = alerts_panel(latest_prices or {})
+    prices_p = crypto_prices_table(latest_prices or {})
     # Historical examples
     charts = []
-    store = get_market_store()
     for sym in ["BTC/USDT","ETH/USDT"]:
         charts.append(historical_chart(sym, "Binance", "day"))
-    console.print(Panel(Columns([fx_panel, sources_panel]), title="Vue d'ensemble"))
+    console.print(Panel(Columns([fx_panel, sources_panel, alerts_p]), title="Vue d'ensemble"))
+    console.print(prices_p)
     for c in charts:
         console.print(c)
