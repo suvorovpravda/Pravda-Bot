@@ -18,6 +18,11 @@ class MarketStoreContentionTests(unittest.TestCase):
         self.store = MarketStore(self.path)
         self.now = datetime(2026, 10, 27, 12, tzinfo=timezone.utc)
 
+    def tearDown(self):
+        # Force garbage collection to close lingering SQLite connections on Windows
+        import gc
+        gc.collect()
+
     def count(self):
         with sqlite3.connect(self.path) as connection:
             return connection.execute('SELECT COUNT(*) FROM market_ticks').fetchone()[0]
