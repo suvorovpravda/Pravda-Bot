@@ -58,6 +58,12 @@ jobs:
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       
+      # Check workspace
+      - name: Check workspace
+        env:
+          PYO3_PYTHON: ${{ env.PYO3_PYTHON }}
+        run: cargo check --workspace --all-targets
+      
       # Build workspace
       - name: Build workspace
         run: cargo build --workspace
