@@ -2,6 +2,7 @@
 name = "pravda-server"
 version = "0.2.0"
 edition = "2021"
+windows-subsystem = "windows"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
