@@ -1,12 +1,12 @@
-pub mod types;
-pub mod kraken;
 pub mod binance;
 pub mod health;
+pub mod kraken;
+pub mod types;
 
-pub use types::{Symbol, Exchange, Tick, Spread};
-pub use kraken::KrakenClient;
 pub use binance::BinanceClient;
-pub use health::{MarketHealth, HealthStatus, assess_market_data, calculate_spread};
+pub use health::{assess_market_data, calculate_spread, HealthStatus, MarketHealth};
+pub use kraken::KrakenClient;
+pub use types::{Exchange, Spread, Symbol, Tick};
 
 use tokio::sync::broadcast;
 

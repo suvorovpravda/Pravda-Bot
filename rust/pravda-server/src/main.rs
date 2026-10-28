@@ -1,12 +1,12 @@
+use axum::extract::ws::{Message, WebSocket};
 use axum::{
+    extract::State,
     extract::WebSocketUpgrade,
     http::HeaderValue,
     response::{IntoResponse, Json, Response},
     routing::get,
     Router,
-    extract::State,
 };
-use axum::extract::ws::{Message, WebSocket};
 use futures_util::{SinkExt, StreamExt};
 use pravda_fetchers::types::Tick;
 use serde_json::{json, Value};
@@ -30,9 +30,18 @@ async fn dashboard() -> impl IntoResponse {
         HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self ws://127.0.0.1:8080'; img-src 'self' data:;"),
     );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
-    headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
-    headers.insert("Referrer-Policy", HeaderValue::from_static("no-referrer-when-downgrade"));
-    headers.insert("Content-Type", HeaderValue::from_static("text/html; charset=utf-8"));
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        "Referrer-Policy",
+        HeaderValue::from_static("no-referrer-when-downgrade"),
+    );
+    headers.insert(
+        "Content-Type",
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
 
     response
 }
@@ -68,10 +77,7 @@ async fn api_metrics() -> Json<Value> {
     Json(json!({"uptime_seconds": 0.0, "memory_usage_mb": 0.0}))
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<Arc<AppState>>,
-) -> impl IntoResponse {
+async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
     ws.on_upgrade(|socket| handle_socket(socket, state))
 }
 
@@ -89,9 +95,8 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     });
 
-    let recv_task = tokio::spawn(async move {
-        while let Some(Ok(_msg)) = receiver.next().await {}
-    });
+    let recv_task =
+        tokio::spawn(async move { while let Some(Ok(_msg)) = receiver.next().await {} });
 
     tokio::select! {
         _ = send_task => {},
@@ -102,7 +107,7 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tick_tx, _) = pravda_fetchers::create_tick_channel();
-    
+
     let state = Arc::new(AppState {
         tick_tx: tick_tx.clone(),
         last_ticks: RwLock::new(Vec::new()),

@@ -1,5 +1,5 @@
-use chrono::{Utc, Duration};
-use crate::types::{Tick, Spread, Symbol};
+use crate::types::{Spread, Symbol, Tick};
+use chrono::{Duration, Utc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HealthStatus {

@@ -1,12 +1,12 @@
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use futures_util::{StreamExt, SinkExt};
-use serde_json::Value;
-use crate::types::{Tick, Symbol, Exchange};
+use crate::types::{Exchange, Symbol, Tick};
 use chrono::Utc;
+use futures_util::{SinkExt, StreamExt};
+use serde_json::Value;
 use std::time::Duration;
-use tokio::time::sleep;
 use tokio::sync::broadcast;
-use tracing::{info, warn, error};
+use tokio::time::sleep;
+use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tracing::{error, info, warn};
 
 pub struct BinanceClient {
     url: String,

@@ -1,12 +1,12 @@
-use tokio_tungstenite::{connect_async, tungstenite::Message};
-use futures_util::{StreamExt, SinkExt};
-use serde_json::Value;
-use crate::types::{Tick, Symbol, Exchange};
+use crate::types::{Exchange, Symbol, Tick};
 use chrono::Utc;
+use futures_util::{SinkExt, StreamExt};
+use serde_json::Value;
 use std::time::Duration;
-use tokio::time::sleep;
 use tokio::sync::broadcast;
-use tracing::{info, warn, error};
+use tokio::time::sleep;
+use tokio_tungstenite::{connect_async, tungstenite::Message};
+use tracing::{error, info, warn};
 
 pub struct KrakenClient {
     url: String,
@@ -77,7 +77,12 @@ impl KrakenClient {
                         _ => return Err("Unknown pair".into()),
                     };
                     if let Some(ticker) = channel_data.get("ticker") {
-                        if let Some(last) = ticker.get("c").and_then(|v| v.as_array()).and_then(|a| a.first()).and_then(|v| v.as_str()) {
+                        if let Some(last) = ticker
+                            .get("c")
+                            .and_then(|v| v.as_array())
+                            .and_then(|a| a.first())
+                            .and_then(|v| v.as_str())
+                        {
                             if let Ok(price) = last.parse::<f64>() {
                                 return Ok(Tick {
                                     symbol,
