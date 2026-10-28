@@ -1,0 +1,116 @@
+# Dependabot configuration for Pravda-Bot
+# Documentation: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+
+updates:
+  # ─── Rust (Cargo) ───────────────────────────────────────────────────────
+  # Met à jour les dépendances Rust du workspace (market-core + pravda-server)
+  - package-ecosystem: "cargo"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "12:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "suvorovpravda"
+    labels:
+      - "dependencies"
+      - "rust"
+      - "security"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    # Ignore les mises à jour majeures automatiques (à valider manuellement)
+    ignore:
+      - dependency-name: "tokio"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "axum"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "pyo3"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Groupe les mises à jour mineures/patch pour réduire le bruit
+      rust-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # ─── GitHub Actions ─────────────────────────────────────────────────────
+  # Met à jour les versions des actions GitHub (sécurité critique)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "thursday"
+      time: "12:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "suvorovpravda"
+    labels:
+      - "dependencies"
+      - "ci"
+      - "security"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # ─── Python (archive legacy) ────────────────────────────────────────────
+  # Met à jour les dépendances Python dans l'archive (pour référence future)
+  # Optionnel : à supprimer si tu ne veux pas maintenir l'archive
+  - package-ecosystem: "pip"
+    directory: "/archive/python-legacy"
+    schedule:
+      interval: "monthly"
+      day: "first"
+      time: "12:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "suvorovpravda"
+    labels:
+      - "dependencies"
+      - "python"
+      - "archive"
+    commit-message:
+      prefix: "deps(python)"
+      include: "scope"
+    # Exclure les packages non critiques
+    ignore:
+      - dependency-name: "ccxt"
+        update-types: ["version-update:semver-major"]
+
+  # ─── JavaScript/TypeScript (dashboard frontend) ─────────────────────────
+  # Si tu ajoutes un package.json pour le dashboard (Chart.js, Leaflet, etc.)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "first"
+      time: "12:00"
+      timezone: "Europe/Paris"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "suvorovpravda"
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "deps(js)"
+      include: "scope"
+    groups:
+      frontend-minor-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
