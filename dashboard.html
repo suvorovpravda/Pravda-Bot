@@ -1244,6 +1244,21 @@
     // Default to all
     applyTab('all');
 
+    // WebSocket temps réel pour les ticks
+    try {
+        const ws = new WebSocket('ws://127.0.0.1:8080/ws/ticks');
+        ws.onopen = () => console.log('✅ WebSocket connecté');
+        ws.onmessage = (event) => {
+            try {
+                const tick = JSON.parse(event.data);
+                console.log('Tick reçu:', tick);
+                // TODO: mettre à jour l'UI avec le tick
+            } catch (e) { console.error('Erreur parsing tick', e); }
+        };
+        ws.onclose = () => { console.log('⚠️ WebSocket déconnecté'); setTimeout(()=>location.reload(), 5000); };
+        ws.onerror = (e) => console.error('❌ WebSocket erreur', e);
+    } catch (e) { console.warn('WebSocket non disponible', e); }
+
 </script>
 </body>
 </html>
