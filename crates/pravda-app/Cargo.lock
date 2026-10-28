@@ -2629,6 +2629,7 @@ name = "pravda-app"
 version = "0.1.0"
 dependencies = [
  "pravda-server",
+ "reqwest 0.11.27",
  "tauri",
  "tauri-build",
  "tokio",
