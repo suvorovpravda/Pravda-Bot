@@ -2,7 +2,7 @@ pub mod error;
 pub mod types;
 
 pub use error::PravdaError;
-pub use types::{Symbol, Exchange, Tick, Spread, EnergyPrice, MiningIndex};
+pub use types::{EnergyPrice, Exchange, MiningIndex, Spread, Symbol, Tick};
 
 #[cfg(test)]
 mod tests {
