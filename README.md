@@ -90,35 +90,21 @@ Spread net        0,84 %
 
 Le helper robuste retourne une fraction ; le bot convertit explicitement en pourcentage pour ses seuils et journaux. Le détecteur d'écart absolu et le spread directionnel achat/vente ont des usages distincts : un résultat directionnel négatif conserve son signe. Le plafond brut par défaut de **5 %** écarte des anomalies sans démontrer la faisabilité économique. Les frais fixes réseau/retrait et un véritable modèle de remplissage ne sont pas inclus.
 
-### Installation — Windows
+### Installation
 
-Pour une **nouvelle copie**, avec Python 3.12 installé :
-
-```powershell
-git clone https://github.com/suvorovpravda/Pravda-Bot.git
-Set-Location Pravda-Bot
-py -3.12 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements-bootstrap.txt
-.\.venv\Scripts\python.exe -m pip install --require-hashes -r requirements.txt
-.\.venv\Scripts\python.exe -m pip check
-if (-not (Test-Path '.env')) { Copy-Item '.env.example' '.env' }
-```
-
-Dans une copie existante, relever d'abord `git status --short --branch` et conserver les modifications locales avant de changer de branche. L'activation du venv n'est pas obligatoire : les commandes ci-dessus appellent son interpréteur explicitement.
-
-### Installation — Linux
+#### Version Rust (actuelle)
 
 ```bash
 git clone https://github.com/suvorovpravda/Pravda-Bot.git
 cd Pravda-Bot
-python3.12 -m venv .venv
-.venv/bin/python -m pip install --require-hashes -r requirements-bootstrap.txt
-.venv/bin/python -m pip install --require-hashes -r requirements.txt
-.venv/bin/python -m pip check
-[ -f .env ] || cp .env.example .env
+cargo build --release
 ```
 
-Le projet cible la série **3.12**. La CI enregistre le correctif réellement installé sur chaque OS ; elle ne demande pas une version exacte absente du runner Windows. Runtime, outils d'audit et outils de construction utilisent des verrous distincts. Leur régénération utilise `uv pip compile --universal --python-version 3.12 --generate-hashes --no-build` et doit être revue.
+Ouvrir http://127.0.0.1:8080 dans le navigateur.
+
+#### Version Python (archivée)
+
+La version Python legacy (v0.1) est conservée dans `archive/python-legacy/` pour référence historique. Elle n'est plus maintenue.
 
 ### Lancer et vérifier
 

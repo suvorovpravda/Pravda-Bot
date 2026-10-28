@@ -47,3 +47,8 @@ security_modules/
 security_revised/
 
 ..Pravda-Bot-validation/
+
+# Archive Python legacy
+archive/python-legacy/.venv/
+archive/python-legacy/__pycache__/
+archive/python-legacy/*.pyc

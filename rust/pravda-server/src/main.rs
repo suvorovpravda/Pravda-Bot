@@ -4,12 +4,13 @@ use axum::{
     routing::get,
     Router,
 };
+
 use serde_json::{json, Value};
 use std::net::SocketAddr;
 
-/// Dashboard HTML with strict CSP and security headers
+// Original static dashboard rendering
 async fn dashboard() -> impl IntoResponse {
-    let html = include_str!("../static/dashboard.html");
+    let html = include_str!("../../../dashboard.html");
     let mut response = Response::new(html.to_string());
     let headers = response.headers_mut();
 
@@ -103,7 +104,7 @@ async fn api_metrics() -> Json<Value> {
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let app = Router::new()
         // Dashboard routes
         .route("/", get(dashboard))
@@ -117,8 +118,7 @@ async fn main() {
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     println!("🚀 Pravda Server listening on http://127.0.0.1:8080");
 
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
-    axum::serve(listener, app.into_make_service())
-        .await
-        .unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app.into_make_service()).await?;
+    Ok(())
 }
