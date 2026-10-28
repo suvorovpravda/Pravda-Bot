@@ -1,5 +1,5 @@
-use rusqlite::{params, Connection, OptionalExtension};
 use chrono::{DateTime, Utc};
+use rusqlite::{params, Connection};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -33,7 +33,13 @@ impl PravdaStore {
         Ok(Self { conn })
     }
 
-    pub fn insert_tick(&self, symbol: &str, price: f64, exchange: &str, ts: DateTime<Utc>) -> Result<(), StoreError> {
+    pub fn insert_tick(
+        &self,
+        symbol: &str,
+        price: f64,
+        exchange: &str,
+        ts: DateTime<Utc>,
+    ) -> Result<(), StoreError> {
         self.conn.execute(
             "INSERT INTO ticks (symbol, price, exchange, ts) VALUES (?1, ?2, ?3, ?4)",
             params![symbol, price, exchange, ts.to_rfc3339()],
@@ -41,10 +47,14 @@ impl PravdaStore {
         Ok(())
     }
 
-    pub fn latest_ticks(&self, symbol: &str, limit: usize) -> Result<Vec<(f64, String)>, StoreError> {
-        let mut stmt = self.conn.prepare(
-            "SELECT price, ts FROM ticks WHERE symbol = ?1 ORDER BY ts DESC LIMIT ?2",
-        )?;
+    pub fn latest_ticks(
+        &self,
+        symbol: &str,
+        limit: usize,
+    ) -> Result<Vec<(f64, String)>, StoreError> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT price, ts FROM ticks WHERE symbol = ?1 ORDER BY ts DESC LIMIT ?2")?;
         let rows = stmt.query_map(params![symbol, limit as i64], |row| {
             let price: f64 = row.get(0)?;
             let ts: String = row.get(1)?;
@@ -65,7 +75,9 @@ mod tests {
         let path = dir.path().join("test.db");
         let store = PravdaStore::open(path.to_str().unwrap()).unwrap();
         let now = Utc::now();
-        store.insert_tick("BTC/USDT", 12345.0, "Binance", now).unwrap();
+        store
+            .insert_tick("BTC/USDT", 12345.0, "Binance", now)
+            .unwrap();
         let rows = store.latest_ticks("BTC/USDT", 10).unwrap();
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].0, 12345.0);
