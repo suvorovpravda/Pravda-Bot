@@ -1,0 +1,11 @@
+[package]
+name = "pravda-app"
+version = "0.1.0"
+edition = "2021"
+description = "Pravda-Bot desktop app with Tauri"
+
+[dependencies]
+tauri = { version = "1.5", features = ["api-all"] }
+tokio = { version = "1", features = ["full"] }
+```
+
