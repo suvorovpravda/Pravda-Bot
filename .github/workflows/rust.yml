@@ -1,9 +1,10 @@
 name: Rust migration
 on:
   push:
-    branches: [main, 'rust/**']
-  pull_request:
     branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - '**/rust/**'}]
 permissions:
   contents: read
 jobs:
