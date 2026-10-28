@@ -5,18 +5,21 @@ use crate::types::{Tick, Symbol, Exchange};
 use chrono::Utc;
 use std::time::Duration;
 use tokio::time::sleep;
+use tokio::sync::broadcast;
 use tracing::{info, warn, error};
 
 pub struct KrakenClient {
     url: String,
     symbols: Vec<Symbol>,
+    tx: broadcast::Sender<Tick>,
 }
 
 impl KrakenClient {
-    pub fn new(symbols: Vec<Symbol>) -> Self {
+    pub fn new(symbols: Vec<Symbol>, tx: broadcast::Sender<Tick>) -> Self {
         Self {
             url: "wss://ws.kraken.com".to_string(),
             symbols,
+            tx,
         }
     }
 
@@ -44,8 +47,10 @@ impl KrakenClient {
         while let Some(msg) = read.next().await {
             match msg {
                 Ok(Message::Text(text)) => {
-                    if let Ok(tick) = self.parse_ticker_message(&text, &self.symbols) {
+                    if let Ok(tick) = self.parse_ticker_message(&text) {
                         info!("Received tick: {:?}", tick);
+                        // Diffuser le tick
+                        let _ = self.tx.send(tick);
                     }
                 }
                 Ok(Message::Ping(_)) => {}
@@ -60,7 +65,7 @@ impl KrakenClient {
         Ok(())
     }
 
-    fn parse_ticker_message(&self, text: &str, _symbols: &[Symbol]) -> Result<Tick, Box<dyn std::error::Error>> {
+    fn parse_ticker_message(&self, text: &str) -> Result<Tick, Box<dyn std::error::Error>> {
         let value: Value = serde_json::from_str(text)?;
         if let Some(arr) = value.as_array() {
             if let Some(channel_data) = arr.get(1).and_then(|v| v.as_object()) {
@@ -72,7 +77,7 @@ impl KrakenClient {
                         _ => return Err("Unknown pair".into()),
                     };
                     if let Some(ticker) = channel_data.get("ticker") {
-                        if let Some(last) = ticker.get("c").and_then(|v| v.as_array()).and_then(|a| a.get(0)).and_then(|v| v.as_str()) {
+                        if let Some(last) = ticker.get("c").and_then(|v| v.as_array()).and_then(|a| a.first()).and_then(|v| v.as_str()) {
                             if let Ok(price) = last.parse::<f64>() {
                                 return Ok(Tick {
                                     symbol,

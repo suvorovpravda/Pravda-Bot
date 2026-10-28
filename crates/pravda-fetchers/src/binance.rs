@@ -5,18 +5,21 @@ use crate::types::{Tick, Symbol, Exchange};
 use chrono::Utc;
 use std::time::Duration;
 use tokio::time::sleep;
+use tokio::sync::broadcast;
 use tracing::{info, warn, error};
 
 pub struct BinanceClient {
     url: String,
     symbols: Vec<Symbol>,
+    tx: broadcast::Sender<Tick>,
 }
 
 impl BinanceClient {
-    pub fn new(symbols: Vec<Symbol>) -> Self {
+    pub fn new(symbols: Vec<Symbol>, tx: broadcast::Sender<Tick>) -> Self {
         Self {
             url: "wss://stream.binance.com:9443/ws".to_string(),
             symbols,
+            tx,
         }
     }
 
@@ -46,6 +49,7 @@ impl BinanceClient {
                 Ok(Message::Text(text)) => {
                     if let Ok(tick) = self.parse_ticker_message(&text) {
                         info!("Received tick: {:?}", tick);
+                        let _ = self.tx.send(tick);
                     }
                 }
                 Ok(Message::Ping(_)) => {}
