@@ -1,5 +1,5 @@
-use std::collections::{HashMap, HashSet};
 use chrono::{DateTime, Utc};
+use std::collections::{HashMap, HashSet};
 
 #[derive(Debug, Clone)]
 pub struct AlertGate {
@@ -12,7 +12,10 @@ pub struct AlertGate {
 
 impl AlertGate {
     pub fn new(confirmation_seconds: f64) -> Self {
-        assert!(confirmation_seconds >= 0.0, "confirmation_seconds must be non-negative");
+        assert!(
+            confirmation_seconds >= 0.0,
+            "confirmation_seconds must be non-negative"
+        );
         Self {
             confirmation_seconds,
             candidate_since: HashMap::new(),
@@ -75,7 +78,10 @@ impl AlertGate {
             .entry(symbol.to_string())
             .or_insert_with(|| now);
 
-        let elapsed = now.signed_duration_since(*candidate_since).num_milliseconds() as f64 / 1000.0;
+        let elapsed = now
+            .signed_duration_since(*candidate_since)
+            .num_milliseconds() as f64
+            / 1000.0;
         if elapsed + 1e-9 < self.confirmation_seconds {
             return false;
         }
@@ -83,7 +89,8 @@ impl AlertGate {
         self.candidate_since.remove(symbol);
         self.active.insert(symbol.to_string());
         self.next_activation_id += 1;
-        self.activation_ids.insert(symbol.to_string(), self.next_activation_id);
+        self.activation_ids
+            .insert(symbol.to_string(), self.next_activation_id);
         true
     }
 }
@@ -163,14 +170,20 @@ impl PaperSimulator {
         let signed_spread = Self::signed_spread_percent(kraken_price, binance_price);
 
         if let Some(pos) = self.positions.get(symbol) {
-            let entry_direction = if pos.entry_signed_spread_percent > 0.0 { 1.0 } else { -1.0 };
+            let entry_direction = if pos.entry_signed_spread_percent > 0.0 {
+                1.0
+            } else {
+                -1.0
+            };
             let remaining_signed_spread = signed_spread * entry_direction;
             let age_seconds = now.signed_duration_since(pos.opened_at).num_seconds() as f64;
             let should_close = remaining_signed_spread <= self.exit_spread_percent
                 || age_seconds >= self.max_hold_seconds;
             if should_close {
-                let gross_pnl = (pos.entry_signed_spread_percent.abs() - remaining_signed_spread.abs())
-                    * pos.notional_usdt / 100.0;
+                let gross_pnl = (pos.entry_signed_spread_percent.abs()
+                    - remaining_signed_spread.abs())
+                    * pos.notional_usdt
+                    / 100.0;
                 let fees = pos.notional_usdt * self.estimated_fees_percent / 100.0;
                 let net_pnl = gross_pnl - fees;
                 self.cash_usdt += pos.notional_usdt + net_pnl;
@@ -204,7 +217,12 @@ impl PaperSimulator {
     }
 
     pub fn equity_usdt(&self) -> f64 {
-        self.cash_usdt + self.positions.values().map(|p| p.notional_usdt).sum::<f64>()
+        self.cash_usdt
+            + self
+                .positions
+                .values()
+                .map(|p| p.notional_usdt)
+                .sum::<f64>()
     }
 }
 
@@ -225,19 +243,17 @@ mod tests {
 
     #[test]
     fn test_paper_simulator_open_close() {
-        let mut sim = PaperSimulator::new(
-            PaperMode::Fixed,
-            1000.0,
-            10.0,
-            100.0,
-            0.05,
-            3600.0,
-            0.1,
-        );
+        let mut sim = PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.1);
         let now = Utc::now();
-        assert_eq!(sim.update("BTC/USDT", 101.0, 100.0, true, now), Some("opened".to_string()));
+        assert_eq!(
+            sim.update("BTC/USDT", 101.0, 100.0, true, now),
+            Some("opened".to_string())
+        );
         let later = now + Duration::seconds(10);
         // spread closed
-        assert_eq!(sim.update("BTC/USDT", 100.01, 100.0, false, later), Some("closed".to_string()));
+        assert_eq!(
+            sim.update("BTC/USDT", 100.01, 100.0, false, later),
+            Some("closed".to_string())
+        );
     }
 }

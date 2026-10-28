@@ -1,4 +1,5 @@
 pub mod binance;
+pub mod energy;
 pub mod health;
 pub mod kraken;
 pub mod types;

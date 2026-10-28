@@ -12,6 +12,8 @@ serde_json = "1"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors"] }
 pravda-fetchers = { path = "../../crates/pravda-fetchers" }
+pravda-engine = { path = "../../crates/pravda-engine" }
+pravda-store = { path = "../../crates/pravda-store" }
 futures-util = "0.3"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
