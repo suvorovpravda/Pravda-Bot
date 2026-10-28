@@ -2,8 +2,10 @@
 name = "pravda-server"
 version = "0.2.0"
 edition = "2021"
+rust-version.workspace = true
 
 [dependencies]
+pravda-market-core = { path = "../market-core" }
 tokio = { version = "1", features = ["full"] }
 axum = { version = "0.7", features = ["ws"] }
 serde = { version = "1", features = ["derive"] }

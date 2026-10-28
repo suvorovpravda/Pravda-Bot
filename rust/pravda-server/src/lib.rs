@@ -11,15 +11,19 @@ use chrono::Utc;
 use futures_util::{SinkExt, StreamExt};
 use pravda_engine::{AlertGate, PaperMode, PaperSimulator};
 use pravda_fetchers::types::{Exchange, Symbol, Tick};
+use pravda_market_core::health::{assess_market_data, HealthStatus};
+use pravda_market_core::{calculate_spread, DEFAULT_FEE_RATE, DEFAULT_MAX_SPREAD_PERCENT};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, RwLock};
 
 /// État partagé entre les handlers
 struct AppState {
+    started_at: Instant,
     tick_tx: broadcast::Sender<Tick>,
     last_ticks: RwLock<Vec<Tick>>,
     prices: RwLock<HashMap<Symbol, HashMap<Exchange, Tick>>>,
@@ -44,7 +48,7 @@ async fn dashboard() -> impl IntoResponse {
 
     headers.insert(
         "Content-Security-Policy",
-        HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self ws://127.0.0.1:8080'; img-src 'self' data:;"),
+        HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:8080; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none';"),
     );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
     headers.insert(
@@ -73,12 +77,15 @@ async fn api_market(State(state): State<Arc<AppState>>) -> Json<Value> {
                 if let Some(tick) = ex_map.get(&exchange) {
                     let mut ex_map_inner = serde_json::Map::new();
                     ex_map_inner.insert("price".to_string(), json!(tick.price));
+                    let age: f64 = tick.observed_at.elapsed().as_secs_f64();
+                    ex_map_inner.insert("age_seconds".to_string(), json!(age));
+                    ex_map_inner.insert(
+                        "status".to_string(),
+                        json!(if age <= 4.0 { "live" } else { "stale" }),
+                    );
                     ex_map_inner
                         .insert("timestamp".to_string(), json!(tick.timestamp.to_rfc3339()));
-                    entry.insert(
-                        format!("{:?}", exchange).to_lowercase(),
-                        json!(ex_map_inner),
-                    );
+                    entry.insert(format!("{:?}", exchange), json!(ex_map_inner));
                 }
             }
         }
@@ -91,21 +98,24 @@ async fn api_market(State(state): State<Arc<AppState>>) -> Json<Value> {
 }
 
 async fn api_fx() -> Json<Value> {
-    Json(json!({"rates": {}, "source": "Frankfurter", "timestamp": "2026-10-29"}))
+    Json(
+        json!({"status": "unavailable", "rates": {}, "timestamp": null, "notice": "FX connector not migrated"}),
+    )
 }
 
 async fn api_history(State(state): State<Arc<AppState>>) -> Json<Value> {
-    let store = state.store.lock().await;
     let symbol = "BTC/USDT";
-    match store.latest_ticks(symbol, 100) {
-        Ok(rows) => {
+    let store = state.store.clone();
+    match tokio::task::spawn_blocking(move || store.blocking_lock().latest_ticks(symbol, 100)).await
+    {
+        Ok(Ok(rows)) => {
             let ticks = rows
                 .into_iter()
                 .map(|(price, ts)| json!({"price": price, "ts": ts}))
                 .collect::<Vec<_>>();
             Json(json!({"symbol": symbol, "ticks": ticks}))
         }
-        Err(_) => Json(json!({"symbol": symbol, "ticks": [], "error": "store unavailable"})),
+        _ => Json(json!({"symbol": symbol, "ticks": [], "error": "store unavailable"})),
     }
 }
 
@@ -134,8 +144,10 @@ async fn api_alerts(State(state): State<Arc<AppState>>) -> Json<Value> {
     }))
 }
 
-async fn api_metrics() -> Json<Value> {
-    Json(json!({"uptime_seconds": 0.0, "memory_usage_mb": 0.0}))
+async fn api_metrics(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(
+        json!({"uptime_seconds": state.started_at.elapsed().as_secs_f64(), "memory_usage_mb": null, "cpu_percent": null, "status": "partial", "pid": std::process::id()}),
+    )
 }
 
 async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -146,8 +158,13 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tick_tx.subscribe();
 
-    let send_task = tokio::spawn(async move {
-        while let Ok(tick) = rx.recv().await {
+    let mut send_task = tokio::spawn(async move {
+        loop {
+            let tick = match rx.recv().await {
+                Ok(tick) => tick,
+                Err(broadcast::error::RecvError::Lagged(_)) => continue,
+                Err(broadcast::error::RecvError::Closed) => break,
+            };
             if let Ok(json_str) = serde_json::to_string(&tick) {
                 if sender.send(Message::Text(json_str)).await.is_err() {
                     break;
@@ -156,12 +173,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
         }
     });
 
-    let recv_task =
+    let mut recv_task =
         tokio::spawn(async move { while let Some(Ok(_msg)) = receiver.next().await {} });
 
     tokio::select! {
-        _ = send_task => {},
-        _ = recv_task => {},
+        _ = &mut send_task => { recv_task.abort(); let _ = recv_task.await; },
+        _ = &mut recv_task => { send_task.abort(); let _ = send_task.await; },
     }
 }
 
@@ -175,6 +192,7 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let store_arc = Arc::new(tokio::sync::Mutex::new(store));
 
     let state = Arc::new(AppState {
+        started_at: Instant::now(),
         tick_tx: tick_tx.clone(),
         last_ticks: RwLock::new(Vec::new()),
         prices: RwLock::new(HashMap::new()),
@@ -198,6 +216,8 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
 
+    // Subscribe before starting producers so startup frames cannot be lost.
+    let mut rx = state.tick_tx.subscribe();
     // Lance les fetchers en arrière-plan
     let tx_clone = tick_tx.clone();
     tokio::spawn(async move {
@@ -209,11 +229,22 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     // Traitement temps réel des ticks
     let state_clone = state.clone();
     tokio::spawn(async move {
-        let mut rx = state_clone.tick_tx.subscribe();
-        const FEE_PERCENT: f64 = 0.36;
         const REARM_THRESHOLD: f64 = 0.005;
 
-        while let Ok(tick) = rx.recv().await {
+        loop {
+            let tick = match rx.recv().await {
+                Ok(tick) => tick,
+                Err(broadcast::error::RecvError::Lagged(count)) => {
+                    tracing::warn!(count, "Ticks lost: invalidate pending market state");
+                    state_clone.prices.write().await.clear();
+                    state_clone.alert_gates.write().await.clear();
+                    continue;
+                }
+                Err(broadcast::error::RecvError::Closed) => break,
+            };
+            if !tick.price.is_finite() || tick.price <= 0.0 {
+                continue;
+            }
             // Mettre à jour les prix
             {
                 let mut prices = state_clone.prices.write().await;
@@ -232,13 +263,20 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
             // Persister en SQLite
             {
-                let store_guard = state_clone.store.lock().await;
-                let _ = store_guard.insert_tick(
-                    &tick.symbol.to_string(),
-                    tick.price,
-                    &format!("{:?}", tick.exchange),
-                    tick.timestamp,
-                );
+                let store = state_clone.store.clone();
+                let saved_tick = tick.clone();
+                let result = tokio::task::spawn_blocking(move || {
+                    store.blocking_lock().insert_tick(
+                        &saved_tick.symbol.to_string(),
+                        saved_tick.price,
+                        &format!("{:?}", saved_tick.exchange),
+                        saved_tick.timestamp,
+                    )
+                })
+                .await;
+                if !matches!(result, Ok(Ok(()))) {
+                    tracing::error!("Tick persistence failed");
+                }
             }
 
             // Calcul spread si les deux exchanges présents
@@ -250,12 +288,14 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
                 ) {
                     let kraken_tick = kraken.clone();
                     let binance_tick = binance.clone();
-                    let signed_spread = PaperSimulator::signed_spread_percent(
-                        kraken_tick.price,
-                        binance_tick.price,
-                    );
-                    let gross_spread = signed_spread.abs();
-                    let net_spread = gross_spread - FEE_PERCENT;
+                    let Some(spread) =
+                        actionable_spread(&kraken_tick, &binance_tick, Instant::now())
+                    else {
+                        state_clone.alert_gates.write().await.remove(&tick.symbol);
+                        continue;
+                    };
+                    let gross_spread = spread.gross_percent();
+                    let net_spread = spread.net_percent();
                     let profitable = net_spread > 0.0;
                     let now = Utc::now();
 
@@ -264,6 +304,10 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
                     let gate = gates
                         .entry(tick.symbol)
                         .or_insert_with(|| AlertGate::new(3.0));
+                    if actionable_spread(&kraken_tick, &binance_tick, Instant::now()).is_none() {
+                        gate.reset_candidate(&tick.symbol.to_string());
+                        continue;
+                    }
                     let activated = gate.update(
                         &tick.symbol.to_string(),
                         profitable,
@@ -294,6 +338,9 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
                     // Paper simulator
                     let mut sim = state_clone.paper_sim.write().await;
+                    if actionable_spread(&kraken_tick, &binance_tick, Instant::now()).is_none() {
+                        continue;
+                    }
                     if let Some(action) = sim.update(
                         &tick.symbol.to_string(),
                         kraken_tick.price,
@@ -308,6 +355,9 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
                             timestamp: now,
                             spread_percent: gross_spread,
                         });
+                        if alerts.len() > 200 {
+                            alerts.remove(0);
+                        }
                     }
                 }
             }
@@ -333,4 +383,72 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+/// Fail closed before alerting or simulation; fees are a fraction internally.
+fn actionable_spread(
+    kraken: &Tick,
+    binance: &Tick,
+    now: Instant,
+) -> Option<pravda_market_core::Spread> {
+    if kraken.symbol != binance.symbol
+        || kraken.exchange != Exchange::Kraken
+        || binance.exchange != Exchange::Binance
+    {
+        return None;
+    }
+    let health = assess_market_data(
+        Some(kraken.observed_at),
+        Some(binance.observed_at),
+        now,
+        Duration::from_secs(4),
+        Duration::from_secs(2),
+    )
+    .ok()?;
+    if health.status != HealthStatus::Ok {
+        return None;
+    }
+    let spread = calculate_spread(kraken.price, binance.price, DEFAULT_FEE_RATE).ok()?;
+    if spread.gross_percent() > DEFAULT_MAX_SPREAD_PERCENT {
+        return None;
+    }
+    Some(spread)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn quote(exchange: Exchange, price: f64, observed_at: Instant) -> Tick {
+        Tick {
+            symbol: Symbol::BTCUSDT,
+            price,
+            exchange,
+            timestamp: Utc::now(),
+            observed_at,
+        }
+    }
+    #[test]
+    fn guard_rejects_stale_skew_anomalies_and_invalid_numbers() {
+        let now: Instant = Instant::now();
+        let b: Tick = quote(Exchange::Binance, 100.0, now);
+        for price in [0.0, -1.0, f64::NAN, f64::INFINITY, 106.0] {
+            assert!(actionable_spread(&quote(Exchange::Kraken, price, now), &b, now).is_none());
+        }
+        for seconds in [3_u64, 20_u64] {
+            assert!(actionable_spread(
+                &quote(Exchange::Kraken, 101.0, now - Duration::from_secs(seconds)),
+                &b,
+                now
+            )
+            .is_none());
+        }
+        let valid = actionable_spread(&quote(Exchange::Kraken, 101.0, now), &b, now).unwrap();
+        assert!((valid.net_percent() - 0.64).abs() < 1e-12);
+        assert!(actionable_spread(
+            &quote(Exchange::Kraken, 101.0, now),
+            &b,
+            now + Duration::from_secs(5)
+        )
+        .is_none());
+    }
 }

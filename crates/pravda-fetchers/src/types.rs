@@ -30,6 +30,8 @@ pub struct Tick {
     pub price: f64,
     pub timestamp: DateTime<Utc>,
     pub exchange: Exchange,
+    #[serde(skip, default = "std::time::Instant::now")]
+    pub observed_at: std::time::Instant,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

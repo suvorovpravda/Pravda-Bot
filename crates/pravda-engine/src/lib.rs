@@ -13,7 +13,7 @@ pub struct AlertGate {
 impl AlertGate {
     pub fn new(confirmation_seconds: f64) -> Self {
         assert!(
-            confirmation_seconds >= 0.0,
+            confirmation_seconds.is_finite() && confirmation_seconds >= 0.0,
             "confirmation_seconds must be non-negative"
         );
         Self {
@@ -59,6 +59,14 @@ impl AlertGate {
         rearm_threshold: f64,
         now: DateTime<Utc>,
     ) -> bool {
+        if !spread.is_finite()
+            || spread < 0.0
+            || !rearm_threshold.is_finite()
+            || rearm_threshold < 0.0
+        {
+            self.reset_candidate(symbol);
+            return false;
+        }
         if self.active.contains(symbol) {
             if spread <= rearm_threshold {
                 self.active.remove(symbol);
@@ -76,7 +84,7 @@ impl AlertGate {
         let candidate_since = self
             .candidate_since
             .entry(symbol.to_string())
-            .or_insert_with(|| now);
+            .or_insert(now);
 
         let elapsed = now
             .signed_duration_since(*candidate_since)
@@ -167,7 +175,17 @@ impl PaperSimulator {
         opportunity_confirmed: bool,
         now: DateTime<Utc>,
     ) -> Option<String> {
+        if !kraken_price.is_finite()
+            || !binance_price.is_finite()
+            || kraken_price <= 0.0
+            || binance_price <= 0.0
+        {
+            return None;
+        }
         let signed_spread = Self::signed_spread_percent(kraken_price, binance_price);
+        if !signed_spread.is_finite() {
+            return None;
+        }
 
         if let Some(pos) = self.positions.get(symbol) {
             let entry_direction = if pos.entry_signed_spread_percent > 0.0 {
@@ -180,8 +198,7 @@ impl PaperSimulator {
             let should_close = remaining_signed_spread <= self.exit_spread_percent
                 || age_seconds >= self.max_hold_seconds;
             if should_close {
-                let gross_pnl = (pos.entry_signed_spread_percent.abs()
-                    - remaining_signed_spread.abs())
+                let gross_pnl = (pos.entry_signed_spread_percent.abs() - remaining_signed_spread)
                     * pos.notional_usdt
                     / 100.0;
                 let fees = pos.notional_usdt * self.estimated_fees_percent / 100.0;
@@ -230,6 +247,29 @@ impl PaperSimulator {
 mod tests {
     use super::*;
     use chrono::Duration;
+
+    #[test]
+    fn reversal_preserves_signed_paper_return() {
+        let mut sim =
+            PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+        let now = Utc::now();
+        assert!(sim.update("BTC/USDT", 101.0, 100.0, true, now).is_some());
+        assert!(sim.update("BTC/USDT", 99.0, 100.0, false, now).is_some());
+        assert!((sim.realized_pnl_usdt - 1.64).abs() < 1e-10);
+    }
+
+    #[test]
+    fn invalid_prices_do_not_mutate_paper_state() {
+        let mut sim =
+            PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+        for price in [f64::NAN, f64::INFINITY, 0.0, -1.0] {
+            assert!(sim
+                .update("BTC/USDT", price, 100.0, true, Utc::now())
+                .is_none());
+        }
+        assert_eq!(sim.cash_usdt, 1000.0);
+        assert!(sim.positions.is_empty());
+    }
 
     #[test]
     fn test_alert_gate_basic_flow() {

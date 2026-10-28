@@ -31,9 +31,9 @@ impl KrakenClient {
 
         for symbol in &self.symbols {
             let pair = match symbol {
-                Symbol::BTCUSDT => "XBTUSD",
-                Symbol::ETHUSDT => "ETHUSD",
-                Symbol::SOLUSDT => "SOLUSD",
+                Symbol::BTCUSDT => "XBT/USDT",
+                Symbol::ETHUSDT => "ETH/USDT",
+                Symbol::SOLUSDT => "SOL/USDT",
             };
             let subscribe_msg = serde_json::json!({
                 "event": "subscribe",
@@ -67,36 +67,38 @@ impl KrakenClient {
 
     fn parse_ticker_message(&self, text: &str) -> Result<Tick, Box<dyn std::error::Error>> {
         let value: Value = serde_json::from_str(text)?;
-        if let Some(arr) = value.as_array() {
-            if let Some(channel_data) = arr.get(1).and_then(|v| v.as_object()) {
-                if let Some(pair) = channel_data.get("pair").and_then(|v| v.as_str()) {
-                    let symbol = match pair {
-                        "XBTUSD" => Symbol::BTCUSDT,
-                        "ETHUSD" => Symbol::ETHUSDT,
-                        "SOLUSD" => Symbol::SOLUSDT,
-                        _ => return Err("Unknown pair".into()),
-                    };
-                    if let Some(ticker) = channel_data.get("ticker") {
-                        if let Some(last) = ticker
-                            .get("c")
-                            .and_then(|v| v.as_array())
-                            .and_then(|a| a.first())
-                            .and_then(|v| v.as_str())
-                        {
-                            if let Ok(price) = last.parse::<f64>() {
-                                return Ok(Tick {
-                                    symbol,
-                                    price,
-                                    timestamp: Utc::now(),
-                                    exchange: Exchange::Kraken,
-                                });
-                            }
-                        }
-                    }
-                }
-            }
+        let arr: &Vec<Value> = value.as_array().ok_or("Not a ticker array")?;
+        if arr.len() != 4 {
+            return Err("Not a ticker frame".into());
         }
-        Err("Invalid ticker message".into())
+        let pair: Option<&str> = match (arr[2].as_str(), arr[3].as_str()) {
+            (Some("ticker"), pair) | (pair, Some("ticker")) => pair,
+            _ => return Err("Not a ticker frame".into()),
+        };
+        let symbol: Symbol = match pair {
+            Some("XBT/USDT" | "BTC/USDT") => Symbol::BTCUSDT,
+            Some("ETH/USDT") => Symbol::ETHUSDT,
+            Some("SOL/USDT") => Symbol::SOLUSDT,
+            _ => return Err("Unknown or non-USDT pair".into()),
+        };
+        let raw: &str = arr[1]
+            .get("c")
+            .and_then(Value::as_array)
+            .and_then(|values| values.first())
+            .and_then(Value::as_str)
+            .ok_or("Missing close price")?;
+        let price: f64 = raw.parse()?;
+        if !price.is_finite() || price <= 0.0 || !self.symbols.contains(&symbol) {
+            return Err("Invalid price or unsubscribed symbol".into());
+        }
+        // Kraken v1 ticker has no event timestamp: this records reception only.
+        Ok(Tick {
+            symbol,
+            price,
+            timestamp: Utc::now(),
+            exchange: Exchange::Kraken,
+            observed_at: std::time::Instant::now(),
+        })
     }
 
     pub async fn connect_with_retry(&self) {
@@ -117,6 +119,28 @@ impl KrakenClient {
             info!("Reconnecting in {:?}...", delay);
             sleep(delay).await;
             delay = std::cmp::min(delay * 2, max_delay);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn parses_real_v1_layout_and_rejects_usd_and_nonfinite() {
+        let (tx, _) = broadcast::channel(4);
+        let client = KrakenClient::new(vec![Symbol::BTCUSDT], tx);
+        let tick = client
+            .parse_ticker_message(r#"[42,{"c":["100.5","1"]},"ticker","XBT/USDT"]"#)
+            .unwrap();
+        assert_eq!(tick.price, 100.5);
+        for frame in [
+            r#"[42,{"c":["100","1"]},"ticker","XBT/USD"]"#,
+            r#"[42,{"c":["NaN","1"]},"ticker","XBT/USDT"]"#,
+            r#"[42,{"c":["0","1"]},"ticker","XBT/USDT"]"#,
+            r#"{"event":"heartbeat"}"#,
+        ] {
+            assert!(client.parse_ticker_message(frame).is_err());
         }
     }
 }

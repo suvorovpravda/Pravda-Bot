@@ -4,6 +4,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum StoreError {
+    #[error("invalid market tick")]
+    InvalidTick,
     #[error("rusqlite error: {0}")]
     Rusqlite(#[from] rusqlite::Error),
     #[error("IO error: {0}")]
@@ -40,6 +42,9 @@ impl PravdaStore {
         exchange: &str,
         ts: DateTime<Utc>,
     ) -> Result<(), StoreError> {
+        if !price.is_finite() || price <= 0.0 {
+            return Err(StoreError::InvalidTick);
+        }
         self.conn.execute(
             "INSERT INTO ticks (symbol, price, exchange, ts) VALUES (?1, ?2, ?3, ?4)",
             params![symbol, price, exchange, ts.to_rfc3339()],
