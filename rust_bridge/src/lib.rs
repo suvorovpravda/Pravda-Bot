@@ -1,38 +1,40 @@
 use pyo3::prelude::*;
+use pyo3::exceptions::PyValueError;
 
-/// Calculates the net spread between Kraken and Binance prices.
-/// Matches Python security_and_fees.calculate_net_spread_safe formula exactly:
-/// - Uses minimum price as denominator (not mean)
-/// - Returns ratio, NOT percentage (*100 removed)
-/// Formula: spread = (price_kraken - price_binance) / min_price - fee_rate
+/// Calcule le spread brut et net entre Kraken et Binance.
+/// Formule alignée avec Python : (Kraken - Binance) / Binance
 #[pyfunction]
-fn calculate_net_spread(price_kraken: f64, price_binance: f64, fees_percent: f64) -> PyResult<f64> {
-    // Validation: prices must be finite and positive (P2-2)
+fn calculate_spread(price_kraken: f64, price_binance: f64, fee_rate: f64) -> PyResult<(f64, f64)> {
+    // Validation stricte
     if !price_kraken.is_finite() || !price_binance.is_finite() || price_kraken <= 0.0 || price_binance <= 0.0 {
-        return Err(pyo3::exceptions::PyValueError::new_err("prices must be finite and positive"));
+        return Err(PyValueError::new_err("prices must be finite and positive"));
     }
-    
-    // Validation: fees_percent must be finite and non-negative (P2-5)
-    if !fees_percent.is_finite() || fee_rate < 0.0 {
-        return Err(pyo3::exceptions::PyValueError::new_err("fee_rate must be finite and non-negative"));
+    if !fee_rate.is_finite() || fee_rate < 0.0 {
+        return Err(PyValueError::new_err("fee_rate must be finite and non-negative"));
     }
 
-    // ✅ Match Python: (Kraken - Binance) / min_price
-    let min_price = price_kraken.min(price_binance);
-    let gross_spread = (price_kraken - price_binance) / min_price;
-    
-    // Net spread after fees
-    let net = gross_spread - fees_percent;
+    // Formule Python : (Kraken - Binance) / Binance
+    let gross = (price_kraken - price_binance) / price_binance;
+    let net = gross - fee_rate;
 
     if !net.is_finite() {
-        return Err(pyo3::exceptions::PyValueError::new_err("spread result is not finite"));
+        return Err(PyValueError::new_err("spread result is not finite"));
     }
 
-    Ok(net)
+    Ok((gross, net))
 }
 
-/// Validates a price value (used by market data validators).
+/// Valide qu'un prix est fini et positif.
 #[pyfunction]
 fn validate_price(price: f64) -> PyResult<bool> {
     Ok(price.is_finite() && price > 0.0)
+}
+
+/// ✅ INITIALIZER PYO3 — Indispensable pour l'import Python
+/// Cette fonction est appelée par Python lors de `import pravda_rust_bridge`
+#[pymodule]
+fn pravda_rust_bridge(_py: Python<'_>, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(calculate_spread, m)?)?;
+    m.add_function(wrap_pyfunction!(validate_price, m)?)?;
+    Ok(())
 }
