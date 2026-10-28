@@ -1,26 +1,24 @@
 {
+  "productName": "Pravda-Bot",
+  "version": "0.2.0",
+  "identifier": "com.pravda.bot",
   "build": {
     "beforeDevCommand": "cargo run --release -p pravda-server",
     "beforeBuildCommand": "cargo build --release -p pravda-server",
-    "frontendDist": "../.."
+    "frontendDist": "../assets"
   },
-  "package": {
-    "productName": "Pravda-Bot",
-    "version": "0.2.0"
-  },
-  "tauri": {
+  "app": {
     "windows": [
       {
         "title": "Pravda-Bot",
         "width": 1280,
         "height": 800
       }
-    ],
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.pravda.bot",
-      "icon": []
-    }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": []
   }
 }

@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "Pravda-Bot desktop app with Tauri"
 
-[dependencies]
-tauri = { version = "1.5", features = ["api-all"] }
-tokio = { version = "1", features = ["full"] }
-```
+[workspace]
 
+[dependencies]
+tauri = { version = "2", features = [] }
+tokio = { version = "1", features = ["full"] }
+pravda-server = { path = "../../rust/pravda-server" }
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
