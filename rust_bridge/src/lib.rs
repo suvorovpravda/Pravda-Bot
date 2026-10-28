@@ -1,16 +1,22 @@
-use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
 /// Calcule le spread brut et net entre Kraken et Binance.
 /// Formule alignée avec Python : (Kraken - Binance) / Binance
 #[pyfunction]
 fn calculate_spread(price_kraken: f64, price_binance: f64, fee_rate: f64) -> PyResult<(f64, f64)> {
     // Validation stricte
-    if !price_kraken.is_finite() || !price_binance.is_finite() || price_kraken <= 0.0 || price_binance <= 0.0 {
+    if !price_kraken.is_finite()
+        || !price_binance.is_finite()
+        || price_kraken <= 0.0
+        || price_binance <= 0.0
+    {
         return Err(PyValueError::new_err("prices must be finite and positive"));
     }
     if !fee_rate.is_finite() || fee_rate < 0.0 {
-        return Err(PyValueError::new_err("fee_rate must be finite and non-negative"));
+        return Err(PyValueError::new_err(
+            "fee_rate must be finite and non-negative",
+        ));
     }
 
     // Formule Python : (Kraken - Binance) / Binance

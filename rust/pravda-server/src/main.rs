@@ -1,6 +1,6 @@
 use axum::{
     http::HeaderValue,
-    response::{IntoResponse, Response, Json},
+    response::{IntoResponse, Json, Response},
     routing::get,
     Router,
 };
@@ -12,17 +12,26 @@ async fn dashboard() -> impl IntoResponse {
     let html = include_str!("../static/dashboard.html");
     let mut response = Response::new(html.to_string());
     let headers = response.headers_mut();
-    
+
     // Strict CSP: same-origin, allow inline scripts for existing dashboard functionality
     headers.insert(
         "Content-Security-Policy",
         HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:;"),
     );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
-    headers.insert("X-Content-Type-Options", HeaderValue::from_static("nosniff"));
-    headers.insert("Referrer-Policy", HeaderValue::from_static("no-referrer-when-downgrade"));
-    headers.insert("Content-Type", HeaderValue::from_static("text/html; charset=utf-8"));
-    
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert(
+        "Referrer-Policy",
+        HeaderValue::from_static("no-referrer-when-downgrade"),
+    );
+    headers.insert(
+        "Content-Type",
+        HeaderValue::from_static("text/html; charset=utf-8"),
+    );
+
     response
 }
 
@@ -107,7 +116,7 @@ async fn main() {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
     println!("🚀 Pravda Server listening on http://127.0.0.1:8080");
-    
+
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app.into_make_service())
         .await
