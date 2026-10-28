@@ -4,9 +4,10 @@ on:
     branches: [main]
     paths:
       - 'Cargo.toml'
-      - '**/rust/**'}]
+      - '**/rust/**'
 permissions:
   contents: read
+
 jobs:
   check:
     strategy:
@@ -15,29 +16,31 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
+    
     steps:
       - uses: actions/checkout@v4
       
+      # Setup Python for PyO3 detection (P1-2, P1-3)
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       
-      - name: Setup Python for PyO3 detection
-        id: python
+      # Set PYO3_PYTHON environment variable correctly for each runner
+      - name: Set PYO3_PYTHON
+        shell: bash
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
-            echo "PYTHON_PATH=Scripts/python.exe" >> $GITHUB_OUTPUT
+            echo "PYO3_PYTHON=python" >> $GITHUB_ENV
           else
-            echo "PYTHON_PATH=/opt/hostedtoolcache/Python/3.12.x/x64/bin/python" >> $GITHUB_OUTPUT
+            echo "PYO3_PYTHON=python" >> $GITHUB_ENV
           fi
       
+      # Setup Rust toolchain
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       
-      - name: Install maturin (for PyO3 wheel build)
-        run: pip install maturin
-      
+      # Cache cargo registry for faster builds
       - name: Cache cargo registry
         uses: actions/cache@v4
         with:
@@ -47,15 +50,22 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
       
-      - name: Check workspace
+      # Format check
+      - name: Check formatting
         run: cargo fmt --all -- --check
       
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets
+      # Clippy (with warnings as error, no --allow-dirty)
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
       
-      - name: Test workspace with PyO3 environment
+      # Build workspace
+      - name: Build workspace
+        run: cargo build --workspace
+      
+      # Test workspace with PyO3 environment
+      - name: Run tests (with PyO3)
         env:
-          PYO3_PYTHON: ${{ steps.python.outputs.PYTHON_PATH }}
+          PYO3_PYTHON: ${{ env.PYO3_PYTHON }}
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
         run: cargo test --workspace
 
@@ -67,16 +77,26 @@ jobs:
       
       - uses: dtolnay/rust-toolchain@stable
       
-      - name: Check workspace (MSRV-compatible toolchain)
+      # Install Python for PyO3 detection
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Set PYO3_PYTHON for MSRV check
+        shell: bash
+        run: |
+          echo "PYO3_PYTHON=python" >> $GITHUB_ENV
+      
+      # Check workspace format and build
+      - name: Check workspace (MSRV)
         run: cargo fmt --all -- --check
       
-      - name: Test PyO3 module with MSRV toolchain
+      # Test PyO3 module with MSRV toolchain
+      - name: Test PyO3 module (MSRV)
         env:
-          PYO3_PYTHON: python3
+          PYO3_PYTHON: ${{ env.PYO3_PYTHON }}
           PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
-        run: |
-          cd rust/market-core
-          cargo test --workspace
+        run: cargo test --workspace
 
   build-wheel:
     runs-on: ubuntu-latest
@@ -84,10 +104,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      # Setup Python and Rust for PyO3 wheel build
       - uses: dtolnay/rust-toolchain@stable
       
-      - name: Install maturin
+      - name: Install maturin (for PyO3 wheel)
         run: pip install maturin
+      
+      # Set PYO3_PYTHON for wheel build
+      - name: Set PYO3_PYTHON
+        shell: bash
+        run: |
+          echo "PYO3_PYTHON=python" >> $GITHUB_ENV
       
       - name: Build PyO3 wheel (for release automation)
         env:
