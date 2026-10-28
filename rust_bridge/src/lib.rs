@@ -13,8 +13,11 @@ fn calculate_net_spread(price_kraken: f64, price_binance: f64, fees_percent: f64
     if price_kraken <= 0.0 || price_binance <= 0.0 {
         return Err(pyo3::exceptions::PyValueError::new_err("prices must be positive"));
     }
-    let gross = ((price_binance - price_kraken).abs() / ((price_kraken + price_binance) / 2.0)) * 100.0;
-    let net = gross - fees_percent;
+    // Match Python security_and_fees.calculate_net_spread_safe formula
+    // Uses minimum price as denominator, no *100 multiplier
+    let min_price = price_kraken.min(price_binance);
+    let gross = (price_binance - price_kraken).abs() / min_price - fees_percent;
+    let net = gross;
     Ok(net)
 }
 

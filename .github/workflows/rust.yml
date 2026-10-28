@@ -18,13 +18,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
       - name: Setup Python for PyO3 detection
         id: python
         run: |
           if [ "$RUNNER_OS" == "Windows" ]; then
             echo "PYTHON_PATH=Scripts/python.exe" >> $GITHUB_OUTPUT
           else
-            echo "PYTHON_PATH=bin/python" >> $GITHUB_OUTPUT
+            echo "PYTHON_PATH=/opt/hostedtoolcache/Python/3.12.x/x64/bin/python" >> $GITHUB_OUTPUT
           fi
       
       - uses: dtolnay/rust-toolchain@stable
@@ -46,8 +50,8 @@ jobs:
       - name: Check workspace
         run: cargo fmt --all -- --check
       
-      - name: Clippy (without warnings as error for incremental migration)
-        run: cargo clippy --workspace --all-targets --allow-dirty
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets
       
       - name: Test workspace with PyO3 environment
         env:
