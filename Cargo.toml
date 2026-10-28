@@ -1,3 +1,4 @@
 [workspace]
 members = ["crates/pravda-engine","crates/pravda-fetchers", "crates/pravda-store","rust/market-core", "rust/pravda-server"]
 resolver = "2"
+rust-version = "1.85.0"
