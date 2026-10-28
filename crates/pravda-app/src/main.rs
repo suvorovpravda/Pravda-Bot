@@ -3,7 +3,7 @@ use tauri::{WebviewWindowBuilder, WebviewUrl};
 #[tokio::main]
 async fn main() {
     // Démarre le serveur Axum directement dans le même processus
-    let server_handle = tokio::spawn(async {
+    let _server_handle = tokio::spawn(async {
         if let Err(e) = pravda_server::run_server().await {
             eprintln!("❌ Pravda server error: {}", e);
         }
