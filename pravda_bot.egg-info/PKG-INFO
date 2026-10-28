@@ -1,0 +1,70 @@
+Metadata-Version: 2.4
+Name: pravda-bot
+Version: 0.1.1
+Summary: Local-first market bot with real-time dashboard
+Author: Your Name
+License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
+Requires-Dist: python-dotenv>=1.0.0
+Requires-Dist: requests>=2.31.0
+Requires-Dist: websockets>=12.0
+Requires-Dist: rich>=13.7.0
+Requires-Dist: ccxt>=4.9.1
+Requires-Dist: pydantic>=2.6.4
+Dynamic: description
+Dynamic: requires-dist
+Dynamic: requires-python
+Dynamic: summary
+
+# Pravdaâ€‘Bot
+
+Pravdaâ€‘Bot est un observateur local Python pour les marchÃ©s crypto et lâ€™Ã©nergie. Il collecte des ticks publics (Kraken/Binance), mesure les spreads, exÃ©cute une simulation papier, fournit un tableau de bord web local et expose une API d'OSINT.
+
+## Roadmap (prioritÃ©s)
+- **Terminal enrichi** â€“ historique persistant, graphiques multiâ€‘Ã©chelle, CSV export, alertes configurables.
+- **Cartographie gÃ©ospatiale** â€“ pipelines ENTSOG + OSM, AIS maritime open source, TTF prix vÃ©rifiÃ©s.
+- **Veille gÃ©opolitique** â€“ GDELT/BBC/ACLED, filtres personnalisÃ©s, journal de provenance.
+
+## FonctionnalitÃ©s clÃ©s
+* Tick collection via WebSocket (Kraken/Binance)
+* Spread calculation & alerting with hysteresis
+* Paperâ€‘trading simulation (no real orders)
+* SQLite persistent history (`market_history.sqlite3`)
+* Local dashboard (127.0.0.1:8080) â€“ live ticks, alerts, daily report CSV
+* ENTSOG data for pipeline points (no real conduit data)
+* AIS stream via openâ€‘source APIs (aisstream.io / openwaters.io) â€“ no commercial licence
+* OSINT pipeline: GDELT, BBC RSS, GDELT news aggregation
+
+## Installation
+```bash
+python -m venv .venv
+.\.venv\Scripts\activate  # Windows
+# or .venv/bin/activate    # Linux/Mac
+pip install --require-hashes -r requirements.txt
+```
+Create `.env` from `.env.example` if you want to enable notifications (`NTFY_TOPIC_URL`), LMâ€‘Studio analysis, or AIS proxy.
+
+**Secrets**
+* Ne jamais committer `.env`. `AIS_API_KEY` est affichÃ©e une seule fois sur aisstream.io/account : stocke-la uniquement dans une variable dâ€™environnement ou un secret manager, jamais dans le code ni dans le repo.
+* Le fichier `.env.example` contient les clÃ©s sans valeur.
+
+Run:
+```bash
+python dashboard.py  # HTTP server
+python main.py       # Bot loop
+```
+Open <http://127.0.0.1:8080> in your browser.
+
+## Usage
+* The bot writes ticks to `market_history.sqlite3`.
+* Daily reports are exported as CSV (`daily_report.csv`).
+* Alerts can be sent via ntfy if a private topic is configured.
+
+## Security
+See [SECURITY.md](SECURITY.md) for hardening guidelines, secret handling and audit results.
+
+## Contributing
+Pull requests accepted after passing tests (pytest + lint). Avoid exposing secrets in `.env` or commit history.

@@ -1,40 +1,129 @@
 name: Rust migration
 on:
   push:
-    branches: [main, 'rust/**']
-  pull_request:
     branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - '**/rust/**'
 permissions:
   contents: read
+
 jobs:
-  msrv:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - uses: dtolnay/rust-toolchain@1.89.0
-        env:
-          PYO3_PYTHON: python3
-      - run: cargo check --locked --workspace --all-targets
   check:
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    
     steps:
       - uses: actions/checkout@v4
+      
+      # Setup Python for PyO3 detection (P1-2, P1-3)
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      
+      # Set PYO3_PYTHON environment variable correctly for each runner
+      - name: Set PYO3_PYTHON
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            echo "PYO3_PYTHON=python" >> $GITHUB_ENV
+          else
+            echo "PYO3_PYTHON=python" >> $GITHUB_ENV
+          fi
+      
+      # Setup Rust toolchain
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
+      
+      # Cache cargo registry for faster builds
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      
+      # Format check
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      
+      # Clippy (with warnings as error, no --allow-dirty)
+      - name: Run clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      
+      # Build workspace
+      - name: Build workspace
+        run: cargo build --workspace
+      
+      # Test workspace with PyO3 environment
+      - name: Run tests (with PyO3)
         env:
-          PYO3_PYTHON: python3
-      - run: cargo fmt --all -- --check
-      - run: cargo clippy --locked --workspace --all-targets -- -D warnings
-      - run: cargo test --locked --workspace
-      - run: cargo build --locked --workspace --release
+          PYO3_PYTHON: ${{ env.PYO3_PYTHON }}
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+        run: cargo test --workspace
+
+  msrv:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: dtolnay/rust-toolchain@stable
+      
+      # Install Python for PyO3 detection
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      
+      - name: Set PYO3_PYTHON for MSRV check
+        shell: bash
+        run: |
+          echo "PYO3_PYTHON=python" >> $GITHUB_ENV
+      
+      # Check workspace format and build
+      - name: Check workspace (MSRV)
+        run: cargo fmt --all -- --check
+      
+      # Test PyO3 module with MSRV toolchain
+      - name: Test PyO3 module (MSRV)
+        env:
+          PYO3_PYTHON: ${{ env.PYO3_PYTHON }}
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+        run: cargo test --workspace
+
+  build-wheel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      
+      # Setup Python and Rust for PyO3 wheel build
+      - uses: dtolnay/rust-toolchain@stable
+      
+      - name: Install maturin (for PyO3 wheel)
+        run: pip install maturin
+      
+      # Set PYO3_PYTHON for wheel build
+      - name: Set PYO3_PYTHON
+        shell: bash
+        run: |
+          echo "PYO3_PYTHON=python" >> $GITHUB_ENV
+      
+      - name: Build PyO3 wheel (for release automation)
+        env:
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY: 1
+        run: |
+          cd rust/market-core
+          PYO3_USE_ABI3_FORWARD_COMPATIBILITY=1 maturin build --release --out dist
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pravda-wheel-ubuntu
+          path: rust/market-core/dist/*.whl
