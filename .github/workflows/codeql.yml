@@ -23,7 +23,7 @@ jobs:
       matrix:
         include:
         - language: rust
-          build-mode: autobuild
+          build-mode: none
         - language: python
           build-mode: none
 
@@ -32,18 +32,14 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Initialize CodeQL
-      uses: github/codeql-action/init@v3
+      uses: github/codeql-action/init@v4
       with:
         languages: ${{ matrix.language }}
         build-mode: ${{ matrix.build-mode }}
         config-file: ./.github/codeql-config.yml
         queries: security-extended,security-and-quality
 
-    - name: Autobuild
-      uses: github/codeql-action/autobuild@v3
-      if: matrix.build-mode == 'autobuild'
-
     - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v3
+      uses: github/codeql-action/analyze@v4
       with:
         category: "/language:${{matrix.language}}"
