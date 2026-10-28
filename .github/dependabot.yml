@@ -32,7 +32,7 @@ updates:
       - dependency-name: "pyo3"
         update-types: ["version-update:semver-major"]
       - dependency-name: "glib"
-        versions: ["<0.20.0"]
+        update-types: ["version-update:semver-major","version-update:semver-minor","version-update:semver-patch","security"]
         # Vulnérabilité RUSTSEC-2024-0429 bloquée en amont par Tauri/GTK3
         # Voir https://github.com/tauri-apps/tauri/issues
 
