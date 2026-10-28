@@ -144,7 +144,7 @@ mod tests {
 use pyo3::prelude::*;
 
 #[pymodule]
-fn pravda_market_core(_py: Python, m: &PyModule) -> PyResult<()> {
+fn pravda_market_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(py_parse_positive_price, m)?)?;
     m.add_function(wrap_pyfunction!(py_calculate_spread, m)?)?;
     m.add_function(wrap_pyfunction!(py_allowed_spread, m)?)?;
