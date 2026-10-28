@@ -11,6 +11,10 @@
 
 ## Français
 
+### Migration Rust
+
+Le module `rust/market-core` fournit validation des prix, calcul de spread, contrôle de fraîcheur et persistance SQLite expérimentale isolée. Il utilise `PRAGMA journal_mode=WAL`, `busy_timeout` configurable et un pool r2d2. Le module n'est pas encore raccordé au bot en fonctionnement et refuse d'ouvrir une base existante.
+
 ### Périmètre et modèle de menace
 
 Pravda-Bot est une application locale de surveillance publique et de simulation papier. Elle ne passe pas d'ordres réels et ne valide pas les soldes ou les permissions d'un compte privé. Le dashboard utilise `http.server`, écoute sur **127.0.0.1** et n'a pas d'authentification. Il ne doit pas être publié par tunnel, interface réseau publique ou reverse proxy public.

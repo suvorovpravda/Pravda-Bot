@@ -41,11 +41,36 @@ from reconnect import ExponentialBackoff, run_with_reconnect
 from security_and_fees import (
     DEFAULT_ESTIMATED_FEES_PERCENT,
     check_security_guardrails,
-    calculate_net_spread_safe,
-    parse_positive_price,
+    calculate_net_spread_safe as py_calculate_net_spread_safe,
+    parse_positive_price as py_parse_positive_price,
     request_error_summary,
     csv_safe_text,
 )
+
+USE_RUST_CORE = os.getenv('USE_RUST_CORE','0') == '1'
+try:
+    import pravda_market_core as rust_core
+    RUST_AVAILABLE = USE_RUST_CORE
+except Exception:
+    RUST_AVAILABLE = False
+    rust_core = None
+
+def calculate_net_spread_safe(price_kraken, price_binance, fee_rate):
+    if RUST_AVAILABLE and rust_core is not None:
+        try:
+            gross_frac, net_frac = rust_core.py_calculate_spread(price_kraken, price_binance, fee_rate)
+            return net_frac
+        except Exception:
+            RUST_AVAILABLE = False
+    return py_calculate_net_spread_safe(price_kraken, price_binance, fee_rate)
+
+def parse_positive_price(raw):
+    if RUST_AVAILABLE and rust_core is not None:
+        try:
+            return rust_core.py_parse_positive_price(raw)
+        except Exception:
+            RUST_AVAILABLE = False
+    return py_parse_positive_price(raw)
 
 market_store = get_market_store()
 

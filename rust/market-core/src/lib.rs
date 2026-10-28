@@ -139,3 +139,31 @@ mod tests {
         );
     }
 }
+
+// PyO3 bindings
+use pyo3::prelude::*;
+
+#[pymodule]
+fn pravda_market_core(_py: Python, m: &PyModule) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(py_parse_positive_price, m)?)?;
+    m.add_function(wrap_pyfunction!(py_calculate_spread, m)?)?;
+    m.add_function(wrap_pyfunction!(py_allowed_spread, m)?)?;
+    Ok(())
+}
+
+#[pyfunction]
+fn py_parse_positive_price(raw: String) -> PyResult<f64> {
+    parse_positive_price(&raw).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:?}", e)))
+}
+
+#[pyfunction]
+fn py_calculate_spread(first: f64, second: f64, fee_rate: f64) -> PyResult<(f64, f64)> {
+    let s = calculate_spread(first, second, fee_rate).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:?}", e)))?;
+    Ok((s.gross_fraction, s.net_fraction))
+}
+
+#[pyfunction]
+fn py_allowed_spread(gross_percent: f64, maximum_percent: f64) -> PyResult<bool> {
+    allowed_spread(gross_percent, maximum_percent).map_err(|e| pyo3::exceptions::PyValueError::new_err(format!("{:?}", e)))
+}
+

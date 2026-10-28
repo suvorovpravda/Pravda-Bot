@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Pravda Bot – Dashboard</title>
+<style>
+body{font-family:system-ui;margin:0;background:#091426;color:#f2f5fb}
+.tabs{display:flex;gap:8px;padding:12px;background:#101f34}
+.tab{padding:8px 12px;border:1px solid #293d59;border-radius:8px;cursor:pointer}
+.tab.active{background:#172943;border-color:#4d8edc}
+.panel{padding:20px;display:none}
+.panel.active{display:block}
+</style>
+</head>
+<body>
+<div class="tabs">
+<div class="tab active" data-tab="markets">Marchés / Crypto</div>
+<div class="tab" data-tab="fx">Taux FX</div>
+<div class="tab" data-tab="alerts">Alertes</div>
+<div class="tab" data-tab="flows">Flux & News</div>
+<div class="tab" data-tab="metrics">Métriques</div>
+</div>
+<div id="markets" class="panel active">Marchés</div>
+<div id="fx" class="panel">FX</div>
+<div id="alerts" class="panel">Alertes</div>
+<div id="flows" class="panel">Flux</div>
+<div id="metrics" class="panel">Métriques</div>
+<script>
+document.querySelectorAll('.tab').forEach(t=>{
+ t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.tab).classList.add('active');
+ }
+});
+</script>
+</body>
+</html>
