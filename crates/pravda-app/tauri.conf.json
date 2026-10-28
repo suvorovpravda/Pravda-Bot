@@ -3,9 +3,6 @@
   "version": "0.2.0",
   "identifier": "com.pravda.bot",
   "build": {
-    "beforeDevCommand": "cargo run --release -p pravda-server",
-    "beforeBuildCommand": "cargo build --release -p pravda-server",
-    "frontendDist": "../assets"
   },
   "app": {
     "windows": [

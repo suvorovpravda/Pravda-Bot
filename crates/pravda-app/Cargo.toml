@@ -9,6 +9,7 @@ description = "Pravda-Bot desktop app with Tauri"
 [dependencies]
 tauri = { version = "2", features = [] }
 tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.11", features = ["json"] }
 pravda-server = { path = "../../rust/pravda-server" }
 
 [build-dependencies]
