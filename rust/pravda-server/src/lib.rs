@@ -20,6 +20,7 @@ use pravda_market_core::{calculate_spread, DEFAULT_FEE_RATE};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
 use std::collections::HashMap;
+use std::env; // added for env var
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -52,10 +53,15 @@ async fn dashboard(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let mut response = Response::new(html.replace("ws://127.0.0.1:8080/ws/ticks", &socket_url));
     let headers = response.headers_mut();
 
+    // Determine port from env var for CSP
+    let port: u16 = std::env::var("DASHBOARD_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(8080);
+    let csp = format!("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self ws://127.0.0.1:{port}'; img-src 'self' data:;");
     headers.insert(
         "Content-Security-Policy",
-        HeaderValue::from_str(&format!("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:{}; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none';", state.config.port)).expect("static CSP and numeric port are valid header bytes"),
-    );
+        HeaderValue::from_str(&csp).unwrap(),    );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
     headers.insert(
         "X-Content-Type-Options",
@@ -415,8 +421,17 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         ))
         .with_state(state);
 
-    println!("Pravda Server listening on http://{addr}");
-    println!("WebSocket endpoint: ws://{addr}/ws/ticks");
+
+    // Determine port from env var or default 8080
+    let port: u16 = std::env::var("DASHBOARD_PORT")
+        .ok()
+        .and_then(|p| p.parse::<u16>().ok())
+        .unwrap_or(8080);
+    let addr = SocketAddr::from(([127, 0, 0, 1], port));
+    println!("🚀 Pravda Server listening on http://127.0.0.1:{port}");
+    println!("📡 WebSocket endpoint: ws://127.0.0.1:{port}/ws/ticks");
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;
 
     Ok(())
