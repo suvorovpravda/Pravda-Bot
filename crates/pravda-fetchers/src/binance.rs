@@ -75,11 +75,27 @@ impl BinanceClient {
             };
             if let Some(price_str) = value.get("c").and_then(|v| v.as_str()) {
                 if let Ok(price) = price_str.parse::<f64>() {
+                    if !price.is_finite() || price <= 0.0 || !self.symbols.contains(&symbol) {
+                        return Err("Invalid price or unsubscribed symbol".into());
+                    }
+                    let timestamp = value
+                        .get("E")
+                        .and_then(Value::as_i64)
+                        .and_then(chrono::DateTime::from_timestamp_millis)
+                        .ok_or("Missing or invalid event timestamp")?;
+                    if timestamp > Utc::now() + chrono::Duration::seconds(5) {
+                        return Err("Future event timestamp".into());
+                    }
+                    let age = (Utc::now() - timestamp).to_std().unwrap_or(Duration::ZERO);
+                    let observed_at = std::time::Instant::now()
+                        .checked_sub(age)
+                        .ok_or("Event timestamp out of monotonic range")?;
                     return Ok(Tick {
                         symbol,
                         price,
-                        timestamp: Utc::now(),
+                        timestamp,
                         exchange: Exchange::Binance,
+                        observed_at,
                     });
                 }
             }
@@ -106,5 +122,26 @@ impl BinanceClient {
             sleep(delay).await;
             delay = std::cmp::min(delay * 2, max_delay);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn retains_event_age_and_rejects_invalid_quotes() {
+        let (tx, _) = broadcast::channel(4);
+        let client = BinanceClient::new(vec![Symbol::BTCUSDT], tx);
+        let epoch: i64 = (Utc::now() - chrono::Duration::seconds(20)).timestamp_millis();
+        let frame = serde_json::json!({"s":"BTCUSDT","c":"100","E":epoch});
+        let tick = client.parse_ticker_message(&frame.to_string()).unwrap();
+        assert!(tick.observed_at.elapsed() >= Duration::from_secs(19));
+        for price in ["NaN", "inf", "0", "-1", "1e999"] {
+            let bad = serde_json::json!({"s":"BTCUSDT","c":price,"E":epoch});
+            assert!(client.parse_ticker_message(&bad.to_string()).is_err());
+        }
+        assert!(client
+            .parse_ticker_message(r#"{"s":"BTCUSDT","c":"100"}"#)
+            .is_err());
     }
 }

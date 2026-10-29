@@ -1,4 +1,5 @@
 [workspace]
 members = ["crates/pravda-engine","crates/pravda-fetchers", "crates/pravda-store","rust/market-core", "rust/pravda-server"]
 resolver = "2"
+[workspace.package]
 rust-version = "1.95.0"

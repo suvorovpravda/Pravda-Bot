@@ -7,6 +7,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/rust.yml'
+      - 'dashboard.html'
       - '**/rust/**'
       - 'crates/**'
   pull_request:
@@ -43,13 +44,13 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Check workspace
-        run: cargo check --workspace --all-targets
+        run: cargo check --locked --workspace --all-targets
 
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
   msrv:
     name: Rust MSRV
@@ -60,4 +61,4 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.95.0
 
       - name: Check workspace with MSRV
-        run: cargo check --workspace --all-targets
+        run: cargo check --locked --workspace --all-targets
