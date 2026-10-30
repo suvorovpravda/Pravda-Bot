@@ -4,6 +4,8 @@ Base du lot historique : `9e910ace0091d83b68bacfd9276f39e67ed775e4` (PR #19 fusi
 
 ## FR
 
+Reprise du 30 octobre : correction de l'ordre des verrous de `/api/alerts` (test déterministe échouant avant correction), adaptation des messages texte à tokio-tungstenite 0.30, restauration de la MSRV 1.95.0. Dependabot ne modifie plus automatiquement la référence rust-toolchain ; sa maintenance reste manuelle.
+
 Lot historique : `/api/market/history` et `/api/market/history.csv` raccordés en Rust. Filtres typés symbol/exchange/period, ordre chronologique, limite 10 000, troncature explicite, requêtes SQLite paramétrées et indexées, erreurs 503 sans détails internes. Tests HTTP sans réseau externe. Le graphique EUR/CHF dépend encore du connecteur FX non migré ; ces routes ne suffisent pas à rendre toutes les courbes visibles.
 
 Lot courant : réparer le chemin Rust réellement exécuté avant de poursuivre la parité fonctionnelle.
@@ -43,11 +45,15 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 
 ## RU
 
+30 октября: исправлены порядок блокировок alerts/simulator, совместимость с tokio-tungstenite 0.30 и версия MSRV 1.95.0.
+
 Добавлены JSON/CSV-маршруты истории с типизированными фильтрами и ограничением 10 000 записей. График EUR/CHF пока зависит от отсутствующего FX-коннектора.
 
 Текущий этап исправляет рабочий Rust-сервер, но не завершает перенос всех функций. Далее нужны реальные источники энергии/новостей/FX, совместимые HTTP-маршруты, CSV, настраиваемые уведомления, безопасность HTTP и проверенная сборка Windows. Команды выше проверяют workspace сервера, а не отдельное приложение Tauri. Архив Python сохранён.
 
 ## EN
+
+October 30: repaired alerts/simulator lock ordering, tokio-tungstenite 0.30 text compatibility and MSRV 1.95.0. Toolchain-reference maintenance is now manual.
 
 History JSON/CSV routes now support typed filters and a 10,000-row cap. EUR/CHF charts still depend on the missing FX connector.
 

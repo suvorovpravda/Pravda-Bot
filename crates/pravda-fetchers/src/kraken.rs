@@ -40,7 +40,9 @@ impl KrakenClient {
                 "pair": [pair],
                 "subscription": {"name": "ticker"}
             });
-            write.send(Message::Text(subscribe_msg.to_string())).await?;
+            write
+                .send(Message::Text(subscribe_msg.to_string().into()))
+                .await?;
             info!("Subscribed to {} ticker", symbol);
         }
 

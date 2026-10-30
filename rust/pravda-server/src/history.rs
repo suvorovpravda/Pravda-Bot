@@ -239,6 +239,25 @@ mod tests {
             store: Arc::new(Mutex::new(store)),
         })
     }
+    #[tokio::test]
+    async fn alerts_handler_releases_alerts_before_waiting_for_simulator() {
+        let state = test_state();
+        let simulator = state.paper_sim.write().await;
+        let response = crate::api_alerts(State(state.clone()));
+        tokio::pin!(response);
+        std::future::poll_fn(|context| {
+            assert!(std::future::Future::poll(response.as_mut(), context).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+        assert!(
+            state.alerts.try_write().is_ok(),
+            "opposite lock order can deadlock the writer"
+        );
+        drop(simulator);
+        let _ = response.await;
+    }
+
     fn app() -> Router {
         Router::new()
             .route("/api/market/history", get(json_history))
