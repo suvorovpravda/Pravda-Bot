@@ -59,6 +59,8 @@ Un ticker Kraken v1 est actualisé à chaque transaction ; une absence de transa
 
 L'interface utilise encore des scripts inline. La liaison locale ne remplace pas une authentification : ne pas exposer le port par un proxy public. Les résultats papier ne modélisent pas les contraintes de remplissage, marge, emprunt, inventaire ou latence de placement.
 
+Le serveur contrôle désormais `Host`, `Origin` et le contexte navigateur avant les routes HTTP/WebSocket. Les requêtes vers un hôte ou un port inattendu sont refusées. Les clients locaux sans `Origin` restent utilisables ; ce contrôle ne protège pas contre un programme malveillant exécuté sur le poste. Voir [SECURITY.md](SECURITY.md).
+
 ### Contribuer et reprendre le travail
 
 Chaque lot doit avoir des tests Rust, un commit identifiable et une CI Windows/Linux vérifiée avant fusion. Ne pas présenter un module isolé comme intégré. Les archives ne sont pas une suite de validation de la nouvelle application. Consulter [MIGRATION_STATUS.md](MIGRATION_STATUS.md) pour les travaux restants et les commandes de contrôle.

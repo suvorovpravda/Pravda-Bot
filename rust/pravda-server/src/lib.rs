@@ -1,6 +1,7 @@
 use axum::extract::ws::{Message, WebSocket};
 mod config;
 mod history;
+mod http_security;
 use axum::{
     extract::State,
     extract::WebSocketUpgrade,
@@ -408,6 +409,10 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/alerts", get(api_alerts))
         .route("/api/metrics", get(api_metrics))
         .route("/ws/ticks", get(ws_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            state.config.port,
+            http_security::local_only,
+        ))
         .with_state(state);
 
     println!("Pravda Server listening on http://{addr}");
