@@ -16,7 +16,49 @@ pub struct PravdaStore {
     conn: Connection,
 }
 
+#[derive(Debug, Clone)]
+pub struct HistoryTick {
+    pub price: f64,
+    pub timestamp: String,
+}
+
 impl PravdaStore {
+    /// Return the newest bounded window in chronological order.
+    pub fn history(
+        &self,
+        symbol: &str,
+        exchange: &str,
+        since: DateTime<Utc>,
+        until: DateTime<Utc>,
+        limit: usize,
+    ) -> Result<Vec<HistoryTick>, StoreError> {
+        if !(1..=10_001).contains(&limit) || since > until {
+            return Err(StoreError::InvalidTick);
+        }
+        let mut statement = self.conn.prepare(
+            "SELECT price, ts FROM ticks WHERE symbol = ?1 AND exchange = ?2
+             AND julianday(ts) >= julianday(?3) AND julianday(ts) <= julianday(?4)
+             ORDER BY julianday(ts) DESC, id DESC LIMIT ?5",
+        )?;
+        let rows = statement.query_map(
+            params![
+                symbol,
+                exchange,
+                since.to_rfc3339(),
+                until.to_rfc3339(),
+                limit as i64
+            ],
+            |row| {
+                Ok(HistoryTick {
+                    price: row.get(0)?,
+                    timestamp: row.get(1)?,
+                })
+            },
+        )?;
+        let mut ticks = rows.collect::<Result<Vec<_>, _>>()?;
+        ticks.reverse();
+        Ok(ticks)
+    }
     pub fn open(path: &str) -> Result<Self, StoreError> {
         let conn = Connection::open(path)?;
         conn.execute_batch(
@@ -30,6 +72,7 @@ impl PravdaStore {
                  ts TEXT NOT NULL
              );
              CREATE INDEX IF NOT EXISTS idx_ticks_symbol_ts ON ticks(symbol, ts);
+             CREATE INDEX IF NOT EXISTS idx_ticks_history ON ticks(symbol, exchange, julianday(ts) DESC, id DESC);
          ",
         )?;
         Ok(Self { conn })
@@ -73,6 +116,47 @@ impl PravdaStore {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn history_is_bounded_chronological_and_excludes_future_ticks() {
+        let store = PravdaStore::open(":memory:").unwrap();
+        let now = Utc::now();
+        for seconds in [-3_i64, -2, -1, 1] {
+            store
+                .insert_tick(
+                    "SOL/USDT",
+                    (seconds + 100) as f64,
+                    "Binance",
+                    now + chrono::Duration::seconds(seconds),
+                )
+                .unwrap();
+        }
+        let rows = store
+            .history(
+                "SOL/USDT",
+                "Binance",
+                now - chrono::Duration::days(1),
+                now,
+                2,
+            )
+            .unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].price, 98.0);
+        assert_eq!(rows[1].price, 99.0);
+        assert!(store
+            .history(
+                "SOL/USDT",
+                "Kraken",
+                now - chrono::Duration::days(1),
+                now,
+                2
+            )
+            .unwrap()
+            .is_empty());
+        assert!(store
+            .history("SOL/USDT", "Binance", now, now, usize::MAX)
+            .is_err());
+    }
 
     #[test]
     fn test_store_roundtrip() {
