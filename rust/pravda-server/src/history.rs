@@ -221,6 +221,7 @@ mod tests {
             .unwrap();
         let (tick_tx, _) = broadcast::channel(8);
         Arc::new(AppState {
+            config: crate::config::ServerConfig::default(),
             started_at: Instant::now(),
             tick_tx,
             last_ticks: RwLock::new(Vec::new()),
@@ -263,6 +264,20 @@ mod tests {
             .route("/api/market/history", get(json_history))
             .route("/api/market/history.csv", get(csv_history))
             .with_state(test_state())
+    }
+    #[tokio::test]
+    async fn configured_port_reaches_dashboard_socket_and_csp() {
+        let mut state = test_state();
+        Arc::get_mut(&mut state).unwrap().config.port = 8081;
+        let response = crate::dashboard(State(state)).await.into_response();
+        assert!(response.headers()[header::CONTENT_SECURITY_POLICY]
+            .to_str()
+            .unwrap()
+            .contains("ws://127.0.0.1:8081"));
+        let bytes = to_bytes(response.into_body(), 2_000_000).await.unwrap();
+        let html = std::str::from_utf8(&bytes).unwrap();
+        assert!(html.contains("ws://127.0.0.1:8081/ws/ticks"));
+        assert!(!html.contains("ws://127.0.0.1:8080/ws/ticks"));
     }
     #[tokio::test]
     async fn cap_keeps_newest_ticks_and_reports_truncation() {

@@ -27,6 +27,20 @@ cargo run --locked -p pravda-server
 
 Ouvrir http://127.0.0.1:8080. Le serveur écoute uniquement la boucle locale et crée `pravda.db` dans le répertoire de lancement. Arrêt : Ctrl+C. Il nécessite un accès Internet pour les flux publics ; local ne signifie pas hors ligne. Le serveur n'a pas besoin de Python.
 
+### Configuration du serveur Rust
+
+Définir les variables dans l'environnement du processus avant le lancement. Le serveur ne charge pas automatiquement les fichiers `.env` de l'ancienne version.
+
+| Variable | Défaut | Validation |
+|---|---|---|
+| `DASHBOARD_PORT` | 8080 | Entier de 1 à 65535 ; écoute toujours sur 127.0.0.1 |
+| `PRAVDA_DB_PATH` | pravda.db | Chemin non vide, sans octet nul ; base mémoire refusée ; dossier parent existant |
+| `MARKET_DATA_STALE_SECONDS` | 4 | Durée strictement positive, au plus 3600 secondes |
+| `MAX_EXCHANGE_SKEW_SECONDS` | 2 | Durée de 0 à 3600 secondes |
+| `MAX_ALLOWED_SPREAD_PERCENT` | 5 | Valeur finie strictement positive, au plus 100 points de pourcentage |
+
+Sous PowerShell, `$env:DASHBOARD_PORT='8081'` puis `cargo run --locked -p pravda-server` utilise http://127.0.0.1:8081. Une configuration invalide ou un port occupé interrompt le démarrage avant les connexions marché. Les frais restent fixés à 0,36 %. Augmenter les limites de fraîcheur ou d'anomalie réduit la protection. Le lanceur Tauri séparé attend encore 8080 : ces options sont actuellement destinées au serveur en ligne de commande.
+
 ### Fonctionnement et limites
 
 | Composant | État réel |
@@ -55,6 +69,8 @@ Disponibilité annoncée par le responsable : la moitié de l'équipe est en vac
 
 ## Русский
 
+Rust-сервер читает переменные окружения процесса, но не загружает `.env` автоматически. Порт задаётся `DASHBOARD_PORT`, база — `PRAVDA_DB_PATH`, ограничения — переменными из таблицы выше. Ошибочные значения останавливают запуск. Отдельный Tauri-клиент пока ожидает порт 8080.
+
 Pravda-Bot — локальное приложение наблюдения за публичными ценами Kraken/Binance. Сервер написан на Rust (Tokio/Axum), история хранится в SQLite. Реальные ордера не отправляются; счета и остатки не проверяются. Старый Python-код находится в `archive/python-legacy/` и не запускается Rust-сервером.
 
 Запуск: `cargo test --locked --workspace`, затем `cargo run --locked -p pravda-server`. Интерфейс: http://127.0.0.1:8080. Для рыночных данных требуется Интернет.
@@ -64,6 +80,8 @@ Pravda-Bot — локальное приложение наблюдения за
 Каждое изменение проходит тесты и отдельный коммит; перед слиянием требуется CI Windows/Linux. План: [MIGRATION_STATUS.md](MIGRATION_STATUS.md). По информации руководителя, половина команды в отпуске, возвращение ожидается около 2 ноября 2026 года.
 
 ## English
+
+The Rust server reads process environment variables; it does not automatically load `.env`. Configure the port with `DASHBOARD_PORT`, storage with `PRAVDA_DB_PATH`, and guard thresholds using the table above. Invalid values stop startup. The separate Tauri client still expects port 8080.
 
 Pravda-Bot observes public Kraken/Binance prices locally. Its active server uses Rust, Tokio/Axum and SQLite. It sends no real orders and verifies no exchange accounts. Python sources under `archive/python-legacy/` are reference material, not part of the Rust runtime.
 
