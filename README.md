@@ -35,7 +35,7 @@ Ouvrir http://127.0.0.1:8080. Le serveur écoute uniquement la boucle locale et 
 | Contrôles | Prix finis positifs, fraîcheur 4 s, désynchronisation 2 s, plafond d'écart brut 5 % |
 | Frais | Estimation fixe de 0,0036 en fraction, soit 0,36 point de pourcentage |
 | Simulation | Moteur Rust en mémoire ; aucun ordre, carnet exécuté, solde réel ou transfert |
-| Historique | SQLite WAL, appels bloquants isolés du runtime asynchrone ; historique API encore limité à BTC |
+| Historique | SQLite WAL ; JSON/CSV filtrés BTC/ETH/SOL, Kraken/Binance, jour/semaine/mois ; 10 000 ticks maximum avec indicateur de troncature |
 | Métriques | Uptime et PID réels ; CPU et mémoire indisponibles (`null`) |
 | Interface | HTML/JavaScript servi par Rust ; certains panneaux de l'ancienne interface restent à raccorder |
 | Énergie, actualités, Forex, AIS | Migration non terminée : aucune promesse de données opérationnelles |

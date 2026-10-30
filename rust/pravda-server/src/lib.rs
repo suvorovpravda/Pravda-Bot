@@ -1,4 +1,5 @@
 use axum::extract::ws::{Message, WebSocket};
+mod history;
 use axum::{
     extract::State,
     extract::WebSocketUpgrade,
@@ -369,6 +370,8 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/market", get(api_market))
         .route("/api/fx", get(api_fx))
         .route("/api/history", get(api_history))
+        .route("/api/market/history", get(history::json_history))
+        .route("/api/market/history.csv", get(history::csv_history))
         .route("/api/news", get(api_news))
         .route("/api/alerts", get(api_alerts))
         .route("/api/metrics", get(api_metrics))

@@ -1,8 +1,10 @@
 # Migration Rust — point de reprise / передача / handoff
 
-Base : `230387178413a1879774ea0b2897ebe95a218957`.
+Base du lot historique : `9e910ace0091d83b68bacfd9276f39e67ed775e4` (PR #19 fusionnée).
 
 ## FR
+
+Lot historique : `/api/market/history` et `/api/market/history.csv` raccordés en Rust. Filtres typés symbol/exchange/period, ordre chronologique, limite 10 000, troncature explicite, requêtes SQLite paramétrées et indexées, erreurs 503 sans détails internes. Tests HTTP sans réseau externe. Le graphique EUR/CHF dépend encore du connecteur FX non migré ; ces routes ne suffisent pas à rendre toutes les courbes visibles.
 
 Lot courant : réparer le chemin Rust réellement exécuté avant de poursuivre la parité fonctionnelle.
 
@@ -20,7 +22,7 @@ Lot courant : réparer le chemin Rust réellement exécuté avant de poursuivre 
 À reprendre, sans annoncer une migration complète :
 
 1. Remplacer le reste des réponses provisoires énergie/actualités/FX par des adaptateurs testés avec provenance et indisponibilité explicite.
-2. Porter les routes historique filtré/CSV, alertes configurables, sources et rapports journaliers attendues par l'interface.
+2. Porter les alertes configurables, sources et rapports journaliers ; historique filtré JSON/CSV désormais implémenté.
 3. Porter les estimations sur carnets, exports et outils d'analyse hors ligne ; comparer les résultats de référence aux archives.
 4. Porter ntfy/LLM optionnels avec secrets masqués et revalidation des snapshots avant chaque effet.
 5. Renforcer CSP, contrôle Host/Origin, débit HTTP et tests de sécurité du nouveau serveur.
@@ -41,8 +43,12 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 
 ## RU
 
+Добавлены JSON/CSV-маршруты истории с типизированными фильтрами и ограничением 10 000 записей. График EUR/CHF пока зависит от отсутствующего FX-коннектора.
+
 Текущий этап исправляет рабочий Rust-сервер, но не завершает перенос всех функций. Далее нужны реальные источники энергии/новостей/FX, совместимые HTTP-маршруты, CSV, настраиваемые уведомления, безопасность HTTP и проверенная сборка Windows. Команды выше проверяют workspace сервера, а не отдельное приложение Tauri. Архив Python сохранён.
 
 ## EN
+
+History JSON/CSV routes now support typed filters and a 10,000-row cap. EUR/CHF charts still depend on the missing FX connector.
 
 This batch repairs the active Rust server; it does not complete feature parity. Remaining work includes real energy/news/FX sources, compatible HTTP routes, CSV reports, configurable notifications, HTTP security and a tested Windows desktop build. Commands above validate the server workspace, not the separate Tauri app. Python references remain archived.
