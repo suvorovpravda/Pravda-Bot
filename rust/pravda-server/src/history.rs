@@ -270,13 +270,14 @@ mod tests {
         let mut state = test_state();
         Arc::get_mut(&mut state).unwrap().config.port = 8081;
         let response = crate::dashboard(State(state)).await.into_response();
-        assert!(response.headers()[header::CONTENT_SECURITY_POLICY]
+        let csp = response.headers()[header::CONTENT_SECURITY_POLICY]
             .to_str()
-            .unwrap()
-            .contains("ws://127.0.0.1:8081"));
+            .unwrap();
+        assert!(csp.contains("connect-src 'self' ws://127.0.0.1:8081 ws://localhost:8081;"));
+        assert!(csp.contains("frame-ancestors 'none'; base-uri 'none';"));
         let bytes = to_bytes(response.into_body(), 2_000_000).await.unwrap();
         let html = std::str::from_utf8(&bytes).unwrap();
-        assert!(html.contains("ws://127.0.0.1:8081/ws/ticks"));
+        assert!(html.contains("new WebSocket(`ws://${location.host}/ws/ticks`)"));
         assert!(!html.contains("ws://127.0.0.1:8080/ws/ticks"));
     }
     #[tokio::test]

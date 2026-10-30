@@ -20,7 +20,6 @@ use pravda_market_core::{calculate_spread, DEFAULT_FEE_RATE};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
 use std::collections::HashMap;
-use std::env; // added for env var
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
@@ -49,19 +48,15 @@ struct AlertEvent {
 
 async fn dashboard(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let html = include_str!("../../../dashboard.html");
-    let socket_url = format!("ws://127.0.0.1:{}/ws/ticks", state.config.port);
-    let mut response = Response::new(html.replace("ws://127.0.0.1:8080/ws/ticks", &socket_url));
+    let mut response = Response::new(axum::body::Body::from(html));
     let headers = response.headers_mut();
 
-    // Determine port from env var for CSP
-    let port: u16 = std::env::var("DASHBOARD_PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(8080);
-    let csp = format!("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self ws://127.0.0.1:{port}'; img-src 'self' data:;");
+    let port = state.config.port;
+    let csp = format!("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:{port} ws://localhost:{port}; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none';");
     headers.insert(
         "Content-Security-Policy",
-        HeaderValue::from_str(&csp).unwrap(),    );
+        HeaderValue::from_str(&csp).expect("static CSP and numeric port are valid header bytes"),
+    );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
     headers.insert(
         "X-Content-Type-Options",
@@ -241,13 +236,15 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
     // Subscribe before starting producers so startup frames cannot be lost.
     let mut rx = state.tick_tx.subscribe();
-    // Lance les fetchers en arrière-plan
-    let tx_clone = tick_tx.clone();
-    tokio::spawn(async move {
-        if let Err(e) = pravda_fetchers::run_fetchers(tx_clone, symbols.clone()).await {
-            tracing::error!("Fetchers error: {}", e);
-        }
-    });
+    // The explicit offline mode is useful for local diagnostics and smoke tests.
+    if state.config.market_feeds_enabled {
+        let tx_clone = tick_tx.clone();
+        tokio::spawn(async move {
+            if let Err(e) = pravda_fetchers::run_fetchers(tx_clone, symbols.clone()).await {
+                tracing::error!("Fetchers error: {}", e);
+            }
+        });
+    }
 
     // Traitement temps réel des ticks
     let state_clone = state.clone();
@@ -420,18 +417,8 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             http_security::local_only,
         ))
         .with_state(state);
-
-
-    // Determine port from env var or default 8080
-    let port: u16 = std::env::var("DASHBOARD_PORT")
-        .ok()
-        .and_then(|p| p.parse::<u16>().ok())
-        .unwrap_or(8080);
-    let addr = SocketAddr::from(([127, 0, 0, 1], port));
-    println!("🚀 Pravda Server listening on http://127.0.0.1:{port}");
-    println!("📡 WebSocket endpoint: ws://127.0.0.1:{port}/ws/ticks");
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    println!("Pravda Server listening on http://{addr}");
+    println!("WebSocket endpoint: ws://{addr}/ws/ticks");
     axum::serve(listener, app).await?;
 
     Ok(())

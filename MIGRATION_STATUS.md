@@ -4,6 +4,8 @@ Base du lot historique : `9e910ace0091d83b68bacfd9276f39e67ed775e4` (PR #19 fusi
 
 ## FR
 
+Reprise du 31 octobre : le serveur ne réserve plus son port deux fois. La CSP utilise le port validé et autorise le WebSocket local de la page ; le navigateur réutilise l'hôte de sa page. Un test lance le vrai binaire en mode diagnostic sans flux, vérifie HTTP, WebSocket et refus d'une origine étrangère.
+
 Lot HTTP local : middleware commun avant les routes HTTP/WebSocket, contrôle strict Host/Origin/Fetch Metadata, refus des doublons et des origines externes, en-têtes de protection sur succès et erreurs. Tests de requêtes locales, inter-origines et de rebinding sans réseau externe. SECURITY.md réécrit pour décrire le Rust actif, sans reprendre les garanties de l'archive Python.
 
 Lot configuration : variables de processus validées pour port, base SQLite, fraîcheur, désynchronisation et plafond de spread. Les seuils alimentent réellement le garde-fou ; le port est propagé au dashboard et à sa CSP. Liaison locale conservée, réservation du port avant toute connexion marché. `.env` n'est pas chargé implicitement. Le lanceur Tauri reste à adapter au port configurable.
@@ -49,6 +51,8 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 
 ## RU
 
+31 октября: исправлены двойное связывание порта и CSP; тест запускает реальный бинарный файл без биржевых подключений и проверяет HTTP, WebSocket и отклонение внешнего источника.
+
 Добавлены проверки Host/Origin перед HTTP/WebSocket и защитные заголовки. SECURITY.md теперь описывает действующий Rust-сервер; аутентификация и ограничение нагрузки ещё отсутствуют.
 
 Добавлена проверка настроек сервера: порт, путь SQLite и пороги рыночных данных. Порт передаётся в WebSocket и CSP; Tauri требует отдельной адаптации.
@@ -60,6 +64,8 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 Текущий этап исправляет рабочий Rust-сервер, но не завершает перенос всех функций. Далее нужны реальные источники энергии/новостей/FX, совместимые HTTP-маршруты, CSV, настраиваемые уведомления, безопасность HTTP и проверенная сборка Windows. Команды выше проверяют workspace сервера, а не отдельное приложение Tauri. Архив Python сохранён.
 
 ## EN
+
+October 31: fixed the duplicate port bind and CSP. A smoke test launches the actual binary with exchange feeds disabled and checks HTTP, WebSocket and cross-origin rejection.
 
 Host/Origin checks now precede HTTP/WebSocket routes, with defensive response headers. SECURITY.md describes the active Rust server; authentication and global load limits remain absent.
 
