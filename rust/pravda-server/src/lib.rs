@@ -125,7 +125,9 @@ async fn api_news() -> Json<Value> {
 }
 
 async fn api_alerts(State(state): State<Arc<AppState>>) -> Json<Value> {
-    let alerts = state.alerts.read().await;
+    // Release alerts before waiting for paper_sim: the writer takes the
+    // simulator lock first and then appends alerts.
+    let alerts = state.alerts.read().await.clone();
     let sim = state.paper_sim.read().await;
     Json(json!({
         "alerts": alerts.iter().map(|a| json!({

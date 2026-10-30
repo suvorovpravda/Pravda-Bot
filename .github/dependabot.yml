@@ -40,6 +40,9 @@ updates:
   # ─── GitHub Actions ─────────────────────────────────────────────────────
   - package-ecosystem: "github-actions"
     directory: "/"
+    # MSRV changes are deliberate compatibility decisions, not action upgrades.
+    ignore:
+      - dependency-name: "dtolnay/rust-toolchain"
     schedule:
       interval: "weekly"
       day: "thursday"

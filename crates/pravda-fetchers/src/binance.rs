@@ -40,7 +40,9 @@ impl BinanceClient {
                 "params": [format!("{}@ticker", pair)],
                 "id": 1
             });
-            write.send(Message::Text(subscribe_msg.to_string())).await?;
+            write
+                .send(Message::Text(subscribe_msg.to_string().into()))
+                .await?;
             info!("Subscribed to {} ticker", symbol);
         }
 
