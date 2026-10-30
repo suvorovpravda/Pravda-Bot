@@ -8,6 +8,7 @@ pub struct ServerConfig {
     pub stale_after: Duration,
     pub max_skew: Duration,
     pub max_spread_percent: f64,
+    pub market_feeds_enabled: bool,
 }
 #[derive(Debug, PartialEq, Eq)]
 pub struct ConfigError(&'static str);
@@ -25,6 +26,7 @@ impl Default for ServerConfig {
             stale_after: Duration::from_secs(4),
             max_skew: Duration::from_secs(2),
             max_spread_percent: 5.0,
+            market_feeds_enabled: true,
         }
     }
 }
@@ -40,6 +42,13 @@ impl ServerConfig {
         mut read: impl FnMut(&'static str) -> Result<Option<String>, ConfigError>,
     ) -> Result<Self, ConfigError> {
         let mut config = Self::default();
+        if let Some(raw) = read("PRAVDA_MARKET_FEEDS_ENABLED")? {
+            config.market_feeds_enabled = match raw.as_str() {
+                "true" => true,
+                "false" => false,
+                _ => return Err(ConfigError("PRAVDA_MARKET_FEEDS_ENABLED")),
+            };
+        }
         if let Some(raw) = read("DASHBOARD_PORT")? {
             config.port = raw
                 .parse::<u16>()
@@ -95,6 +104,16 @@ mod tests {
     #[test]
     fn defaults_and_overrides_are_explicit() {
         assert_eq!(ServerConfig::from_lookup(|_| Ok(None)).unwrap().port, 8080);
+        assert!(
+            ServerConfig::from_lookup(|_| Ok(None))
+                .unwrap()
+                .market_feeds_enabled
+        );
+        assert!(
+            !parse("PRAVDA_MARKET_FEEDS_ENABLED", "false")
+                .unwrap()
+                .market_feeds_enabled
+        );
         assert_eq!(parse("DASHBOARD_PORT", "8081").unwrap().port, 8081);
         assert_eq!(
             parse("MAX_EXCHANGE_SKEW_SECONDS", "0").unwrap().max_skew,
@@ -117,6 +136,7 @@ mod tests {
     fn invalid_configuration_fails_without_echoing_values() {
         for (key, values) in [
             ("DASHBOARD_PORT", vec!["0", "65536", "abc", "-1"]),
+            ("PRAVDA_MARKET_FEEDS_ENABLED", vec!["", "0", "TRUE"]),
             ("PRAVDA_DB_PATH", vec!["", " ", ":memory:", "secret\0path"]),
             (
                 "MARKET_DATA_STALE_SECONDS",

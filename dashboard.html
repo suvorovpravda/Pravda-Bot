@@ -1246,7 +1246,7 @@
 
     // WebSocket temps réel pour les ticks
     try {
-        const ws = new WebSocket(`ws://${location.hostname}:${location.port || 8080}/ws/ticks`);
+        const ws = new WebSocket(`ws://${location.host}/ws/ticks`);
         ws.onopen = () => console.log('✅ WebSocket connecté');
         ws.onmessage = (event) => {
             try {

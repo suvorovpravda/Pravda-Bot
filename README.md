@@ -35,6 +35,7 @@ Définir les variables dans l'environnement du processus avant le lancement. Le 
 |---|---|---|
 | `DASHBOARD_PORT` | 8080 | Entier de 1 à 65535 ; écoute toujours sur 127.0.0.1 |
 | `PRAVDA_DB_PATH` | pravda.db | Chemin non vide, sans octet nul ; base mémoire refusée ; dossier parent existant |
+| `PRAVDA_MARKET_FEEDS_ENABLED` | true | `true` ou `false` ; `false` désactive les connexions Kraken/Binance pour le diagnostic |
 | `MARKET_DATA_STALE_SECONDS` | 4 | Durée strictement positive, au plus 3600 secondes |
 | `MAX_EXCHANGE_SKEW_SECONDS` | 2 | Durée de 0 à 3600 secondes |
 | `MAX_ALLOWED_SPREAD_PERCENT` | 5 | Valeur finie strictement positive, au plus 100 points de pourcentage |
@@ -71,7 +72,7 @@ Disponibilité annoncée par le responsable : la moitié de l'équipe est en vac
 
 ## Русский
 
-Rust-сервер читает переменные окружения процесса, но не загружает `.env` автоматически. Порт задаётся `DASHBOARD_PORT`, база — `PRAVDA_DB_PATH`, ограничения — переменными из таблицы выше. Ошибочные значения останавливают запуск. Отдельный Tauri-клиент пока ожидает порт 8080.
+Rust-сервер читает переменные окружения процесса, но не загружает `.env` автоматически. Порт задаётся `DASHBOARD_PORT`, база — `PRAVDA_DB_PATH`, ограничения — переменными из таблицы выше. Для диагностики `PRAVDA_MARKET_FEEDS_ENABLED=false` отключает подключения к биржам. Ошибочные значения останавливают запуск. Отдельный Tauri-клиент пока ожидает порт 8080.
 
 Pravda-Bot — локальное приложение наблюдения за публичными ценами Kraken/Binance. Сервер написан на Rust (Tokio/Axum), история хранится в SQLite. Реальные ордера не отправляются; счета и остатки не проверяются. Старый Python-код находится в `archive/python-legacy/` и не запускается Rust-сервером.
 
@@ -83,7 +84,7 @@ Pravda-Bot — локальное приложение наблюдения за
 
 ## English
 
-The Rust server reads process environment variables; it does not automatically load `.env`. Configure the port with `DASHBOARD_PORT`, storage with `PRAVDA_DB_PATH`, and guard thresholds using the table above. Invalid values stop startup. The separate Tauri client still expects port 8080.
+The Rust server reads process environment variables; it does not automatically load `.env`. Configure the port with `DASHBOARD_PORT`, storage with `PRAVDA_DB_PATH`, and guard thresholds using the table above. For diagnostics, `PRAVDA_MARKET_FEEDS_ENABLED=false` disables exchange connections. Invalid values stop startup. The separate Tauri client still expects port 8080.
 
 Pravda-Bot observes public Kraken/Binance prices locally. Its active server uses Rust, Tokio/Axum and SQLite. It sends no real orders and verifies no exchange accounts. Python sources under `archive/python-legacy/` are reference material, not part of the Rust runtime.
 
