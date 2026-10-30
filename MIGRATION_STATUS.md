@@ -4,6 +4,8 @@ Base du lot historique : `9e910ace0091d83b68bacfd9276f39e67ed775e4` (PR #19 fusi
 
 ## FR
 
+Lot configuration : variables de processus validées pour port, base SQLite, fraîcheur, désynchronisation et plafond de spread. Les seuils alimentent réellement le garde-fou ; le port est propagé au dashboard et à sa CSP. Liaison locale conservée, réservation du port avant toute connexion marché. `.env` n'est pas chargé implicitement. Le lanceur Tauri reste à adapter au port configurable.
+
 Reprise du 30 octobre : correction de l'ordre des verrous de `/api/alerts` (test déterministe échouant avant correction), adaptation des messages texte à tokio-tungstenite 0.30, restauration de la MSRV 1.95.0. Dependabot ne modifie plus automatiquement la référence rust-toolchain ; sa maintenance reste manuelle.
 
 Lot historique : `/api/market/history` et `/api/market/history.csv` raccordés en Rust. Filtres typés symbol/exchange/period, ordre chronologique, limite 10 000, troncature explicite, requêtes SQLite paramétrées et indexées, erreurs 503 sans détails internes. Tests HTTP sans réseau externe. Le graphique EUR/CHF dépend encore du connecteur FX non migré ; ces routes ne suffisent pas à rendre toutes les courbes visibles.
@@ -30,7 +32,7 @@ Lot courant : réparer le chemin Rust réellement exécuté avant de poursuivre 
 5. Renforcer CSP, contrôle Host/Origin, débit HTTP et tests de sécurité du nouveau serveur.
 6. Vérifier le lanceur Tauri et produire un binaire Windows testé ; ne pas confondre workspace serveur et application desktop séparée.
 7. Mesures CPU/RSS réelles et tests d'intégration sans connexion aux exchanges.
-8. Configuration validée des seuils, du port et des chemins ; contrats de parité API et tests du flux complet jusqu'aux effets.
+8. Étendre la configuration aux notifications et au simulateur ; contrats de parité API et tests du flux complet jusqu'aux effets. Port, chemin SQLite et seuils de marché déjà validés.
 
 Commandes de validation :
 
@@ -45,6 +47,8 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 
 ## RU
 
+Добавлена проверка настроек сервера: порт, путь SQLite и пороги рыночных данных. Порт передаётся в WebSocket и CSP; Tauri требует отдельной адаптации.
+
 30 октября: исправлены порядок блокировок alerts/simulator, совместимость с tokio-tungstenite 0.30 и версия MSRV 1.95.0.
 
 Добавлены JSON/CSV-маршруты истории с типизированными фильтрами и ограничением 10 000 записей. График EUR/CHF пока зависит от отсутствующего FX-коннектора.
@@ -52,6 +56,8 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 Текущий этап исправляет рабочий Rust-сервер, но не завершает перенос всех функций. Далее нужны реальные источники энергии/новостей/FX, совместимые HTTP-маршруты, CSV, настраиваемые уведомления, безопасность HTTP и проверенная сборка Windows. Команды выше проверяют workspace сервера, а не отдельное приложение Tauri. Архив Python сохранён.
 
 ## EN
+
+Server configuration now validates the port, SQLite path and market thresholds. The port reaches WebSocket markup and CSP; Tauri support remains separate.
 
 October 30: repaired alerts/simulator lock ordering, tokio-tungstenite 0.30 text compatibility and MSRV 1.95.0. Toolchain-reference maintenance is now manual.
 

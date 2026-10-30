@@ -1,4 +1,5 @@
 use axum::extract::ws::{Message, WebSocket};
+mod config;
 mod history;
 use axum::{
     extract::State,
@@ -9,21 +10,23 @@ use axum::{
     Router,
 };
 use chrono::Utc;
+use config::ServerConfig;
 use futures_util::{SinkExt, StreamExt};
 use pravda_engine::{AlertGate, PaperMode, PaperSimulator};
 use pravda_fetchers::types::{Exchange, Symbol, Tick};
 use pravda_market_core::health::{assess_market_data, HealthStatus};
-use pravda_market_core::{calculate_spread, DEFAULT_FEE_RATE, DEFAULT_MAX_SPREAD_PERCENT};
+use pravda_market_core::{calculate_spread, DEFAULT_FEE_RATE};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use tokio::sync::{broadcast, RwLock};
 
 /// État partagé entre les handlers
 struct AppState {
+    config: ServerConfig,
     started_at: Instant,
     tick_tx: broadcast::Sender<Tick>,
     last_ticks: RwLock<Vec<Tick>>,
@@ -42,14 +45,15 @@ struct AlertEvent {
     spread_percent: f64,
 }
 
-async fn dashboard() -> impl IntoResponse {
+async fn dashboard(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let html = include_str!("../../../dashboard.html");
-    let mut response = Response::new(html.to_string());
+    let socket_url = format!("ws://127.0.0.1:{}/ws/ticks", state.config.port);
+    let mut response = Response::new(html.replace("ws://127.0.0.1:8080/ws/ticks", &socket_url));
     let headers = response.headers_mut();
 
     headers.insert(
         "Content-Security-Policy",
-        HeaderValue::from_static("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:8080; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none';"),
+        HeaderValue::from_str(&format!("default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:{}; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none';", state.config.port)).expect("static CSP and numeric port are valid header bytes"),
     );
     headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
     headers.insert(
@@ -82,7 +86,11 @@ async fn api_market(State(state): State<Arc<AppState>>) -> Json<Value> {
                     ex_map_inner.insert("age_seconds".to_string(), json!(age));
                     ex_map_inner.insert(
                         "status".to_string(),
-                        json!(if age <= 4.0 { "live" } else { "stale" }),
+                        json!(if age <= state.config.stale_after.as_secs_f64() {
+                            "live"
+                        } else {
+                            "stale"
+                        }),
                     );
                     ex_map_inner
                         .insert("timestamp".to_string(), json!(tick.timestamp.to_rfc3339()));
@@ -187,14 +195,19 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
 
 //
 pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
+    let config = ServerConfig::from_env()?;
+    let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
+    // Bind before opening the database or starting any market connections.
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     let (tick_tx, _) = pravda_fetchers::create_tick_channel();
 
     let paper_sim = PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
 
-    let store = PravdaStore::open("pravda.db")?;
+    let store = PravdaStore::open(&config.database_path)?;
     let store_arc = Arc::new(tokio::sync::Mutex::new(store));
 
     let state = Arc::new(AppState {
+        config,
         started_at: Instant::now(),
         tick_tx: tick_tx.clone(),
         last_ticks: RwLock::new(Vec::new()),
@@ -291,9 +304,12 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
                 ) {
                     let kraken_tick = kraken.clone();
                     let binance_tick = binance.clone();
-                    let Some(spread) =
-                        actionable_spread(&kraken_tick, &binance_tick, Instant::now())
-                    else {
+                    let Some(spread) = configured_spread(
+                        &kraken_tick,
+                        &binance_tick,
+                        Instant::now(),
+                        &state_clone.config,
+                    ) else {
                         state_clone.alert_gates.write().await.remove(&tick.symbol);
                         continue;
                     };
@@ -307,7 +323,14 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
                     let gate = gates
                         .entry(tick.symbol)
                         .or_insert_with(|| AlertGate::new(3.0));
-                    if actionable_spread(&kraken_tick, &binance_tick, Instant::now()).is_none() {
+                    if configured_spread(
+                        &kraken_tick,
+                        &binance_tick,
+                        Instant::now(),
+                        &state_clone.config,
+                    )
+                    .is_none()
+                    {
                         gate.reset_candidate(&tick.symbol.to_string());
                         continue;
                     }
@@ -341,7 +364,14 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
                     // Paper simulator
                     let mut sim = state_clone.paper_sim.write().await;
-                    if actionable_spread(&kraken_tick, &binance_tick, Instant::now()).is_none() {
+                    if configured_spread(
+                        &kraken_tick,
+                        &binance_tick,
+                        Instant::now(),
+                        &state_clone.config,
+                    )
+                    .is_none()
+                    {
                         continue;
                     }
                     if let Some(action) = sim.update(
@@ -380,21 +410,19 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/ws/ticks", get(ws_handler))
         .with_state(state);
 
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8080));
-    println!("🚀 Pravda Server listening on http://127.0.0.1:8080");
-    println!("📡 WebSocket endpoint: ws://127.0.0.1:8080/ws/ticks");
-
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    println!("Pravda Server listening on http://{addr}");
+    println!("WebSocket endpoint: ws://{addr}/ws/ticks");
     axum::serve(listener, app).await?;
 
     Ok(())
 }
 
 /// Fail closed before alerting or simulation; fees are a fraction internally.
-fn actionable_spread(
+fn configured_spread(
     kraken: &Tick,
     binance: &Tick,
     now: Instant,
+    config: &ServerConfig,
 ) -> Option<pravda_market_core::Spread> {
     if kraken.symbol != binance.symbol
         || kraken.exchange != Exchange::Kraken
@@ -406,15 +434,15 @@ fn actionable_spread(
         Some(kraken.observed_at),
         Some(binance.observed_at),
         now,
-        Duration::from_secs(4),
-        Duration::from_secs(2),
+        config.stale_after,
+        config.max_skew,
     )
     .ok()?;
     if health.status != HealthStatus::Ok {
         return None;
     }
     let spread = calculate_spread(kraken.price, binance.price, DEFAULT_FEE_RATE).ok()?;
-    if spread.gross_percent() > DEFAULT_MAX_SPREAD_PERCENT {
+    if spread.gross_percent() > config.max_spread_percent {
         return None;
     }
     Some(spread)
@@ -423,6 +451,10 @@ fn actionable_spread(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
+    fn actionable_spread(k: &Tick, b: &Tick, now: Instant) -> Option<pravda_market_core::Spread> {
+        configured_spread(k, b, now, &ServerConfig::default())
+    }
     fn quote(exchange: Exchange, price: f64, observed_at: Instant) -> Tick {
         Tick {
             symbol: Symbol::BTCUSDT,
@@ -455,5 +487,28 @@ mod tests {
             now + Duration::from_secs(5)
         )
         .is_none());
+    }
+    #[test]
+    fn configured_thresholds_control_actual_spread_guard() {
+        let now = Instant::now();
+        let k = quote(Exchange::Kraken, 101.0, now);
+        let b = quote(Exchange::Binance, 100.0, now);
+        let strict = ServerConfig {
+            max_spread_percent: 0.5,
+            ..ServerConfig::default()
+        };
+        assert!(configured_spread(&k, &b, now, &strict).is_none());
+        let short = ServerConfig {
+            stale_after: Duration::from_secs(1),
+            ..ServerConfig::default()
+        };
+        assert!(configured_spread(&k, &b, now + Duration::from_secs(2), &short).is_none());
+        assert!(configured_spread(
+            &k,
+            &b,
+            now + Duration::from_secs(2),
+            &ServerConfig::default()
+        )
+        .is_some());
     }
 }
