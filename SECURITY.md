@@ -1,104 +1,42 @@
-<div align="center">
-
-# 🔒 Sécurité · Безопасность · Security
-
-*Périmètre documenté · Contrôles vérifiables · Limites explicites*
-
-[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat-square)](https://www.python.org/)
-[![CI](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/suvorovpravda/Pravda-Bot/actions)
-
-</div>
+# Sécurité · Безопасность · Security
 
 ## Français
 
-### Migration Rust
+Cette politique décrit le serveur Rust maintenu (`rust/pravda-server`). Les protections de l'archive Python ne sont pas automatiquement celles du serveur Rust.
 
-Le module `rust/market-core` fournit validation des prix, calcul de spread, contrôle de fraîcheur et persistance SQLite expérimentale isolée. Il utilise `PRAGMA journal_mode=WAL`, `busy_timeout` configurable et un pool r2d2. Le module n'est pas encore raccordé au bot en fonctionnement et refuse d'ouvrir une base existante.
+### Contrôles présents
 
-### Périmètre et modèle de menace
+- Écoute sur `127.0.0.1` uniquement, port validé et réservé avant le démarrage des flux.
+- Vérification de `Host` : adresse loopback ou `localhost`, avec le port configuré. Une origine fournie doit correspondre exactement à l'hôte et au port de la requête HTTP locale. Les origines externes, `null`, les en-têtes de sécurité dupliqués et les requêtes navigateur inter-origines sont refusés avant les routes HTTP et WebSocket.
+- Les clients locaux sans en-tête `Origin` restent autorisés. Les en-têtes de proxy ne créent aucune autorisation.
+- `Cache-Control: no-store`, `nosniff`, interdiction d'intégration en frame, politique de référent restrictive et isolation des ressources par origine sur les réponses du serveur, y compris les refus.
+- Validation des prix finis et strictement positifs ; contrôle de fraîcheur monotone, désynchronisation et plafond d'anomalie avant simulation.
+- Requêtes SQLite paramétrées, historique filtré et borné. Export CSV de champs contrôlés : symboles/exchanges énumérés, prix positifs et timestamps validés.
+- Tests Rust locaux et workflow CI Windows/Linux, avec contrôle de compatibilité Rust 1.95.0. Un résultat CI doit être rattaché au SHA effectivement contrôlé.
 
-Pravda-Bot est une application locale de surveillance publique et de simulation papier. Elle ne passe pas d'ordres réels et ne valide pas les soldes ou les permissions d'un compte privé. Le dashboard utilise `http.server`, écoute sur **127.0.0.1** et n'a pas d'authentification. Il ne doit pas être publié par tunnel, interface réseau publique ou reverse proxy public.
+### Limites connues
 
-La surface examinée inclut les données externes, les requêtes d'un navigateur vers le serveur local, les écritures différées, les dépendances et les fichiers d'exécution. Un utilisateur ou programme pouvant modifier les sources ou le `.env` possède déjà un accès important au poste ; cette application n'est pas une sandbox contre cet accès.
+- Le dashboard n'a **pas d'authentification**. Ces contrôles ne protègent pas contre un programme malveillant déjà exécuté sur le poste, qui peut forger Host/Origin. Ne pas exposer le serveur par un proxy, un tunnel public ou une redirection de port.
+- La CSP autorise encore les scripts/styles inline. La migration vers des ressources externes ou des hashes reste à faire. Les contrôles d'origine ne remplacent pas la prévention des injections dans l'interface.
+- Une limitation globale des requêtes, des connexions WebSocket et de l'utilisation disque reste à implémenter. Le bornage d'une réponse ne constitue pas une protection complète contre le déni de service.
+- Les transports HTTP/WebSocket des sources, le lanceur Tauri et les archives nécessitent leurs propres contrôles. Aucun audit général certifiant l'absence de vulnérabilités n'est revendiqué.
+- Le modèle papier ne vérifie ni comptes, ni inventaires, ni exécution réelle. Le ticker Kraken v1 est horodaté à la réception, sans preuve de l'âge de la transaction à la source.
+- Le serveur lit les variables de processus ; il ne charge pas automatiquement `.env`. Les connecteurs ntfy/LLM et plusieurs sources restent en cours de migration.
 
-### Contrôles des chemins maintenus
+### Secrets et signalement
 
-| Surface | Contrôle appliqué | Limite |
-|---|---|---|
-| HTTP local | Host/port réel, Origin des mutations, rejet des requêtes cross-site, rate limiter borné, délais et tailles maximales | Sans authentification ; un programme local reste dans le périmètre de confiance du poste |
-| Navigateur | CSP avec hashes des scripts inline, titres externes rendus en texte, protocoles des liens vérifiés | Styles inline conservés ; toute nouvelle route ou ressource doit être revue |
-| HTTP sortant | Hôtes exacts, HTTPS public, absence de redirections, corps lu sous plafond, retries GET bornés | Vérification DNS préalable sans pinning IP ; pas d'annulation absolue de DNS/en-têtes lents |
-| LM Studio | Exception HTTP explicite pour loopback et port configuré ; désactivé dans l'exemple | Ni serveur distant arbitraire ni fallback cloud automatique |
-| RSS | defusedxml ; DTD, entités et références externes interdites | Une source autorisée peut rester erronée ou indisponible |
-| Cotations | Prix finis/positifs, générations et fraîcheur/synchronisation revalidées avant effets différés | Les derniers prix ne prouvent pas l'exécution d'un ordre |
-| CSV | Texte de modèle borné, cellules texte protégées contre les formules, lecture récente bornée et consciente des guillemets | Une observation individuelle trop grande ou invalide est refusée ; le stockage disque peut croître |
-| Dépendances | Bootstrap/runtime/audit/build séparés, versions et hashes, pip check, audits stricts en CI | CVE connues seulement ; les hashes ne prouvent pas qu'un paquet est bienveillant |
-| Processus | Arguments en liste et gestion d'arrêt/propriété des enfants dans le lanceur | Le build `--help` n'est pas une validation de tous les scénarios sur le PC utilisateur |
+Ne pas commiter de clés, topics privés, bases de données ou journaux personnels. `.gitignore` n'efface pas un secret déjà présent dans l'historique : le révoquer s'il a été exposé. Aucun filtre ne garantit qu'une sortie arbitraire est exempte de secrets.
 
-Les POST ntfy/LLM ne sont pas rejoués par le client HTTP commun. CCXT, WebSocket et les utilitaires expérimentaux possèdent leurs propres transports et nécessitent leur propre revue. Le client historique `src/lm_studio_client.py` n'est pas le chemin LLM actif durci ; il reste explicitement hors d'une affirmation de couverture totale.
-
-### Secrets et fichiers locaux
-
-- `.env`, venvs, bases SQLite/WAL, CSV privés, journaux et EXE restent hors de Git. Un fichier déjà suivi n'est pas retiré par la seule présence d'une règle `.gitignore`.
-- `.env.example` contient des valeurs d'exemple et `NTFY_TOPIC_URL=` vide. Le lanceur de démonstration désactive les notifications ; un lancement direct peut utiliser une destination configurée par l'utilisateur.
-- Les erreurs des chemins HTTP maintenus sont génériques. Il ne faut pas afficher les exceptions réseau brutes, les URL privées, les headers ou les corps de réponse dans les journaux.
-- Aucun filtre de logs ne garantit la suppression de tous les secrets dans une sortie arbitraire. Examiner les fichiers destinés à Git, y compris les fichiers non suivis, avant de les ajouter.
-- Si une clé ou un topic privé est exposé, le retirer du code ne suffit pas : révoquer ou renouveler l'accès auprès du fournisseur et examiner les copies déjà diffusées.
-
-SQLite n'est pas chiffré par l'application. Permissions du poste, sauvegardes et éventuel chiffrement du volume doivent être gérés selon l'usage. La lecture bornée des observations ne constitue pas une politique de rétention des bases ou journaux ; les exports historiques volumineux demandent encore une surveillance spécifique.
-
-### Vérification et publication
-
-La CI vérifie les versions réellement installées, la syntaxe des modules publiés, JavaScript, les tests Python/lanceur, les audits CVE et Bandit. Un outil absent, un téléchargement interrompu, un paquet ignoré ou un audit inconcluant doit rester un échec explicite. Aucun `|| true` ne doit masquer pip-audit.
-
-Les résultats sont attachés au SHA concerné. Une CI verte ne prouve pas l'absence de vulnérabilité, la disponibilité de Kraken/Binance/AIS, la qualité d'un modèle, une conformité OWASP globale ou des droits de redistribution. Une différence de timing doit être rendue reproductible et corrigée ; un passage en CI n'est pas un motif pour ignorer un échec local connu.
-
-La fusion et les releases suivent le circuit de revue défini dans le README. Aucune approbation Gemini, GPT ou humaine n'est inventée. Pas de force push ni d'identité Git fabriquée pour débloquer une livraison.
-
-### Géographie, AIS et actualités
-
-Les modules expérimentaux ne prouvent pas une collecte AIS opérationnelle. Le proxy vide est indiqué indisponible, sans positions fabriquées. Couverture, dates, classification des navires et conditions du fournisseur doivent être vérifiées avant toute utilisation ou redistribution. Aucun caractère gratuit, non commercial ou purement terrestre d'un fournisseur n'est présumé à partir du seul nom d'un module.
-
-Les points ENTSOG et les segments proxy ne prouvent pas un tracé de conduite. Les articles restent des informations rapportées ; la présence d'un lien officiel ne confirme pas à elle seule un incident. Aucun cours TTF licencié ou Forex interbancaire continu n'est annoncé.
-
-### Signaler une vulnérabilité
-
-Utiliser le signalement privé GitHub **s'il est activé**. Sinon, demander au mainteneur un canal privé avant d'envoyer les détails sensibles. Aucun email ou canal interne non vérifié n'est annoncé.
-
-Fournir le SHA, le composant, une reproduction minimale et l'impact. Masquer clés, topics, données personnelles et identifiants de compte. Ne pas joindre `.env`, base privée ou journal complet à une issue publique.
+Pour signaler une vulnérabilité, utiliser le signalement privé GitHub si cette fonction est activée dans l'onglet Security du dépôt. Sinon, demander au mainteneur un canal privé sans publier la preuve d'exploitation ni les données sensibles. Aucun délai de réponse ou canal privé non vérifié n'est promis.
 
 ## Русский
 
-### Область применения
+Политика относится к Rust-серверу, а не к архиву Python. Сервер слушает только loopback, проверяет Host/Origin и браузерный контекст запроса до HTTP/WebSocket-маршрутов. Локальные CLI-клиенты без Origin разрешены. Ответы запрещают кэширование и содержат защитные заголовки.
 
-Приложение локальное: публичные источники и бумажная симуляция, без реальных ордеров или проверки балансов. Dashboard без аутентификации должен оставаться на **127.0.0.1**. Не открывайте его через публичный интерфейс, туннель или reverse proxy.
-
-Поддерживаемые пути проверяют Host/Origin, размеры, время, точные HTTP-хосты и свежесть котировок. Используются CSP, защищённый RSS-парсер и ограниченное чтение последних логических CSV-записей. Это уменьшает риск, но не является полной защитой. DNS-проверка не закрепляет IP соединения; сторонние транспорты и экспериментальные модули требуют отдельной проверки.
-
-### Секреты, зависимости и данные
-
-`.env`, базы, журналы, venv и EXE не публикуются. Ошибки HTTP должны быть общими, без частных URL или тела ответа; фильтр журналов не гарантирует удаление произвольного секрета. При утечке необходимо отозвать или заменить доступ у поставщика. SQLite не шифруется самим приложением, а объём хранения требует отдельной политики.
-
-Зависимости и инструменты разделены, закреплены с хешами и проверяются в CI. Неудачный или незавершённый аудит нельзя превращать в успех. Зелёная CI относится к конкретному SHA и не доказывает отсутствие всех уязвимостей, наличие лицензии, реального AIS-потока или корректность геополитического вывода. Нестабильный тест необходимо исправлять, а не отключать из-за успешного CI-прогона.
-
-### Приватное сообщение
-
-Используйте приватный GitHub-канал, если он включён, либо сначала запросите подтверждённый приватный контакт сопровождающего. Укажите SHA, минимальный сценарий и последствия. Не прикладывайте секреты, личные данные, `.env`, БД или полные журналы к публичной issue.
+Аутентификации нет: локальная вредоносная программа может подделать заголовки. Не публикуйте сервер через туннель или прокси. CSP пока допускает inline-скрипты; ограничение нагрузки и диска ещё не завершено. Наличие тестов не означает отсутствие уязвимостей. Сообщайте о проблемах приватно, не публикуя секреты.
 
 ## English
 
-### Scope
+This policy covers the maintained Rust server, not inherited Python protections. The server binds to loopback and validates Host/Origin plus browser request context before HTTP/WebSocket routes. Local CLI requests without Origin remain allowed. Responses use no-store and defensive headers.
 
-Local public-data monitoring and paper simulation only: no real orders or balance validation. The unauthenticated dashboard must remain on **127.0.0.1**. Do not expose it through a public interface, tunnel or reverse proxy.
-
-Maintained paths apply Host/Origin checks, request/time/size bounds, exact HTTP targets and quote-freshness checks. CSP, hardened RSS parsing and bounded reads of recent logical CSV records reduce risk without establishing complete security. DNS prechecks do not pin the connection IP. Third-party transports and experimental utilities require separate review.
-
-### Secrets, dependencies and data
-
-Keep `.env`, databases, private logs, venvs and executables out of Git. Maintained HTTP paths return generic errors; arbitrary-output redaction cannot guarantee complete secrecy. Exposed keys/topics require provider-side revocation or rotation. SQLite is not encrypted by the application, and storage growth needs its own retention plan.
-
-Runtime, bootstrap, audit and build dependencies are separately pinned and hashed. Failed or inconclusive audits must not be hidden. A green CI result belongs to one SHA; it does not prove complete security, provider availability, data rights or incident verification. Known flaky assertions should be made deterministic rather than skipped because CI happens to pass.
-
-### Reporting
-
-Use GitHub private vulnerability reporting if enabled; otherwise obtain a verified private contact from the maintainer before sharing sensitive details. Include the SHA, affected component, minimal reproduction and impact. Exclude credentials, personal data, `.env`, databases and full logs from public issues.
+There is no authentication: local malware can forge headers. Do not expose the server through a tunnel or proxy. CSP still allows inline scripts, and global request/connection/storage limits remain unfinished. Tests do not establish the absence of vulnerabilities. Use GitHub private reporting if enabled, or request a private maintainer channel without disclosing secrets publicly.

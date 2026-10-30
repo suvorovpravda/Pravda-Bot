@@ -4,6 +4,8 @@ Base du lot historique : `9e910ace0091d83b68bacfd9276f39e67ed775e4` (PR #19 fusi
 
 ## FR
 
+Lot HTTP local : middleware commun avant les routes HTTP/WebSocket, contrôle strict Host/Origin/Fetch Metadata, refus des doublons et des origines externes, en-têtes de protection sur succès et erreurs. Tests de requêtes locales, inter-origines et de rebinding sans réseau externe. SECURITY.md réécrit pour décrire le Rust actif, sans reprendre les garanties de l'archive Python.
+
 Lot configuration : variables de processus validées pour port, base SQLite, fraîcheur, désynchronisation et plafond de spread. Les seuils alimentent réellement le garde-fou ; le port est propagé au dashboard et à sa CSP. Liaison locale conservée, réservation du port avant toute connexion marché. `.env` n'est pas chargé implicitement. Le lanceur Tauri reste à adapter au port configurable.
 
 Reprise du 30 octobre : correction de l'ordre des verrous de `/api/alerts` (test déterministe échouant avant correction), adaptation des messages texte à tokio-tungstenite 0.30, restauration de la MSRV 1.95.0. Dependabot ne modifie plus automatiquement la référence rust-toolchain ; sa maintenance reste manuelle.
@@ -29,7 +31,7 @@ Lot courant : réparer le chemin Rust réellement exécuté avant de poursuivre 
 2. Porter les alertes configurables, sources et rapports journaliers ; historique filtré JSON/CSV désormais implémenté.
 3. Porter les estimations sur carnets, exports et outils d'analyse hors ligne ; comparer les résultats de référence aux archives.
 4. Porter ntfy/LLM optionnels avec secrets masqués et revalidation des snapshots avant chaque effet.
-5. Renforcer CSP, contrôle Host/Origin, débit HTTP et tests de sécurité du nouveau serveur.
+5. Renforcer CSP et débit HTTP ; contrôle Host/Origin et tests de la frontière HTTP locale désormais présents. L'authentification et la résistance à un processus local hostile ne sont pas assurées.
 6. Vérifier le lanceur Tauri et produire un binaire Windows testé ; ne pas confondre workspace serveur et application desktop séparée.
 7. Mesures CPU/RSS réelles et tests d'intégration sans connexion aux exchanges.
 8. Étendre la configuration aux notifications et au simulateur ; contrats de parité API et tests du flux complet jusqu'aux effets. Port, chemin SQLite et seuils de marché déjà validés.
@@ -47,6 +49,8 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 
 ## RU
 
+Добавлены проверки Host/Origin перед HTTP/WebSocket и защитные заголовки. SECURITY.md теперь описывает действующий Rust-сервер; аутентификация и ограничение нагрузки ещё отсутствуют.
+
 Добавлена проверка настроек сервера: порт, путь SQLite и пороги рыночных данных. Порт передаётся в WebSocket и CSP; Tauri требует отдельной адаптации.
 
 30 октября: исправлены порядок блокировок alerts/simulator, совместимость с tokio-tungstenite 0.30 и версия MSRV 1.95.0.
@@ -56,6 +60,8 @@ Aucun résultat Windows local ni test live des exchanges n'est revendiqué. Les 
 Текущий этап исправляет рабочий Rust-сервер, но не завершает перенос всех функций. Далее нужны реальные источники энергии/новостей/FX, совместимые HTTP-маршруты, CSV, настраиваемые уведомления, безопасность HTTP и проверенная сборка Windows. Команды выше проверяют workspace сервера, а не отдельное приложение Tauri. Архив Python сохранён.
 
 ## EN
+
+Host/Origin checks now precede HTTP/WebSocket routes, with defensive response headers. SECURITY.md describes the active Rust server; authentication and global load limits remain absent.
 
 Server configuration now validates the port, SQLite path and market thresholds. The port reaches WebSocket markup and CSP; Tauri support remains separate.
 
