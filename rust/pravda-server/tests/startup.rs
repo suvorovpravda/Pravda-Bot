@@ -107,7 +107,9 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         })
         .expect("server did not answer within ten seconds");
     assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
-    assert!(response.to_ascii_lowercase().contains("x-pravda-server: 1\r\n"));
+    assert!(response
+        .to_ascii_lowercase()
+        .contains("x-pravda-server: 1\r\n"));
 
     // Everything except the login page is closed to unauthenticated clients.
     for path in ["/", "/api/metrics", "/api/market"] {
