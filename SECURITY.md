@@ -8,7 +8,7 @@ Cette politique décrit le serveur Rust maintenu (`rust/pravda-server`). Les pro
 
 - Écoute sur `127.0.0.1` uniquement, port validé et réservé avant le démarrage des flux.
 - Authentification locale : dashboard, API et WebSocket exigent une session (cookie `HttpOnly`, `SameSite=Strict`). Mot de passe d'au moins 15 caractères, défini à la première visite ou via `PRAVDA_ADMIN_PASSWORD`, stocké uniquement sous forme d'empreinte PBKDF2-HMAC-SHA256 salée (`PRAVDA_AUTH_PATH`, défaut `pravda_auth.json`). Verrouillage progressif après 5 échecs ; la déconnexion ferme le WebSocket. Cela ne protège pas contre un logiciel malveillant ou un administrateur sur la même machine.
-- Vérification de `Host` : adresse loopback ou `localhost`, avec le port configuré. Une origine fournie doit correspondre exactement à l'hôte et au port de la requête HTTP locale. Les origines externes, `null`, les en-têtes de sécurité dupliqués et les requêtes navigateur inter-origines sont refusés avant les routes HTTP et WebSocket.
+- Vérification de `Host` : adresse loopback ou `localhost`, avec le port configuré. Une origine fournie doit correspondre exactement à l'hôte et au port de la requête HTTP locale. Les origines externes, `null` et les en-têtes de sécurité dupliqués sont refusés. **Exception bornée pour Windows WebView2** : la première navigation inter-origine peut uniquement charger un document public via `GET /` ou `GET /login` avec les métadonnées `navigate`/`document`, sans `Origin` ; les API, POST, WebSocket et accès non conformes restent refusés.
 - Les clients locaux sans en-tête `Origin` restent autorisés. Les en-têtes de proxy ne créent aucune autorisation.
 - `Cache-Control: no-store`, `nosniff`, interdiction d'intégration en frame, politique de référent restrictive et isolation des ressources par origine sur les réponses du serveur, y compris les refus.
 - Validation des prix finis et strictement positifs ; contrôle de fraîcheur monotone, désynchronisation et plafond d'anomalie avant simulation.
@@ -17,10 +17,10 @@ Cette politique décrit le serveur Rust maintenu (`rust/pravda-server`). Les pro
 
 ### Limites connues
 
-- Le dashboard n'a **pas d'authentification**. Ces contrôles ne protègent pas contre un programme malveillant déjà exécuté sur le poste, qui peut forger Host/Origin. Ne pas exposer le serveur par un proxy, un tunnel public ou une redirection de port.
+- Le dashboard **exige une session authentifiée**, tout comme les API et les WebSockets. Cette authentification ne protège toutefois pas contre un programme malveillant déjà exécuté sur le poste, qui peut accéder aux fichiers locaux ou forger Host/Origin. Ne pas exposer le serveur par un proxy, un tunnel public ou une redirection de port.
 - La CSP autorise encore les scripts/styles inline. La migration vers des ressources externes ou des hashes reste à faire. Les contrôles d'origine ne remplacent pas la prévention des injections dans l'interface.
 - Une limitation globale des requêtes, des connexions WebSocket et de l'utilisation disque reste à implémenter. Le bornage d'une réponse ne constitue pas une protection complète contre le déni de service.
-- Les transports HTTP/WebSocket des sources, le lanceur Tauri et les archives nécessitent leurs propres contrôles. Aucun audit général certifiant l'absence de vulnérabilités n'est revendiqué.
+- Les transports HTTP/WebSocket des sources, le lanceur Tauri et les archives nécessitent leurs propres contrôles. Les tests CI Windows vérifient le démarrage, la navigation WebView2 simulée et le cycle d'authentification HTTP ; ils ne constituent pas un test graphique complet sur tous les postes. Aucun audit général certifiant l'absence de vulnérabilités n'est revendiqué.
 - Le modèle papier ne vérifie ni comptes, ni inventaires, ni exécution réelle. Le ticker Kraken v1 est horodaté à la réception, sans preuve de l'âge de la transaction à la source.
 - Le serveur lit les variables de processus ; il ne charge pas automatiquement `.env`. Les connecteurs ntfy/LLM et plusieurs sources restent en cours de migration.
 

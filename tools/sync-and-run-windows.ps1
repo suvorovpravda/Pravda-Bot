@@ -53,8 +53,10 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
 Push-Location $Destination
 try {
     Invoke-Checked cargo @("fmt", "--all", "--", "--check")
+    Invoke-Checked cargo @("fmt", "--manifest-path", "crates/pravda-app/Cargo.toml", "--", "--check")
     Invoke-Checked cargo @("check", "--locked", "--workspace", "--all-targets")
     Invoke-Checked cargo @("test", "--locked", "--workspace")
+    Invoke-Checked cargo @("test", "--locked", "--manifest-path", "crates/pravda-app/Cargo.toml")
     Invoke-Checked cargo @("build", "--locked", "--manifest-path", "crates/pravda-app/Cargo.toml")
     $app = Join-Path $Destination "crates/pravda-app/target/debug/pravda-app.exe"
     if (-not (Test-Path -LiteralPath $app)) {

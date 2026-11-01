@@ -56,7 +56,11 @@ Dans PowerShell, une fois ce script présent dans ton clone Windows :
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sync-and-run-windows.ps1 -Destination "$env:USERPROFILE\Pravda-Bot" -Launch
 ```
 
-Le binaire compilé se trouve sous `crates/pravda-app/target/debug/pravda-app.exe`. Les exécutables distribués indépendamment et les fichiers locaux de l'ancien projet ne sont pas remplacés par cette opération. Pour conserver les réglages locaux, en particulier `pravda_auth.json`, ne pas supprimer les données existantes lors de la synchronisation.
+Le binaire compilé se trouve sous `crates/pravda-app/target/debug/pravda-app.exe`. Les exécutables distribués indépendamment et les fichiers locaux de l'ancien projet ne sont pas remplacés par cette opération.
+
+**Stockage stable de l'application Windows (après installation de cette version du code)** : la base SQLite et l'empreinte du mot de passe se trouvent par défaut dans `%LOCALAPPDATA%\Pravda-Bot\pravda.db` et `%LOCALAPPDATA%\Pravda-Bot\pravda_auth.json`, indépendamment du dossier depuis lequel l'EXE est lancé. Les variables `PRAVDA_DB_PATH` et `PRAVDA_AUTH_PATH`, si définies explicitement, restent prioritaires. Ce changement concerne **l'application Windows Tauri**, pas le serveur Rust lancé seul depuis un terminal, qui conserve ses chemins relatifs par défaut. Si le dossier AppData ne peut pas être créé, l'application échoue au démarrage au lieu d'enregistrer des données ailleurs.
+
+**Migration depuis v0.3.2 ou une version antérieure** : les anciens fichiers de données créés dans un autre répertoire de travail ne sont **pas copiés ni supprimés automatiquement**. Fermer toutes les instances du programme ; localiser le couple `pravda.db` / `pravda_auth.json` de l'installation précédente, le sauvegarder, puis le copier manuellement dans le dossier AppData si les fichiers cibles n'existent pas. En cas de doute, conserver les anciens fichiers et ne pas remplacer ceux qui existent déjà.
 
 ### Fonctionnement et limites
 
@@ -70,7 +74,7 @@ Le binaire compilé se trouve sous `crates/pravda-app/target/debug/pravda-app.ex
 | Métriques | Uptime et PID réels ; CPU et mémoire indisponibles (`null`) |
 | Interface | HTML/JavaScript servi par Rust ; certains panneaux de l'ancienne interface restent à raccorder |
 | Énergie, actualités, Forex, AIS | Migration non terminée : aucune promesse de données opérationnelles |
-| Desktop Tauri | Projet séparé, non couvert par les tests du workspace serveur ; build Windows à vérifier |
+| Desktop Tauri | Projet séparé, avec CI Windows dédiée : compilation, test de lancement, requête de navigation WebView2, création du mot de passe local, accès API, déconnexion et reconnexion ; validation graphique sur les postes utilisateurs toujours nécessaire |
 
 Un ticker Kraken v1 est actualisé à chaque transaction ; une absence de transaction peut produire un état STALE. Son horodatage local ne prouve pas l'âge de la transaction à l'exchange. Le seuil ne doit pas être élargi pour cacher ce manque d'information.
 
