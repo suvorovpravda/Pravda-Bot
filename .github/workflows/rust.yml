@@ -62,3 +62,53 @@ jobs:
 
       - name: Check workspace with MSRV
         run: cargo check --locked --workspace --all-targets
+
+  desktop_windows:
+    name: Windows desktop build and startup
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Verify Tauri formatting
+        run: cargo fmt --manifest-path crates/pravda-app/Cargo.toml -- --check
+      - name: Build native Windows desktop application
+        run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
+      - name: Launch desktop app and verify local authentication server
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
+          $probe.Start()
+          $port = $probe.LocalEndpoint.Port
+          $probe.Stop()
+          $env:DASHBOARD_PORT = "$port"
+          $env:PRAVDA_MARKET_FEEDS_ENABLED = "false"
+          $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP "pravda-desktop-smoke.db"
+          $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP "pravda-desktop-auth.json"
+          $executable = Join-Path (Get-Location).Path "crates/pravda-app/target/debug/pravda-app.exe"
+          if (-not (Test-Path $executable)) { throw "Desktop executable not built: $executable" }
+          $process = Start-Process -FilePath $executable -PassThru
+          try {
+            $ready = $false
+            for ($attempt = 0; $attempt -lt 80; $attempt++) {
+              $process.Refresh()
+              if ($process.HasExited) { throw "Desktop application exited prematurely with code $($process.ExitCode)" }
+              try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/login" -TimeoutSec 2 -MaximumRedirection 0
+                if ($response.StatusCode -eq 200 -and $response.Headers["x-pravda-server"] -eq "1") {
+                  $ready = $true
+                  break
+                }
+              } catch { }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $ready) { throw "Desktop application failed to start its authenticated local server" }
+            $process.Refresh()
+            if ($process.HasExited) { throw "Desktop application exited after the server became ready" }
+            Write-Host "Windows desktop process and authenticated local server are running."
+          } finally {
+            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          }
