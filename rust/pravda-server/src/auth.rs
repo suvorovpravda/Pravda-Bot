@@ -161,14 +161,32 @@ impl Auth {
             hash: to_hex(&derive(password, &salt, self.iterations)),
         };
         let text = serde_json::to_string_pretty(&new_record).map_err(|_| AuthError::Storage)?;
+        // A random sibling temporary file avoids collisions between processes.
+        // hard_link creates the final path only if it does not already exist.
+        // Unlike rename, it cannot replace another server's password record.
         let mut temporary = self.path.clone().into_os_string();
-        temporary.push(".tmp");
+        temporary.push(format!(".{}.tmp", to_hex(&random_bytes::<16>()?)));
         let temporary = PathBuf::from(temporary);
-        std::fs::write(&temporary, text).map_err(|_| AuthError::Storage)?;
-        if std::fs::rename(&temporary, &self.path).is_err() {
-            let _ = std::fs::remove_file(&temporary);
-            return Err(AuthError::Storage);
-        }
+        let result = (|| -> Result<(), AuthError> {
+            use std::io::Write as _;
+            let mut file = std::fs::OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&temporary)
+                .map_err(|_| AuthError::Storage)?;
+            file.write_all(text.as_bytes())
+                .map_err(|_| AuthError::Storage)?;
+            file.sync_all().map_err(|_| AuthError::Storage)?;
+            std::fs::hard_link(&temporary, &self.path).map_err(|error| {
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    AuthError::AlreadyConfigured
+                } else {
+                    AuthError::Storage
+                }
+            })
+        })();
+        let _ = std::fs::remove_file(&temporary);
+        result?;
         *record = Some(new_record);
         Ok(())
     }
@@ -473,6 +491,20 @@ mod tests {
             reloaded.login("wrong-password-value"),
             Err(AuthError::Invalid)
         );
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn independent_servers_cannot_overwrite_existing_password_record() {
+        let (first, path) = auth("race");
+        let second = Auth::load(&path, 1_000).unwrap();
+        first.set_password(PASSWORD).unwrap();
+        assert_eq!(
+            second.set_password(&format!("{PASSWORD}-different")),
+            Err(AuthError::AlreadyConfigured)
+        );
+        let restored = Auth::load(&path, 1_000).unwrap();
+        assert!(restored.login(PASSWORD).is_ok());
         let _ = std::fs::remove_file(path);
     }
 
