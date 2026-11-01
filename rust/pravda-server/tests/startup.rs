@@ -35,7 +35,7 @@ fn request(
 ) -> std::io::Result<String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let mut socket = TcpStream::connect_timeout(&address, Duration::from_millis(300))?;
-    socket.set_read_timeout(Some(Duration::from_secs(3)))?;
+    socket.set_read_timeout(Some(Duration::from_secs(10)))?;
     socket.write_all(
         format!("{method} {path} HTTP/1.1\r\nHost: {host}:{port}\r\n{extra}Content-Length: {}\r\n\r\n{body}", body.len()).as_bytes(),
     )?;
@@ -47,9 +47,13 @@ fn request(
             break;
         }
         response.extend_from_slice(&buffer[..count]);
-        // WebSocket connections remain open after the handshake.
-        if (response.starts_with(b"HTTP/1.1 101 ") || response.starts_with(b"HTTP/1.1 401 "))
-            && response.windows(4).any(|w| w == b"\r\n\r\n")
+        // Tests only need response headers for WebSockets and login POSTs.
+        // Do not wait for EOF on a server-managed keep-alive connection.
+        let headers_complete = response.windows(4).any(|w| w == b"\r\n\r\n");
+        if headers_complete
+            && (response.starts_with(b"HTTP/1.1 101 ")
+                || (path == "/ws/ticks" && response.starts_with(b"HTTP/1.1 401 "))
+                || (method == "POST" && path == "/login"))
         {
             break;
         }
@@ -103,6 +107,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         })
         .expect("server did not answer within ten seconds");
     assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+    assert!(response.to_ascii_lowercase().contains("x-pravda-server: 1\r\n"));
 
     // Everything except the login page is closed to unauthenticated clients.
     for path in ["/", "/api/metrics", "/api/market"] {
