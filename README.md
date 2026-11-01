@@ -46,6 +46,18 @@ Définir les variables dans l'environnement du processus avant le lancement. Le 
 
 Sous PowerShell, `$env:DASHBOARD_PORT='8081'` puis `cargo run --locked -p pravda-server` utilise http://127.0.0.1:8081. Une configuration invalide ou un port occupé interrompt le démarrage avant les connexions marché. Les frais restent fixés à 0,36 %. Augmenter les limites de fraîcheur ou d'anomalie réduit la protection. Le lanceur Tauri utilise le même DASHBOARD_PORT.
 
+### Windows : synchronisation contrôlée et lancement de l'application
+
+Le script `tools/sync-and-run-windows.ps1` vérifie l'URL du dépôt, refuse toute modification d'un dossier contenant des fichiers locaux non enregistrés, récupère `main` sans réécriture de l'historique, compare son commit à `origin/main`, lance les vérifications Rust, compile Tauri puis ouvre l'application avec l'option `-Launch`. **Une PR non fusionnée n'est pas encore incluse dans `main`**.
+
+Dans PowerShell, une fois ce script présent dans ton clone Windows :
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sync-and-run-windows.ps1 -Destination "$env:USERPROFILE\Pravda-Bot" -Launch
+```
+
+Le binaire compilé se trouve sous `crates/pravda-app/target/debug/pravda-app.exe`. Les exécutables distribués indépendamment et les fichiers locaux de l'ancien projet ne sont pas remplacés par cette opération. Pour conserver les réglages locaux, en particulier `pravda_auth.json`, ne pas supprimer les données existantes lors de la synchronisation.
+
 ### Fonctionnement et limites
 
 | Composant | État réel |
