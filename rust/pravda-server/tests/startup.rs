@@ -19,12 +19,25 @@ impl Drop for ServerProcess {
     }
 }
 
+const PASSWORD: &str = "correct-horse-battery";
+
 fn http_request(port: u16, host: &str, extra: &str, path: &str) -> std::io::Result<String> {
+    request(port, host, extra, "GET", path, "")
+}
+
+fn request(
+    port: u16,
+    host: &str,
+    extra: &str,
+    method: &str,
+    path: &str,
+    body: &str,
+) -> std::io::Result<String> {
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let mut socket = TcpStream::connect_timeout(&address, Duration::from_millis(300))?;
     socket.set_read_timeout(Some(Duration::from_secs(3)))?;
     socket.write_all(
-        format!("GET {path} HTTP/1.1\r\nHost: {host}:{port}\r\n{extra}\r\n").as_bytes(),
+        format!("{method} {path} HTTP/1.1\r\nHost: {host}:{port}\r\n{extra}Content-Length: {}\r\n\r\n{body}", body.len()).as_bytes(),
     )?;
     let mut response = Vec::new();
     let mut buffer = [0_u8; 4096];
@@ -63,6 +76,8 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         .env("DASHBOARD_PORT", port.to_string())
         .env("PRAVDA_DB_PATH", directory.join("test.sqlite3"))
         .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
+        .env("PRAVDA_AUTH_PATH", directory.join("auth.json"))
+        .env("PRAVDA_ADMIN_PASSWORD", PASSWORD)
         .env_remove("MARKET_DATA_STALE_SECONDS")
         .env_remove("MAX_EXCHANGE_SKEW_SECONDS")
         .env_remove("MAX_ALLOWED_SPREAD_PERCENT")
@@ -76,7 +91,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
             if let Some(status) = server.child.try_wait().unwrap() {
                 panic!("server exited before becoming ready: {status}");
             }
-            match http_request(port, "127.0.0.1", "Connection: close\r\n", "/") {
+            match http_request(port, "127.0.0.1", "Connection: close\r\n", "/login") {
                 Ok(response) => Some(response),
                 Err(_) => {
                     thread::sleep(Duration::from_millis(20));
@@ -85,6 +100,53 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
             }
         })
         .expect("server did not answer within ten seconds");
+    assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+
+    // Everything except the login page is closed to unauthenticated clients.
+    for path in ["/", "/api/metrics", "/api/market"] {
+        let denied = http_request(port, "127.0.0.1", "Connection: close\r\n", path).unwrap();
+        assert!(!denied.starts_with("HTTP/1.1 200 "), "{path}: {denied}");
+    }
+    let upgrade = format!("Origin: http://127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
+    let denied = http_request(port, "127.0.0.1", &upgrade, "/ws/ticks").unwrap();
+    assert!(denied.starts_with("HTTP/1.1 401 "), "{denied}");
+
+    let form = "Connection: close\r\nContent-Type: application/x-www-form-urlencoded\r\n";
+    let wrong = request(
+        port,
+        "127.0.0.1",
+        form,
+        "POST",
+        "/login",
+        "password=wrong-password-value",
+    )
+    .unwrap();
+    assert!(wrong.starts_with("HTTP/1.1 401 "), "{wrong}");
+    let login = request(
+        port,
+        "127.0.0.1",
+        form,
+        "POST",
+        "/login",
+        &format!("password={PASSWORD}"),
+    )
+    .unwrap();
+    assert!(login.starts_with("HTTP/1.1 303 "), "{login}");
+    let cookie = login
+        .lines()
+        .find_map(|line| {
+            line.to_ascii_lowercase()
+                .starts_with("set-cookie:")
+                .then(|| line[11..].trim().split(';').next().unwrap().to_owned())
+        })
+        .expect("session cookie");
+    let response = http_request(
+        port,
+        "127.0.0.1",
+        &format!("Connection: close\r\nCookie: {cookie}\r\n"),
+        "/",
+    )
+    .unwrap();
     assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
     let headers = response
         .split("\r\n\r\n")
@@ -98,14 +160,14 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
     assert!(response.contains("new WebSocket(`ws://${location.host}/ws/ticks`)"));
 
     for host in ["127.0.0.1", "localhost"] {
-        let upgrade = format!("Origin: http://{host}:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
+        let upgrade = format!("Cookie: {cookie}\r\nOrigin: http://{host}:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
         let response = http_request(port, host, &upgrade, "/ws/ticks").unwrap();
         assert!(response.starts_with("HTTP/1.1 101 "), "{response}");
     }
     let rejected = http_request(
         port,
         "127.0.0.1",
-        "Origin: http://attacker.example\r\nConnection: close\r\n",
+        &format!("Cookie: {cookie}\r\nOrigin: http://attacker.example\r\nConnection: close\r\n"),
         "/api/metrics",
     )
     .unwrap();

@@ -39,6 +39,7 @@ Définir les variables dans l'environnement du processus avant le lancement. Le 
 | `MARKET_DATA_STALE_SECONDS` | 4 | Durée strictement positive, au plus 3600 secondes |
 | `MAX_EXCHANGE_SKEW_SECONDS` | 2 | Durée de 0 à 3600 secondes |
 | `MAX_ALLOWED_SPREAD_PERCENT` | 5 | Valeur finie strictement positive, au plus 100 points de pourcentage |
+| `PRAVDA_AUTH_PATH` | pravda_auth.json | Fichier de l'empreinte du mot de passe local ; sans fichier, le mot de passe (15 caractères minimum) est créé à la première visite ou depuis `PRAVDA_ADMIN_PASSWORD` |
 
 Sous PowerShell, `$env:DASHBOARD_PORT='8081'` puis `cargo run --locked -p pravda-server` utilise http://127.0.0.1:8081. Une configuration invalide ou un port occupé interrompt le démarrage avant les connexions marché. Les frais restent fixés à 0,36 %. Augmenter les limites de fraîcheur ou d'anomalie réduit la protection. Le lanceur Tauri séparé attend encore 8080 : ces options sont actuellement destinées au serveur en ligne de commande.
 

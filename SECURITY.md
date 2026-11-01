@@ -7,6 +7,7 @@ Cette politique décrit le serveur Rust maintenu (`rust/pravda-server`). Les pro
 ### Contrôles présents
 
 - Écoute sur `127.0.0.1` uniquement, port validé et réservé avant le démarrage des flux.
+- Authentification locale : dashboard, API et WebSocket exigent une session (cookie `HttpOnly`, `SameSite=Strict`). Mot de passe d'au moins 15 caractères, défini à la première visite ou via `PRAVDA_ADMIN_PASSWORD`, stocké uniquement sous forme d'empreinte PBKDF2-HMAC-SHA256 salée (`PRAVDA_AUTH_PATH`, défaut `pravda_auth.json`). Verrouillage progressif après 5 échecs ; la déconnexion ferme le WebSocket. Cela ne protège pas contre un logiciel malveillant ou un administrateur sur la même machine.
 - Vérification de `Host` : adresse loopback ou `localhost`, avec le port configuré. Une origine fournie doit correspondre exactement à l'hôte et au port de la requête HTTP locale. Les origines externes, `null`, les en-têtes de sécurité dupliqués et les requêtes navigateur inter-origines sont refusés avant les routes HTTP et WebSocket.
 - Les clients locaux sans en-tête `Origin` restent autorisés. Les en-têtes de proxy ne créent aucune autorisation.
 - `Cache-Control: no-store`, `nosniff`, interdiction d'intégration en frame, politique de référent restrictive et isolation des ressources par origine sur les réponses du serveur, y compris les refus.

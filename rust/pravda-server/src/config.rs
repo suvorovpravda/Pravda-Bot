@@ -5,6 +5,7 @@ use std::{fmt, time::Duration};
 pub struct ServerConfig {
     pub port: u16,
     pub database_path: String,
+    pub auth_path: String,
     pub stale_after: Duration,
     pub max_skew: Duration,
     pub max_spread_percent: f64,
@@ -23,6 +24,7 @@ impl Default for ServerConfig {
         Self {
             port: 8080,
             database_path: "pravda.db".into(),
+            auth_path: "pravda_auth.json".into(),
             stale_after: Duration::from_secs(4),
             max_skew: Duration::from_secs(2),
             max_spread_percent: 5.0,
@@ -62,6 +64,12 @@ impl ServerConfig {
                 return Err(ConfigError("PRAVDA_DB_PATH"));
             }
             config.database_path = path;
+        }
+        if let Some(path) = read("PRAVDA_AUTH_PATH")? {
+            if path.trim().is_empty() || path.contains('\0') {
+                return Err(ConfigError("PRAVDA_AUTH_PATH"));
+            }
+            config.auth_path = path;
         }
         for (name, destination, allow_zero) in [
             ("MARKET_DATA_STALE_SECONDS", &mut config.stale_after, false),

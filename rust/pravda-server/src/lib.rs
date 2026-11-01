@@ -1,4 +1,5 @@
 use axum::extract::ws::{Message, WebSocket};
+mod auth;
 mod config;
 mod history;
 mod http_security;
@@ -8,6 +9,7 @@ use axum::{
     http::HeaderValue,
     response::{IntoResponse, Json, Response},
     routing::get,
+    Extension,
     Router,
 };
 use chrono::Utc;
@@ -36,6 +38,7 @@ struct AppState {
     paper_sim: RwLock<PaperSimulator>,
     alerts: RwLock<Vec<AlertEvent>>,
     store: Arc<tokio::sync::Mutex<PravdaStore>>,
+    auth: Arc<auth::Auth>,
 }
 
 #[derive(Debug, Clone)]
@@ -163,13 +166,19 @@ async fn api_metrics(State(state): State<Arc<AppState>>) -> Json<Value> {
     )
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AppState>>,
+    Extension(session): Extension<auth::SessionToken>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, state, session))
 }
 
-async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
+async fn handle_socket(socket: WebSocket, state: Arc<AppState>, session: auth::SessionToken) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tick_tx.subscribe();
+    let mut closed = state.auth.subscribe_closed();
+    let auth = state.auth.clone();
 
     let mut send_task = tokio::spawn(async move {
         loop {
@@ -189,10 +198,32 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>) {
     let mut recv_task =
         tokio::spawn(async move { while let Some(Ok(_msg)) = receiver.next().await {} });
 
+    // Closes the socket as soon as its session is logged out or expires.
+    let mut session_task = tokio::spawn(async move {
+        let mut check = tokio::time::interval(std::time::Duration::from_secs(30));
+        loop {
+            tokio::select! {
+                msg = closed.recv() => match msg {
+                    Ok(token) if token == session.as_str() => break,
+                    Err(broadcast::error::RecvError::Closed) => break,
+                    _ => {}
+                },
+                _ = check.tick() => {}
+            }
+            if !auth.session_valid(session.as_str()) {
+                break;
+            }
+        }
+    });
+
     tokio::select! {
-        _ = &mut send_task => { recv_task.abort(); let _ = recv_task.await; },
-        _ = &mut recv_task => { send_task.abort(); let _ = send_task.await; },
+        _ = &mut send_task => {},
+        _ = &mut recv_task => {},
+        _ = &mut session_task => {},
     }
+    send_task.abort();
+    recv_task.abort();
+    session_task.abort();
 }
 
 //
@@ -204,6 +235,18 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let (tick_tx, _) = pravda_fetchers::create_tick_channel();
 
     let paper_sim = PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+
+    let auth = Arc::new(auth::Auth::load(&config.auth_path, auth::PBKDF2_ITERATIONS)?);
+    if !auth.is_configured() {
+        if let Ok(initial) = std::env::var("PRAVDA_ADMIN_PASSWORD") {
+            let worker = auth.clone();
+            tokio::task::spawn_blocking(move || worker.set_password(&initial))
+                .await?
+                .map_err(|_| "PRAVDA_ADMIN_PASSWORD must contain at least 15 characters")?;
+        } else {
+            println!("No local password set: open the dashboard to create one.");
+        }
+    }
 
     let store = PravdaStore::open(&config.database_path)?;
     let store_arc = Arc::new(tokio::sync::Mutex::new(store));
@@ -218,6 +261,7 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         paper_sim: RwLock::new(paper_sim),
         alerts: RwLock::new(Vec::new()),
         store: store_arc,
+        auth,
     });
 
     let symbols = vec![
@@ -412,6 +456,11 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/alerts", get(api_alerts))
         .route("/api/metrics", get(api_metrics))
         .route("/ws/ticks", get(ws_handler))
+        .merge(auth::routes(state.auth.clone()))
+        .layer(axum::middleware::from_fn_with_state(
+            state.auth.clone(),
+            auth::require_auth,
+        ))
         .layer(axum::middleware::from_fn_with_state(
             state.config.port,
             http_security::local_only,
