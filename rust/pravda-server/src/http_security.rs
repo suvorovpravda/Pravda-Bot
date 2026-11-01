@@ -1,7 +1,7 @@
 //! Local browser boundary, not authentication against local processes.
 use axum::{
     extract::{Request, State},
-    http::{header, HeaderMap, HeaderValue, StatusCode},
+    http::{header, HeaderMap, HeaderValue, Method, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
     Json,
@@ -68,10 +68,26 @@ fn allowed(request: &Request, port: u16) -> bool {
         }
         Err(()) => return false,
     }
-    matches!(
-        single_header(request.headers(), "sec-fetch-site"),
-        Ok(None | Some("same-origin" | "none"))
-    )
+    match single_header(request.headers(), "sec-fetch-site") {
+        Ok(None | Some("same-origin" | "none")) => true,
+        // WebView2 may classify the *first* Tauri -> HTTP navigation as cross-site.
+        // Permit document navigation ONLY to the public login or dashboard page;
+        // never exempt API, WebSocket, form POSTs or arbitrary cross-site fetches.
+        Ok(Some("cross-site")) => {
+            request.method() == Method::GET
+                && matches!(request.uri().path(), "/" | "/login")
+                && matches!(
+                    single_header(request.headers(), "sec-fetch-mode"),
+                    Ok(Some("navigate"))
+                )
+                && matches!(
+                    single_header(request.headers(), "sec-fetch-dest"),
+                    Ok(Some("document"))
+                )
+                && matches!(single_header(request.headers(), "origin"), Ok(None))
+        }
+        _ => false,
+    }
 }
 
 pub(crate) async fn local_only(State(port): State<u16>, request: Request, next: Next) -> Response {
@@ -107,6 +123,8 @@ mod tests {
 
     fn app() -> Router {
         Router::new()
+            .route("/", get(|| async { "dashboard page" }))
+            .route("/login", get(|| async { "login page" }))
             .route("/api/metrics", get(|| async { "local metrics" }))
             .route("/ws/ticks", get(|| async { "upgrade boundary" }))
             .layer(middleware::from_fn_with_state(8081_u16, local_only))
@@ -150,6 +168,68 @@ mod tests {
             assert_eq!(
                 send(Some(host), None, None, "/api/metrics").await.status(),
                 StatusCode::OK
+            );
+        }
+    }
+    #[tokio::test]
+    async fn permits_only_cross_site_top_level_document_navigation() {
+        // Matches the browser fetch metadata emitted by WebView2 on initial launch.
+        for path in ["/", "/login"] {
+            let request = Request::builder()
+                .method(Method::GET)
+                .uri(path)
+                .header(header::HOST, "127.0.0.1:8081")
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-mode", "navigate")
+                .header("sec-fetch-dest", "document")
+                .body(Body::empty())
+                .unwrap();
+            assert_eq!(
+                app().oneshot(request).await.unwrap().status(),
+                StatusCode::OK
+            );
+        }
+        // Cross-site scripts, API reads, mutations and WebSocket handshakes
+        // are still denied, even if they forge navigation metadata.
+        for path in ["/api/metrics", "/ws/ticks", "/setup", "/logout"] {
+            let request = Request::builder()
+                .method(Method::GET)
+                .uri(path)
+                .header(header::HOST, "127.0.0.1:8081")
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-mode", "navigate")
+                .header("sec-fetch-dest", "document")
+                .body(Body::empty())
+                .unwrap();
+            assert_eq!(
+                app().oneshot(request).await.unwrap().status(),
+                StatusCode::FORBIDDEN
+            );
+        }
+        for (method, path, origin, mode, dest) in [
+            (Method::POST, "/login", None, "navigate", "document"),
+            (Method::GET, "/login", Some("null"), "navigate", "document"),
+            (Method::GET, "/login", None, "cors", "empty"),
+            (Method::GET, "/login", None, "no-cors", "document"),
+            (Method::GET, "/login", None, "navigate", "empty"),
+        ] {
+            let mut request = Request::builder()
+                .method(method)
+                .uri(path)
+                .header(header::HOST, "127.0.0.1:8081")
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-mode", mode)
+                .header("sec-fetch-dest", dest);
+            if let Some(value) = origin {
+                request = request.header(header::ORIGIN, value);
+            }
+            assert_eq!(
+                app()
+                    .oneshot(request.body(Body::empty()).unwrap())
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::FORBIDDEN
             );
         }
     }
