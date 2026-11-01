@@ -331,6 +331,8 @@ fn page(configured: bool, status: StatusCode, message: &str) -> Response {
     );
     let mut response = (status, body).into_response();
     let headers = response.headers_mut();
+    // The desktop launcher checks this marker before opening its WebView.
+    headers.insert("x-pravda-server", HeaderValue::from_static("1"));
     headers.insert(
         header::CONTENT_TYPE,
         HeaderValue::from_static("text/html; charset=utf-8"),
