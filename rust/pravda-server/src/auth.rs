@@ -481,16 +481,16 @@ mod tests {
             Err(AuthError::WeakPassword)
         );
         assert!(!auth.is_configured());
-        auth.set_password(password).unwrap();
+        auth.set_password(&password).unwrap();
         let stored = std::fs::read_to_string(&path).unwrap();
-        assert!(!stored.contains(password));
+        assert!(!stored.contains(&password));
         assert!(stored.contains("pbkdf2-sha256"));
         assert_eq!(
-            auth.set_password(password),
+            auth.set_password(&password),
             Err(AuthError::AlreadyConfigured)
         );
         let reloaded = Auth::load(&path, 1_000).unwrap();
-        assert!(reloaded.login(password).is_ok());
+        assert!(reloaded.login(&password).is_ok());
         assert_eq!(
             reloaded.login(&format!("{password}-wrong")),
             Err(AuthError::Invalid)
@@ -503,13 +503,13 @@ mod tests {
         let (first, path) = auth("race");
         let password = test_password();
         let second = Auth::load(&path, 1_000).unwrap();
-        first.set_password(password).unwrap();
+        first.set_password(&password).unwrap();
         assert_eq!(
             second.set_password(&format!("{password}-different")),
             Err(AuthError::AlreadyConfigured)
         );
         let restored = Auth::load(&path, 1_000).unwrap();
-        assert!(restored.login(password).is_ok());
+        assert!(restored.login(&password).is_ok());
         let _ = std::fs::remove_file(path);
     }
 
@@ -525,11 +525,11 @@ mod tests {
     fn repeated_failures_lock_out_even_the_correct_password() {
         let (auth, path) = auth("lock");
         let password = test_password();
-        auth.set_password(password).unwrap();
+        auth.set_password(&password).unwrap();
         for _ in 0..FREE_ATTEMPTS {
             assert_eq!(auth.login(&format!("{password}-wrong")), Err(AuthError::Invalid));
         }
-        assert!(matches!(auth.login(password), Err(AuthError::Locked(_))));
+        assert!(matches!(auth.login(&password), Err(AuthError::Locked(_))));
         let _ = std::fs::remove_file(path);
     }
 
@@ -537,8 +537,8 @@ mod tests {
     fn logout_invalidates_session_and_notifies_subscribers() {
         let (auth, path) = auth("logout");
         let password = test_password();
-        auth.set_password(password).unwrap();
-        let token = auth.login(password).unwrap();
+        auth.set_password(&password).unwrap();
+        let token = auth.login(&password).unwrap();
         let mut closed = auth.subscribe_closed();
         assert!(auth.session_valid(&token));
         auth.logout(&token);
