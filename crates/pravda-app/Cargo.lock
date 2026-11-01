@@ -2876,7 +2876,7 @@ dependencies = [
 
 [[package]]
 name = "pravda-app"
-version = "0.1.0"
+version = "0.3.1"
 dependencies = [
  "pravda-server",
  "reqwest 0.11.27",
@@ -2921,7 +2921,7 @@ dependencies = [
 
 [[package]]
 name = "pravda-server"
-version = "0.2.0"
+version = "0.3.1"
 dependencies = [
  "axum",
  "chrono",
