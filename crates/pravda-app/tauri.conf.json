@@ -2,16 +2,9 @@
   "productName": "Pravda-Bot",
   "version": "0.2.0",
   "identifier": "com.pravda.bot",
-  "build": {
-  },
+  "build": {},
   "app": {
-    "windows": [
-      {
-        "title": "Pravda-Bot",
-        "width": 1280,
-        "height": 800
-      }
-    ]
+    "windows": []
   },
   "bundle": {
     "active": false
