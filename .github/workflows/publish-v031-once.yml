@@ -1,82 +1,15 @@
-name: Publish Pravda-Bot v0.3.1 Windows prerelease once
+name: Publish validated Pravda-Bot v0.3.1 prerelease once
 on:
   push:
-    branches: [release/publish-v0.3.1]
+    branches: [main]
+    paths: ['.github/workflows/publish-v031-once.yml']
 permissions:
   contents: write
   actions: read
 jobs:
-  windows:
-    name: Compile, launch-test and package Windows x64
-    runs-on: windows-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: 1d46aa7236efaa164dc2346b1ffc82fddbb40802
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build validated source in release mode
-        run: cargo build --locked --release --manifest-path crates/pravda-app/Cargo.toml
-      - name: Verify actual Windows startup and authenticated local server
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-          $probe.Start()
-          $port = $probe.LocalEndpoint.Port
-          $probe.Stop()
-          $env:DASHBOARD_PORT = "$port"
-          $env:PRAVDA_MARKET_FEEDS_ENABLED = "false"
-          $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP "pravda-release-smoke.db"
-          $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP "pravda-release-auth.json"
-          $app = Join-Path (Get-Location).Path "crates/pravda-app/target/release/pravda-app.exe"
-          if (-not (Test-Path $app)) { throw "Missing release executable" }
-          $process = Start-Process -FilePath $app -PassThru
-          try {
-            $ready = $false
-            for ($attempt = 0; $attempt -lt 80; $attempt++) {
-              $process.Refresh()
-              if ($process.HasExited) { throw "App exited before authentication service started" }
-              try {
-                $r = Invoke-WebRequest -Uri "http://127.0.0.1:$port/login" -TimeoutSec 2 -MaximumRedirection 0
-                if ($r.StatusCode -eq 200 -and $r.Headers["x-pravda-server"] -eq "1") {
-                  $ready = $true
-                  break
-                }
-              } catch { }
-              Start-Sleep -Milliseconds 250
-            }
-            if (-not $ready) { throw "Local authentication page not ready" }
-            $process.Refresh()
-            if ($process.HasExited) { throw "App exited unexpectedly after startup" }
-            Write-Host "Release exe launched and authenticated local server verified."
-          } finally {
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
-          }
-      - name: Package portable application and checksums
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          New-Item -ItemType Directory -Force "release-stage","release-dist" | Out-Null
-          Copy-Item "crates/pravda-app/target/release/pravda-app.exe" "release-stage/pravda-app.exe"
-          Copy-Item "README.md" "release-stage/README.md"
-          Copy-Item "SECURITY.md" "release-stage/SECURITY.md"
-          Copy-Item "docs/releases/v0.3.1.md" "release-stage/RELEASE_NOTES.md"
-          Compress-Archive -Path "release-stage/*" -DestinationPath "release-dist/Pravda-Bot-v0.3.1-Windows-x64.zip" -Force
-          $hash = (Get-FileHash -Algorithm SHA256 "release-dist/Pravda-Bot-v0.3.1-Windows-x64.zip").Hash.ToLowerInvariant()
-          "$hash  Pravda-Bot-v0.3.1-Windows-x64.zip" | Set-Content -Encoding ascii "release-dist/SHA256SUMS.txt"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pravda-bot-v0.3.1-windows
-          path: release-dist/*
-          if-no-files-found: error
-          retention-days: 14
-
   publish:
-    name: Publish immutable prerelease only after main CI is green
-    needs: windows
+    name: Verify existing Windows release artifact and create v0.3.1
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     env:
       GH_TOKEN: ${{ github.token }}
       SOURCE_SHA: 1d46aa7236efaa164dc2346b1ffc82fddbb40802
@@ -87,26 +20,35 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: pravda-bot-v0.3.1-windows
+          run-id: 41357947462
+          repository: suvorovpravda/Pravda-Bot
+          github-token: ${{ github.token }}
           path: release-dist
-      - name: Guard source SHA and required main CI checks
+      - name: Validate exact source, CI, release asset and tag uniqueness
         shell: bash
         run: |
           set -euo pipefail
           current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
-          test "$current" = "$SOURCE_SHA" || { echo "main moved; refusing release"; exit 1; }
+          changed="$(gh api "repos/$GITHUB_REPOSITORY/compare/$SOURCE_SHA...$current" --jq '.files[].filename')"
+          test "$changed" = ".github/workflows/publish-v031-once.yml" || {
+            echo "Unexpected main source changes; release aborted"
+            exit 1
+          }
+          for run in 41357745029 41357745028; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run" \
+              --jq '.head_sha + " " + .conclusion' |
+              grep -Fx "$SOURCE_SHA success" || {
+                echo "Mandatory source CI failed or commit changed"
+                exit 1
+              }
+          done
           if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/v0.3.1" >/dev/null 2>&1; then
-            echo "Tag v0.3.1 already exists; refusing to overwrite immutable tag"
+            echo "v0.3.1 already exists; immutable tags are not overwritten"
             exit 1
           fi
-          runs="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs?branch=main&per_page=50")"
-          echo "$runs" | jq -e --arg sha "$SOURCE_SHA" '
-            [.workflow_runs[] | select(.head_sha == $sha and .event == "push")] as $r
-            | (any($r[]; .name == "Rust migration" and .conclusion == "success"))
-              and (any($r[]; .name == "CodeQL Advanced" and .conclusion == "success"))
-          ' >/dev/null || { echo "Mandatory main CI is not yet successful"; exit 1; }
           test -s release-dist/Pravda-Bot-v0.3.1-Windows-x64.zip
-          (cd release-dist && sha256sum -c SHA256SUMS.txt)
-      - name: Publish new prerelease and portable Windows archive
+          (cd release-dist && sha256sum --check SHA256SUMS.txt)
+      - name: Publish new v0.3.1 Windows prerelease
         shell: bash
         run: |
           gh release create v0.3.1 \
@@ -117,24 +59,3 @@ jobs:
             --title "Pravda-Bot v0.3.1 — Windows x64" \
             --notes-file docs/releases/v0.3.1.md \
             --prerelease
-
-  cleanup:
-    name: Remove temporary publisher workflow
-    needs: publish
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: release/publish-v0.3.1
-          persist-credentials: true
-      - name: Remove one-time workflow
-        run: |
-          set -euo pipefail
-          rm .github/workflows/publish-v031-once.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -u
-          git commit -m "chore(release): remove one-time v0.3.1 publisher"
-          git push origin HEAD:release/publish-v0.3.1
