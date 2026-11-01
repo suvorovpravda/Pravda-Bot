@@ -25,7 +25,8 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let server = tokio::spawn(async { pravda_server::run_server().await.map_err(|e| e.to_string()) });
+    let server =
+        tokio::spawn(async { pravda_server::run_server().await.map_err(|e| e.to_string()) });
     let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(800))
         .redirect(reqwest::redirect::Policy::none())
