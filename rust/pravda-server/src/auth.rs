@@ -308,15 +308,15 @@ fn page(configured: bool, status: StatusCode, message: &str) -> Response {
     let form = if configured {
         "<h1>Pravda-Bot</h1><p>Entrez le mot de passe local.</p>\
          <form method=\"post\" action=\"/login\">\
-         <input type=\"password\" name=\"password\" autocomplete=\"current-password\" autofocus required>\
+         <label>Mot de passe<input type=\"password\" name=\"password\" autocomplete=\"current-password\" autofocus required></label>\
          <button type=\"submit\">Se connecter</button></form>"
             .to_string()
     } else {
         format!(
             "<h1>Pravda-Bot</h1><p>Première utilisation : définissez un mot de passe local d'au moins {MIN_PASSWORD_CHARS} caractères.</p>\
              <form method=\"post\" action=\"/setup\">\
-             <input type=\"password\" name=\"password\" autocomplete=\"new-password\" minlength=\"{MIN_PASSWORD_CHARS}\" autofocus required>\
-             <input type=\"password\" name=\"confirm\" autocomplete=\"new-password\" minlength=\"{MIN_PASSWORD_CHARS}\" required>\
+             <label>Mot de passe<input type=\"password\" name=\"password\" autocomplete=\"new-password\" minlength=\"{MIN_PASSWORD_CHARS}\" autofocus required></label>\
+             <label>Confirmer le mot de passe<input type=\"password\" name=\"confirm\" autocomplete=\"new-password\" minlength=\"{MIN_PASSWORD_CHARS}\" required></label>\
              <button type=\"submit\">Enregistrer</button></form>"
         )
     };
