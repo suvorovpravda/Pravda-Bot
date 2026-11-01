@@ -2,6 +2,12 @@ use tauri::{WebviewWindowBuilder, WebviewUrl};
 
 #[tokio::main]
 async fn main() {
+    let port: u16 = std::env::var("DASHBOARD_PORT")
+        .ok()
+        .and_then(|raw| raw.parse().ok())
+        .filter(|port| *port != 0)
+        .unwrap_or(8080);
+    let url = format!("http://127.0.0.1:{port}");
     // Démarre le serveur Axum directement dans le même processus
     let _server_handle = tokio::spawn(async {
         if let Err(e) = pravda_server::run_server().await {
@@ -19,7 +25,7 @@ async fn main() {
                 eprintln!("⚠️ Serveur non prêt après 60 tentatives, on continue quand même");
                 break;
             }
-            match client.get("http://127.0.0.1:8080/").send().await {
+            match client.get(&url).send().await {
                 Ok(_) => break,
                 Err(_) => {
                     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -35,11 +41,11 @@ async fn main() {
 
 
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
             WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::External("http://127.0.0.1:8080".parse().unwrap()),
+                WebviewUrl::External(url.parse().unwrap()),
             )
             .title("Pravda-Bot")
             .inner_size(1280.0, 800.0)

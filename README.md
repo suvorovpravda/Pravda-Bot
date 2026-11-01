@@ -5,6 +5,9 @@
 Surveillance des marchés · Simulation papier · Données locales
 
 [![Rust CI](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml/badge.svg)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml)
+[![CodeQL](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml/badge.svg)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml)
+![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange)
+![Local only](https://img.shields.io/badge/server-127.0.0.1-blue)
 
 [FR](#français) · [RU](#русский) · [EN](#english)
 
@@ -41,7 +44,7 @@ Définir les variables dans l'environnement du processus avant le lancement. Le 
 | `MAX_ALLOWED_SPREAD_PERCENT` | 5 | Valeur finie strictement positive, au plus 100 points de pourcentage |
 | `PRAVDA_AUTH_PATH` | pravda_auth.json | Fichier de l'empreinte du mot de passe local ; sans fichier, le mot de passe (15 caractères minimum) est créé à la première visite ou depuis `PRAVDA_ADMIN_PASSWORD` |
 
-Sous PowerShell, `$env:DASHBOARD_PORT='8081'` puis `cargo run --locked -p pravda-server` utilise http://127.0.0.1:8081. Une configuration invalide ou un port occupé interrompt le démarrage avant les connexions marché. Les frais restent fixés à 0,36 %. Augmenter les limites de fraîcheur ou d'anomalie réduit la protection. Le lanceur Tauri séparé attend encore 8080 : ces options sont actuellement destinées au serveur en ligne de commande.
+Sous PowerShell, `$env:DASHBOARD_PORT='8081'` puis `cargo run --locked -p pravda-server` utilise http://127.0.0.1:8081. Une configuration invalide ou un port occupé interrompt le démarrage avant les connexions marché. Les frais restent fixés à 0,36 %. Augmenter les limites de fraîcheur ou d'anomalie réduit la protection. Le lanceur Tauri utilise le même DASHBOARD_PORT.
 
 ### Fonctionnement et limites
 
@@ -73,7 +76,7 @@ Disponibilité annoncée par le responsable : la moitié de l'équipe est en vac
 
 ## Русский
 
-Rust-сервер читает переменные окружения процесса, но не загружает `.env` автоматически. Порт задаётся `DASHBOARD_PORT`, база — `PRAVDA_DB_PATH`, ограничения — переменными из таблицы выше. Для диагностики `PRAVDA_MARKET_FEEDS_ENABLED=false` отключает подключения к биржам. Ошибочные значения останавливают запуск. Отдельный Tauri-клиент пока ожидает порт 8080.
+Rust-сервер читает переменные окружения процесса, но не загружает `.env` автоматически. Порт задаётся `DASHBOARD_PORT`, база — `PRAVDA_DB_PATH`, ограничения — переменными из таблицы выше. Для диагностики `PRAVDA_MARKET_FEEDS_ENABLED=false` отключает подключения к биржам. Ошибочные значения останавливают запуск. Клиент Tauri использует тот же DASHBOARD_PORT. Доступ защищён локальным паролем (не менее 15 символов, хранится соленый хеш PBKDF2): пароль задаётся при первом открытии либо через PRAVDA_ADMIN_PASSWORD; файл хеша — PRAVDA_AUTH_PATH (по умолчанию pravda_auth.json).
 
 Pravda-Bot — локальное приложение наблюдения за публичными ценами Kraken/Binance. Сервер написан на Rust (Tokio/Axum), история хранится в SQLite. Реальные ордера не отправляются; счета и остатки не проверяются. Старый Python-код находится в `archive/python-legacy/` и не запускается Rust-сервером.
 
@@ -85,7 +88,7 @@ Pravda-Bot — локальное приложение наблюдения за
 
 ## English
 
-The Rust server reads process environment variables; it does not automatically load `.env`. Configure the port with `DASHBOARD_PORT`, storage with `PRAVDA_DB_PATH`, and guard thresholds using the table above. For diagnostics, `PRAVDA_MARKET_FEEDS_ENABLED=false` disables exchange connections. Invalid values stop startup. The separate Tauri client still expects port 8080.
+The Rust server reads process environment variables; it does not automatically load `.env`. Configure the port with `DASHBOARD_PORT`, storage with `PRAVDA_DB_PATH`, and guard thresholds using the table above. For diagnostics, `PRAVDA_MARKET_FEEDS_ENABLED=false` disables exchange connections. Invalid values stop startup. The Tauri client uses the same DASHBOARD_PORT. Access requires a local password (at least 15 characters, stored as a salted PBKDF2 hash): it is created on first visit or from PRAVDA_ADMIN_PASSWORD; the hash file is PRAVDA_AUTH_PATH (default pravda_auth.json).
 
 Pravda-Bot observes public Kraken/Binance prices locally. Its active server uses Rust, Tokio/Axum and SQLite. It sends no real orders and verifies no exchange accounts. Python sources under `archive/python-legacy/` are reference material, not part of the Rust runtime.
 
