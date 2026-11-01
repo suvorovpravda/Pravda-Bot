@@ -48,7 +48,7 @@ fn request(
         }
         response.extend_from_slice(&buffer[..count]);
         // WebSocket connections remain open after the handshake.
-        if response.starts_with(b"HTTP/1.1 101 ") && response.windows(4).any(|w| w == b"\r\n\r\n") {
+        if (response.starts_with(b"HTTP/1.1 101 ") || response.starts_with(b"HTTP/1.1 401 ")) && response.windows(4).any(|w| w == b"\r\n\r\n") {
             break;
         }
         assert!(
@@ -109,7 +109,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
     }
     let upgrade = format!("Origin: http://127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
     let denied = http_request(port, "127.0.0.1", &upgrade, "/ws/ticks").unwrap();
-    assert!(denied.starts_with("HTTP/1.1 401 "), "{denied}");
+    assert!(denied.starts_with("HTTP/1.1 401 "), "unauthenticated WebSocket upgrade must be denied");
 
     let form = "Connection: close\r\nContent-Type: application/x-www-form-urlencoded\r\n";
     let wrong = request(
