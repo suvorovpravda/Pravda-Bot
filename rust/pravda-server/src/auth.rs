@@ -527,7 +527,10 @@ mod tests {
         let password = test_password();
         auth.set_password(&password).unwrap();
         for _ in 0..FREE_ATTEMPTS {
-            assert_eq!(auth.login(&format!("{password}-wrong")), Err(AuthError::Invalid));
+            assert_eq!(
+                auth.login(&format!("{password}-wrong")),
+                Err(AuthError::Invalid)
+            );
         }
         assert!(matches!(auth.login(&password), Err(AuthError::Locked(_))));
         let _ = std::fs::remove_file(path);
@@ -595,7 +598,14 @@ mod tests {
         );
 
         let short = "x".repeat(MIN_PASSWORD_CHARS - 1);
-        let weak = call(&app, "POST", "/setup", None, &format!("password={short}&confirm={short}")).await;
+        let weak = call(
+            &app,
+            "POST",
+            "/setup",
+            None,
+            &format!("password={short}&confirm={short}"),
+        )
+        .await;
         assert_eq!(weak.status(), StatusCode::BAD_REQUEST);
         let body = format!("password={password}&confirm={password}");
         let response = call(&app, "POST", "/setup", None, &body).await;
