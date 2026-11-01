@@ -106,6 +106,17 @@ jobs:
               Start-Sleep -Milliseconds 250
             }
             if (-not $ready) { throw "Desktop application failed to start its authenticated local server" }
+            # Reproduce WebView2's first cross-site document navigation. A plain
+            # HTTP health probe is NOT enough to detect blocked app windows.
+            $webviewHeaders = @{
+              "Sec-Fetch-Site" = "cross-site"
+              "Sec-Fetch-Mode" = "navigate"
+              "Sec-Fetch-Dest" = "document"
+            }
+            $loginPage = Invoke-WebRequest -Uri "http://127.0.0.1:$port/login" -Headers $webviewHeaders -TimeoutSec 3 -MaximumRedirection 0
+            if ($loginPage.StatusCode -ne 200 -or $loginPage.Content -notmatch "Pravda-Bot") {
+              throw "WebView2 document navigation was rejected"
+            }
             $process.Refresh()
             if ($process.HasExited) { throw "Desktop application exited after the server became ready" }
             Write-Host "Windows desktop process and authenticated local server are running."
