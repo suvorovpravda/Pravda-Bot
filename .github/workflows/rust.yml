@@ -144,8 +144,8 @@ jobs:
               if ([int]$setup.StatusCode -ne 303) { throw "First-run setup did not redirect" }
               $authorized = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
               if ([int]$authorized.StatusCode -ne 200) { throw "Authenticated API access failed" }
-              $home = $http.GetAsync("$base/").GetAwaiter().GetResult()
-              if ([int]$home.StatusCode -ne 200) { throw "Dashboard access failed after setup" }
+              $dashboardResponse = $http.GetAsync("$base/").GetAwaiter().GetResult()
+              if ([int]$dashboardResponse.StatusCode -ne 200) { throw "Dashboard access failed after setup" }
 
               $logout = $http.PostAsync("$base/logout", [System.Net.Http.StringContent]::new("")).GetAwaiter().GetResult()
               if ([int]$logout.StatusCode -ne 303) { throw "Logout did not redirect" }
