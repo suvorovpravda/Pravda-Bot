@@ -1,8 +1,108 @@
 use std::time::{Duration, Instant};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
+// Keep desktop credentials and SQLite in a stable per-user directory, rather than
+// inheriting Explorer, shortcut or terminal working directories. Explicit server
+// environment overrides always take precedence.
+#[cfg(windows)]
+fn default_storage_paths(
+    local_app_data: &std::path::Path,
+    custom_db: bool,
+    custom_auth: bool,
+) -> Vec<(&'static str, std::path::PathBuf)> {
+    let root = local_app_data.join("Pravda-Bot");
+    let mut defaults = Vec::new();
+    if !custom_db {
+        defaults.push(("PRAVDA_DB_PATH", root.join("pravda.db")));
+    }
+    if !custom_auth {
+        defaults.push(("PRAVDA_AUTH_PATH", root.join("pravda_auth.json")));
+    }
+    defaults
+}
+
+#[cfg(windows)]
+fn configure_desktop_storage() -> Result<(), &'static str> {
+    let custom_db = std::env::var_os("PRAVDA_DB_PATH").is_some();
+    let custom_auth = std::env::var_os("PRAVDA_AUTH_PATH").is_some();
+    if custom_db && custom_auth {
+        return Ok(());
+    }
+    let local_app_data =
+        std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is not defined")?;
+    if local_app_data.is_empty() {
+        return Err("LOCALAPPDATA is empty");
+    }
+    let defaults = default_storage_paths(
+        std::path::Path::new(&local_app_data),
+        custom_db,
+        custom_auth,
+    );
+    let folder = std::path::Path::new(&local_app_data).join("Pravda-Bot");
+    std::fs::create_dir_all(&folder).map_err(|_| {
+        "Cannot create Pravda-Bot data directory in LOCALAPPDATA; check permissions"
+    })?;
+    for (key, path) in defaults {
+        // Called before launching the embedded HTTP server or any file workers.
+        std::env::set_var(key, path);
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn configure_desktop_storage() -> Result<(), &'static str> {
+    Ok(())
+}
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+    #[test]
+    fn default_data_paths_do_not_depend_on_current_working_directory() {
+        let base = std::path::Path::new(r"C:\Users\Tester\AppData\Local");
+        let result = default_storage_paths(base, false, false);
+        assert_eq!(
+            result,
+            vec![
+                (
+                    "PRAVDA_DB_PATH",
+                    base.join("Pravda-Bot").join("pravda.db")
+                ),
+                (
+                    "PRAVDA_AUTH_PATH",
+                    base.join("Pravda-Bot").join("pravda_auth.json")
+                )
+            ]
+        );
+    }
+    #[test]
+    fn explicit_paths_are_never_replaced() {
+        let base = std::path::Path::new(r"C:\Users\Tester\AppData\Local");
+        assert!(default_storage_paths(base, true, true).is_empty());
+        assert_eq!(
+            default_storage_paths(base, true, false),
+            vec![(
+                "PRAVDA_AUTH_PATH",
+                base.join("Pravda-Bot").join("pravda_auth.json")
+            )]
+        );
+        assert_eq!(
+            default_storage_paths(base, false, true),
+            vec![(
+                "PRAVDA_DB_PATH",
+                base.join("Pravda-Bot").join("pravda.db")
+            )]
+        );
+    }
+}
+
 #[tokio::main]
 async fn main() {
+    if let Err(message) = configure_desktop_storage() {
+        eprintln!("Pravda-Bot desktop storage error: {message}");
+        std::process::exit(1);
+    }
+
     let port: u16 = match std::env::var("DASHBOARD_PORT") {
         Ok(raw) => match raw.parse() {
             Ok(port) if port != 0 => port,
