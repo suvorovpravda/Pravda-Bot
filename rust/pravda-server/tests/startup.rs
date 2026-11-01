@@ -19,7 +19,12 @@ impl Drop for ServerProcess {
     }
 }
 
-const PASSWORD: &str = "correct-horse-battery";
+// The integration test never embeds a reusable administrator password.
+fn test_password() -> String {
+    let mut bytes = [0_u8; 20];
+    getrandom::getrandom(&mut bytes).expect("test entropy must be available");
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
 
 fn http_request(port: u16, host: &str, extra: &str, path: &str) -> std::io::Result<String> {
     request(port, host, extra, "GET", path, "")
@@ -78,12 +83,13 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
     let directory =
         std::env::temp_dir().join(format!("pravda-startup-{}-{nonce}", std::process::id()));
     fs::create_dir(&directory).unwrap();
+    let password = test_password();
     let child = Command::new(env!("CARGO_BIN_EXE_pravda-server"))
         .env("DASHBOARD_PORT", port.to_string())
         .env("PRAVDA_DB_PATH", directory.join("test.sqlite3"))
         .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
         .env("PRAVDA_AUTH_PATH", directory.join("auth.json"))
-        .env("PRAVDA_ADMIN_PASSWORD", PASSWORD)
+        .env("PRAVDA_ADMIN_PASSWORD", &password)
         .env_remove("MARKET_DATA_STALE_SECONDS")
         .env_remove("MAX_EXCHANGE_SKEW_SECONDS")
         .env_remove("MAX_ALLOWED_SPREAD_PERCENT")
@@ -106,7 +112,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
             }
         })
         .expect("server did not answer within ten seconds");
-    assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+    assert!(response.starts_with("HTTP/1.1 200 "), "login page must return HTTP 200");
     assert!(response
         .to_ascii_lowercase()
         .contains("x-pravda-server: 1\r\n"));
@@ -114,7 +120,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
     // Everything except the login page is closed to unauthenticated clients.
     for path in ["/", "/api/metrics", "/api/market"] {
         let denied = http_request(port, "127.0.0.1", "Connection: close\r\n", path).unwrap();
-        assert!(!denied.starts_with("HTTP/1.1 200 "), "{path}: {denied}");
+        assert!(!denied.starts_with("HTTP/1.1 200 "), "protected route must reject unauthenticated requests");
     }
     let upgrade = format!("Origin: http://127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
     let denied = http_request(port, "127.0.0.1", &upgrade, "/ws/ticks").unwrap();
@@ -130,20 +136,20 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         form,
         "POST",
         "/login",
-        "password=wrong-password-value",
+        &format!("password={password}-wrong"),
     )
     .unwrap();
-    assert!(wrong.starts_with("HTTP/1.1 401 "), "{wrong}");
+    assert!(wrong.starts_with("HTTP/1.1 401 "), "invalid password must be denied");
     let login = request(
         port,
         "127.0.0.1",
         form,
         "POST",
         "/login",
-        &format!("password={PASSWORD}"),
+        &format!("password={password}"),
     )
     .unwrap();
-    assert!(login.starts_with("HTTP/1.1 303 "), "{login}");
+    assert!(login.starts_with("HTTP/1.1 303 "), "valid password must redirect");
     let cookie = login
         .lines()
         .find_map(|line| {
@@ -176,7 +182,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         let response = http_request(port, host, &upgrade, "/ws/ticks").unwrap();
         assert!(
             response.starts_with("HTTP/1.1 101 "),
-            "WebSocket upgrade failed for host: {host}"
+            "authenticated WebSocket upgrade must succeed"
         );
     }
     let rejected = http_request(
