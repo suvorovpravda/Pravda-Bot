@@ -165,7 +165,7 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         "/",
     )
     .unwrap();
-    assert!(response.starts_with("HTTP/1.1 200 "), "{response}");
+    assert!(response.starts_with("HTTP/1.1 200 "), "authenticated dashboard must return HTTP 200");
     let headers = response
         .split("\r\n\r\n")
         .next()
