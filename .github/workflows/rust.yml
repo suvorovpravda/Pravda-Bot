@@ -74,6 +74,8 @@ jobs:
           components: rustfmt
       - name: Verify Tauri formatting
         run: cargo fmt --manifest-path crates/pravda-app/Cargo.toml -- --check
+      - name: Test desktop storage path selection (Windows)
+        run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml
       - name: Build native Windows desktop application
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
       - name: Launch desktop app and verify local authentication server
@@ -119,7 +121,48 @@ jobs:
             }
             $process.Refresh()
             if ($process.HasExited) { throw "Desktop application exited after the server became ready" }
-            Write-Host "Windows desktop process and authenticated local server are running."
+
+            # Exercise the full first-run authentication flow, not just a GET /login.
+            # Passwords are generated only in memory for each Windows CI run.
+            $password = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(20))
+            $handler = [System.Net.Http.HttpClientHandler]::new()
+            $handler.AllowAutoRedirect = $false
+            $handler.UseCookies = $true
+            $handler.CookieContainer = [System.Net.CookieContainer]::new()
+            $http = [System.Net.Http.HttpClient]::new($handler)
+            try {
+              $base = "http://127.0.0.1:$port"
+              $unauthorized = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
+              if ([int]$unauthorized.StatusCode -ne 401) {
+                throw "API accepted access without a session"
+              }
+              $form = [System.Collections.Generic.Dictionary[string,string]]::new()
+              $form.Add("password", $password)
+              $form.Add("confirm", $password)
+              $payload = [System.Net.Http.FormUrlEncodedContent]::new($form)
+              $setup = $http.PostAsync("$base/setup", $payload).GetAwaiter().GetResult()
+              if ([int]$setup.StatusCode -ne 303) { throw "First-run setup did not redirect" }
+              $authorized = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
+              if ([int]$authorized.StatusCode -ne 200) { throw "Authenticated API access failed" }
+              $home = $http.GetAsync("$base/").GetAwaiter().GetResult()
+              if ([int]$home.StatusCode -ne 200) { throw "Dashboard access failed after setup" }
+
+              $logout = $http.PostAsync("$base/logout", [System.Net.Http.StringContent]::new("")).GetAwaiter().GetResult()
+              if ([int]$logout.StatusCode -ne 303) { throw "Logout did not redirect" }
+              $revoked = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
+              if ([int]$revoked.StatusCode -ne 401) { throw "Logout did not revoke the session" }
+
+              $loginForm = [System.Collections.Generic.Dictionary[string,string]]::new()
+              $loginForm.Add("password", $password)
+              $relogin = $http.PostAsync("$base/login", [System.Net.Http.FormUrlEncodedContent]::new($loginForm)).GetAwaiter().GetResult()
+              if ([int]$relogin.StatusCode -ne 303) { throw "Valid re-login failed" }
+              $recovered = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
+              if ([int]$recovered.StatusCode -ne 200) { throw "Re-login did not restore the session" }
+            } finally {
+              $http.Dispose()
+              $handler.Dispose()
+            }
+            Write-Host "Windows desktop, WebView2 navigation, setup, dashboard, logout and re-login verified."
           } finally {
             if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
           }
