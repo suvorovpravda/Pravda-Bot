@@ -238,6 +238,17 @@ mod tests {
             )),
             alerts: RwLock::new(Vec::new()),
             store: Arc::new(Mutex::new(store)),
+            auth: Arc::new(
+                crate::auth::Auth::load(
+                    std::env::temp_dir().join(format!(
+                        "pravda-history-auth-{}-{}.json",
+                        std::process::id(),
+                        now.timestamp_nanos_opt().unwrap_or_default()
+                    )),
+                    1_000,
+                )
+                .unwrap(),
+            ),
         })
     }
     #[tokio::test]
