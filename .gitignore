@@ -51,4 +51,5 @@ security_revised/
 # Archive Python legacy
 archive/python-legacy/.venv/
 archive/python-legacy/__pycache__/
-archive/python-legacy/*.pycpravda_auth.json
+archive/python-legacy/*.pyc
+/pravda_auth.json
