@@ -34,10 +34,10 @@ Pour signaler une vulnérabilité, utiliser le signalement privé GitHub si cett
 
 Политика относится к Rust-серверу, а не к архиву Python. Сервер слушает только loopback, проверяет Host/Origin и браузерный контекст запроса до HTTP/WebSocket-маршрутов. Локальные CLI-клиенты без Origin разрешены. Ответы запрещают кэширование и содержат защитные заголовки.
 
-Аутентификации нет: локальная вредоносная программа может подделать заголовки. Не публикуйте сервер через туннель или прокси. CSP пока допускает inline-скрипты; ограничение нагрузки и диска ещё не завершено. Наличие тестов не означает отсутствие уязвимостей. Сообщайте о проблемах приватно, не публикуя секреты.
+Доступ защищён локальным паролем (не менее 15 символов, хранится только соленый хеш PBKDF2-HMAC-SHA256; сессионный cookie HttpOnly/SameSite=Strict; прогрессивная блокировка после 5 ошибок; выход закрывает WebSocket). Пароль не защищает от локальной вредоносной программы или администратора на том же компьютере. Не публикуйте сервер через туннель или прокси. CSP пока допускает inline-скрипты; ограничение нагрузки и диска ещё не завершено. Наличие тестов не означает отсутствие уязвимостей. Сообщайте о проблемах приватно, не публикуя секреты.
 
 ## English
 
 This policy covers the maintained Rust server, not inherited Python protections. The server binds to loopback and validates Host/Origin plus browser request context before HTTP/WebSocket routes. Local CLI requests without Origin remain allowed. Responses use no-store and defensive headers.
 
-There is no authentication: local malware can forge headers. Do not expose the server through a tunnel or proxy. CSP still allows inline scripts, and global request/connection/storage limits remain unfinished. Tests do not establish the absence of vulnerabilities. Use GitHub private reporting if enabled, or request a private maintainer channel without disclosing secrets publicly.
+Access requires a local password (at least 15 characters, stored only as a salted PBKDF2-HMAC-SHA256 hash; HttpOnly/SameSite=Strict session cookie; progressive lockout after 5 failures; logout closes the WebSocket). It does not protect against local malware or an administrator on the same machine. Do not expose the server through a tunnel or proxy. CSP still allows inline scripts, and global request/connection/storage limits remain unfinished. Tests do not establish the absence of vulnerabilities. Use GitHub private reporting if enabled, or request a private maintainer channel without disclosing secrets publicly.

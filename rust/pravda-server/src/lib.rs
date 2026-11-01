@@ -133,6 +133,17 @@ async fn api_history(State(state): State<Arc<AppState>>) -> Json<Value> {
     }
 }
 
+async fn api_alerts_check() -> Json<Value> {
+    Json(json!({"triggered": []}))
+}
+
+async fn api_alert_delete() -> impl IntoResponse {
+    (
+        axum::http::StatusCode::NOT_FOUND,
+        Json(json!({"error": "price alerts are not available in the Rust server"})),
+    )
+}
+
 async fn api_news() -> Json<Value> {
     Json(json!({"articles": [], "message": "News endpoint"}))
 }
@@ -454,6 +465,8 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .route("/api/market/history.csv", get(history::csv_history))
         .route("/api/news", get(api_news))
         .route("/api/alerts", get(api_alerts))
+        .route("/api/alerts/check", get(api_alerts_check))
+        .route("/api/alerts/:id", axum::routing::delete(api_alert_delete))
         .route("/api/metrics", get(api_metrics))
         .route("/ws/ticks", get(ws_handler))
         .merge(auth::routes(state.auth.clone()))
