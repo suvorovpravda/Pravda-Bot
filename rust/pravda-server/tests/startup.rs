@@ -162,7 +162,10 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
     for host in ["127.0.0.1", "localhost"] {
         let upgrade = format!("Cookie: {cookie}\r\nOrigin: http://{host}:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
         let response = http_request(port, host, &upgrade, "/ws/ticks").unwrap();
-        assert!(response.starts_with("HTTP/1.1 101 "), "{response}");
+        assert!(
+            response.starts_with("HTTP/1.1 101 "),
+            "WebSocket upgrade failed for host: {host}"
+        );
     }
     let rejected = http_request(
         port,
