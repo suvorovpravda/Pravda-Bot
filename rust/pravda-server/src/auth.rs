@@ -562,9 +562,23 @@ mod tests {
         let again = call(&app, "POST", "/setup", None, &body).await;
         assert_eq!(again.status(), StatusCode::CONFLICT);
 
-        let bad = call(&app, "POST", "/login", None, "password=wrong-password-value").await;
+        let bad = call(
+            &app,
+            "POST",
+            "/login",
+            None,
+            "password=wrong-password-value",
+        )
+        .await;
         assert_eq!(bad.status(), StatusCode::UNAUTHORIZED);
-        let response = call(&app, "POST", "/login", None, &format!("password={PASSWORD}")).await;
+        let response = call(
+            &app,
+            "POST",
+            "/login",
+            None,
+            &format!("password={PASSWORD}"),
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         let set_cookie = response.headers()[header::SET_COOKIE]
             .to_str()
