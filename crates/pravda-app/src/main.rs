@@ -28,8 +28,7 @@ fn configure_desktop_storage() -> Result<(), &'static str> {
     if custom_db && custom_auth {
         return Ok(());
     }
-    let local_app_data =
-        std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is not defined")?;
+    let local_app_data = std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA is not defined")?;
     if local_app_data.is_empty() {
         return Err("LOCALAPPDATA is empty");
     }
@@ -64,10 +63,7 @@ mod tests {
         assert_eq!(
             result,
             vec![
-                (
-                    "PRAVDA_DB_PATH",
-                    base.join("Pravda-Bot").join("pravda.db")
-                ),
+                ("PRAVDA_DB_PATH", base.join("Pravda-Bot").join("pravda.db")),
                 (
                     "PRAVDA_AUTH_PATH",
                     base.join("Pravda-Bot").join("pravda_auth.json")
@@ -88,10 +84,7 @@ mod tests {
         );
         assert_eq!(
             default_storage_paths(base, false, true),
-            vec![(
-                "PRAVDA_DB_PATH",
-                base.join("Pravda-Bot").join("pravda.db")
-            )]
+            vec![("PRAVDA_DB_PATH", base.join("Pravda-Bot").join("pravda.db"))]
         );
     }
 }
