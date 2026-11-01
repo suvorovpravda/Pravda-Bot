@@ -565,7 +565,7 @@ mod tests {
             "POST",
             "/login",
             None,
-            "******",
+            "password=wrong-password-value",
         )
         .await;
         assert_eq!(bad.status(), StatusCode::UNAUTHORIZED);
@@ -574,7 +574,7 @@ mod tests {
             "POST",
             "/login",
             None,
-            &format!("******"),
+            &format!("password={PASSWORD}"),
         )
         .await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
