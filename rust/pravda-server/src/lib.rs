@@ -9,8 +9,7 @@ use axum::{
     http::HeaderValue,
     response::{IntoResponse, Json, Response},
     routing::get,
-    Extension,
-    Router,
+    Extension, Router,
 };
 use chrono::Utc;
 use config::ServerConfig;
@@ -247,7 +246,10 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
     let paper_sim = PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
 
-    let auth = Arc::new(auth::Auth::load(&config.auth_path, auth::PBKDF2_ITERATIONS)?);
+    let auth = Arc::new(auth::Auth::load(
+        &config.auth_path,
+        auth::PBKDF2_ITERATIONS,
+    )?);
     if !auth.is_configured() {
         if let Ok(initial) = std::env::var("PRAVDA_ADMIN_PASSWORD") {
             let worker = auth.clone();

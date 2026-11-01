@@ -1,4 +1,4 @@
-//! Mot de passe local : empreinte PBKDF2 salée, sessions en mémoire, limitation des tentatives.
+﻿//! Mot de passe local : empreinte PBKDF2 salée, sessions en mémoire, limitation des tentatives.
 //! Ne protège pas contre un processus local malveillant ou un administrateur de la machine.
 use axum::{
     extract::{Request, State},
@@ -560,9 +560,23 @@ mod tests {
         let again = call(&app, "POST", "/setup", None, &body).await;
         assert_eq!(again.status(), StatusCode::CONFLICT);
 
-        let bad = call(&app, "POST", "/login", None, "password=wrong-password-value").await;
+        let bad = call(
+            &app,
+            "POST",
+            "/login",
+            None,
+            "******",
+        )
+        .await;
         assert_eq!(bad.status(), StatusCode::UNAUTHORIZED);
-        let response = call(&app, "POST", "/login", None, &format!("password={PASSWORD}")).await;
+        let response = call(
+            &app,
+            "POST",
+            "/login",
+            None,
+            &format!("******"),
+        )
+        .await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         let set_cookie = response.headers()[header::SET_COOKIE]
             .to_str()
