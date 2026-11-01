@@ -451,7 +451,10 @@ mod tests {
     use axum::{body::Body, middleware, routing::get as get_route};
     use tower::ServiceExt;
 
-    const PASSWORD: &str = "correct-horse-battery";
+    // Test secrets are generated at runtime, never published as fixed values.
+    fn test_password() -> String {
+        to_hex(&random_bytes::<20>().expect("test randomness must be available"))
+    }
 
     fn temp_path(label: &str) -> PathBuf {
         let nonce = std::time::SystemTime::now()
@@ -472,23 +475,24 @@ mod tests {
     #[test]
     fn short_passwords_are_rejected_and_hash_is_salted_and_not_plaintext() {
         let (auth, path) = auth("store");
+        let password = test_password();
         assert_eq!(
-            auth.set_password("short-secret"),
+            auth.set_password(&"x".repeat(MIN_PASSWORD_CHARS - 1)),
             Err(AuthError::WeakPassword)
         );
         assert!(!auth.is_configured());
-        auth.set_password(PASSWORD).unwrap();
+        auth.set_password(password).unwrap();
         let stored = std::fs::read_to_string(&path).unwrap();
-        assert!(!stored.contains(PASSWORD));
+        assert!(!stored.contains(password));
         assert!(stored.contains("pbkdf2-sha256"));
         assert_eq!(
-            auth.set_password(PASSWORD),
+            auth.set_password(password),
             Err(AuthError::AlreadyConfigured)
         );
         let reloaded = Auth::load(&path, 1_000).unwrap();
-        assert!(reloaded.login(PASSWORD).is_ok());
+        assert!(reloaded.login(password).is_ok());
         assert_eq!(
-            reloaded.login("wrong-password-value"),
+            reloaded.login(&format!("{password}-wrong")),
             Err(AuthError::Invalid)
         );
         let _ = std::fs::remove_file(path);
@@ -497,14 +501,15 @@ mod tests {
     #[test]
     fn independent_servers_cannot_overwrite_existing_password_record() {
         let (first, path) = auth("race");
+        let password = test_password();
         let second = Auth::load(&path, 1_000).unwrap();
-        first.set_password(PASSWORD).unwrap();
+        first.set_password(password).unwrap();
         assert_eq!(
-            second.set_password(&format!("{PASSWORD}-different")),
+            second.set_password(&format!("{password}-different")),
             Err(AuthError::AlreadyConfigured)
         );
         let restored = Auth::load(&path, 1_000).unwrap();
-        assert!(restored.login(PASSWORD).is_ok());
+        assert!(restored.login(password).is_ok());
         let _ = std::fs::remove_file(path);
     }
 
@@ -519,19 +524,21 @@ mod tests {
     #[test]
     fn repeated_failures_lock_out_even_the_correct_password() {
         let (auth, path) = auth("lock");
-        auth.set_password(PASSWORD).unwrap();
+        let password = test_password();
+        auth.set_password(password).unwrap();
         for _ in 0..FREE_ATTEMPTS {
-            assert_eq!(auth.login("wrong-password-value"), Err(AuthError::Invalid));
+            assert_eq!(auth.login(&format!("{password}-wrong")), Err(AuthError::Invalid));
         }
-        assert!(matches!(auth.login(PASSWORD), Err(AuthError::Locked(_))));
+        assert!(matches!(auth.login(password), Err(AuthError::Locked(_))));
         let _ = std::fs::remove_file(path);
     }
 
     #[test]
     fn logout_invalidates_session_and_notifies_subscribers() {
         let (auth, path) = auth("logout");
-        auth.set_password(PASSWORD).unwrap();
-        let token = auth.login(PASSWORD).unwrap();
+        let password = test_password();
+        auth.set_password(password).unwrap();
+        let token = auth.login(password).unwrap();
         let mut closed = auth.subscribe_closed();
         assert!(auth.session_valid(&token));
         auth.logout(&token);
@@ -571,6 +578,7 @@ mod tests {
     #[tokio::test]
     async fn dashboard_and_api_require_login_then_logout_revokes_access() {
         let (auth, path) = auth("http");
+        let password = test_password();
         let app = app(auth.clone());
 
         let response = call(&app, "GET", "/api/metrics", None, "").await;
@@ -586,9 +594,10 @@ mod tests {
             StatusCode::OK
         );
 
-        let weak = call(&app, "POST", "/setup", None, "password=short&confirm=short").await;
+        let short = "x".repeat(MIN_PASSWORD_CHARS - 1);
+        let weak = call(&app, "POST", "/setup", None, &format!("password={short}&confirm={short}")).await;
         assert_eq!(weak.status(), StatusCode::BAD_REQUEST);
-        let body = format!("password={PASSWORD}&confirm={PASSWORD}");
+        let body = format!("password={password}&confirm={password}");
         let response = call(&app, "POST", "/setup", None, &body).await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         let again = call(&app, "POST", "/setup", None, &body).await;
@@ -599,7 +608,7 @@ mod tests {
             "POST",
             "/login",
             None,
-            "password=wrong-password-value",
+            &format!("password={password}-wrong"),
         )
         .await;
         assert_eq!(bad.status(), StatusCode::UNAUTHORIZED);
@@ -608,7 +617,7 @@ mod tests {
             "POST",
             "/login",
             None,
-            &format!("password={PASSWORD}"),
+            &format!("password={password}"),
         )
         .await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
