@@ -112,7 +112,10 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
             }
         })
         .expect("server did not answer within ten seconds");
-    assert!(response.starts_with("HTTP/1.1 200 "), "login page must return HTTP 200");
+    assert!(
+        response.starts_with("HTTP/1.1 200 "),
+        "login page must return HTTP 200"
+    );
     assert!(response
         .to_ascii_lowercase()
         .contains("x-pravda-server: 1\r\n"));
@@ -120,7 +123,10 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
     // Everything except the login page is closed to unauthenticated clients.
     for path in ["/", "/api/metrics", "/api/market"] {
         let denied = http_request(port, "127.0.0.1", "Connection: close\r\n", path).unwrap();
-        assert!(!denied.starts_with("HTTP/1.1 200 "), "protected route must reject unauthenticated requests");
+        assert!(
+            !denied.starts_with("HTTP/1.1 200 "),
+            "protected route must reject unauthenticated requests"
+        );
     }
     let upgrade = format!("Origin: http://127.0.0.1:{port}\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n");
     let denied = http_request(port, "127.0.0.1", &upgrade, "/ws/ticks").unwrap();
@@ -139,7 +145,10 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         &format!("password={password}-wrong"),
     )
     .unwrap();
-    assert!(wrong.starts_with("HTTP/1.1 401 "), "invalid password must be denied");
+    assert!(
+        wrong.starts_with("HTTP/1.1 401 "),
+        "invalid password must be denied"
+    );
     let login = request(
         port,
         "127.0.0.1",
@@ -149,7 +158,10 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         &format!("password={password}"),
     )
     .unwrap();
-    assert!(login.starts_with("HTTP/1.1 303 "), "valid password must redirect");
+    assert!(
+        login.starts_with("HTTP/1.1 303 "),
+        "valid password must redirect"
+    );
     let cookie = login
         .lines()
         .find_map(|line| {
@@ -165,7 +177,10 @@ fn binary_starts_once_and_serves_local_http_and_websocket() {
         "/",
     )
     .unwrap();
-    assert!(response.starts_with("HTTP/1.1 200 "), "authenticated dashboard must return HTTP 200");
+    assert!(
+        response.starts_with("HTTP/1.1 200 "),
+        "authenticated dashboard must return HTTP 200"
+    );
     let headers = response
         .split("\r\n\r\n")
         .next()
