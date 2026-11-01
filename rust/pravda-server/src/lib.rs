@@ -255,7 +255,11 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             let worker = auth.clone();
             tokio::task::spawn_blocking(move || worker.set_password(&initial))
                 .await?
-                .map_err(|_| "PRAVDA_ADMIN_PASSWORD must contain at least 15 characters")?;
+                .map_err(|error| match error {
+                    auth::AuthError::WeakPassword => "PRAVDA_ADMIN_PASSWORD must contain at least 15 characters and at most 1024 bytes",
+                    auth::AuthError::Storage => "could not initialize authentication storage; check PRAVDA_AUTH_PATH and filesystem permissions",
+                    _ => "could not initialize local authentication",
+                })?;
         } else {
             println!("No local password set: open the dashboard to create one.");
         }
