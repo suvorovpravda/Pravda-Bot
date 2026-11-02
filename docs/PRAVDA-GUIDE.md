@@ -16,7 +16,7 @@
 ---
 
 > [!IMPORTANT]
-> **Document de référence consolidé au 2 novembre 2026**, fondé sur le dépôt `main@93f2775311ecf26bda0857ffc3523fb7f6318154` et la branche de préparation `migration/rust-production-boundary-20261102`. **Cette page n'est pas une attestation de release**. Les travaux non fusionnés sont signalés comme tels. Les anciens guides éliminés de l'arborescence restent consultables via l'[historique Git antérieur à la consolidation](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154).
+> **Document de référence consolidé au 2 novembre 2026**, actualisé après la fusion de #72 et #75 sur `main@6b1b91693916529f317436c2e9e060e06b3d35a2` (contrôle Rust-only réussi sur `main`). **Cette page n'est pas une attestation de release**. Les travaux non fusionnés sont signalés comme tels. Les anciens guides éliminés de l'arborescence restent consultables via l'[historique Git antérieur à la consolidation](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154).
 
 ## 🎯 Doctrine : une production Rust, une archive Python
 
@@ -212,7 +212,7 @@ cargo test --locked --workspace
 cargo test --locked --manifest-path .\crates\pravda-app\Cargo.toml
 node tools/test-desktop-ipc.mjs
 node tools/test-dashboard.mjs
-# Garde de frontière Rust / Python (sur branche de migration) :
+# Garde de frontière Rust / Python (intégrée à main via #72) :
 node tools/test-rust-production-boundary.mjs
 ```
 
