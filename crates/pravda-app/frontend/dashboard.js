@@ -680,13 +680,20 @@ const translations = {
             "/api/market/history": "ipc_history_query",
             "/api/alerts": "ipc_paper_alerts_snapshot",
             "/api/metrics": "ipc_runtime_metrics",
-            "/api/fx": "ipc_fx_status"
+            "/api/fx": "ipc_fx_status",
+            "/api/eu/flows": "ipc_public_feed",
+            "/api/geopolitics": "ipc_public_feed",
+            "/api/sources": "ipc_public_feed",
+            "/api/revolut/public": "ipc_public_feed"
         };
         const command = commands[parsed.pathname];
         if (!command) throw new Error("UNAVAILABLE");
         try {
-            return await window.pravdaInvoke(command,
-                parsed.pathname === "/api/market/history" ? { query } : {});
+            const publicSources = {"/api/eu/flows":"energy", "/api/geopolitics":"news",
+                "/api/sources":"sources", "/api/revolut/public":"revolut"};
+            const args = command === "ipc_public_feed" ? {source:publicSources[parsed.pathname]}
+                : parsed.pathname === "/api/market/history" ? { query } : {};
+            return await window.pravdaInvoke(command, args);
         } catch (error) {
             if (String(error).includes("UNAUTHORIZED")) window.pravdaRequireLogin();
             throw error;
@@ -702,6 +709,57 @@ const translations = {
             $("chart-age").textContent = t("unknownError");
         }
     }
+    async function refreshRevolut() {
+        const status = $("revolut-status");
+        const container = $("revolut-orderbook");
+        setStatus(status,"pending","Lecture du carnet public…");
+        try {
+            const data = await fetchJson("/api/revolut/public");
+            if (data.status === "unavailable" || !data.book?.data) throw new Error("PUBLIC_ORDER_BOOK_UNAVAILABLE");
+            const book = data.book.data;
+            const bestBid = book.bids?.[0]?.price;
+            const bestAsk = book.asks?.[0]?.price;
+            if (!bestBid || !bestAsk) throw new Error("EMPTY_BOOK");
+            container.replaceChildren();
+            for(const [label,price] of [["Meilleure offre d'achat",bestBid],["Meilleure offre de vente",bestAsk]]) {
+                const panel = document.createElement("div"); panel.className="connector-metric";
+                const text = document.createElement("span"); text.textContent=label;
+                const value=document.createElement("strong");value.textContent=String(price)+" USD";
+                panel.append(text,value);container.append(panel);
+            }
+            setStatus(status,"live","Carnet public reçu");
+        } catch {
+            container.textContent="Le carnet public Revolut X est indisponible. Aucun prix fictif n’est affiché.";
+            setStatus(status,"error","Source indisponible");
+        }
+    }
+    async function refreshSystem() {
+        try {
+            const d = await fetchJson("/api/metrics");
+            const fmt=(v,unit="")=>Number.isFinite(v)?numericFormat(v)+unit:"—";
+            $("runtime-cpu").textContent=fmt(d.cpu_percent,"%");
+            $("runtime-ram").textContent=fmt(d.memory_usage_mb," MiB");
+            $("runtime-uptime").textContent=fmt(d.uptime_seconds," s");
+            $("runtime-pid").textContent=d.pid??"—";
+            setStatus($("runtime-status"),d.status==="available"?"live":"pending",
+                d.status==="available"?"Mesures locales":"Mesures partielles");
+        } catch {
+            setStatus($("runtime-status"),"error","Diagnostic indisponible");
+        }
+    }
+    document.addEventListener("click",async event => {
+        const tab=event.target.closest("[data-go-tab]");
+        if(tab){document.querySelector('.tab-btn[data-tab="'+tab.dataset.goTab+'"]')?.click();return;}
+        const anchor=event.target.closest("a[data-source-link]");
+        if(!anchor)return;
+        event.preventDefault();
+        const msg=$("source-link-notice");
+        try{
+            await window.pravdaInvoke("ipc_open_source",{source:anchor.dataset.sourceLink});
+            msg.textContent="Source ouverte dans le navigateur Windows";
+        }catch{msg.textContent="Impossible d’ouvrir la source officielle. Vérifiez votre navigateur par défaut.";}
+    });
+    $("revolut-refresh").addEventListener("click",refreshRevolut);
     async function refreshFx() {
         try { renderFx(await fetchJson("/api/fx")); }
         catch (error) {
@@ -933,6 +991,8 @@ const translations = {
         setInterval(refreshSources, 60000);
     }
     startPolling();
+    refreshSystem();
+    setInterval(refreshSystem, 10000);
     
     // Tabs filtering
     const tabButtons = document.querySelectorAll('.tab-btn');
@@ -952,9 +1012,17 @@ const translations = {
         // Keep general cards visible
         document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
     }
-    tabButtons.forEach(btn=>btn.addEventListener('click',()=>applyTab(btn.dataset.tab)));
-    // Default to all
-    applyTab('all');
+    const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
+    const tabFromHash=()=>{const route=window.location.hash.slice(2);return knownTabs.has(route)?route:"all";};
+    tabButtons.forEach(btn=>btn.addEventListener("click",()=>{
+        const route=btn.dataset.tab;
+        window.location.hash="/"+route;
+        applyTab(route);
+        document.querySelector(".tabs")?.scrollIntoView({block:"nearest",behavior:"smooth"});
+        if(route==="revolut")refreshRevolut();
+    }));
+    window.addEventListener("hashchange",()=>applyTab(tabFromHash()));
+    applyTab(tabFromHash());
 
     // The existing one-second IPC snapshot poll replaces the WebSocket transport.
 
