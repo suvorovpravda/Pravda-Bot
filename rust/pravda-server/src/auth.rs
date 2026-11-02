@@ -9,9 +9,9 @@ use axum::{
     Extension, Form, Json, Router,
 };
 use serde::Deserialize;
+pub(crate) use service::SessionToken;
 use service::*;
 pub use service::{Auth, AuthError, PBKDF2_ITERATIONS};
-pub(crate) use service::SessionToken;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
