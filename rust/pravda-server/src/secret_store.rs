@@ -146,7 +146,7 @@ mod native {
 
     fn failure() -> SecretStoreError {
         SecretStoreError::OsFailure(
-            std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32,
+            std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32
         )
     }
 
@@ -269,7 +269,15 @@ mod tests {
 
     #[test]
     fn names_cannot_escape_the_application_scope() {
-        for bad in ["", "../other", "name/secret", "space key", "bad\0key", "é", "a@b"] {
+        for bad in [
+            "",
+            "../other",
+            "name/secret",
+            "space key",
+            "bad\0key",
+            "é",
+            "a@b",
+        ] {
             assert_eq!(scoped_target(bad), Err(SecretStoreError::InvalidName));
         }
         assert_eq!(
@@ -284,7 +292,10 @@ mod tests {
         assert_eq!(format!("{secret:?}"), "SecretValue([REDACTED])");
         assert!(check_secret_size(secret.expose()).is_ok());
         assert_eq!(check_secret_size(&[]), Err(SecretStoreError::InvalidSize));
-        assert_eq!(check_secret_size(&vec![1; 1025]), Err(SecretStoreError::InvalidSize));
+        assert_eq!(
+            check_secret_size(&vec![1; 1025]),
+            Err(SecretStoreError::InvalidSize)
+        );
     }
 
     #[cfg(not(windows))]
@@ -311,13 +322,21 @@ mod tests {
                 .as_nanos()
         );
         let _ = store.remove(&unique); // Fresh scoped name, ignore missing.
-        assert!(matches!(store.get(&unique), Err(SecretStoreError::NotFound)));
+        assert!(matches!(
+            store.get(&unique),
+            Err(SecretStoreError::NotFound)
+        ));
         let original = SecretValue::new(b"test-only-secret-123".to_vec());
-        store.put(&unique, &original).expect("Credential Manager write");
+        store
+            .put(&unique, &original)
+            .expect("Credential Manager write");
         let loaded = store.get(&unique).expect("Credential Manager read");
         assert_eq!(loaded.expose(), original.expose());
         drop(loaded);
         store.remove(&unique).expect("Credential Manager delete");
-        assert!(matches!(store.get(&unique), Err(SecretStoreError::NotFound)));
+        assert!(matches!(
+            store.get(&unique),
+            Err(SecretStoreError::NotFound)
+        ));
     }
 }
