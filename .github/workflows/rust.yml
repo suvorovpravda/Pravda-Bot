@@ -132,7 +132,7 @@ jobs:
               throw "Unauthenticated startup unexpectedly wrote a password verifier"
             }
             Write-Host "Bundled desktop launch, SQLite startup and no local HTTP listener verified."
-            Write-Host "Interactive WebView2 IPC auth/setup/logout and capabilities denial require separate human Windows E2E acceptance."
+            Write-Host "Interactive IPC/ACL denial is verified separately by the native Windows WebView2 security E2E job."
           } finally {
             $app.Refresh()
             if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
@@ -141,7 +141,10 @@ jobs:
 
   security_native_webview2:
     name: Windows native WebView2 IPC security E2E
-    if: github.event_name == 'pull_request' && github.head_ref == 'security/ipc-windows-native-e2e-20261102'
+    # PR #67 was merged: this guard must run on EVERY PR and push to main,
+    # not only on the historical security branch (which would silently skip).
+    # No auto-merge: branch protection settings decide the required checks.
+
     # Temporary WebView2/EdgeDriver upstream compatibility workaround.
     # See actions/runner-images#14738: windows-2025 DevToolsActivePort failure.
     # Keep fail-closed; move back only after native E2E passes.
@@ -193,10 +196,45 @@ jobs:
           node tools/test-ipc-security-windows.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify native E2E report against checked-out SHA
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = Join-Path $env:RUNNER_TEMP 'Pravda-IPC-security-report.json'
+          if (-not (Test-Path -LiteralPath $path)) {
+            throw "Native E2E report missing: refuse success"
+          }
+          $report = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+          if ($report.passed -ne $true) { throw "Native IPC E2E report is not passed" }
+          if ($report.git_sha -ne $env:GITHUB_SHA) {
+            throw "Evidence SHA does not match checked out commit"
+          }
+          $tests = @($report.tests)
+          if ($tests.Count -lt 22) { throw "Incomplete native E2E test coverage" }
+          if (@($tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw "One or more native IPC assertions failed"
+          }
+          $required = @(
+            'no session: ipc_market_snapshot',
+            'no session: ipc_history_export_csv',
+            'main: authenticated snapshot',
+            'main: logout revokes market access',
+            'security-probe: bootstrap auth_status denied',
+            'security-probe: market snapshot denied',
+            'security-probe: no arbitrary disk modification',
+            'security-probe: shell plugin denied'
+          )
+          foreach ($name in $required) {
+            if (@($tests | Where-Object { $_.name -eq $name -and $_.passed -eq $true }).Count -ne 1) {
+              throw "Required native assertion absent: $name"
+            }
+          }
+          Write-Host "Verified $($tests.Count) native WebView2 security assertions on $env:GITHUB_SHA."
+
       - name: Attach redacted JSON test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: pravda-windows-native-ipc-security
           path: ${{ runner.temp }}/Pravda-IPC-security-report.json
-          if-no-files-found: warn
+          if-no-files-found: error
