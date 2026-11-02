@@ -90,7 +90,7 @@ fn derive(password: &str, salt: &[u8], iterations: u32) -> [u8; 32] {
 
 pub(super) fn random_bytes<const N: usize>() -> Result<[u8; N], AuthError> {
     let mut buffer = [0_u8; N];
-    getrandom::getrandom(&mut buffer).map_err(|_| AuthError::Storage)?;
+    getrandom::fill(&mut buffer).map_err(|_| AuthError::Storage)?;
     Ok(buffer)
 }
 
