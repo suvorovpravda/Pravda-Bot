@@ -165,7 +165,7 @@
         .shell { padding:28px clamp(16px,3vw,42px) 60px; }
 
 .shell[hidden] { display: none !important; }
-.ipc-auth-screen[hidden] { display: none !important; }
+.ipc-auth-screen[hidden], .ipc-auth-card label[hidden] { display: none !important; }
 .desktop-style-1 { color:var(--cyan) }
 .desktop-style-2 { margin-top:15px }
 .desktop-style-3 { font-size:18px }
