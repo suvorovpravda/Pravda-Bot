@@ -18,7 +18,7 @@
 ---
 
 > [!WARNING]
-> **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** La [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) a été fusionnée le **2 novembre 2026** et son parcours Windows natif a été testé par le responsable. La **review GitHub indépendante n'a pas été enregistrée** et le réglage **« Do not allow bypassing »** de `main` n'a pas pu être confirmé par l'intégration, malgré `protected=true`. Un examen de sécurité indépendant et des tests négatifs dynamiques restent requis. Aucun paquet MSI Enterprise signé n'est attesté.
+> **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** Les [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) ont été fusionnées le **2 novembre 2026**. La PR #67 a passé **8/8 checks**, dont une batterie IPC WebView2 sur Windows réel (**22 assertions** avec rapport JSON). Le test utilise **deux sessions natives successives** : il ne prouve ni deux fenêtres simultanées dans le même processus, ni une origine distante hostile. Le propriétaire maintient le projet seul et a **retiré l'exigence d'une review par un second développeur** ; la PR, les checks et la protection sans bypass restent la politique souhaitée. Une capture du paramétrage a été fournie, mais l'API d'administration reste inaccessible à l'intégration (**403**) ; ne pas présenter une vérification API comme acquise. **Aucun MSI Enterprise signé n'est attesté.**
 
 ## 🇫🇷 Politique — français
 
@@ -146,7 +146,7 @@ flowchart TB
 | Menace | Actif | Défense intégrée | Vérification / risque restant |
 |:--|:--|:--|:--|
 | XSS / script externe | WebView2 | JS/CSS locaux, CSP `'self'` | Tests d'injection et revue du frontend à compléter |
-| Appel IPC non autorisé | Données métier | ACL `main` + autorisation Rust | **P0 :** tests négatifs sur fenêtres/origines |
+| Appel IPC non autorisé | Données métier | ACL `main` + autorisation Rust | **Tests Windows natifs validés PR #67** : 8 refus `UNAUTHORIZED` sans session, refus après logout, refus ACL `security-probe` ; **origine distante et fenêtres simultanées non testées** |
 | Vol local de session | Session | Jeton côté Rust ; révocation logout | Malware même utilisateur hors garantie |
 | Brute force mot de passe | Auth | PBKDF2 + verrouillage progressif | Tester sur redémarrage/attaques répétées |
 | SQL injection / export arbitraire | SQLite | Requêtes paramétrées, enums, CSV borné | Revue du format et test CSV malveillant |
@@ -155,19 +155,19 @@ flowchart TB
 | Déni de service local | Disque / CPU / flux | Requêtes historiques bornées | Limites globales connexions, débit et disque **à faire** |
 | Dépendance compromise | Build | CI, CodeQL, Dependabot | Audit/attestation SBOM et provenance à faire |
 | Exécutable remplacé | Poste Windows | Aucune signature Enterprise attestée | **P0 release :** signature éditeur, horodatage et contrôle chaîne |
-| Contournement de gouvernance | `main` | Branche indiquée protégée | **P0 :** no-bypass non vérifié ; approbation #64 non attestée |
+| Contournement de gouvernance | `main` | Protection activée ; capture propriétaire : « Do not allow bypassing » coché | **L'enregistrement effectif n'est pas lisible via l'intégration (HTTP 403)** ; gouvernance solo sans approbateur externe |
 
 ### ⚠️ Risques résiduels et limites
 
 > [!CAUTION]
 > **Ce qui n'est PAS garanti :** protection complète contre un malware local, absence de vulnérabilité, confidentialité face à l'administrateur du poste, résultats financiers réels, qualité intrinsèque des sources de marché ou intégrité d'un exécutable non signé téléchargé ailleurs.
 
-1. **IPC :** le contrôle dynamique des permissions pour les fenêtres non autorisées et les origines externes n'a pas encore de rapport manuel indépendant ; il faut le tester sur Windows réel avec une instrumentation contrôlée.
+1. **IPC :** [preuves natives WebView2 de la PR #67](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/job/125359902577) : refus Rust avant/après session, refus ACL d'une WebView `security-probe` distincte et refus `fs`/`shell`. **Restent hors preuve** : deux fenêtres concurrentes partageant un processus et une session authentifiée, navigation depuis origine distante et tests d'injection XSS.
 2. **Distribution :** `bundle.active=false` et **aucun MSI signé avec Authenticode/RFC 3161** n'est attesté ; les scripts de lancement de développement ne constituent pas une chaîne de release.
 3. **Charge / déni de service :** pas de garantie de quota global sur toutes les connexions, sessions, flux, requêtes et la taille de la base. Les limites d'une **réponse** ne sont pas une limite de volume du disque.
 4. **Disponibilité :** FX, énergie, actualités, AIS, notifications et mesures CPU/RSS n'ont pas tous un backend réel complet ; afficher l'absence de données plutôt que créer des valeurs.
 5. **Legacy :** une ancienne base Python, ses scripts et ses dépendances restent des matériaux de référence, **pas** des composants héritant automatiquement de la sécurité Rust.
-6. **Post-fusion #64 :** le propriétaire a lancé lui-même la fusion. Le journal GitHub consulté ne contient que deux reviews `COMMENTED` du connecteur, **pas** d'`APPROVED` humain indépendant. `main` était `protected=true`, mais la lecture détaillée des protections a renvoyé **403**. Consigner et corriger toute divergence de procédure ; ne pas prétendre à une approbation qui n'existe pas.
+6. **Gouvernance d'un dépôt solo :** le propriétaire a décidé de **ne plus exiger de reviewer externe**. Cette décision n'est pas une revue indépendante rétroactive de #64/#67. La capture des paramètres montrait la protection « no bypass » cochée ; la configuration effectivement sauvegardée n'est pas directement vérifiable par cette intégration (**403**). Ne jamais lever les checks requis pour forcer une fusion.
 
 ### 🗺️ Plan de sécurisation priorisé
 
@@ -177,7 +177,7 @@ flowchart LR
     classDef p1 fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px
     classDef p2 fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px
     A["P0 · Prouver les protections GitHub et CI post-merge"]:::p0
-    B["P0 · Revue indépendante Tauri ACL et tests IPC négatifs"]:::p0
+    B["PR #67 · IPC Windows E2E vérifié · 22 assertions"]:::p0
     C["P1 · Migration, CSV, limites de charge et logs"]:::p1
     D["P2 · Supply chain, SBOM et MSI signé"]:::p2
     A --> B --> C --> D
@@ -186,8 +186,8 @@ flowchart LR
 | Étape | Action attendue | Preuve de clôture |
 |:--|:--|:--|
 | **P0 — immédiat** | Vérifier les résultats des jobs **sur le SHA `main` fusionné**, pas seulement sur la tête de PR | Liens CI, SHA et conclusion de chaque job |
-| **P0 — gouvernance** | Administrateur : confirmer « Require a pull request », review humaine, refus bypass, résolution des commentaires et politiques de signature | Capture des paramètres de protection / ruleset et revue indépendante |
-| **P0 — IPC** | Tester sans session, sur fenêtre non `main`, origine distante, après logout et session expirée | Matrice `command → expected denial` et logs sans secret |
+| **P0 — gouvernance** | Solo : PR et checks requis, branche à jour, commentaires résolus et « Do not allow bypassing » ; **aucun reviewer indépendant obligatoire** | Capture enregistrée / validation des paramètres effectifs par l'administrateur |
+| **P0 — IPC** | **Acquis dans #67 :** refus sans session, après logout et fenêtre `security-probe` isolée. **Restant :** origine distante et seconde fenêtre simultanée dans un même processus | Logs de la [CI #67](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/job/125359902577) ; futur scénario natif complémentaire |
 | **P1 — stockage** | Import SQLite legacy avec doublons, fichier corrompu, interruption, rollback/reprise ; vérifier export CSV et refus de formules | Jeux de données fictives + tests reproductibles |
 | **P1 — robustesse** | Tester erreurs/charge, reconnections exchange, quotas disque, masquage des logs | Tests automatisés + résultat de saturation |
 | **P2 — dépendances** | Cartographier dépendances et produire SBOM, audit et provenance artefacts | SBOM + rapport d'audit associé à un SHA |
@@ -262,7 +262,7 @@ Write-Host "OK : aucun listener TCP pour pravda-app.exe."
 
 **Persistence.** SQLite WAL, parameterized and bounded history reads, read-only source for transactional Python legacy migration, and per-user Windows AppData defaults. Back up the database **including its WAL consistency** and the password verifier before migrating.
 
-**Known gaps.** No independent GitHub `APPROVED` review was recorded for merged PR #64, and the no-bypass setting was not confirmed. Negative IPC boundary testing, load limits, signed MSI/Authenticode, SBOM, and some data-source adapters still need work. Local malware can access files under the compromised account. CI is **not** a security certification.
+**Verified and outstanding.** Merged [PR #67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) passed eight CI checks, including **22 real Windows WebView2 IPC assertions** (unauthenticated and logged-out denials, unprivileged probe, denied file/shell commands). These are **two successive native sessions**, not concurrent windows in one authenticated process; remote-origin behavior also remains untested. The solo maintainer removed the requirement for a second human reviewer. Branch no-bypass was shown checked in a maintainer screenshot, but the integration cannot query saved settings (**403**). A signed MSI/Authenticode, SBOM, load limits and some feeds are pending. CI is **not** a security certification.
 
 **Responsible disclosure.** Use [GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security) → **Report a vulnerability** if private reporting is enabled. Otherwise ask the maintainer for a **private contact route without posting exploit details publicly**. Share reproducible non-sensitive evidence privately. No guaranteed response SLA is published.
 
@@ -276,6 +276,6 @@ Write-Host "OK : aucun listener TCP pour pravda-app.exe."
 
 **Пароль:** минимум 15 символов, случайная соль, PBKDF2-HMAC-SHA256 (600 000 итераций), задержки после ошибок, отзыв сессии при выходе. Данные сохраняются в SQLite/WAL и файле проверки пароля в пользовательском каталоге Windows. При миграции нужны согласованные резервные копии.
 
-**Ограничения:** защита от вредоносной программы в той же учётной записи не гарантируется; независимая проверка PR #64 и настройка запрета bypass не подтверждены. Подписанный Enterprise MSI, негативные IPC-тесты и ограничения нагрузки ещё требуют выполнения.
+**Проверено и ограничения:** [PR #67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) объединён, **8 проверок CI и 22 IPC-теста на настоящем Windows/WebView2 прошли успешно**: отказы без сессии, после выхода, для окна `security-probe` и запрещённых команд shell/fs. Тесты выполнены в двух **последовательных процессах**; одновременные окна одного процесса и удалённое происхождение не проверены. Единственный сопровождающий отменил обязательное одобрение второго разработчика; настройка no-bypass показана на скриншоте, но API интеграции возвращает 403. Подписанный MSI, SBOM и ограничения нагрузки остаются задачами.
 
 **Уязвимости:** используйте [закрытую отправку через GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security), если она включена, либо запросите у сопровождающего приватный способ связи. Не публикуйте пароли, данные пользователей или подробности эксплуатации в открытых issues.
