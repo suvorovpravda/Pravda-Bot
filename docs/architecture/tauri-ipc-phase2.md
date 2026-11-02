@@ -1,6 +1,11 @@
 # Phase 2 — Desktop Tauri IPC, assets embarqués
 
-**État : PR brouillon non livrable sans revue/validation Windows réelle.** Référence : issue #61.
+> [!IMPORTANT]
+> **Mise à jour au 2 novembre 2026 — code fusionné.** La [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) est fusionnée dans `main` (commit de fusion `3dc3680b059d242e25eacfec113bdc0d73f37bcb`). Les ressources `frontendDist` et les commandes IPC sont intégrées. La recette manuelle Windows du responsable (setup/login/logout/relogin/redémarrage, mode sans données live, base/auth et absence d'écoute TCP) est validée. **Cela ne remplace ni une revue humaine GitHub indépendante (non enregistrée), ni les tests dynamiques négatifs hors fenêtre/origine, ni une vérification de la règle no-bypass de `main`, ni le MSI signé (non livré).**
+>
+> **Note de lecture :** le texte sous cet encadré a été écrit **avant la fusion**. Les expressions « PR brouillon », « avant fusion » ou « non livrable » décrivent la situation historique, et **non** l'état actuel. Utiliser [SECURITY.md](../../SECURITY.md) pour les risques ouverts et [README](../../README.md) pour les commandes actuelles.
+
+**État actuel : Phase 2 fusionnée dans main ; recette Windows du responsable obtenue, gates de sécurité/gouvernance complémentaires non attestés.** Référence : issue #61.
 
 ## Architecture cible de cette PR
 
