@@ -1,0 +1,55 @@
+name: Windows browser fallback and password persistence
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'tools/Start-Pravda-Bot.ps1'
+      - 'tools/Stop-Pravda-Bot.ps1'
+      - 'tools/Demarrer-Pravda-Bot.cmd'
+      - 'tools/Arreter-Pravda-Bot.cmd'
+      - 'tools/test-browser-mode.ps1'
+      - 'rust/**'
+      - '.github/workflows/browser-fallback.yml'
+permissions:
+  contents: read
+jobs:
+  windows_browser:
+    name: Build Rust server and test restart/auth persistence (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build native Windows Rust server executable
+        run: cargo build --locked --release -p pravda-server
+      - name: Stage standalone browser-mode package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          New-Item -ItemType Directory -Force tools/release-stage,release-dist | Out-Null
+          Copy-Item target/release/pravda-server.exe tools/release-stage/pravda-server.exe
+          foreach ($file in @("Start-Pravda-Bot.ps1", "Stop-Pravda-Bot.ps1", "Demarrer-Pravda-Bot.cmd", "Arreter-Pravda-Bot.cmd", "README-NAVIGATEUR.txt")) {
+            Copy-Item (Join-Path tools $file) (Join-Path tools/release-stage $file)
+          }
+      - name: Test password setup, hashed disk persistence and login after restart
+        shell: pwsh
+        run: ./tools/test-browser-mode.ps1
+      - name: Verify no custom or private local data inside archive
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $files = @(Get-ChildItem tools/release-stage -File | Select-Object -ExpandProperty Name)
+          if ($files.Count -ne 6 -or -not ($files -contains "pravda-server.exe")) {
+            throw "Unexpected files in browser-mode distribution"
+          }
+          Compress-Archive -Path tools/release-stage/* -DestinationPath release-dist/Pravda-Bot-Windows-Navigateur.zip -Force
+          $hash = (Get-FileHash -Algorithm SHA256 release-dist/Pravda-Bot-Windows-Navigateur.zip).Hash.ToLowerInvariant()
+          "$hash  Pravda-Bot-Windows-Navigateur.zip" | Set-Content -Encoding ascii release-dist/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pravda-bot-windows-browser-fallback
+          path: release-dist/*
+          retention-days: 14
+          if-no-files-found: error
