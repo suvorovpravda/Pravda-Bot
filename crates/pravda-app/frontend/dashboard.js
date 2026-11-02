@@ -750,12 +750,14 @@ const translations = {
     document.addEventListener("click",async event => {
         const tab=event.target.closest("[data-go-tab]");
         if(tab){document.querySelector('.tab-btn[data-tab="'+tab.dataset.goTab+'"]')?.click();return;}
-        const anchor=event.target.closest("a[data-source-link]");
+        const anchor=event.target.closest("a[data-source-link], a[data-article-url]");
         if(!anchor)return;
         event.preventDefault();
         const msg=$("source-link-notice");
         try{
-            await window.pravdaInvoke("ipc_open_source",{source:anchor.dataset.sourceLink});
+            const args=anchor.dataset.articleUrl ? {source:"article",link:anchor.href}
+                : {source:anchor.dataset.sourceLink};
+            await window.pravdaInvoke("ipc_open_source",args);
             msg.textContent="Source ouverte dans le navigateur Windows";
         }catch{msg.textContent="Impossible d’ouvrir la source officielle. Vérifiez votre navigateur par défaut.";}
     });
@@ -796,6 +798,7 @@ const translations = {
                 item.className = "news-item";
                 const link = document.createElement("a");
                 link.href = articleUrl.href;
+                link.dataset.articleUrl = "true";
                 link.target = "_blank"; link.rel = "noopener noreferrer";
                 link.textContent = article.title;
                 const meta = document.createElement("div");

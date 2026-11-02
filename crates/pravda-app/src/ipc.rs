@@ -238,24 +238,46 @@ pub async fn ipc_public_feed(
     Ok(desktop.public_feed(&source).await)
 }
 
-/// Opens a FIXED, allowlisted public documentation URL through the OS browser.
+
+fn safe_article_link(raw: &str) -> Result<String, &'static str> {
+    if raw.len() > 1500 || raw.contains(['\\r', '\\n']) {
+        return Err("INVALID_ARTICLE_LINK");
+    }
+    let link = reqwest::Url::parse(raw).map_err(|_| "INVALID_ARTICLE_LINK")?;
+    if link.scheme() != "https" || !link.username().is_empty() || link.password().is_some()
+        || !matches!(link.port(), None | Some(443)) {
+        return Err("INVALID_ARTICLE_LINK");
+    }
+    let host = link.host_str().ok_or("INVALID_ARTICLE_LINK")?.to_ascii_lowercase();
+    if !host.contains('.') || !host.bytes().any(|x| x.is_ascii_alphabetic())
+        || host == "localhost" || host.ends_with(".localhost") || host.ends_with(".local")
+        || host.ends_with(".internal") || host.ends_with(".test") || host.ends_with(".invalid")
+        || host.ends_with(".onion") {
+        return Err("INVALID_ARTICLE_LINK");
+    }
+    Ok(link.into())
+}
+
+/// Opens allowlisted source websites or a user-clicked public HTTPS news URL.
 /// Never pass an arbitrary URL from an exchange response, a web page, or the UI.
 #[tauri::command]
 pub fn ipc_open_source(
     window: Window,
     session: State<'_, IpcAuth>,
     source: String,
+    link: Option<String>,
 ) -> Result<(), String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
     let url = match source.as_str() {
-        "ecb" => "https://data.ecb.europa.eu/data/datasets/EXR",
-        "frankfurter" => "https://frankfurter.dev/",
-        "entsog" => "https://transparency.entsog.eu/",
-        "gdelt" => "https://www.gdeltproject.org/",
-        "aisstream" => "https://aisstream.io/",
-        "revolutx" => "https://exchange.revolut.com/",
-        "ice" => "https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures",
-        "github" => "https://github.com/suvorovpravda/Pravda-Bot",
+        "ecb" => "https://data.ecb.europa.eu/data/datasets/EXR".to_owned(),
+        "frankfurter" => "https://frankfurter.dev/".to_owned(),
+        "entsog" => "https://transparency.entsog.eu/".to_owned(),
+        "gdelt" => "https://www.gdeltproject.org/".to_owned(),
+        "aisstream" => "https://aisstream.io/".to_owned(),
+        "revolutx" => "https://exchange.revolut.com/".to_owned(),
+        "ice" => "https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures".to_owned(),
+         "github" => "https://github.com/suvorovpravda/Pravda-Bot".to_owned(),
+        "article" => safe_article_link(link.as_deref().unwrap_or_default()).map_err(str::to_string)?,
         _ => return Err("INVALID_SOURCE_LINK".to_owned()),
     };
     #[cfg(windows)]
@@ -302,6 +324,16 @@ mod tests {
         (IpcAuth::new(authority), path)
     }
 
+    #[test]
+    fn external_article_urls_refuse_local_network_and_unsafe_schemes() {
+        for link in ["file:///C:/secret", "http://example.org", "https://localhost/",
+            "https://127.0.0.1/private", "https://server.internal/test",
+            "https://user:pass@example.org/", "javascript:alert(1)"] {
+            assert!(safe_article_link(link).is_err(), "{link}");
+        }
+        assert_eq!(safe_article_link("https://www.reuters.com/world/").unwrap(),
+            "https://www.reuters.com/world/");
+    }
     #[test]
     fn all_protected_commands_reject_unauthenticated_and_other_windows() {
         let (session, path) = new_session();
