@@ -24,7 +24,7 @@
 ## Français
 
 > [!IMPORTANT]
-> **État après la fusion de la [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) (2 novembre 2026).** Le desktop Windows charge désormais des ressources **embarquées** et communique avec Rust par **IPC Tauri** : il **n'ouvre pas de serveur HTTP local** pour son interface. Le serveur Axum existe toujours, mais c'est une **application de diagnostic distincte**. Cette architecture intégrée au code source ne signifie **pas** qu'un installeur MSI signé ou une release Enterprise a été publiée.
+> **État après les fusions des [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) (2 novembre 2026).** Desktop Windows Tauri 2 avec assets embarqués et **IPC natif sans serveur HTTP pour son UI**, plus serveur Axum de diagnostic séparé. La PR #67 a confirmé **8/8 checks verts et 22 assertions de sécurité IPC sous Windows WebView2 réel**. Ces vérifications portent sur **deux sessions natives successives**, pas sur deux fenêtres simultanées du même processus ni sur une origine distante. **Aucun MSI Enterprise signé n'est livré.**
 
 ### 🎯 À quoi sert Pravda-Bot ?
 
@@ -189,7 +189,7 @@ flowchart LR
 - **Aucune permission IPC générale `shell` / `fs`**, aucun script distant, ressources JS/CSS locales et CSP spécifique au desktop.
 - **Séparation des transports :** le desktop ne démarre pas de service HTTP ; le serveur diagnostic applique ses propres contrôles Host/Origin, cookies et en-têtes.
 - **Limites non résolues :** un logiciel malveillant ayant les droits de l'utilisateur peut atteindre ses fichiers ; l'analyse de code, la CI verte et un mot de passe local **ne garantissent pas l'absence de vulnérabilités**.
-- **Statut gouvernance PR #64 :** recette Windows validée par le responsable, mais **approbation GitHub indépendante non enregistrée** et règle de non-bypass non vérifiée au moment de la fusion. Ne pas présenter ces contrôles comme attestés.
+- **Gouvernance solo :** le propriétaire maintient seul le dépôt et a supprimé l'obligation d'approbation d'un deuxième développeur. Les **PR, checks CI et protections de `main`** restent indispensables. L'option « no bypass » apparaît cochée dans une capture de la configuration, mais l'API de l'intégration ne peut pas confirmer les réglages sauvegardés (HTTP 403).
 
 ➡️ **Lire la [politique SECURITY.md](SECURITY.md)** pour les menaces, les mesures vérifiées, les risques restants et le signalement privé.
 
@@ -214,7 +214,7 @@ node tools/test-desktop-ipc.mjs
 
 **CI GitHub :** Rust Linux/Windows, MSRV 1.95, smoke Windows desktop sans listener, serveur navigateur, CodeQL. Le badge est dynamique : un commit fusionné demande une **nouvelle vérification des jobs de `main`**, pas seulement des checks verts sur la PR.
 
-**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. Les tests négatifs IPC depuis fenêtre/origine non autorisée, le CSV réel, la reprise de données historiques et la distribution signée exigent encore des preuves dédiées.
+**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis, dont refus `UNAUTHORIZED` sans session/après logout, refus des IPC depuis `security-probe` et blocage shell/fs avec absence d'écriture. **Restent non démontrés :** origine distante, deux fenêtres simultanées avec session partagée, export CSV réel, reprise historique complexe et distribution signée.
 
 ### 🗺️ Feuille de route
 
@@ -225,15 +225,15 @@ flowchart LR
     classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12
     A["PR-01 · Contrats, architecture, menaces"]:::done --> B["SQLite · Import legacy transactionnel"]:::done
     B --> C["PR #64 · Desktop Tauri IPC intégré"]:::done
-    C --> D["Sécurité · E2E négatif, revue indépendante"]:::next
+    C --> D["PR #67 · IPC natif testé sous Windows"]:::done
     D --> E["Parité · FX/énergie/news/AIS, alertes"]:::pending
     E --> F["Distribution · MSI signé, SBOM, rollback"]:::pending
 ```
 
 | Priorité | Chantier | Critère de sortie |
 |:--|:--|:--|
-| **P0** | Auditer la fusion #64, protections `main` et jobs post-merge | Checks verts sur SHA `main`, règles vérifiées, risques documentés |
-| **P0** | Recette sécurité IPC négative | Refus hors session, hors fenêtre autorisée et origine distante ; compte rendu Windows |
+| **P0** | Gouvernance solo et checks post-fusion | PR/checks/no-bypass maintenus ; confirmation des réglages enregistrés par le propriétaire ; E2E permanent dans la CI |
+| **P0/P1** | Étendre la recette IPC native | Les **22 assertions Windows** de #67 sont acquises ; ajouter tests origines distantes et fenêtres simultanées en processus unique |
 | **P1** | Compléter la parité Rust | Sources avec provenance vérifiée, UI affichant « indisponible » si absent |
 | **P1** | Qualité des données et persistance | Rejeu/migration SQLite, CSV borné, tests redémarrage/rollback |
 | **P2** | Packaging Enterprise | MSI/EXE **signés et horodatés**, SBOM et intégrité CI, tests sur Windows propre |
