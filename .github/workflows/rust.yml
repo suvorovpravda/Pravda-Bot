@@ -62,6 +62,12 @@ jobs:
       - name: Run tests
         run: cargo test --locked --workspace
 
+      - name: Inspect dependency tree
+        run: cargo tree --locked --workspace
+
+      - name: Build backend in release mode
+        run: cargo build --locked --release --workspace
+
   msrv:
     name: Rust MSRV
     runs-on: ubuntu-latest
