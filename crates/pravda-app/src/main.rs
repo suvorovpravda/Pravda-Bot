@@ -155,9 +155,9 @@ async fn main() {
             if std::env::var("PRAVDA_E2E_PROBE_ONLY").as_deref() == Ok("true") {
                 let probe_url = WebviewUrl::App("security-probe.html".into());
                 WebviewWindowBuilder::new(app, "security-probe", probe_url)
-                .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
-                .inner_size(700.0, 500.0)
-                .build()?;
+                    .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
+                    .inner_size(700.0, 500.0)
+                    .build()?;
                 return Ok(());
             }
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
