@@ -11,14 +11,36 @@
 
 **[Signalement](#-signaler-une-vulnérabilité)** · **[Frontières](#-frontières-de-confiance)** · **[Contrôles](#-contrôles-effectivement-présents)** · **[Risques](#-risques-résiduels-et-limites)** · **[Plan P0–P2](#-plan-de-sécurisation-priorisé)**
 
-[README](README.md) · [Threat model](docs/architecture/threat-model.md) · [Acceptance](docs/architecture/acceptance.md)
+[README](README.md) · [Guide technique unique](docs/PRAVDA-GUIDE.md) · [Avancement P0–P2](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)
 
 </div>
 
 ---
 
 > [!WARNING]
-> **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** Les [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) ont été fusionnées le **2 novembre 2026**. La PR #67 a passé **8/8 checks**, dont une batterie IPC WebView2 sur Windows réel (**22 assertions** avec rapport JSON). Le test utilise **deux sessions natives successives** : il ne prouve ni deux fenêtres simultanées dans le même processus, ni une origine distante hostile. Le propriétaire maintient le projet seul et a **retiré l'exigence d'une review par un second développeur** ; la PR, les checks et la protection sans bypass restent la politique souhaitée. Une capture du paramétrage a été fournie, mais l'API d'administration reste inaccessible à l'intégration (**403**) ; ne pas présenter une vérification API comme acquise. **Aucun MSI Enterprise signé n'est attesté.**
+> **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** Les pourcentages ci-dessous représentent des jalons vérifiables et non un niveau général de sécurité garanti. Les [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) ont été fusionnées le **2 novembre 2026**. La PR #67 a passé **8/8 checks**, dont une batterie IPC WebView2 sur Windows réel (**22 assertions** avec rapport JSON). Le test utilise **deux sessions natives successives** : il ne prouve ni deux fenêtres simultanées dans le même processus, ni une origine distante hostile. Le propriétaire maintient le projet seul et a **retiré l'exigence d'une review par un second développeur** ; la PR, les checks et la protection sans bypass restent la politique souhaitée. Une capture du paramétrage a été fournie, mais l'API d'administration reste inaccessible à l'intégration (**403**) ; ne pas présenter une vérification API comme acquise. **Aucun MSI Enterprise signé n'est attesté.**
+
+### 📊 État des chantiers et sécurité — priorités
+
+La même échelle que celle du [README](README.md#-avancement-par-priorité) est utilisée ici : **pourcentage = jalons documentés accomplis ÷ jalons prévus**. Les éléments marqués *branche* ne sont **pas fusionnés**. Un test CI ne remplace pas un audit indépendant.
+
+| Priorité | Chantier | Jalons / total | Progression | Preuve ou réserve |
+|:--|:--|--:|--:|:--|
+| **P0** | Séparation Python / Rust | 3/6 (branche) | **50 %** | Archive seule ; contrôle CI et fusion à valider |
+| **P0** | Sécurité IPC Windows | 2/4 | **50 %** | 22 tests Windows et job permanent ; issue #70 ouverte |
+| **P0** | Parité Rust métier | 3/8 | **38 %** | Sources et fonctions historiques non entièrement portées |
+| **P0** | CI / règles GitHub | 3/5 | **60 %** | Checks actifs ; règles admin non lisibles (HTTP 403) |
+| **P1** | Migration SQLite | 3/4 | **75 %** | Tests transactionnels ; reprise/backup Windows à prouver |
+| **P1** | Desktop / robustesse | 2/4 | **50 %** | IPC + authentification ; scénarios dégradés à compléter |
+| **P1** | Distribution signée | 0/4 | **0 %** | MSI Authenticode non livré |
+| **P2** | Observabilité / quotas | 1/4 | **25 %** | Uptime disponible, CPU/RSS/charge à compléter |
+| **P2** | Feeds optionnels / LLM | 0/4 | **0 %** | Non démontrés ; pas de succès fictif |
+
+![Sécurité IPC](https://img.shields.io/badge/IPC%20Windows-50%25%20des%20jalons-2563eb)
+![Production Rust](https://img.shields.io/badge/Fronti%C3%A8re%20Rust-50%25%20branche-f97316)
+![Release](https://img.shields.io/badge/MSI%20sign%C3%A9-0%25-dc2626)
+
+**[Tableau de bord complet, critères de sortie et preuves](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
 
 ## 🇫🇷 Politique — français
 
