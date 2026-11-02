@@ -59,6 +59,9 @@ jobs:
       - name: Enforce Rust-only production boundary (no active Python)
         run: node tools/test-rust-production-boundary.mjs
 
+      - name: Verify single documentation, links and prioritized progress percentages
+        run: node tools/test-docs-consistency.mjs
+
       - name: Fmt check
         run: cargo fmt --all -- --check
 
