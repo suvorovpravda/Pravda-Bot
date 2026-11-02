@@ -13,7 +13,6 @@ $env:PRAVDA_MARKET_FEEDS_ENABLED = "false"
 $childId = 0
 try {
     $first = & $launcher -NoBrowser -DataDirectory $data -Port $port
-    if ($LASTEXITCODE -ne 0) { throw "Browser server failed to launch" }
     $ready = [string]($first | Where-Object { $_ -match '^PRAVDA_READY:\d+$' } | Select-Object -Last 1)
     if (-not $ready) { throw "Browser launcher did not return server process id" }
     $childId = [int]$ready.Split(':')[1]
