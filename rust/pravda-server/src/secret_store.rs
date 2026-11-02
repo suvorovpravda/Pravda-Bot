@@ -96,7 +96,7 @@ fn check_secret_size(bytes: &[u8]) -> Result<(), SecretStoreError> {
 mod native {
     use super::*;
     use std::ffi::c_void;
-    use std::ptr::{null, null_mut};
+    use std::ptr::null_mut;
 
     const CRED_TYPE_GENERIC: u32 = 1;
     const CRED_PERSIST_LOCAL_MACHINE: u32 = 2;
