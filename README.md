@@ -13,6 +13,8 @@ Surveillance des marchés · Simulation papier · Données locales
 
 </div>
 
+> **Refonte Windows Enterprise — PR-01 :** [architecture cible, modèle de menace, inventaire HTTP→IPC et critères de validation](docs/architecture/README.md). Ce document décrit un **projet de migration** ; le desktop publié n'implémente pas encore l'IPC natif ni la signature Authenticode.
+
 ## Français
 
 Pravda-Bot est un observatoire local des prix publics Kraken/Binance. Il sert à étudier les écarts, conserver des ticks dans SQLite et expérimenter une simulation papier. **Il ne passe aucun ordre et ne vérifie aucun compte d'exchange.**
