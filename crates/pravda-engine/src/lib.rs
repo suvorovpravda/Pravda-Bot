@@ -167,12 +167,30 @@ impl PaperSimulator {
         (kraken_price - binance_price) / binance_price * 100.0
     }
 
+    /// Production entry point: execution approval has already been checked by
+    /// the upstream market guard. Preserve the existing API for callers.
     pub fn update(
         &mut self,
         symbol: &str,
         kraken_price: f64,
         binance_price: f64,
         opportunity_confirmed: bool,
+        now: DateTime<Utc>,
+    ) -> Option<String> {
+        self.update_with_execution_approval(
+            symbol, kraken_price, binance_price, opportunity_confirmed, true, now,
+        )
+    }
+
+    /// Legacy Python parity: an explicit rejection must prevent new entries,
+    /// while never blocking an existing position from being closed.
+    pub fn update_with_execution_approval(
+        &mut self,
+        symbol: &str,
+        kraken_price: f64,
+        binance_price: f64,
+        opportunity_confirmed: bool,
+        execution_approved: bool,
         now: DateTime<Utc>,
     ) -> Option<String> {
         if !kraken_price.is_finite()
@@ -212,7 +230,7 @@ impl PaperSimulator {
             return None;
         }
 
-        if !opportunity_confirmed {
+        if !opportunity_confirmed || !execution_approved {
             return None;
         }
 
