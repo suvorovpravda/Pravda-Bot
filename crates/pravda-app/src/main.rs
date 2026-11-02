@@ -1,3 +1,6 @@
+mod ipc;
+
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
@@ -96,6 +99,26 @@ async fn main() {
         std::process::exit(1);
     }
 
+    // One Rust password/session authority shared by the compatibility HTTP
+    // adapter and IPC. No independent password caches or parallel verifiers.
+    let auth_path = std::env::var_os("PRAVDA_AUTH_PATH")
+        .unwrap_or_else(|| "pravda_auth.json".into());
+    if auth_path.is_empty() {
+        eprintln!("Pravda-Bot cannot start: authentication path is empty");
+        std::process::exit(1);
+    }
+    let shared_auth = match pravda_server::Auth::load(
+        std::path::PathBuf::from(auth_path),
+        pravda_server::PBKDF2_ITERATIONS,
+    ) {
+        Ok(authority) => Arc::new(authority),
+        Err(message) => {
+            eprintln!("Pravda-Bot cannot start: {message}");
+            std::process::exit(1);
+        }
+    };
+    let ipc_auth = ipc::IpcAuth::new(shared_auth.clone());
+
     let port: u16 = match std::env::var("DASHBOARD_PORT") {
         Ok(raw) => match raw.parse() {
             Ok(port) if port != 0 => port,
@@ -118,8 +141,11 @@ async fn main() {
         std::process::exit(1);
     }
 
-    let server =
-        tokio::spawn(async { pravda_server::run_server().await.map_err(|e| e.to_string()) });
+    let server = tokio::spawn(async move {
+        pravda_server::run_server_with_auth(shared_auth)
+            .await
+            .map_err(|error| error.to_string())
+    });
     let client = reqwest::Client::builder()
         .timeout(Duration::from_millis(800))
         .redirect(reqwest::redirect::Policy::none())
@@ -164,6 +190,17 @@ async fn main() {
 
     // Config has no automatic windows: build one window only after the server is ready.
     tauri::Builder::default()
+        .manage(ipc_auth)
+        // The current WebView is still External(127.0.0.1). No remote origin
+        // is permitted by the capability; IPC becomes usable from bundled
+        // assets only in the later, separately reviewed frontend switch.
+        .invoke_handler(tauri::generate_handler![
+            ipc::ipc_auth_status,
+            ipc::ipc_auth_setup,
+            ipc::ipc_auth_login,
+            ipc::ipc_auth_logout,
+            ipc::ipc_session_check
+        ])
         .setup(move |app| {
             WebviewWindowBuilder::new(
                 app,
