@@ -43,6 +43,7 @@ shell.hidden = true;
 let setup = false;
 let dashboardLoaded = false;
 let working = false;
+let loginVisible = false;
 
 window.pravdaInvoke = async (command, args = {}) => {
     if (typeof invoke !== "function") throw new Error("TAURI_IPC_UNAVAILABLE");
@@ -50,6 +51,9 @@ window.pravdaInvoke = async (command, args = {}) => {
 };
 
 function showLogin() {
+    // Idempotent: background polling must never erase a password being typed.
+    if (loginVisible) return;
+    loginVisible = true;
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -60,6 +64,7 @@ function showLogin() {
 window.pravdaRequireLogin = showLogin;
 
 function activateDashboard() {
+    loginVisible = false;
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {
