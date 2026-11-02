@@ -77,8 +77,15 @@ function verifyMergePatchDetection() {
     const sentinel="ghp_"+"A".repeat(36);
     writeFileSync(join(temp,"merge-only.txt"),sentinel+"\n");
     run("add","."); commit("merge with deliberate synthetic marker");
+    run("checkout","-q","-b","cleanup");
+    writeFileSync(join(temp,"cleanup.txt"),"cleanup branch\\n");
+    run("add","."); commit("cleanup branch");
+    run("checkout","-q","main");
+    writeFileSync(join(temp,"other.txt"),"another branch\\n");
+    run("add","."); commit("other branch");
+    run("merge","--no-ff","--no-commit","cleanup");
     unlinkSync(join(temp,"merge-only.txt"));
-    run("add","-A"); commit("scrub synthetic marker");
+    run("add","-A"); commit("merge resolution scrubs synthetic marker");
     const plain=run("log","--all","--format=","--patch","--no-ext-diff");
     const complete=run("log","--all","--format=","--patch","--diff-merges=separate","--no-ext-diff");
     assert.equal(plain.includes(sentinel),false,
