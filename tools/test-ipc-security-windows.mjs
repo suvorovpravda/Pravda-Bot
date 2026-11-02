@@ -264,10 +264,16 @@ async function checkHostileHttpsOrigin() {
     verdict("hostile origin never receives Tauri business capabilities",true,
       "WebView2 document origin example.com, no remote capabilities");
   } else {
+    // A retained trusted URL alone proves nothing: a driver/protocol failure
+    // can leave the original page untouched without exercising Tauri policy.
+    // Only an explicit navigation-policy denial can count as a rejection.
+    const policyDenied=Boolean(navigationError) &&
+      /(?:ERR_BLOCKED_BY_CLIENT|navigation (?:is )?(?:not allowed|denied|blocked)|blocked by (?:navigation )?policy|not allowed to navigate)/i.test(navigationError);
     verdict("untrusted HTTPS navigation blocked in authenticated main window",
-      /^(tauri|http:\/\/tauri\.localhost|https:\/\/tauri\.localhost|http:\/\/localhost)/.test(location),
+      policyDenied &&
+        /^(?:tauri:|https?:\/\/(?:tauri\.localhost|localhost)(?:[:/]|$))/.test(location),
       "trusted page retained="+location.slice(0,130)+
-        (navigationError?"; native navigation rejected":""));
+        "; explicit policy denial="+policyDenied);
   }
 }
 
