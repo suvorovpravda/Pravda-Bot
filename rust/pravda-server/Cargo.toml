@@ -21,5 +21,5 @@ tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 pbkdf2 = "0.12"
 sha2 = "0.10"
-getrandom = "0.2"
+getrandom = "0.4"
 subtle = "2"
