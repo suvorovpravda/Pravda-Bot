@@ -14,6 +14,10 @@ assert.deepEqual(cfg.app.security.capabilities,["main-ipc"]);
 assert.match(cfg.app.security.csp["connect-src"],/ipc:/);
 assert.doesNotMatch(cfg.app.security.csp["script-src"],/unsafe-inline|https?:/);
 assert.deepEqual(cap.windows,["main"]);
+assert.match(main, /#\[cfg\(all\(windows, debug_assertions, feature = "security-e2e"\)\)\]/);
+assert.match(main, /"security-probe"/);
+assert.ok(!cap.windows.includes("security-probe"),"Security test window must have zero capabilities");
+
 assert.ok(!("remote" in cap));
 assert.ok(cap.permissions.every(p=>/^allow-ipc-[a-z-]+$/.test(p)));
 assert.ok(!/fs:|shell:|\*/.test(cap.permissions.join(",")));
