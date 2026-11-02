@@ -57,7 +57,8 @@ mod native {
             ..Counters::default() };
         // SAFETY: GetCurrentProcess returns a pseudo-handle valid in this process;
         // counters points to an initialized Windows PROCESS_MEMORY_COUNTERS buffer.
-        let ok = unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, counters.cb) };
+        let size = counters.cb;
+        let ok = unsafe { GetProcessMemoryInfo(GetCurrentProcess(), &mut counters, size) };
         (ok != 0).then_some(counters.working_set as f64 / 1_048_576.0)
     }
     pub fn process_cpu_seconds() -> Option<f64> {
