@@ -99,12 +99,30 @@ fn imports_preserves_values_and_existing_ticks_and_is_idempotent_across_reopen()
     assert_eq!(
         values,
         vec![
-            ("BTC/USDT".into(), 100.0, "Kraken".into(), "2026-10-27T12:00:00.000Z".into()),
-            ("BTC/USDT".into(), 100.0, "Kraken".into(), "2026-10-27T12:00:00.000Z".into()),
-            ("ETH/USDT".into(), 230.5, "Binance".into(), "2026-10-27T12:00:01.000Z".into()),
+            (
+                "BTC/USDT".into(),
+                100.0,
+                "Kraken".into(),
+                "2026-10-27T12:00:00.000Z".into()
+            ),
+            (
+                "BTC/USDT".into(),
+                100.0,
+                "Kraken".into(),
+                "2026-10-27T12:00:00.000Z".into()
+            ),
+            (
+                "ETH/USDT".into(),
+                230.5,
+                "Binance".into(),
+                "2026-10-27T12:00:01.000Z".into()
+            ),
         ]
     );
-    assert_eq!(count(&Connection::open(&source).unwrap(), "market_ticks"), 3);
+    assert_eq!(
+        count(&Connection::open(&source).unwrap(), "market_ticks"),
+        3
+    );
 }
 
 #[test]
@@ -133,9 +151,15 @@ fn supports_incremental_import_without_repeating_previous_rows() {
 fn no_legacy_table_is_a_safe_noop_and_missing_source_is_an_error() {
     let dir = tempdir().unwrap();
     let source = dir.path().join("other.db");
-    Connection::open(&source).unwrap().execute_batch("CREATE TABLE something(id INTEGER);").unwrap();
+    Connection::open(&source)
+        .unwrap()
+        .execute_batch("CREATE TABLE something(id INTEGER);")
+        .unwrap();
     let mut store = PravdaStore::open(dir.path().join("new.db").to_str().unwrap()).unwrap();
-    assert_eq!(store.migrate_legacy_schema(&source).unwrap(), MigrationReport::default());
+    assert_eq!(
+        store.migrate_legacy_schema(&source).unwrap(),
+        MigrationReport::default()
+    );
     assert!(matches!(
         store.migrate_legacy_schema(&dir.path().join("absent.db")),
         Err(MigrationError::LegacyIo(_))
@@ -148,10 +172,16 @@ fn refuses_self_import_and_reports_incompatible_legacy_schema() {
     let dir = tempdir().unwrap();
     let target = dir.path().join("pravda.db");
     let mut store = PravdaStore::open(target.to_str().unwrap()).unwrap();
-    assert!(matches!(store.migrate_legacy_schema(&target), Err(MigrationError::SameDatabase)));
+    assert!(matches!(
+        store.migrate_legacy_schema(&target),
+        Err(MigrationError::SameDatabase)
+    ));
 
     let source = dir.path().join("wrong.db");
-    Connection::open(&source).unwrap().execute_batch("CREATE TABLE market_ticks(id INTEGER PRIMARY KEY);").unwrap();
+    Connection::open(&source)
+        .unwrap()
+        .execute_batch("CREATE TABLE market_ticks(id INTEGER PRIMARY KEY);")
+        .unwrap();
     assert!(matches!(
         store.migrate_legacy_schema(&source),
         Err(MigrationError::InvalidLegacySchema)
@@ -171,10 +201,16 @@ fn invalid_source_row_rolls_back_entire_import() {
         ],
     );
     let mut store = PravdaStore::open(target.to_str().unwrap()).unwrap();
-    assert!(matches!(store.migrate_legacy_schema(&source), Err(MigrationError::InvalidRow(2))));
+    assert!(matches!(
+        store.migrate_legacy_schema(&source),
+        Err(MigrationError::InvalidRow(2))
+    ));
     let db = Connection::open(&target).unwrap();
     assert_eq!(count(&db, "ticks"), 0);
-    assert_eq!(count(&Connection::open(&source).unwrap(), "market_ticks"), 2);
+    assert_eq!(
+        count(&Connection::open(&source).unwrap(), "market_ticks"),
+        2
+    );
 }
 
 #[test]
@@ -195,13 +231,20 @@ fn injected_sqlite_failure_rolls_back_all_prior_inserts() {
         "CREATE TRIGGER fail_import BEFORE INSERT ON ticks
          WHEN NEW.symbol = 'SOL/USDT'
          BEGIN SELECT RAISE(ABORT, 'injected migration failure'); END;",
-    ).unwrap();
-    assert!(matches!(store.migrate_legacy_schema(&source), Err(MigrationError::Sqlite(_))));
+    )
+    .unwrap();
+    assert!(matches!(
+        store.migrate_legacy_schema(&source),
+        Err(MigrationError::Sqlite(_))
+    ));
     assert_eq!(count(&db, "ticks"), 0);
     db.execute_batch("DROP TRIGGER fail_import;").unwrap();
     assert_eq!(store.migrate_legacy_schema(&source).unwrap().inserted, 2);
     assert_eq!(count(&db, "ticks"), 2);
-    assert_eq!(count(&Connection::open(&source).unwrap(), "market_ticks"), 2);
+    assert_eq!(
+        count(&Connection::open(&source).unwrap(), "market_ticks"),
+        2
+    );
 }
 
 #[test]
@@ -216,9 +259,16 @@ fn source_mutation_fails_closed_instead_of_silently_discarding_changes() {
     let mut store = PravdaStore::open(target.to_str().unwrap()).unwrap();
     store.migrate_legacy_schema(&source).unwrap();
     let legacy = Connection::open(&source).unwrap();
-    legacy.execute("UPDATE market_ticks SET price = 999.0 WHERE id = 1", []).unwrap();
-    assert!(matches!(store.migrate_legacy_schema(&source), Err(MigrationError::ChangedRow(1))));
+    legacy
+        .execute("UPDATE market_ticks SET price = 999.0 WHERE id = 1", [])
+        .unwrap();
+    assert!(matches!(
+        store.migrate_legacy_schema(&source),
+        Err(MigrationError::ChangedRow(1))
+    ));
     let db = Connection::open(&target).unwrap();
-    let price: f64 = db.query_row("SELECT price FROM ticks", [], |r| r.get(0)).unwrap();
+    let price: f64 = db
+        .query_row("SELECT price FROM ticks", [], |r| r.get(0))
+        .unwrap();
     assert_eq!(price, 100.0);
 }
