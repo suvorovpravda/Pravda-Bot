@@ -1,3 +1,7 @@
 * text=auto
 *.cmd text eol=crlf
 *.bat text eol=crlf
+
+# Historical Python is reference material only; do not count it as active code.
+# GitHub Linguist still leaves every archived file in Git history and browsing.
+archive/python-legacy/** linguist-vendored

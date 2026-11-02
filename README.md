@@ -13,7 +13,7 @@
 ![Trading](https://img.shields.io/badge/Ordres%20r%C3%A9els-AUCUN-16a34a)
 ![Enterprise](https://img.shields.io/badge/MSI%20sign%C3%A9-NON%20LIVR%C3%89-d97706)
 
-**[Démarrage](#-démarrage-rapide--windows)** · **[Architecture](#-architecture-actuelle)** · **[Fonctions](#-périmètre-réel)** · **[Sécurité](SECURITY.md)** · **[Feuille de route](#-feuille-de-route)**
+**[Démarrage](#-démarrage-rapide--windows)** · **[Architecture](#-architecture-actuelle)** · **[Fonctions](#-périmètre-réel)** · **[Sécurité](SECURITY.md)** · **[Guide central](docs/PRAVDA-GUIDE.md)** · **[Avancement](#-avancement-par-priorité)**
 
 [Français](#français) · [Русский](#русский) · [English](#english)
 
@@ -26,11 +26,35 @@
 > [!IMPORTANT]
 > **État après les fusions des [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) (2 novembre 2026).** Desktop Windows Tauri 2 avec assets embarqués et **IPC natif sans serveur HTTP pour son UI**, plus serveur Axum de diagnostic séparé. La PR #67 a confirmé **8/8 checks verts et 22 assertions de sécurité IPC sous Windows WebView2 réel**. Ces vérifications portent sur **deux sessions natives successives**, pas sur deux fenêtres simultanées du même processus ni sur une origine distante. **Aucun MSI Enterprise signé n'est livré.**
 
+### 📈 Avancement par priorité
+
+**Suivi au 2 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées. Le travail Rust/Python en cours est indiqué comme **branche de PR, non fusionné**. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
+
+| Priorité | Chantier | Jalons validés ou préparés | Avancement |
+|---|---|---:|---:|
+| **P0** | Isoler définitivement Python hors production | 3/6, **branche de migration** | **50 %** |
+| **P0** | Sécurité IPC Windows | 2/4 | **50 %** |
+| **P0** | Parité Rust des anciennes fonctionnalités | 3/8 | **38 %** |
+| **P0** | CI et gouvernance de production | 3/5 | **60 %** |
+| **P1** | Historique/migration SQLite | 3/4 | **75 %** |
+| **P1** | Expérience desktop et robustesse | 2/4 | **50 %** |
+| **P1** | Packaging Windows Enterprise signé | 0/4 | **0 %** |
+| **P2** | Observabilité et charge | 1/4 | **25 %** |
+| **P2** | Sources optionnelles, notifications et LLM | 0/4 | **0 %** |
+
+![Priorité P0](https://img.shields.io/badge/P0-Migration%20Rust%20%2B%20s%C3%A9curit%C3%A9-dc2626)
+![Documentation](https://img.shields.io/badge/Documentation-3%20pages%20centrales-2563eb)
+![Archive](https://img.shields.io/badge/Python-historique%20uniquement-64748b)
+
+> [!NOTE]
+> Le Rust est déjà le **backend actif**. Les fichiers Python historiques restent consultables dans Git mais ne représentent **pas** du code exécuté en production. Les fonctionnalités Python non portées ne doivent pas être considérées comme livrées. Les détails et jalons de sortie sont regroupés dans [PRAVDA-GUIDE.md](docs/PRAVDA-GUIDE.md).
+
 ### 🎯 À quoi sert Pravda-Bot ?
 
 Pravda-Bot observe des cours **publics** Kraken/Binance, évalue leur fraîcheur et des écarts avec garde-fous, conserve un historique local et permet d'explorer une **simulation papier**.
 
 - **Aucun ordre réel**, retrait, transaction bancaire, gestion de compte exchange ou connexion à un portefeuille.
+- **Revolut X** : adaptateur Rust de carnet public intégré via [PR #73](https://github.com/suvorovpravda/Pravda-Bot/pull/73), mais **non branché au dashboard** ; aucune clé privée, aucun solde ni ordre réel.
 - La simulation papier est **en mémoire** : ses résultats ne sont pas un portefeuille réellement exécuté, ni une garantie de profit.
 - Les cotations live nécessitent Internet et dépendent de la disponibilité des sources. Désactiver les flux n'invente pas des prix.
 - Les anciens composants Python sont conservés à titre de **référence** sous `archive/python-legacy/` ; le chemin de production Rust ne les exécute pas.
@@ -70,7 +94,7 @@ flowchart TB
 
 **Deux modes, deux transports.** Le **desktop** charge `crates/pravda-app/frontend/` via `WebviewUrl::App`, utilise des commandes IPC typées et ne démarre **ni Axum ni WebSocket HTTP local**. Le **serveur de diagnostic** reste démarrable indépendamment avec `cargo run -p pravda-server`, écoute exclusivement sur `127.0.0.1` et sert une interface navigateur avec authentification HTTP. Ne pas faire tourner les deux modes simultanément sur les mêmes fichiers de données pour les tests.
 
-Pour les décisions et contrats détaillés : [architecture](docs/architecture/README.md), [Phase 2 IPC](docs/architecture/tauri-ipc-phase2.md), [menaces](docs/architecture/threat-model.md), [migration SQLite](docs/architecture/sqlite-legacy-migration.md).
+Pour les décisions d'architecture, contrats IPC, modèle de menace et migration SQLite : **[guide technique central](docs/PRAVDA-GUIDE.md)** ; pour la politique de sécurité : **[SECURITY.md](SECURITY.md)**.
 
 ### 🪟 Démarrage rapide — Windows
 
@@ -97,7 +121,7 @@ cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml
 | SQLite WAL | même dossier, suffixe `-wal` / `-shm` si présents | Journaux transactionnels |
 | Authentification | `%LOCALAPPDATA%\Pravda-Bot\pravda_auth.json` | Sel et vérificateur de mot de passe, **pas** le mot de passe en clair |
 
-Les variables `PRAVDA_DB_PATH` et `PRAVDA_AUTH_PATH` prennent le dessus si elles sont définies. **N'effacez pas ces fichiers pour résoudre une erreur de connexion.** Pour une migration d'ancienne installation, sauvegarder de façon cohérente SQLite/WAL et le fichier auth ; voir [migration legacy](docs/architecture/sqlite-legacy-migration.md).
+Les variables `PRAVDA_DB_PATH` et `PRAVDA_AUTH_PATH` prennent le dessus si elles sont définies. **N'effacez pas ces fichiers pour résoudre une erreur de connexion.** Pour une migration d'ancienne installation, sauvegarder de façon cohérente SQLite/WAL et le fichier auth ; voir [migration SQLite dans le guide](docs/PRAVDA-GUIDE.md#-migration-et-sauvegarde-sqlite).
 
 <details>
 <summary><strong>🧪 Lancer un profil de test isolé, sans toucher aux données habituelles</strong></summary>
@@ -218,28 +242,9 @@ node tools/test-desktop-ipc.mjs
 
 ### 🗺️ Feuille de route
 
-```mermaid
-flowchart LR
-    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
-    classDef next fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
-    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12
-    A["PR-01 · Contrats, architecture, menaces"]:::done --> B["SQLite · Import legacy transactionnel"]:::done
-    B --> C["PR #64 · Desktop Tauri IPC intégré"]:::done
-    C --> D["PR #67 · IPC natif testé sous Windows"]:::done
-    D --> E["Parité · FX/énergie/news/AIS, alertes"]:::pending
-    E --> F["Distribution · MSI signé, SBOM, rollback"]:::pending
-```
+Le **[guide technique central](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)** regroupe désormais tous les chantiers, pourcentages, jalons, critères de sortie, contrats architecturaux et historique des versions. La politique de sécurité et la divulgation privée restent dans **[SECURITY.md](SECURITY.md)**.
 
-| Priorité | Chantier | Critère de sortie |
-|:--|:--|:--|
-| **P0** | Gouvernance solo et checks post-fusion | PR/checks/no-bypass maintenus ; confirmation des réglages enregistrés par le propriétaire ; E2E permanent dans la CI |
-| **P0/P1** | Étendre la recette IPC native | Les **22 assertions Windows** de #67 sont acquises ; ajouter tests origines distantes et fenêtres simultanées en processus unique |
-| **P1** | Compléter la parité Rust | Sources avec provenance vérifiée, UI affichant « indisponible » si absent |
-| **P1** | Qualité des données et persistance | Rejeu/migration SQLite, CSV borné, tests redémarrage/rollback |
-| **P2** | Packaging Enterprise | MSI/EXE **signés et horodatés**, SBOM et intégrité CI, tests sur Windows propre |
-| **P2** | Observabilité et ergonomie | CPU/RSS mesurés, erreurs redigées, diagnostics compatibles Windows |
-
-**Pas de date de livraison inventée.** Une fonctionnalité reste « prévue » tant que ses tests et preuves de sortie ne sont pas intégrés. Voir le [suivi de migration](MIGRATION_STATUS.md) et les [critères de release](docs/architecture/acceptance.md).
+**Ordre :** P0 séparation Python/Rust et sécurité IPC → parité des modules Rust → tests avancés → distribution Windows signée. La compilation d'un EXE ne prouve pas la disponibilité d'un MSI Enterprise.
 
 ### 🤝 Contribuer et obtenir de l'aide
 
@@ -258,7 +263,7 @@ flowchart LR
 
 **Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. При первом запуске требуется пароль от 15 символов; данные по умолчанию находятся в `%LOCALAPPDATA%\Pravda-Bot`. Для отключения биржевых потоков установите `PRAVDA_MARKET_FEEDS_ENABLED=false`. Firefox/Chrome не нужны для Tauri, но WebView2 необходим.
 
-**Ограничения:** FX, энергетика, новости и AIS реализованы не полностью. Готового подписанного Enterprise MSI нет; зелёная CI не подтверждает безопасность выпуска. Полные инструкции, таблица переменных и план находятся во [французском разделе](#français) и [SECURITY.md](SECURITY.md).
+**Ограничения:** FX, энергетика, новости и AIS реализованы не полностью. Готового подписанного Enterprise MSI нет; зелёная CI не подтверждает безопасность выпуска. Полные инструкции и проценты выполнения находятся в [едином руководстве](docs/PRAVDA-GUIDE.md), а политика безопасности — в [SECURITY.md](SECURITY.md).
 
 ## English
 
@@ -266,4 +271,4 @@ flowchart LR
 
 **Build/run on Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. Create a local password of at least 15 characters on first run. Default data storage: `%LOCALAPPDATA%\Pravda-Bot`. To disable feeds for testing, set `PRAVDA_MARKET_FEEDS_ENABLED=false`.
 
-**Current limitations:** FX, energy, news, AIS and customizable alerts are not fully migrated. No signed Enterprise MSI has been delivered. CI and manual Windows acceptance are meaningful evidence, **not a security certification**. See [the full French guide](#français), [SECURITY.md](SECURITY.md) and the [roadmap](#-feuille-de-route).
+**Current limitations:** FX, energy, news, AIS and customizable alerts are not fully migrated. No signed Enterprise MSI has been delivered. CI and manual Windows acceptance are meaningful evidence, **not a security certification**. See the [single technical guide with progress percentages](docs/PRAVDA-GUIDE.md), [SECURITY.md](SECURITY.md) and the [roadmap](#-feuille-de-route).
