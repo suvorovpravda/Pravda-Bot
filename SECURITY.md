@@ -11,14 +11,36 @@
 
 **[Signalement](#-signaler-une-vulnérabilité)** · **[Frontières](#-frontières-de-confiance)** · **[Contrôles](#-contrôles-effectivement-présents)** · **[Risques](#-risques-résiduels-et-limites)** · **[Plan P0–P2](#-plan-de-sécurisation-priorisé)**
 
-[README](README.md) · [Threat model](docs/architecture/threat-model.md) · [Acceptance](docs/architecture/acceptance.md)
+[README](README.md) · [Guide technique unique](docs/PRAVDA-GUIDE.md) · [Avancement P0–P2](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)
 
 </div>
 
 ---
 
 > [!WARNING]
-> **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** Les [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) ont été fusionnées le **2 novembre 2026**. La PR #67 a passé **8/8 checks**, dont une batterie IPC WebView2 sur Windows réel (**22 assertions** avec rapport JSON). Le test utilise **deux sessions natives successives** : il ne prouve ni deux fenêtres simultanées dans le même processus, ni une origine distante hostile. Le propriétaire maintient le projet seul et a **retiré l'exigence d'une review par un second développeur** ; la PR, les checks et la protection sans bypass restent la politique souhaitée. Une capture du paramétrage a été fournie, mais l'API d'administration reste inaccessible à l'intégration (**403**) ; ne pas présenter une vérification API comme acquise. **Aucun MSI Enterprise signé n'est attesté.**
+> **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** Les pourcentages ci-dessous représentent des jalons vérifiables et non un niveau général de sécurité garanti. Les [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) ont été fusionnées le **2 novembre 2026**. La PR #67 a passé **8/8 checks**, dont une batterie IPC WebView2 sur Windows réel (**22 assertions** avec rapport JSON). Le test utilise **deux sessions natives successives** : il ne prouve ni deux fenêtres simultanées dans le même processus, ni une origine distante hostile. Le propriétaire maintient le projet seul et a **retiré l'exigence d'une review par un second développeur** ; la PR, les checks et la protection sans bypass restent la politique souhaitée. Une capture du paramétrage a été fournie, mais l'API d'administration reste inaccessible à l'intégration (**403**) ; ne pas présenter une vérification API comme acquise. **Aucun MSI Enterprise signé n'est attesté.**
+
+### 📊 État des chantiers et sécurité — priorités
+
+La même échelle que celle du [README](README.md#-avancement-par-priorité) est utilisée ici : **pourcentage = jalons documentés accomplis ÷ jalons prévus**. Les éléments marqués *branche* ne sont **pas fusionnés**. Un test CI ne remplace pas un audit indépendant.
+
+| Priorité | Chantier | Jalons / total | Progression | Preuve ou réserve |
+|:--|:--|--:|--:|:--|
+| **P0** | Séparation Python / Rust | 3/6 (branche) | **50 %** | Archive seule ; contrôle CI et fusion à valider |
+| **P0** | Sécurité IPC Windows | 2/4 | **50 %** | 22 tests Windows et job permanent ; issue #70 ouverte |
+| **P0** | Parité Rust métier | 3/8 | **38 %** | Sources et fonctions historiques non entièrement portées |
+| **P0** | CI / règles GitHub | 3/5 | **60 %** | Checks actifs ; règles admin non lisibles (HTTP 403) |
+| **P1** | Migration SQLite | 3/4 | **75 %** | Tests transactionnels ; reprise/backup Windows à prouver |
+| **P1** | Desktop / robustesse | 2/4 | **50 %** | IPC + authentification ; scénarios dégradés à compléter |
+| **P1** | Distribution signée | 0/4 | **0 %** | MSI Authenticode non livré |
+| **P2** | Observabilité / quotas | 1/4 | **25 %** | Uptime disponible, CPU/RSS/charge à compléter |
+| **P2** | Feeds optionnels / LLM | 0/4 | **0 %** | Non démontrés ; pas de succès fictif |
+
+![Sécurité IPC](https://img.shields.io/badge/IPC%20Windows-50%25%20des%20jalons-2563eb)
+![Production Rust](https://img.shields.io/badge/Fronti%C3%A8re%20Rust-50%25%20branche-f97316)
+![Release](https://img.shields.io/badge/MSI%20sign%C3%A9-0%25-dc2626)
+
+**[Tableau de bord complet, critères de sortie et preuves](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
 
 ## 🇫🇷 Politique — français
 
@@ -33,6 +55,8 @@ Le présent document couvre **le code Rust actuellement maintenu** :
 **Hors garanties :** composants Python archivés (`archive/python-legacy/`), poste déjà compromis par un logiciel malveillant, compte Windows administrateur hostile, réseau d'exchange non fiable, publication de données via un logiciel tiers, paquet binaire distribué en dehors de la chaîne contrôlée.
 
 **Ce que le logiciel ne fait pas :** trading réel, ordres aux exchanges, stockage de clés d'API de trading pour ordonner des transactions, signature Authenticode du paquet actuel. Aucun scénario de sécurité ne doit supposer qu'une simulation papier équivaut à un ordre réel.
+
+**Intégration publique Revolut X :** le module de carnet [#73](https://github.com/suvorovpravda/Pravda-Bot/pull/73) est fusionné, mais sa lecture n'est pas activée dans le runtime desktop. Il ne contient aucune authentification privée ni méthode d'exécution d'ordre. Le coffre Windows proposé en [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) reste une étape distincte soumise aux tests, sans exposition à l'UI.
 
 ### 🔭 Frontières de confiance
 
@@ -156,6 +180,24 @@ flowchart TB
 | Dépendance compromise | Build | CI, CodeQL, Dependabot | Audit/attestation SBOM et provenance à faire |
 | Exécutable remplacé | Poste Windows | Aucune signature Enterprise attestée | **P0 release :** signature éditeur, horodatage et contrôle chaîne |
 | Contournement de gouvernance | `main` | Protection activée ; capture propriétaire : « Do not allow bypassing » coché | **L'enregistrement effectif n'est pas lisible via l'intégration (HTTP 403)** ; gouvernance solo sans approbateur externe |
+
+### 🔐 Coffre Windows — inventaire, menaces et réversibilité (#74)
+
+**État prouvé :** la [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) a fusionné une abstraction Rust `SecretStore` et `WindowsCredentialStore` utilisant les API Win32 `CredWriteW/CredReadW/CredDeleteW`; les 8 contrôles CI de cette PR sont verts. Le composant est **non branché aux commandes Tauri/HTTP** et ne permet aucun ordre réel. La [PR #77](https://github.com/suvorovpravda/Pravda-Bot/pull/77) propose des tests supplémentaires (mock, rotation, histoire Git), **non considérés comme livrés avant fusion**.
+
+| Actif / surface | Menace | Contrôle et limite |
+|:--|:--|:--|
+| Mot de passe local | Fuite du mot de passe | Vérificateur PBKDF2 salé en fichier, pas une clé d'exchange |
+| Clé d'exchange future | Fuite via JSON/YAML/`.env`/Git | À conserver exclusivement dans Credential Manager sous l'identité Windows ; aucune clé privée actuellement nécessaire |
+| Processus Rust | Dump mémoire, spyware, débogueur même utilisateur | `SecretValue` nettoie ses propres octets au `Drop`, mais les copies temporaires, OS et crash dumps **ne sont pas garantis purgés** |
+| Frontend WebView / Tauri / Axum | Exfiltration IPC ou export | Aucune commande de lecture de coffre ; **ne pas en créer** sans nouveau modèle de menace |
+| SQLite/WAL, exports CSV et journaux | Secrets accidentels sur disque | Pas de stockage intentionnel de clés ; contrôles négatifs automatisés proposés en #77, signature-based **non exhaustive** |
+| Sauvegardes et appareil perdu | Restauration impossible ou accès via session compromise | Chiffrement du volume/disque et hygiène OS à organiser hors app ; ne **jamais** exporter une clé dans une sauvegarde en clair |
+| Git historique | Clé autrefois committée toujours récupérable | Contrôle de signatures haute confiance et des *merge diffs* proposé en #77 ; fuite constatée ⇒ révoquer la clé, ne pas se contenter de supprimer la ligne |
+
+**Procédure sans clés réelles :** pour une rotation, révoquer la clé auprès de l'exchange, générer une nouvelle clé avec permissions minimales, remplacer l'entrée par `SecretStore::put`, vérifier le retour via `get` seulement dans Rust puis supprimer l'ancienne identité via `remove` si elle diffère. Pour une suppression, `remove` doit rendre le prochain `get` indisponible. Pour une restauration après perte du profil Windows, **recréer et réapprovisionner** une nouvelle clé chez le fournisseur ; il n'existe pas de sauvegarde plaintext ou d'export de coffre supporté. Les tests utilisent uniquement des identifiants fictifs. La révocation côté fournisseur est **obligatoire** si une clé pouvait être compromise, la suppression locale ne suffit pas.
+
+**Périmètre non couvert :** malware actif sur le même compte, capture par crash dump, matériel HSM/Windows Hello/YubiKey, test d'intrusion tiers, sauvegarde automatique de secrets, clé de production réellement provisionnée ou trading réel.
 
 ### ⚠️ Risques résiduels et limites
 
