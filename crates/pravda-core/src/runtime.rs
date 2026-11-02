@@ -157,7 +157,7 @@ impl PravdaRuntime {
         let mut rx = self.tick_tx.subscribe();
         // The explicit offline mode is useful for local diagnostics and smoke tests.
         if policy.market_feeds_enabled {
-            let tx_clone = tick_tx.clone();
+            let tx_clone = self.tick_tx.clone();
             tokio::spawn(async move {
                 if let Err(e) = pravda_fetchers::run_fetchers(tx_clone, symbols.clone()).await {
                     tracing::error!("Fetchers error: {}", e);
