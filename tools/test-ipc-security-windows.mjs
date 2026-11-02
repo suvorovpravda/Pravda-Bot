@@ -237,6 +237,15 @@ try {
     await invoke("ipc_auth_status"));
   runtimeDenied("security-probe: market snapshot denied",
     await invoke("ipc_market_snapshot"));
+  const probeForbidden=join(directory,"PROBE_MUST_NOT_EXIST.txt");
+  runtimeDenied("security-probe: filesystem plugin denied",
+    await invoke("plugin:fs|write_text_file",
+      {path:probeForbidden,contents:"security probe must not write"}));
+  verdict("security-probe: no arbitrary disk modification",
+    !existsSync(probeForbidden), "No file created by the unauthorized WebView");
+  runtimeDenied("security-probe: shell plugin denied",
+    await invoke("plugin:shell|execute",
+      {program:"__PRAVDA_PROBE_NONEXISTENT__"}));
   report.passed=true;
 } catch(error) {
   failure=error;
