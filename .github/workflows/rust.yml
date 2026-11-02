@@ -137,3 +137,60 @@ jobs:
             $app.Refresh()
             if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
           }
+
+
+  security_native_webview2:
+    name: Windows native WebView2 IPC security E2E
+    if: github.event_name == 'pull_request' && github.head_ref == 'security/ipc-windows-native-e2e-20261102'
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Build opt-in DEBUG security probe (no release capabilities changed)
+        run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml --features security-e2e
+
+      - name: Install Tauri's native Windows WebDriver adapter
+        run: cargo install tauri-driver --locked
+
+      - name: Download matching EdgeDriver from Microsoft only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $edgeCandidates = @(
+            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
+            "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
+          )
+          $edgeExe = $edgeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $edgeExe) { throw "Microsoft Edge executable not found" }
+          $version = (Get-Item $edgeExe).VersionInfo.ProductVersion
+          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "Unexpected Edge version" }
+          $zipPath = Join-Path $env:RUNNER_TEMP 'edgedriver.zip'
+          $binDir = Join-Path $env:RUNNER_TEMP 'edgedriver-bin'
+          $uri = "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip"
+          Invoke-WebRequest -Uri $uri -OutFile $zipPath -ErrorAction Stop
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $binDir
+          if (-not (Test-Path (Join-Path $binDir 'msedgedriver.exe'))) {
+            throw "Microsoft EdgeDriver binary missing"
+          }
+          $binDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Matched Microsoft EdgeDriver version $version"
+
+      - name: Execute native IPC deny tests (no JS mocks)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node tools/test-ipc-security-windows.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Attach redacted JSON test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pravda-windows-native-ipc-security
+          path: ${{ runner.temp }}/Pravda-IPC-security-*.json
+          if-no-files-found: warn
