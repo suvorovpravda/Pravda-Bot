@@ -22,7 +22,7 @@ pub enum HistorySymbol {
     Sol,
 }
 impl HistorySymbol {
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Btc => "BTC/USDT",
             Self::Eth => "ETH/USDT",
@@ -37,7 +37,7 @@ pub enum HistoryExchange {
     Kraken,
 }
 impl HistoryExchange {
-    fn name(self) -> &'static str {
+    pub(crate) fn name(self) -> &'static str {
         match self {
             Self::Binance => "Binance",
             Self::Kraken => "Kraken",
@@ -53,7 +53,7 @@ pub enum HistoryPeriod {
     Month,
 }
 impl HistoryPeriod {
-    fn duration(self) -> Duration {
+    pub(crate) fn duration(self) -> Duration {
         Duration::days(match self {
             Self::Day => 1,
             Self::Week => 7,
@@ -64,9 +64,9 @@ impl HistoryPeriod {
 #[derive(Debug, Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct HistoryQuery {
-    symbol: HistorySymbol,
-    exchange: HistoryExchange,
-    period: HistoryPeriod,
+    pub(crate) symbol: HistorySymbol,
+    pub(crate) exchange: HistoryExchange,
+    pub(crate) period: HistoryPeriod,
 }
 #[derive(Debug, Serialize)]
 struct Observation {
