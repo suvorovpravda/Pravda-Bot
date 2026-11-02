@@ -1,7 +1,5 @@
 //! HTTP adapter around the shared transport-independent password service.
 mod service;
-pub(crate) use service::{Auth, AuthError, SessionToken, PBKDF2_ITERATIONS};
-use service::*;
 use axum::{
     extract::{Request, State},
     http::{header, HeaderMap, HeaderValue, StatusCode},
@@ -11,9 +9,11 @@ use axum::{
     Extension, Form, Json, Router,
 };
 use serde::Deserialize;
-use std::sync::Arc;
+use service::*;
+pub(crate) use service::{Auth, AuthError, SessionToken, PBKDF2_ITERATIONS};
 #[cfg(test)]
 use std::path::PathBuf;
+use std::sync::Arc;
 
 const COOKIE_NAME: &str = "pravda_session";
 
