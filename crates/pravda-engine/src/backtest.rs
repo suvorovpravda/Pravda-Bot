@@ -238,8 +238,10 @@ mod tests {
             replay(&[tick(0, f64::NAN, 100.0, true)], ReplayConfig::default()),
             Err(ReplayError::InvalidRow)
         ));
-        let mut config = ReplayConfig::default();
-        config.estimated_fees_percent = f64::INFINITY;
+        let config = ReplayConfig {
+            estimated_fees_percent: f64::INFINITY,
+            ..ReplayConfig::default()
+        };
         assert!(matches!(
             replay(&[tick(0, 101.0, 100.0, true)], config),
             Err(ReplayError::InvalidConfiguration)
