@@ -1,6 +1,7 @@
 pub mod binance;
 pub mod energy;
 pub mod kraken;
+pub mod public_feeds;
 pub mod revolut_x;
 pub mod types;
 
