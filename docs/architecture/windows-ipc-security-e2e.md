@@ -33,14 +33,16 @@ flowchart LR
 
 Le projet contient déjà des tests unitaires Rust pour les gardes de session et des contrats JS statiques : ils ne prouvent pas le **comportement du vrai runtime WebView2**.
 
-Ce lot ajoute un second WebView **uniquement** via `#[cfg(all(windows, debug_assertions, feature = "security-e2e"))]`. Il porte le label `security-probe`, absent de `capabilities/main.json`. Ce WebView est chargé depuis les mêmes assets locaux que `main` et partage le moteur d'authentification, mais doit être **incapable d'invoquer** les commandes Tauri.
+Ce lot active une **fenêtre de sonde uniquement en Debug Windows et avec la feature explicite** `security-e2e` (`#[cfg(all(windows, debug_assertions, feature = "security-e2e"))]`). Le pilote Windows utilisé n'a exposé qu'un handle WebDriver malgré la création initiale de deux fenêtres ; le test lance désormais **deux sessions natives successives**, d'abord `main` (HTML normal), puis `security-probe` seule comme WebView primaire (`PRAVDA_E2E_PROBE_ONLY=true`), depuis un **second processus** sur les mêmes fichiers temporaires. La sonde charge `security-probe.html`, possède un titre HTML distinct, et demeure absente de `capabilities/main.json`.
+
+**Limite explicite :** cette stratégie démontre la politique par fenêtre dans deux processus WebView2 réels, **pas le comportement d'une seconde fenêtre au sein d'une même session Rust déjà authentifiée**. Ce scénario multi-fenêtre en processus unique reste à couvrir par un test distinct.
 
 **Sémantique importante :**
 - `UNAUTHORIZED` dans `main` sans session valide prouve que le handler **Rust** refuse l'accès.
-- Sur `security-probe`, le système de permissions Tauri peut refuser **avant même d'appeler le handler Rust** ; `ACL denied` ou pont Tauri absent constituent alors une preuve **du runtime ACL**, et non un `FORBIDDEN_WINDOW` émis par le handler.
+- Sur `security-probe`, le système de permissions Tauri peut refuser **avant même d'appeler le handler Rust** ; seul un **rejet explicite** par Tauri est accepté comme preuve par cette batterie (un pont absent produit un échec du test et un diagnostic, pas un PASS), et non un `FORBIDDEN_WINDOW` émis par le handler.
 - Une commande qui réussit depuis `security-probe` fait **échouer** la batterie, sans tolérance.
 
-L'outil appelle réellement `window.__TAURI__.core.invoke` via WebDriver **dans les deux fenêtres**. Aucun mock JavaScript du backend n'est utilisé. Aucun nouveau privilège `shell` ou `fs`, ni commande personnalisée ni capability n'est ajouté.
+L'outil appelle réellement `window.__TAURI__.core.invoke` via WebDriver **dans deux WebViews natives successives**. Aucun mock JavaScript du backend n'est utilisé. Aucun nouveau privilège `shell` ou `fs`, ni commande personnalisée ni capability n'est ajouté.
 
 ## 3. Windows réel : prérequis et lancement
 
@@ -72,18 +74,18 @@ node .\tools\test-ipc-security-windows.mjs
 
 | Test natif | Résultat attendu |
 |---|---|
-| Détecter `main` + `security-probe` | Deux fenêtres WebView2 réellement accessibles par WebDriver |
+| Identifier `main` puis `security-probe` | Deux sessions réelles successives, chacune identifiée par **son titre HTML**, pas par `Window.title` |
 | 8 commandes protégées depuis `main` **avant setup/login** | **`UNAUTHORIZED` (Rust)** |
 | Setup de mot de passe temporaire depuis `main` | Réussite (aucun secret loggé) |
 | Snapshot depuis `main` authentifiée | Réussite |
-| `ipc_auth_status` et `ipc_market_snapshot` depuis `security-probe` | Refus ACL Tauri ou absence de pont IPC |
+| `ipc_auth_status` et `ipc_market_snapshot` depuis `security-probe` | **Refus explicite** Tauri requis ; absence du pont = FAIL, non preuve ACL |
 | Invocation directe `plugin:fs|write_text_file` depuis `main` | Refus + **aucun fichier créé** |
 | Invocation directe `plugin:shell|execute` depuis `main` | Refus (aucun plugin shell autorisé) |
 | Logout puis nouveau snapshot depuis `main` | **`UNAUTHORIZED` (Rust)** |
 
 L'outil doit rendre exit code `0` et `passed=true` **uniquement si tous les scénarios réussissent**. Le démarrage d'un pilote absent, une fenêtre manquante, une réponse inattendue, un échec sans verdict, une défaillance de setup ou un refus d'auth d'un type inattendu empêchent l'approbation.
 
-**Limitations :** la navigation explicite depuis une origine distante, l'exploitabilité d'un XSS, les ACL Windows sur le disque, les scénarios d'expiration 12 h et le packaging Authenticode restent **hors périmètre de ce premier test natif**. Le deuxième WebView local sans capability vérifie la frontière fenêtre, pas toutes les origines hostiles.
+**Limitations :** la navigation explicite depuis une origine distante, l'exploitabilité d'un XSS, les ACL Windows sur le disque, les scénarios d'expiration 12 h et le packaging Authenticode restent **hors périmètre de ce premier test natif**. La sonde sans capability vérifie le refus dans un **processus de test séparé**, pas la frontière simultanée entre deux fenêtres d'un même processus ni toutes les origines hostiles.
 
 ## 4. Comment livrer une preuve vérifiable
 
