@@ -9,6 +9,7 @@ Documents :
 - [Modèle de menace et frontières de confiance](threat-model.md)
 - [Inventaire réel des routes et contrat de migration UI → IPC](ui-ipc-contract.md)
 - [Critères d'acceptation et contrôle de release](acceptance.md)
+- [Tâche 3 — migration SQLite legacy transactionnelle](sqlite-legacy-migration.md)
 
 ## Invariants
 
