@@ -239,4 +239,3 @@ impl SessionToken {
         &self.0
     }
 }
-
