@@ -29,12 +29,44 @@ try {
             throw "First launch did not expose initial setup form"
         }
         $password = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(20))
+        # Reproduce the actual WebView2/Edge top-level navigation to /setup.
+        $setupNavigation = [System.Net.Http.HttpRequestMessage]::new(
+            [System.Net.Http.HttpMethod]::Get, "$base/setup")
+        $setupNavigation.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "cross-site") | Out-Null
+        $setupNavigation.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate") | Out-Null
+        $setupNavigation.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "document") | Out-Null
+        $setupPage = $http.SendAsync($setupNavigation).GetAwaiter().GetResult()
+        if ([int]$setupPage.StatusCode -ne 200) {
+            throw "Cross-site GET /setup must show the first-run form"
+        }
         $form = [System.Collections.Generic.Dictionary[string,string]]::new()
         $form.Add("password", $password)
         $form.Add("confirm", $password)
-        $setup = $http.PostAsync("$base/setup", [System.Net.Http.FormUrlEncodedContent]::new($form)).GetAwaiter().GetResult()
+        # An attacker-supplied Origin must remain denied, even with navigation metadata.
+        $attack = [System.Net.Http.HttpRequestMessage]::new(
+            [System.Net.Http.HttpMethod]::Post, "$base/setup")
+        $attack.Headers.TryAddWithoutValidation("Origin", "https://attacker.invalid") | Out-Null
+        $attack.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "cross-site") | Out-Null
+        $attack.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate") | Out-Null
+        $attack.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "document") | Out-Null
+        $attack.Content = [System.Net.Http.FormUrlEncodedContent]::new($form)
+        $blocked = $http.SendAsync($attack).GetAwaiter().GetResult()
+        if ([int]$blocked.StatusCode -ne 403) {
+            throw "Unsafe cross-site password setup was accepted"
+        }
+        if (Test-Path (Join-Path $data "pravda_auth.json")) {
+            throw "Rejected attacker form managed to create an authentication file"
+        }
+        $navigation = [System.Net.Http.HttpRequestMessage]::new(
+            [System.Net.Http.HttpMethod]::Post, "$base/setup")
+        $navigation.Headers.TryAddWithoutValidation("Origin", "$base") | Out-Null
+        $navigation.Headers.TryAddWithoutValidation("Sec-Fetch-Site", "cross-site") | Out-Null
+        $navigation.Headers.TryAddWithoutValidation("Sec-Fetch-Mode", "navigate") | Out-Null
+        $navigation.Headers.TryAddWithoutValidation("Sec-Fetch-Dest", "document") | Out-Null
+        $navigation.Content = [System.Net.Http.FormUrlEncodedContent]::new($form)
+        $setup = $http.SendAsync($navigation).GetAwaiter().GetResult()
         if ([int]$setup.StatusCode -ne 303) {
-            throw "Setup password was rejected"
+            throw "Browser-style password setup rejected HTTP $([int]$setup.StatusCode)"
         }
         $authFile = Join-Path $data "pravda_auth.json"
         if (-not (Test-Path $authFile)) { throw "Local password was not persisted" }
