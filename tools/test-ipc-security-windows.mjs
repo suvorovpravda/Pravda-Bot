@@ -217,8 +217,9 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
-      record?.state==="rejected" && record?.access_denied===true && record?.malformed===false,
-      record ? record.state+" access_denied="+record.access_denied+
+      record?.state==="rejected" && record?.access_denied===true &&
+        record?.denial_layer==="tauri_acl" && record?.malformed===false,
+      record ? record.state+" denial_layer="+record.denial_layer+
         " malformed="+record.malformed : "missing result");
   }
 }
