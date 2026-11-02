@@ -204,7 +204,25 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             println!("No local password set: open the dashboard to create one.");
         }
     }
-    let store = PravdaStore::open(&config.database_path)?;
+    let mut store = PravdaStore::open(&config.database_path)?;
+    // Migrate only at startup, before constructing or starting the market runtime.
+    // Explicit paths win; never create a missing legacy source.
+    let source = std::env::var_os("PRAVDA_LEGACY_DB_PATH")
+        .or_else(|| std::env::var_os("MARKET_HISTORY_DB"))
+        .or_else(|| {
+            let default = std::path::PathBuf::from("market_history.sqlite3");
+            default.exists().then_some(default.into_os_string())
+        });
+    if let Some(path) = source {
+        if path.is_empty() {
+            return Err("Legacy SQLite database path cannot be empty".into());
+        }
+        let report = store.migrate_legacy_schema(std::path::Path::new(&path))?;
+        println!(
+            "Legacy history migration verified: {} source rows, {} inserted, {} already imported",
+            report.source_rows, report.inserted, report.already_imported
+        );
+    }
     let policy = runtime_policy(&config);
     let runtime = Arc::new(PravdaRuntime::new(store, tick_tx));
     let state = Arc::new(AppState {
