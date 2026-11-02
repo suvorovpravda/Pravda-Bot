@@ -48,7 +48,7 @@ const app=active.filter(p=>p.startsWith("crates/pravda-app/src/")||
   p.startsWith("crates/pravda-store/src/"));
 for(const path of app) {
   const text=readFileSync(path,"utf8");
-  assert.doesNotMatch(text,/\b(?:SecretStore|WindowsCredentialStore|SecretValue)\b/,
+  assert.ok(!/\b(?:SecretStore|WindowsCredentialStore|SecretValue)\b/.test(text),
     "Secret service must never be exposed by frontend, Tauri handlers or DB");
 }
 assert.ok(existsSync("rust/pravda-server/src/secret_store.rs"),
