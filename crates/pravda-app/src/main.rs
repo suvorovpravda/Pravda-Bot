@@ -1,7 +1,6 @@
 mod ipc;
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tauri::{WebviewUrl, WebviewWindowBuilder};
 
 // Keep desktop credentials and SQLite in a stable per-user directory, rather than
@@ -119,93 +118,39 @@ async fn main() {
     };
     let ipc_auth = ipc::IpcAuth::new(shared_auth.clone());
 
-    let port: u16 = match std::env::var("DASHBOARD_PORT") {
-        Ok(raw) => match raw.parse() {
-            Ok(port) if port != 0 => port,
-            _ => {
-                eprintln!("Invalid DASHBOARD_PORT: expected an integer between 1 and 65535");
-                std::process::exit(1);
-            }
-        },
-        Err(std::env::VarError::NotPresent) => 8080,
-        Err(_) => {
-            eprintln!("DASHBOARD_PORT is not valid Unicode");
+    // The desktop owns its SQLite store, migration and market engine directly.
+    // No HTTP listener, reqwest readiness poll, or Axum child task is started.
+    let desktop = match pravda_server::DesktopRuntime::start(shared_auth).await {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("Pravda-Bot desktop initialization failed: {error}");
             std::process::exit(1);
         }
     };
 
-    let address = format!("http://127.0.0.1:{port}");
-    // Never open another process's HTTP service in the desktop WebView.
-    if std::net::TcpListener::bind(("127.0.0.1", port)).is_err() {
-        eprintln!("Pravda-Bot cannot start: dashboard port {port} is already occupied");
-        std::process::exit(1);
-    }
-
-    let server = tokio::spawn(async move {
-        pravda_server::run_server_with_auth(shared_auth)
-            .await
-            .map_err(|error| error.to_string())
-    });
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_millis(800))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("HTTP client configuration must be valid");
-
-    let deadline = Instant::now() + Duration::from_secs(20);
-    loop {
-        if server.is_finished() {
-            let reason = match server.await {
-                Ok(Ok(())) => "the server stopped before becoming ready".to_string(),
-                Ok(Err(error)) => error,
-                Err(error) => error.to_string(),
-            };
-            eprintln!("Pravda-Bot could not start: {reason}");
-            std::process::exit(1);
-        }
-
-        match client.get(format!("{address}/login")).send().await {
-            Ok(response) => {
-                let genuine_server = response.status() == reqwest::StatusCode::OK
-                    && response
-                        .headers()
-                        .get("x-pravda-server")
-                        .and_then(|value| value.to_str().ok())
-                        == Some("1");
-                if genuine_server {
-                    break;
-                }
-                eprintln!("Pravda-Bot refused to open an unexpected local web service");
-                std::process::exit(1);
-            }
-            Err(_) => {}
-        }
-
-        if Instant::now() >= deadline {
-            eprintln!("Pravda-Bot server did not become ready before the startup deadline");
-            std::process::exit(1);
-        }
-        tokio::time::sleep(Duration::from_millis(200)).await;
-    }
-
-    // Config has no automatic windows: build one window only after the server is ready.
+    // The only native WebView opens bundled local assets; no remote origin.
     tauri::Builder::default()
         .manage(ipc_auth)
-        // The current WebView is still External(127.0.0.1). No remote origin
-        // is permitted by the capability; IPC becomes usable from bundled
-        // assets only in the later, separately reviewed frontend switch.
+        .manage(desktop)
         .invoke_handler(tauri::generate_handler![
             ipc::ipc_auth_status,
             ipc::ipc_auth_setup,
             ipc::ipc_auth_login,
             ipc::ipc_auth_logout,
-            ipc::ipc_session_check
+            ipc::ipc_session_check,
+            ipc::ipc_market_snapshot,
+            ipc::ipc_history_recent,
+            ipc::ipc_history_query,
+            ipc::ipc_history_export_csv,
+            ipc::ipc_paper_alerts_snapshot,
+            ipc::ipc_runtime_metrics,
+            ipc::ipc_fx_status
         ])
-        .setup(move |app| {
+        .setup(|app| {
             WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::External(address.parse().expect("loopback URL is valid")),
+                WebviewUrl::App("index.html".into()),
             )
             .title("Pravda-Bot")
             .inner_size(1280.0, 800.0)
