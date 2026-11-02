@@ -7,6 +7,13 @@ fn main() {
         "ipc_auth_login",
         "ipc_auth_logout",
         "ipc_session_check",
+        "ipc_market_snapshot",
+        "ipc_history_recent",
+        "ipc_history_query",
+        "ipc_history_export_csv",
+        "ipc_paper_alerts_snapshot",
+        "ipc_runtime_metrics",
+        "ipc_fx_status",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

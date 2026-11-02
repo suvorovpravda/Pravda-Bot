@@ -2,14 +2,28 @@
   "productName": "Pravda-Bot",
   "version": "0.3.4",
   "identifier": "com.pravda.bot",
-  "build": {},
+  "build": {
+    "frontendDist": "frontend"
+  },
   "app": {
     "windows": [],
     "security": {
       "capabilities": [
         "main-ipc"
-      ]
-    }
+      ],
+      "csp": {
+        "default-src": "'self' customprotocol:",
+        "script-src": "'self'",
+        "style-src": "'self'",
+        "img-src": "'self' data:",
+        "connect-src": "ipc: http://ipc.localhost",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "form-action": "'none'",
+        "base-uri": "'none'"
+      }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": false

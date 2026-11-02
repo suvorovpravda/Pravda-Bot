@@ -1,6 +1,6 @@
 {
   "identifier": "main-ipc",
-  "description": "Only the bundled main window can use bootstrap auth and the first protected IPC command.",
+  "description": "Bundled main window only: local auth bootstrap plus authenticated read-only desktop commands.",
   "windows": [
     "main"
   ],
@@ -9,6 +9,13 @@
     "allow-ipc-auth-setup",
     "allow-ipc-auth-login",
     "allow-ipc-auth-logout",
-    "allow-ipc-session-check"
+    "allow-ipc-session-check",
+    "allow-ipc-market-snapshot",
+    "allow-ipc-history-recent",
+    "allow-ipc-history-query",
+    "allow-ipc-history-export-csv",
+    "allow-ipc-paper-alerts-snapshot",
+    "allow-ipc-runtime-metrics",
+    "allow-ipc-fx-status"
   ]
 }

@@ -46,6 +46,8 @@ jobs:
 
       - name: Dashboard JavaScript regression tests
         run: node tools/test-dashboard.mjs
+      - name: Native bundled IPC frontend security contract
+        run: node tools/test-desktop-ipc.mjs
 
       - name: Fmt check
         run: cargo fmt --all -- --check
@@ -87,102 +89,49 @@ jobs:
           components: rustfmt
       - name: Verify Tauri formatting
         run: cargo fmt --manifest-path crates/pravda-app/Cargo.toml -- --check
-      # TEMPORARY DIAGNOSTIC: remove before merging this hotfix.
-      - name: Diagnose desktop Cargo.lock drift
+      - name: Verify desktop Cargo.lock remains unchanged
         shell: pwsh
         run: |
-          cargo metadata --format-version 1 --manifest-path crates/pravda-app/Cargo.toml | Out-Null
-          git diff -- crates/pravda-app/Cargo.lock
+          cargo metadata --locked --no-deps --format-version 1 --manifest-path crates/pravda-app/Cargo.toml | Out-Null
+          git diff --exit-code -- crates/pravda-app/Cargo.lock
 
       - name: Test desktop storage path selection (Windows)
         run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml
       - name: Build native Windows desktop application
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
-      - name: Launch desktop app and verify local authentication server
+      - name: Launch bundled desktop and assert no local HTTP listener
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-          $probe.Start()
-          $port = $probe.LocalEndpoint.Port
-          $probe.Stop()
-          $env:DASHBOARD_PORT = "$port"
           $env:PRAVDA_MARKET_FEEDS_ENABLED = "false"
-          $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP "pravda-desktop-smoke.db"
-          $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP "pravda-desktop-auth.json"
+          $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP "pravda-ipc-desktop-smoke.db"
+          $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP "pravda-ipc-desktop-auth.json"
+          Remove-Item Env:PRAVDA_LEGACY_DB_PATH -ErrorAction SilentlyContinue
+          Remove-Item Env:MARKET_HISTORY_DB -ErrorAction SilentlyContinue
           $executable = Join-Path (Get-Location).Path "crates/pravda-app/target/debug/pravda-app.exe"
-          if (-not (Test-Path $executable)) { throw "Desktop executable not built: $executable" }
-          $process = Start-Process -FilePath $executable -PassThru
+          if (-not (Test-Path $executable)) { throw "Bundled desktop executable not found" }
+          $app = Start-Process -FilePath $executable -PassThru
           try {
-            $ready = $false
-            for ($attempt = 0; $attempt -lt 80; $attempt++) {
-              $process.Refresh()
-              if ($process.HasExited) { throw "Desktop application exited prematurely with code $($process.ExitCode)" }
-              try {
-                $response = Invoke-WebRequest -Uri "http://127.0.0.1:$port/login" -TimeoutSec 2 -MaximumRedirection 0
-                if ($response.StatusCode -eq 200 -and $response.Headers["x-pravda-server"] -eq "1") {
-                  $ready = $true
-                  break
-                }
-              } catch { }
+            $started = $false
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+              $app.Refresh()
+              if ($app.HasExited) { throw "Bundled desktop exited with code $($app.ExitCode)" }
+              if (Test-Path $env:PRAVDA_DB_PATH) { $started = $true; break }
               Start-Sleep -Milliseconds 250
             }
-            if (-not $ready) { throw "Desktop application failed to start its authenticated local server" }
-            # Reproduce WebView2's first cross-site document navigation. A plain
-            # HTTP health probe is NOT enough to detect blocked app windows.
-            $webviewHeaders = @{
-              "Sec-Fetch-Site" = "cross-site"
-              "Sec-Fetch-Mode" = "navigate"
-              "Sec-Fetch-Dest" = "document"
+            if (-not $started) { throw "Desktop did not initialize isolated SQLite" }
+            Start-Sleep -Seconds 3
+            $app.Refresh()
+            if ($app.HasExited) { throw "Desktop exited after database initialization" }
+            $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+              Where-Object { $_.OwningProcess -eq $app.Id })
+            if ($listeners.Count -ne 0) { throw "Desktop started unexpected listening socket(s)" }
+            if (Test-Path $env:PRAVDA_AUTH_PATH) {
+              throw "Unauthenticated startup unexpectedly wrote a password verifier"
             }
-            $loginPage = Invoke-WebRequest -Uri "http://127.0.0.1:$port/login" -Headers $webviewHeaders -TimeoutSec 3 -MaximumRedirection 0
-            if ($loginPage.StatusCode -ne 200 -or $loginPage.Content -notmatch "Pravda-Bot") {
-              throw "WebView2 document navigation was rejected"
-            }
-            $process.Refresh()
-            if ($process.HasExited) { throw "Desktop application exited after the server became ready" }
-
-            # Exercise the full first-run authentication flow, not just a GET /login.
-            # Passwords are generated only in memory for each Windows CI run.
-            $password = [Convert]::ToHexString([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(20))
-            $handler = [System.Net.Http.HttpClientHandler]::new()
-            $handler.AllowAutoRedirect = $false
-            $handler.UseCookies = $true
-            $handler.CookieContainer = [System.Net.CookieContainer]::new()
-            $http = [System.Net.Http.HttpClient]::new($handler)
-            try {
-              $base = "http://127.0.0.1:$port"
-              $unauthorized = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
-              if ([int]$unauthorized.StatusCode -ne 401) {
-                throw "API accepted access without a session"
-              }
-              $form = [System.Collections.Generic.Dictionary[string,string]]::new()
-              $form.Add("password", $password)
-              $form.Add("confirm", $password)
-              $payload = [System.Net.Http.FormUrlEncodedContent]::new($form)
-              $setup = $http.PostAsync("$base/setup", $payload).GetAwaiter().GetResult()
-              if ([int]$setup.StatusCode -ne 303) { throw "First-run setup did not redirect" }
-              $authorized = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
-              if ([int]$authorized.StatusCode -ne 200) { throw "Authenticated API access failed" }
-              $dashboardResponse = $http.GetAsync("$base/").GetAwaiter().GetResult()
-              if ([int]$dashboardResponse.StatusCode -ne 200) { throw "Dashboard access failed after setup" }
-
-              $logout = $http.PostAsync("$base/logout", [System.Net.Http.StringContent]::new("")).GetAwaiter().GetResult()
-              if ([int]$logout.StatusCode -ne 303) { throw "Logout did not redirect" }
-              $revoked = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
-              if ([int]$revoked.StatusCode -ne 401) { throw "Logout did not revoke the session" }
-
-              $loginForm = [System.Collections.Generic.Dictionary[string,string]]::new()
-              $loginForm.Add("password", $password)
-              $relogin = $http.PostAsync("$base/login", [System.Net.Http.FormUrlEncodedContent]::new($loginForm)).GetAwaiter().GetResult()
-              if ([int]$relogin.StatusCode -ne 303) { throw "Valid re-login failed" }
-              $recovered = $http.GetAsync("$base/api/metrics").GetAwaiter().GetResult()
-              if ([int]$recovered.StatusCode -ne 200) { throw "Re-login did not restore the session" }
-            } finally {
-              $http.Dispose()
-              $handler.Dispose()
-            }
-            Write-Host "Windows desktop, WebView2 navigation, setup, dashboard, logout and re-login verified."
+            Write-Host "Bundled desktop launch, SQLite startup and no local HTTP listener verified."
+            Write-Host "Interactive WebView2 IPC auth/setup/logout and capabilities denial require separate human Windows E2E acceptance."
           } finally {
-            if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+            $app.Refresh()
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
           }

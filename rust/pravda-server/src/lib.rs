@@ -2,7 +2,10 @@ use axum::extract::ws::{Message, WebSocket};
 mod auth;
 pub use auth::{Auth, AuthError, PBKDF2_ITERATIONS};
 mod config;
+mod desktop;
 mod history;
+pub use desktop::{DesktopPayload, DesktopRuntime};
+pub use history::HistoryQuery as DesktopHistoryQuery;
 mod http_security;
 use axum::{
     extract::State,
