@@ -1,5 +1,6 @@
 use axum::extract::ws::{Message, WebSocket};
 mod auth;
+pub use auth::{Auth, AuthError, PBKDF2_ITERATIONS};
 mod config;
 mod history;
 mod http_security;
@@ -177,15 +178,30 @@ async fn handle_socket(socket: WebSocket, state: Arc<AppState>, session: auth::S
 
 //
 pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
+    run_server_with_optional_auth(None).await
+}
+
+/// The desktop IPC layer and HTTP compatibility adapter can share exactly one
+/// password verifier/session authority. No duplicate credential cache.
+pub async fn run_server_with_auth(
+    shared_auth: Arc<Auth>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    run_server_with_optional_auth(Some(shared_auth)).await
+}
+
+async fn run_server_with_optional_auth(
+    preloaded_auth: Option<Arc<Auth>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let config = ServerConfig::from_env()?;
     let addr = SocketAddr::from(([127, 0, 0, 1], config.port));
     // Bind before opening the database or starting any market connections.
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let (tick_tx, _) = pravda_fetchers::create_tick_channel();
-    let auth = Arc::new(auth::Auth::load(
-        &config.auth_path,
-        auth::PBKDF2_ITERATIONS,
-    )?);
+    let auth = if let Some(auth) = preloaded_auth {
+        auth
+    } else {
+        Arc::new(Auth::load(&config.auth_path, PBKDF2_ITERATIONS)?)
+    };
     if !auth.is_configured() {
         if let Ok(initial) = std::env::var("PRAVDA_ADMIN_PASSWORD") {
             let worker = auth.clone();
