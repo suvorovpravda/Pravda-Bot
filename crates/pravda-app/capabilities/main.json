@@ -1,0 +1,14 @@
+{
+  "identifier": "main-ipc",
+  "description": "Only the bundled main window can use bootstrap auth and the first protected IPC command.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "allow-ipc-auth-status",
+    "allow-ipc-auth-setup",
+    "allow-ipc-auth-login",
+    "allow-ipc-auth-logout",
+    "allow-ipc-session-check"
+  ]
+}
