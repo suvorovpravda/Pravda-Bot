@@ -1,9 +1,8 @@
 #!/usr/bin/env rust
-//! Validated market calculations for the Rust migration. Not wired to the bot.
+//! Canonical market arithmetic and freshness guards used by pravda-core.
 #![forbid(unsafe_code)]
 #![allow(clippy::useless_conversion)]
 
-pub mod db;
 pub mod health;
 
 /// Fee estimate expressed as a fraction: 0.0036 = 0.36%.
