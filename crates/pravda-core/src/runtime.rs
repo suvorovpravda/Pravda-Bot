@@ -1,5 +1,6 @@
 //! Transport-agnostic application state and market processing.
 //! No Axum, Tauri, HTTP cookie or desktop process logic is allowed here.
+use crate::process_metrics;
 use chrono::Utc;
 use pravda_engine::{AlertGate, PaperMode, PaperSimulator};
 use pravda_fetchers::types::{Exchange, Symbol, Tick};
@@ -10,7 +11,6 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use crate::process_metrics;
 use tokio::sync::{broadcast, RwLock};
 
 /// All market thresholds are injected by the caller, not read from environment.
@@ -133,7 +133,12 @@ impl PravdaRuntime {
                 let seconds = now.saturating_duration_since(then).as_secs_f64();
                 let delta = current - previous;
                 if seconds >= 0.05 && delta >= 0.0 && delta.is_finite() {
-                    Some((100.0 * delta / seconds).min(100.0 * f64::from(std::thread::available_parallelism().map_or(1, |n| n.get() as u32))))
+                    Some((100.0 * delta / seconds).min(
+                        100.0
+                            * f64::from(
+                                std::thread::available_parallelism().map_or(1, |n| n.get() as u32),
+                            ),
+                    ))
                 } else {
                     None
                 }

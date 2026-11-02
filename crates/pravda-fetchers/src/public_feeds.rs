@@ -13,15 +13,24 @@ async fn public_json(endpoint: &'static str) -> Result<Value, &'static str> {
     let client = Client::builder()
         .timeout(Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::none())
-        .build().map_err(|_| "NETWORK_UNAVAILABLE")?;
-    let mut response = client.get(endpoint).send().await.map_err(|_| "NETWORK_UNAVAILABLE")?;
-    if !response.status().is_success() { return Err("SOURCE_HTTP_ERROR"); }
+        .build()
+        .map_err(|_| "NETWORK_UNAVAILABLE")?;
+    let mut response = client
+        .get(endpoint)
+        .send()
+        .await
+        .map_err(|_| "NETWORK_UNAVAILABLE")?;
+    if !response.status().is_success() {
+        return Err("SOURCE_HTTP_ERROR");
+    }
     if response.content_length().is_some_and(|n| n > 1_048_576) {
         return Err("SOURCE_TOO_LARGE");
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response.chunk().await.map_err(|_| "NETWORK_UNAVAILABLE")? {
-        if bytes.len().saturating_add(chunk.len()) > 1_048_576 { return Err("SOURCE_TOO_LARGE"); }
+        if bytes.len().saturating_add(chunk.len()) > 1_048_576 {
+            return Err("SOURCE_TOO_LARGE");
+        }
         bytes.extend_from_slice(&chunk);
     }
     serde_json::from_slice(&bytes).map_err(|_| "SOURCE_INVALID_JSON")
@@ -40,13 +49,21 @@ fn fx_from_json(value: Value) -> Result<Value, &'static str> {
     let mut rates = serde_json::Map::new();
     let mut date: Option<String> = None;
     for row in rows {
-        if row.base != "EUR" || !matches!(row.quote.as_str(), "USD"|"CHF"|"GBP"|"JPY")
-            || !row.rate.is_finite() || row.rate <= 0.0 || row.date.len() != 10 {
+        if row.base != "EUR"
+            || !matches!(row.quote.as_str(), "USD" | "CHF" | "GBP" | "JPY")
+            || !row.rate.is_finite()
+            || row.rate <= 0.0
+            || row.date.len() != 10
+        {
             continue;
         }
         if let Some(previous) = &date {
-            if previous != &row.date { return Err("MIXED_FX_DATES"); }
-        } else { date = Some(row.date.clone()); }
+            if previous != &row.date {
+                return Err("MIXED_FX_DATES");
+            }
+        } else {
+            date = Some(row.date.clone());
+        }
         rates.insert(row.quote, json!(row.rate));
     }
     if !rates.contains_key("USD") || !rates.contains_key("CHF") {
@@ -71,19 +88,41 @@ pub async fn reference_fx() -> Value {
 }
 
 fn articles_from_json(value: Value) -> Result<Value, &'static str> {
-    let source = value.get("articles").and_then(Value::as_array).ok_or("INVALID_NEWS_SCHEMA")?;
+    let source = value
+        .get("articles")
+        .and_then(Value::as_array)
+        .ok_or("INVALID_NEWS_SCHEMA")?;
     let mut articles = Vec::new();
     for row in source.iter().take(30) {
-        let (Some(title),Some(link))=(row.get("title").and_then(Value::as_str),row.get("url").and_then(Value::as_str)) else {continue};
-        if title.trim().is_empty() || title.len() > 300 || link.len() > 1000 { continue; }
-        let Ok(url)=Url::parse(link) else { continue; };
-        if url.scheme() != "https" || url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {continue;}
+        let (Some(title), Some(link)) = (
+            row.get("title").and_then(Value::as_str),
+            row.get("url").and_then(Value::as_str),
+        ) else {
+            continue;
+        };
+        if title.trim().is_empty() || title.len() > 300 || link.len() > 1000 {
+            continue;
+        }
+        let Ok(url) = Url::parse(link) else {
+            continue;
+        };
+        if url.scheme() != "https"
+            || url.host_str().is_none()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            continue;
+        }
         articles.push(json!({"title":title,"url":link,
             "source":row.get("domain").and_then(Value::as_str).unwrap_or("GDELT"),
             "published_at":row.get("seendate").and_then(Value::as_str).unwrap_or("")}));
-        if articles.len() >= 12 {break;}
+        if articles.len() >= 12 {
+            break;
+        }
     }
-    if articles.is_empty() {return Err("NO_VERIFIED_ARTICLES");}
+    if articles.is_empty() {
+        return Err("NO_VERIFIED_ARTICLES");
+    }
     Ok(json!({"status":"delayed","source":"GDELT DOC 2.0",
         "source_url":"https://www.gdeltproject.org/",
         "retrieved_at":chrono::Utc::now().to_rfc3339(),
@@ -99,41 +138,64 @@ pub async fn geopolitical_news() -> Value {
 }
 
 fn entsog_from_json(value: Value) -> Result<Value, &'static str> {
-    let rows = value.get("operationalData")
-        .or_else(||value.get("operationaldata"))
-        .and_then(Value::as_array).ok_or("INVALID_ENTSOG_SCHEMA")?;
-    let mut observations=Vec::new();
+    let rows = value
+        .get("operationalData")
+        .or_else(|| value.get("operationaldata"))
+        .and_then(Value::as_array)
+        .ok_or("INVALID_ENTSOG_SCHEMA")?;
+    let mut observations = Vec::new();
     for row in rows.iter().take(100) {
-        let point=row.get("pointLabel").and_then(Value::as_str).unwrap_or("");
-        let direction=row.get("directionKey").and_then(Value::as_str).unwrap_or("");
-        let amount=row.get("value").and_then(Value::as_f64)
-            .or_else(||row.get("value").and_then(Value::as_str).and_then(|s|s.parse::<f64>().ok()));
-        let Some(value)=amount else {continue};
-        if point.is_empty() || point.len()>150 || !value.is_finite() || value<0.0 {continue;}
-        let dir=if direction.to_ascii_lowercase().contains("entry") {"entry"}
-            else if direction.to_ascii_lowercase().contains("exit") {"exit"}
-            else {continue};
+        let point = row.get("pointLabel").and_then(Value::as_str).unwrap_or("");
+        let direction = row
+            .get("directionKey")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let amount = row.get("value").and_then(Value::as_f64).or_else(|| {
+            row.get("value")
+                .and_then(Value::as_str)
+                .and_then(|s| s.parse::<f64>().ok())
+        });
+        let Some(value) = amount else { continue };
+        if point.is_empty() || point.len() > 150 || !value.is_finite() || value < 0.0 {
+            continue;
+        }
+        let dir = if direction.to_ascii_lowercase().contains("entry") {
+            "entry"
+        } else if direction.to_ascii_lowercase().contains("exit") {
+            "exit"
+        } else {
+            continue;
+        };
         observations.push(json!({"point":point,"direction":dir,"value":value,
             "unit":row.get("unit").and_then(Value::as_str).unwrap_or("kWh/d"),
             "operator":row.get("operatorLabel").and_then(Value::as_str).unwrap_or(""),
             "period_from":row.get("periodFrom").and_then(Value::as_str).unwrap_or(""),
             "updated_at":row.get("lastUpdateDate").and_then(Value::as_str).unwrap_or(""),
             "country":row.get("countryLabel").and_then(Value::as_str).unwrap_or("")}));
-        if observations.len()>=30 {break;}
+        if observations.len() >= 30 {
+            break;
+        }
     }
-    if observations.is_empty() {return Err("NO_VERIFIED_ENTSOG_OBSERVATIONS");}
-    let entries=observations.iter().filter(|x|x["direction"]=="entry").count();
-    let exits=observations.len()-entries;
-    Ok(json!({"status":"delayed","source":"ENTSOG Transparency Platform",
+    if observations.is_empty() {
+        return Err("NO_VERIFIED_ENTSOG_OBSERVATIONS");
+    }
+    let entries = observations
+        .iter()
+        .filter(|x| x["direction"] == "entry")
+        .count();
+    let exits = observations.len() - entries;
+    Ok(
+        json!({"status":"delayed","source":"ENTSOG Transparency Platform",
         "source_url":"https://transparency.entsog.eu/","observations":observations,
         "entry_count":entries,"exit_count":exits,"latest_source_update":null,
-        "notice":"Échantillon limité de points publiés ; pas de total pays."}))
+        "notice":"Échantillon limité de points publiés ; pas de total pays."}),
+    )
 }
 
 pub async fn energy_flows() -> Value {
     match public_json(ENTSOG_URL).await.and_then(entsog_from_json) {
-        Ok(value)=>value,
-        Err(reason)=>json!({"status":"unavailable","source":"ENTSOG",
+        Ok(value) => value,
+        Err(reason) => json!({"status":"unavailable","source":"ENTSOG",
             "observations":[],"entry_count":null,"exit_count":null,
             "latest_source_update":null,"notice":reason}),
     }
@@ -144,17 +206,24 @@ mod tests {
     use super::*;
     #[test]
     fn fx_rejects_nans_and_missing_pairs() {
-        assert!(fx_from_json(json!([{"date":"2026-11-02","base":"EUR","quote":"USD","rate":1.0}])).is_err());
-        let result=fx_from_json(json!([
+        assert!(
+            fx_from_json(json!([{"date":"2026-11-02","base":"EUR","quote":"USD","rate":1.0}]))
+                .is_err()
+        );
+        let result = fx_from_json(json!([
             {"date":"2026-11-02","base":"EUR","quote":"USD","rate":1.12},
-            {"date":"2026-11-02","base":"EUR","quote":"CHF","rate":0.92}])).unwrap();
-        assert_eq!(result["rates"]["CHF"],0.92);
+            {"date":"2026-11-02","base":"EUR","quote":"CHF","rate":0.92}]))
+        .unwrap();
+        assert_eq!(result["rates"]["CHF"], 0.92);
     }
     #[test]
     fn gdelt_rejects_scripts_and_http_links() {
-        assert!(articles_from_json(json!({"articles":[{"title":"Bad","url":"javascript:alert(1)"}]})).is_err());
+        assert!(articles_from_json(
+            json!({"articles":[{"title":"Bad","url":"javascript:alert(1)"}]})
+        )
+        .is_err());
         let out=articles_from_json(json!({"articles":[{"title":"Public energy news","url":"https://example.org/news","domain":"example.org"}]})).unwrap();
-        assert_eq!(out["articles"].as_array().unwrap().len(),1);
+        assert_eq!(out["articles"].as_array().unwrap().len(), 1);
     }
     #[test]
     fn entsog_does_not_fabricate_observations() {

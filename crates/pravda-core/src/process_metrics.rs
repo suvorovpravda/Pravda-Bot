@@ -4,7 +4,11 @@
 pub fn resident_memory_mb() -> Option<f64> {
     let text = std::fs::read_to_string("/proc/self/status").ok()?;
     let value = text.lines().find_map(|line| {
-        line.strip_prefix("VmRSS:")?.split_whitespace().next()?.parse::<u64>().ok()
+        line.strip_prefix("VmRSS:")?
+            .split_whitespace()
+            .next()?
+            .parse::<u64>()
+            .ok()
     })?;
     Some(value as f64 / 1024.0)
 }
@@ -42,8 +46,13 @@ mod native {
     #[link(name = "kernel32")]
     unsafe extern "system" {
         fn GetCurrentProcess() -> *mut c_void;
-        fn GetProcessTimes(process: *mut c_void, created: *mut FileTime,
-            exited: *mut FileTime, kernel: *mut FileTime, user: *mut FileTime) -> i32;
+        fn GetProcessTimes(
+            process: *mut c_void,
+            created: *mut FileTime,
+            exited: *mut FileTime,
+            kernel: *mut FileTime,
+            user: *mut FileTime,
+        ) -> i32;
     }
     #[link(name = "psapi")]
     unsafe extern "system" {
@@ -53,8 +62,10 @@ mod native {
         (u64::from(value.high) << 32 | u64::from(value.low)) as f64 / 10_000_000.0
     }
     pub fn resident_memory_mb() -> Option<f64> {
-        let mut counters = Counters { cb: std::mem::size_of::<Counters>() as u32,
-            ..Counters::default() };
+        let mut counters = Counters {
+            cb: std::mem::size_of::<Counters>() as u32,
+            ..Counters::default()
+        };
         // SAFETY: GetCurrentProcess returns a pseudo-handle valid in this process;
         // counters points to an initialized Windows PROCESS_MEMORY_COUNTERS buffer.
         let size = counters.cb;
@@ -75,9 +86,13 @@ mod native {
 pub use native::{process_cpu_seconds, resident_memory_mb};
 
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-pub fn resident_memory_mb() -> Option<f64> { None }
+pub fn resident_memory_mb() -> Option<f64> {
+    None
+}
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-pub fn process_cpu_seconds() -> Option<f64> { None }
+pub fn process_cpu_seconds() -> Option<f64> {
+    None
+}
 
 #[cfg(test)]
 mod tests {
