@@ -26,9 +26,22 @@
 > [!IMPORTANT]
 > **État après les fusions des [PR #72](https://github.com/suvorovpravda/Pravda-Bot/pull/72) et [#75](https://github.com/suvorovpravda/Pravda-Bot/pull/75), ainsi que des [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) (2 novembre 2026).** Desktop Windows Tauri 2 avec assets embarqués et **IPC natif sans serveur HTTP pour son UI**, plus serveur Axum de diagnostic séparé. La PR #67 a confirmé **8/8 checks verts et 22 assertions de sécurité IPC sous Windows WebView2 réel**. Ces vérifications portent sur **deux sessions natives successives**, pas sur deux fenêtres simultanées du même processus ni sur une origine distante. **Aucun MSI Enterprise signé n'est livré.**
 
+### 🔄 Intégration en cours — PR unique #88
+
+Le code **déjà fusionné sur `main`** est en Rust + Tauri 2 pour le desktop Windows, avec fichiers de frontend embarqués, IPC natif à permissions limitées, authentification locale et historique SQLite. Le serveur Axum reste un **mode diagnostic distinct**, et la simulation n'émet **aucun ordre de trading réel**. La migration de frontière Python/Rust (#72), l'abstraction de coffre Windows (#75) et la mise à niveau des GitHub Actions (#83) sont intégrées.
+
+Les évolutions des six anciennes PR **#71, #77, #82, #84, #85 et #86** sont maintenant regroupées dans **[la seule PR ouverte #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88)**. Les PR sources ont été **fermées sans fusion**, pas perdues. Cette PR contient :
+
+- **Sécurité WebView2 :** vérifications natives de fenêtres concurrentes, refus IPC pour une fenêtre non privilégiée, politique CSP et navigation depuis une origine HTTPS hostile.
+- **Coffre de secrets :** tests Rust/Win32 de rotation et suppression, refus d'accès depuis l'UI et audit par signatures de l'historique Git complet. Un scan de signatures ne prouve pas qu'aucun secret ne puisse exister.
+- **Migrations Rust :** PBKDF2 0.13 + SHA2 0.11 avec vecteur de compatibilité des mots de passe précédents, `getrandom` 0.4, `rusqlite` 0.41, `thiserror` 2 et les **deux fichiers `Cargo.lock`**.
+- **CI Windows :** tests natifs WebView2, analyse CodeQL, audit des secrets, exécutable `pravda-app.exe` compilé en release avec `--locked`, vérification PE/SHA-256 et démarrage isolé sans serveur HTTP, et annulation des anciens runs d'une même PR.
+
+**Preuve datée :** au commit [`a7f822e`](https://github.com/suvorovpravda/Pravda-Bot/commit/a7f822ee56773e7c4870a1765d72881ecf268fd4), **10 contrôles de #88 étaient réussis**. Les ajouts de documentation modifient le SHA : leur [nouvelle validation](https://github.com/suvorovpravda/Pravda-Bot/pull/88/checks) et les contrôles sur `main` après fusion doivent être vérifiés indépendamment. **Aucun MSI signé ni certification de sécurité** ne résulte de ces tests.
+
 ### 📈 Avancement par priorité
 
-**Suivi au 2 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées. La séparation Python/Rust est **fusionnée** et son contrôle de frontière a réussi sur `main` (`6b1b916`) ; cela ne prouve pas la parité de toutes les anciennes fonctions. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
+**Référence des jalons : `main` au 2 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées ; les travaux de #88 ne sont pas comptés comme livrés par la seule réussite de CI. La séparation Python/Rust est **fusionnée** et son contrôle de frontière a réussi sur `main` (`6b1b916`) ; cela ne prouve pas la parité de toutes les anciennes fonctions. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
 
 | Priorité | Chantier | Jalons validés ou préparés | Avancement |
 |---|---|---:|---:|
@@ -213,7 +226,7 @@ flowchart LR
 - **Aucune permission IPC générale `shell` / `fs`**, aucun script distant, ressources JS/CSS locales et CSP spécifique au desktop.
 - **Séparation des transports :** le desktop ne démarre pas de service HTTP ; le serveur diagnostic applique ses propres contrôles Host/Origin, cookies et en-têtes.
 - **Limites non résolues :** un logiciel malveillant ayant les droits de l'utilisateur peut atteindre ses fichiers ; l'analyse de code, la CI verte et un mot de passe local **ne garantissent pas l'absence de vulnérabilités**.
-- **Gouvernance solo :** le propriétaire maintient seul le dépôt et a supprimé l'obligation d'approbation d'un deuxième développeur. Les **PR, checks CI et protections de `main`** restent indispensables. L'option « no bypass » apparaît cochée dans une capture de la configuration, mais l'API de l'intégration ne peut pas confirmer les réglages sauvegardés (HTTP 403).
+- **Gouvernance solo :** le ruleset de `main` consulté le 2 novembre 2026 prévoit **zéro approbation extérieure**, mais exige une branche à jour, des discussions de revue résolues et trois contrôles : **CodeQL**, **Rust check (windows-latest)** et **Windows desktop build and startup**. Aucun acteur de contournement n'est configuré dans ce ruleset ; la sécurité de cette configuration ne remplace pas une revue indépendante.
 
 ➡️ **Lire la [politique SECURITY.md](SECURITY.md)** pour les menaces, les mesures vérifiées, les risques restants et le signalement privé.
 
@@ -236,9 +249,9 @@ node tools/test-dashboard.mjs
 node tools/test-desktop-ipc.mjs
 ```
 
-**CI GitHub :** Rust Linux/Windows, MSRV 1.95, smoke Windows desktop sans listener, serveur navigateur, CodeQL. Le badge est dynamique : un commit fusionné demande une **nouvelle vérification des jobs de `main`**, pas seulement des checks verts sur la PR.
+**CI GitHub :** Rust Linux/Windows, MSRV 1.95, smoke Windows desktop sans listener, serveur navigateur et CodeQL. **La PR #88 ajoute** audit complet d'historique Git, tests WebView2 multi-fenêtres et origine hostile, compilation Windows release et contrôle des deux workspaces avec `--locked`. Le badge est dynamique : un commit fusionné demande une **nouvelle vérification des jobs de `main`**, pas seulement des checks verts sur la PR.
 
-**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis, dont refus `UNAUTHORIZED` sans session/après logout, refus des IPC depuis `security-probe` et blocage shell/fs avec absence d'écriture. **Restent non démontrés :** origine distante, deux fenêtres simultanées avec session partagée, export CSV réel, reprise historique complexe et distribution signée.
+**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis, dont refus `UNAUTHORIZED` sans session/après logout, refus des IPC depuis `security-probe` et blocage shell/fs avec absence d'écriture. **Limites de la preuve historique #67 :** origine distante et deux fenêtres simultanées ; des tests complémentaires ont réussi sur le commit `a7f822e` de #88, mais doivent encore être réexécutés après modification et vérifiés sur `main` après fusion. Export CSV réel, reprise historique complexe et distribution signée restent hors preuve.
 
 ### 🗺️ Feuille de route
 
@@ -251,7 +264,7 @@ Le **[guide technique central](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)*
 1. Créer une branche dédiée, garder les modifications atomiques et ajouter des tests.
 2. Exécuter les commandes adaptées au **workspace Rust** et au **desktop Tauri**.
 3. Ouvrir une PR, faire revoir le modèle de menace/capabilities si une permission IPC change.
-4. Contrôler les checks **du SHA exact**, documenter les essais Windows et obtenir les approbations requises avant fusion.
+4. Contrôler les checks **du SHA exact**, documenter les essais Windows et respecter les règles de `main` ; aucune approbation extérieure n'est actuellement requise, contrairement aux contrôles CI et aux discussions de revue résolues.
 
 [Issues](https://github.com/suvorovpravda/Pravda-Bot/issues) · [Pull requests](https://github.com/suvorovpravda/Pravda-Bot/pulls) · [Sécurité privée](SECURITY.md#-signaler-une-vulnérabilité)
 
@@ -263,7 +276,7 @@ Le **[guide technique central](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)*
 
 **Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. При первом запуске требуется пароль от 15 символов; данные по умолчанию находятся в `%LOCALAPPDATA%\Pravda-Bot`. Для отключения биржевых потоков установите `PRAVDA_MARKET_FEEDS_ENABLED=false`. Firefox/Chrome не нужны для Tauri, но WebView2 необходим.
 
-**Ограничения:** FX, энергетика, новости и AIS реализованы не полностью. Готового подписанного Enterprise MSI нет; зелёная CI не подтверждает безопасность выпуска. Полные инструкции и проценты выполнения находятся в [едином руководстве](docs/PRAVDA-GUIDE.md), а политика безопасности — в [SECURITY.md](SECURITY.md).
+**Интеграция:** [единый PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) объединяет тесты безопасности Windows, миграцию зависимостей Rust и release-CI. Перед выпуском требуется проверка нового коммита и слияния в `main`. **Ограничения:** FX, энергетика, новости и AIS реализованы не полностью. Готового подписанного Enterprise MSI нет; зелёная CI не подтверждает безопасность выпуска. Полные инструкции и проценты выполнения находятся в [едином руководстве](docs/PRAVDA-GUIDE.md), а политика безопасности — в [SECURITY.md](SECURITY.md).
 
 ## English
 
@@ -271,4 +284,4 @@ Le **[guide technique central](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)*
 
 **Build/run on Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. Create a local password of at least 15 characters on first run. Default data storage: `%LOCALAPPDATA%\Pravda-Bot`. To disable feeds for testing, set `PRAVDA_MARKET_FEEDS_ENABLED=false`.
 
-**Current limitations:** FX, energy, news, AIS and customizable alerts are not fully migrated. No signed Enterprise MSI has been delivered. CI and manual Windows acceptance are meaningful evidence, **not a security certification**. See the [single technical guide with progress percentages](docs/PRAVDA-GUIDE.md), [SECURITY.md](SECURITY.md) and the [roadmap](#-feuille-de-route).
+**Integration in progress:** [single PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) combines extended Windows security checks, coordinated Rust dependency upgrades and Windows release CI; each new commit needs fresh checks before merging into `main`. **Current limitations:** FX, energy, news, AIS and customizable alerts are not fully migrated. No signed Enterprise MSI has been delivered. CI and manual Windows acceptance are meaningful evidence, **not a security certification**. See the [single technical guide with progress percentages](docs/PRAVDA-GUIDE.md), [SECURITY.md](SECURITY.md) and the [roadmap](#-feuille-de-route).
