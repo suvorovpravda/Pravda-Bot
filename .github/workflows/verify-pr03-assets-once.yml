@@ -1,0 +1,48 @@
+name: Verify PR-03 staged frontend once
+on:
+  push:
+    branches: [feat/pr03-bundle-static-frontend-stage]
+    paths: [.github/workflows/verify-pr03-assets-once.yml]
+permissions:
+  contents: write
+jobs:
+  static-assets:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify embedded frontend JS, CSP and parity
+        run: node tools/test-embedded-frontend.mjs
+      - name: Verify legacy dashboard JS contract unchanged
+        run: node tools/test-dashboard.mjs
+  tauri-assets:
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Tauri with staged embedded frontend assets
+        run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
+  cleanup:
+    needs: [static-assets, tauri-assets]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: true
+      - name: Remove one-time workflow after green tests
+        run: |
+          set -euo pipefail
+          rm .github/workflows/verify-pr03-assets-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -u
+          git commit -m "chore(pr03): remove completed one-time asset validation workflow"
+          git push origin HEAD:feat/pr03-bundle-static-frontend-stage
