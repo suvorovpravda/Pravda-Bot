@@ -102,6 +102,14 @@ form.addEventListener("submit", async event => {
                 password: password.value,
                 confirm: confirmation.value
             });
+            // Setup is one-shot. A later logout must offer login, not setup.
+            setup = false;
+            confirmLabel.hidden = true;
+            confirmation.required = false;
+            password.minLength = 0;
+            password.autocomplete = "current-password";
+            notice.textContent = "Saisissez votre mot de passe local.";
+            submit.textContent = "Se connecter";
         } else {
             await window.pravdaInvoke("ipc_auth_login", { password: password.value });
         }
