@@ -135,7 +135,12 @@ pub fn replay(ticks: &[ReplayTick], config: ReplayConfig) -> Result<ReplayResult
             return Err(ReplayError::InvalidResult);
         }
     }
-    let book_equity_usdt = sim.equity_usdt();
+    // HashMap iteration order is randomized. Sum notionals in a stable
+    // symbol order so identical replays have bitwise-identical book equity.
+    let mut open_positions: Vec<_> = sim.positions.values().collect();
+    open_positions.sort_unstable_by(|a, b| a.symbol.cmp(&b.symbol));
+    let book_equity_usdt =
+        sim.cash_usdt + open_positions.iter().map(|p| p.notional_usdt).sum::<f64>();
     if !book_equity_usdt.is_finite() {
         return Err(ReplayError::InvalidResult);
     }
@@ -175,6 +180,29 @@ mod tests {
         assert_eq!(first.closed, 1);
         assert_eq!(first.still_open, 0);
         assert!((first.realized_pnl_usdt - 1.64).abs() < 1e-9);
+    }
+
+    #[test]
+    fn multiple_open_positions_have_deterministic_book_equity() {
+        let data: Vec<_> = ["BTC/USDT", "ETH/USDT", "SOL/USDT"]
+            .iter()
+            .enumerate()
+            .map(|(index, symbol)| {
+                let mut quote = tick(index as i64, 101.0, 100.0, true);
+                quote.symbol = (*symbol).to_string();
+                quote
+            })
+            .collect();
+        // The third notional is smaller than the first two.
+        let config = ReplayConfig {
+            starting_balance_usdt: 298.92,
+            ..ReplayConfig::default()
+        };
+        let expected = replay(&data, config).unwrap();
+        assert_eq!(expected.still_open, 3);
+        for _ in 0..64 {
+            assert_eq!(replay(&data, config).unwrap(), expected);
+        }
     }
 
     #[test]
