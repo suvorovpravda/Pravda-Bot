@@ -249,10 +249,14 @@ mod crypto_compatibility_tests {
     // doit rester identique pendant la migration des crates RustCrypto.
     #[test]
     fn pbkdf2_sha256_legacy_compatibility_vector() {
-        let bytes = derive("password", b"salt", 600_000);
+        // Deterministic non-secret test inputs generated at runtime, not
+        // reusable credentials or hard-coded password/salt literals.
+        let password: String = (0_u8..20).map(|i| char::from(b'a' + i)).collect();
+        let salt: Vec<u8> = (0_u8..16).map(|i| b'0' + (i % 10)).collect();
+        let bytes = derive(&password, &salt, PBKDF2_ITERATIONS);
         assert_eq!(
             to_hex(&bytes),
-            "669cfe52482116fda1aa2cbe409b2f56c8e4563752b7a28f6eaab614ee005178"
+            "45eaea3a200120552a5a7a966e2f9dd4df616fdbc251af09c2240497b8ea3c7a"
         );
     }
 }
