@@ -277,6 +277,10 @@ try {
   assert.ok(Number.isInteger(basePort)&&basePort>=1024&&basePort<=65533,
     "Invalid base driver port");
   report.git_sha=execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();
+  report.windows_version=String(process.env.PRAVDA_E2E_WINDOWS_VERSION||"");
+  report.webview2_version=String(process.env.PRAVDA_E2E_WEBVIEW2_VERSION||"");
+  assert.ok(report.windows_version&&/^\d+\.\d+\.\d+\.\d+$/.test(report.webview2_version),
+    "Missing native Windows/WebView2 version evidence");
   directory=mkdtempSync(join(tmpdir(),"pravda-ipc-e2e-"));
 
   await startSession("main",basePort);

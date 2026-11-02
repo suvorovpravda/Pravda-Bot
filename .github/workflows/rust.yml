@@ -187,6 +187,8 @@ jobs:
           }
           $binDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           Write-Host "Matched Microsoft EdgeDriver version $version"
+          "PRAVDA_E2E_WEBVIEW2_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "PRAVDA_E2E_WINDOWS_VERSION=$([System.Environment]::OSVersion.VersionString)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Execute native IPC deny tests (no JS mocks)
         shell: pwsh
@@ -209,6 +211,54 @@ jobs:
           if ($report.passed -ne $true) { throw "Native IPC E2E report is not passed" }
           if ($report.git_sha -ne $env:GITHUB_SHA) {
             throw "Evidence SHA does not match checked out commit"
+          }
+          if ($report.webview2_version -notmatch '^\d+\.\d+\.\d+\.\d+
+          $tests = @($report.tests)
+          if ($tests.Count -lt 22) { throw "Incomplete native E2E test coverage" }
+          if (@($tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw "One or more native IPC assertions failed"
+          }
+          $required = @(
+            'no session: ipc_market_snapshot',
+            'no session: ipc_history_export_csv',
+            'main: authenticated snapshot',
+            'main: logout revokes market access',
+            'security-probe: bootstrap auth_status denied',
+            'security-probe: market snapshot denied',
+            'security-probe: no arbitrary disk modification',
+            'security-probe: shell plugin denied',
+            'concurrent: ipc_auth_status denied with main authenticated',
+            'concurrent: ipc_market_snapshot denied with main authenticated',
+            'concurrent: ipc_history_recent denied with main authenticated',
+            'concurrent: ipc_history_export_csv denied with main authenticated',
+            'concurrent: plugin:fs|write_text_file denied with main authenticated',
+            'concurrent: plugin:shell|execute denied with main authenticated',
+            'main: native WebView2 CSP blocks injected inline script',
+            'main: authenticated again for hostile HTTPS test'
+          )
+          foreach ($name in $required) {
+            if (@($tests | Where-Object { $_.name -eq $name -and $_.passed -eq $true }).Count -ne 1) {
+              throw "Required native assertion absent: $name"
+            }
+          }
+          $hostileEvidence = @($tests | Where-Object { $_.passed -eq $true -and
+            ($_.name -eq 'untrusted HTTPS origin cannot invoke market IPC' -or
+             $_.name -eq 'untrusted HTTPS navigation blocked in authenticated main window') })
+          if ($hostileEvidence.Count -ne 1) {
+            throw "Missing controlled HTTPS-hostile-origin native test outcome"
+          }
+          Write-Host "Verified $($tests.Count) native WebView2 security assertions on $env:GITHUB_SHA."
+
+      - name: Attach redacted JSON test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pravda-windows-native-ipc-security
+          path: ${{ runner.temp }}/Pravda-IPC-security-report.json
+          if-no-files-found: error
+ -or
+              -not $report.windows_version) {
+            throw "Native E2E report must specify Windows OS and WebView2 runtime versions"
           }
           $tests = @($report.tests)
           if ($tests.Count -lt 22) { throw "Incomplete native E2E test coverage" }
