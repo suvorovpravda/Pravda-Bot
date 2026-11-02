@@ -11,41 +11,37 @@ use axum::{
     routing::get,
     Extension, Router,
 };
-use chrono::Utc;
 use config::ServerConfig;
 use futures_util::{SinkExt, StreamExt};
-use pravda_engine::{AlertGate, PaperMode, PaperSimulator};
 use pravda_fetchers::types::{Exchange, Symbol, Tick};
-use pravda_market_core::health::{assess_market_data, HealthStatus};
-use pravda_market_core::{calculate_spread, DEFAULT_FEE_RATE};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use pravda_core::{PravdaRuntime, RuntimePolicy};
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
-use tokio::sync::{broadcast, RwLock};
+use tokio::sync::broadcast;
 
-/// État partagé entre les handlers
+/// HTTP adapter: no market processing or database ownership belongs to Axum.
 struct AppState {
     config: ServerConfig,
-    started_at: Instant,
-    tick_tx: broadcast::Sender<Tick>,
-    last_ticks: RwLock<Vec<Tick>>,
-    prices: RwLock<HashMap<Symbol, HashMap<Exchange, Tick>>>,
-    alert_gates: RwLock<HashMap<Symbol, AlertGate>>,
-    paper_sim: RwLock<PaperSimulator>,
-    alerts: RwLock<Vec<AlertEvent>>,
-    store: Arc<tokio::sync::Mutex<PravdaStore>>,
+    runtime: Arc<PravdaRuntime>,
     auth: Arc<auth::Auth>,
 }
 
-#[derive(Debug, Clone)]
-struct AlertEvent {
-    symbol: String,
-    message: String,
-    timestamp: chrono::DateTime<Utc>,
-    spread_percent: f64,
+impl std::ops::Deref for AppState {
+    type Target = PravdaRuntime;
+    fn deref(&self) -> &Self::Target {
+        self.runtime.as_ref()
+    }
+}
+
+fn runtime_policy(config: &ServerConfig) -> RuntimePolicy {
+    RuntimePolicy {
+        stale_after: config.stale_after,
+        max_skew: config.max_skew,
+        max_spread_percent: config.max_spread_percent,
+        market_feeds_enabled: config.market_feeds_enabled,
+    }
 }
 
 async fn dashboard(State(state): State<Arc<AppState>>) -> impl IntoResponse {
@@ -77,37 +73,7 @@ async fn dashboard(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 async fn api_market(State(state): State<Arc<AppState>>) -> Json<Value> {
-    let prices = state.prices.read().await;
-    let mut symbols_map = serde_json::Map::new();
-    for symbol in [Symbol::BTCUSDT, Symbol::ETHUSDT, Symbol::SOLUSDT] {
-        let mut entry = serde_json::Map::new();
-        if let Some(ex_map) = prices.get(&symbol) {
-            for exchange in [Exchange::Binance, Exchange::Kraken] {
-                if let Some(tick) = ex_map.get(&exchange) {
-                    let mut ex_map_inner = serde_json::Map::new();
-                    ex_map_inner.insert("price".to_string(), json!(tick.price));
-                    let age: f64 = tick.observed_at.elapsed().as_secs_f64();
-                    ex_map_inner.insert("age_seconds".to_string(), json!(age));
-                    ex_map_inner.insert(
-                        "status".to_string(),
-                        json!(if age <= state.config.stale_after.as_secs_f64() {
-                            "live"
-                        } else {
-                            "stale"
-                        }),
-                    );
-                    ex_map_inner
-                        .insert("timestamp".to_string(), json!(tick.timestamp.to_rfc3339()));
-                    entry.insert(format!("{:?}", exchange), json!(ex_map_inner));
-                }
-            }
-        }
-        symbols_map.insert(symbol.to_string(), json!(entry));
-    }
-    Json(json!({
-        "symbols": symbols_map,
-        "timestamp": Utc::now().to_rfc3339()
-    }))
+    Json(state.market_snapshot(state.config.stale_after).await)
 }
 
 async fn api_fx() -> Json<Value> {
@@ -118,17 +84,12 @@ async fn api_fx() -> Json<Value> {
 
 async fn api_history(State(state): State<Arc<AppState>>) -> Json<Value> {
     let symbol = "BTC/USDT";
-    let store = state.store.clone();
-    match tokio::task::spawn_blocking(move || store.blocking_lock().latest_ticks(symbol, 100)).await
-    {
-        Ok(Ok(rows)) => {
-            let ticks = rows
-                .into_iter()
-                .map(|(price, ts)| json!({"price": price, "ts": ts}))
-                .collect::<Vec<_>>();
-            Json(json!({"symbol": symbol, "ticks": ticks}))
-        }
-        _ => Json(json!({"symbol": symbol, "ticks": [], "error": "store unavailable"})),
+    match state.history_recent().await {
+        Ok(rows) => Json(json!({
+            "symbol": symbol,
+            "ticks": rows.into_iter().map(|(price, ts)| json!({"price":price,"ts":ts})).collect::<Vec<_>>()
+        })),
+        Err(_) => Json(json!({"symbol": symbol, "ticks": [], "error": "store unavailable"})),
     }
 }
 
@@ -148,32 +109,11 @@ async fn api_news() -> Json<Value> {
 }
 
 async fn api_alerts(State(state): State<Arc<AppState>>) -> Json<Value> {
-    // Release alerts before waiting for paper_sim: the writer takes the
-    // simulator lock first and then appends alerts.
-    let alerts = state.alerts.read().await.clone();
-    let sim = state.paper_sim.read().await;
-    Json(json!({
-        "alerts": alerts.iter().map(|a| json!({
-            "symbol": a.symbol,
-            "message": a.message,
-            "timestamp": a.timestamp.to_rfc3339(),
-            "spread_percent": a.spread_percent
-        })).collect::<Vec<_>>(),
-        "paper": {
-            "equity_usdt": sim.equity_usdt(),
-            "cash_usdt": sim.cash_usdt,
-            "realized_pnl_usdt": sim.realized_pnl_usdt,
-            "positions": sim.positions.len(),
-            "completed_positions": sim.completed_positions
-        },
-        "settings": {"mode": "paper"}
-    }))
+    Json(state.alerts_snapshot().await)
 }
 
 async fn api_metrics(State(state): State<Arc<AppState>>) -> Json<Value> {
-    Json(
-        json!({"uptime_seconds": state.started_at.elapsed().as_secs_f64(), "memory_usage_mb": null, "cpu_percent": null, "status": "partial", "pid": std::process::id()}),
-    )
+    Json(state.metrics_snapshot())
 }
 
 async fn ws_handler(
@@ -243,9 +183,6 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     // Bind before opening the database or starting any market connections.
     let listener = tokio::net::TcpListener::bind(addr).await?;
     let (tick_tx, _) = pravda_fetchers::create_tick_channel();
-
-    let paper_sim = PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
-
     let auth = Arc::new(auth::Auth::load(
         &config.auth_path,
         auth::PBKDF2_ITERATIONS,
@@ -268,203 +205,11 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             println!("No local password set: open the dashboard to create one.");
         }
     }
-
     let store = PravdaStore::open(&config.database_path)?;
-    let store_arc = Arc::new(tokio::sync::Mutex::new(store));
-
-    let state = Arc::new(AppState {
-        config,
-        started_at: Instant::now(),
-        tick_tx: tick_tx.clone(),
-        last_ticks: RwLock::new(Vec::new()),
-        prices: RwLock::new(HashMap::new()),
-        alert_gates: RwLock::new(HashMap::new()),
-        paper_sim: RwLock::new(paper_sim),
-        alerts: RwLock::new(Vec::new()),
-        store: store_arc,
-        auth,
-    });
-
-    let symbols = vec![
-        pravda_fetchers::types::Symbol::BTCUSDT,
-        pravda_fetchers::types::Symbol::ETHUSDT,
-        pravda_fetchers::types::Symbol::SOLUSDT,
-    ];
-
-    // Initialiser les alert gates
-    {
-        let mut gates = state.alert_gates.write().await;
-        for s in &symbols {
-            gates.insert(*s, AlertGate::new(3.0));
-        }
-    }
-
-    // Subscribe before starting producers so startup frames cannot be lost.
-    let mut rx = state.tick_tx.subscribe();
-    // The explicit offline mode is useful for local diagnostics and smoke tests.
-    if state.config.market_feeds_enabled {
-        let tx_clone = tick_tx.clone();
-        tokio::spawn(async move {
-            if let Err(e) = pravda_fetchers::run_fetchers(tx_clone, symbols.clone()).await {
-                tracing::error!("Fetchers error: {}", e);
-            }
-        });
-    }
-
-    // Traitement temps réel des ticks
-    let state_clone = state.clone();
-    tokio::spawn(async move {
-        const REARM_THRESHOLD: f64 = 0.005;
-
-        loop {
-            let tick = match rx.recv().await {
-                Ok(tick) => tick,
-                Err(broadcast::error::RecvError::Lagged(count)) => {
-                    tracing::warn!(count, "Ticks lost: invalidate pending market state");
-                    state_clone.prices.write().await.clear();
-                    state_clone.alert_gates.write().await.clear();
-                    continue;
-                }
-                Err(broadcast::error::RecvError::Closed) => break,
-            };
-            if !tick.price.is_finite() || tick.price <= 0.0 {
-                continue;
-            }
-            // Mettre à jour les prix
-            {
-                let mut prices = state_clone.prices.write().await;
-                let ex_map = prices.entry(tick.symbol).or_insert_with(HashMap::new);
-                ex_map.insert(tick.exchange, tick.clone());
-            }
-
-            // Stocker historique en mémoire
-            {
-                let mut ticks = state_clone.last_ticks.write().await;
-                ticks.push(tick.clone());
-                if ticks.len() > 1000 {
-                    ticks.remove(0);
-                }
-            }
-
-            // Persister en SQLite
-            {
-                let store = state_clone.store.clone();
-                let saved_tick = tick.clone();
-                let result = tokio::task::spawn_blocking(move || {
-                    store.blocking_lock().insert_tick(
-                        &saved_tick.symbol.to_string(),
-                        saved_tick.price,
-                        &format!("{:?}", saved_tick.exchange),
-                        saved_tick.timestamp,
-                    )
-                })
-                .await;
-                if !matches!(result, Ok(Ok(()))) {
-                    tracing::error!("Tick persistence failed");
-                }
-            }
-
-            // Calcul spread si les deux exchanges présents
-            let prices_read = state_clone.prices.read().await;
-            if let Some(ex_map) = prices_read.get(&tick.symbol) {
-                if let (Some(kraken), Some(binance)) = (
-                    ex_map.get(&Exchange::Kraken),
-                    ex_map.get(&Exchange::Binance),
-                ) {
-                    let kraken_tick = kraken.clone();
-                    let binance_tick = binance.clone();
-                    let Some(spread) = configured_spread(
-                        &kraken_tick,
-                        &binance_tick,
-                        Instant::now(),
-                        &state_clone.config,
-                    ) else {
-                        state_clone.alert_gates.write().await.remove(&tick.symbol);
-                        continue;
-                    };
-                    let gross_spread = spread.gross_percent();
-                    let net_spread = spread.net_percent();
-                    let profitable = net_spread > 0.0;
-                    let now = Utc::now();
-
-                    // AlertGate
-                    let mut gates = state_clone.alert_gates.write().await;
-                    let gate = gates
-                        .entry(tick.symbol)
-                        .or_insert_with(|| AlertGate::new(3.0));
-                    if configured_spread(
-                        &kraken_tick,
-                        &binance_tick,
-                        Instant::now(),
-                        &state_clone.config,
-                    )
-                    .is_none()
-                    {
-                        gate.reset_candidate(&tick.symbol.to_string());
-                        continue;
-                    }
-                    let activated = gate.update(
-                        &tick.symbol.to_string(),
-                        profitable,
-                        gross_spread,
-                        REARM_THRESHOLD,
-                        now,
-                    );
-
-                    if activated {
-                        let mut alerts = state_clone.alerts.write().await;
-                        alerts.push(AlertEvent {
-                            symbol: tick.symbol.to_string(),
-                            message: format!(
-                                "⚡ Alerte rentable {} spread {:.4}%",
-                                tick.symbol, gross_spread
-                            ),
-                            timestamp: now,
-                            spread_percent: gross_spread,
-                        });
-                        if alerts.len() > 200 {
-                            alerts.remove(0);
-                        }
-                    }
-
-                    let opportunity_confirmed = gate.is_active(&tick.symbol.to_string());
-                    drop(gates);
-                    drop(prices_read);
-
-                    // Paper simulator
-                    let mut sim = state_clone.paper_sim.write().await;
-                    if configured_spread(
-                        &kraken_tick,
-                        &binance_tick,
-                        Instant::now(),
-                        &state_clone.config,
-                    )
-                    .is_none()
-                    {
-                        continue;
-                    }
-                    if let Some(action) = sim.update(
-                        &tick.symbol.to_string(),
-                        kraken_tick.price,
-                        binance_tick.price,
-                        opportunity_confirmed,
-                        now,
-                    ) {
-                        let mut alerts = state_clone.alerts.write().await;
-                        alerts.push(AlertEvent {
-                            symbol: tick.symbol.to_string(),
-                            message: format!("Paper {} {}", tick.symbol, action),
-                            timestamp: now,
-                            spread_percent: gross_spread,
-                        });
-                        if alerts.len() > 200 {
-                            alerts.remove(0);
-                        }
-                    }
-                }
-            }
-        }
-    });
+    let policy = runtime_policy(&config);
+    let runtime = Arc::new(PravdaRuntime::new(store, tick_tx));
+    let state = Arc::new(AppState { config, runtime, auth });
+    state.runtime.start_market_streams(policy).await;
 
     let app = Router::new()
         .route("/", get(dashboard))
@@ -496,41 +241,24 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-/// Fail closed before alerting or simulation; fees are a fraction internally.
+// Keep the existing server-side contract tests while the production market
+// loop uses the exact same transport-agnostic guard in pravda-core.
+#[cfg(test)]
 fn configured_spread(
-    kraken: &Tick,
-    binance: &Tick,
-    now: Instant,
+    kraken: &pravda_fetchers::types::Tick,
+    binance: &pravda_fetchers::types::Tick,
+    now: std::time::Instant,
     config: &ServerConfig,
 ) -> Option<pravda_market_core::Spread> {
-    if kraken.symbol != binance.symbol
-        || kraken.exchange != Exchange::Kraken
-        || binance.exchange != Exchange::Binance
-    {
-        return None;
-    }
-    let health = assess_market_data(
-        Some(kraken.observed_at),
-        Some(binance.observed_at),
-        now,
-        config.stale_after,
-        config.max_skew,
-    )
-    .ok()?;
-    if health.status != HealthStatus::Ok {
-        return None;
-    }
-    let spread = calculate_spread(kraken.price, binance.price, DEFAULT_FEE_RATE).ok()?;
-    if spread.gross_percent() > config.max_spread_percent {
-        return None;
-    }
-    Some(spread)
+    pravda_core::guard_spread(kraken, binance, now, &runtime_policy(config))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+    use chrono::Utc;
+    use pravda_fetchers::types::{Exchange, Symbol, Tick};
     fn actionable_spread(k: &Tick, b: &Tick, now: Instant) -> Option<pravda_market_core::Spread> {
         configured_spread(k, b, now, &ServerConfig::default())
     }
