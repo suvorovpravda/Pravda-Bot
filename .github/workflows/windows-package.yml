@@ -1,0 +1,60 @@
+name: Windows installer packaging (manual, unsigned candidates)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    name: Build Windows NSIS and MSI candidates
+    runs-on: windows-latest
+    timeout-minutes: 80
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check both Cargo lockfiles
+        shell: pwsh
+        run: |
+          cargo metadata --locked --format-version 1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Root workspace lockfile stale" }
+          cargo metadata --locked --manifest-path crates/pravda-app/Cargo.toml --format-version 1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Desktop lockfile stale" }
+      - name: Install Tauri 2 CLI
+        shell: pwsh
+        run: |
+          cargo install tauri-cli --version "^2" --locked
+          if ($LASTEXITCODE -ne 0) { throw "Tauri CLI install failed" }
+      - name: Build unsigned NSIS and MSI
+        shell: pwsh
+        working-directory: crates/pravda-app
+        run: |
+          cargo tauri build --ci --bundles nsis,msi -- --locked
+          if ($LASTEXITCODE -ne 0) { throw "Tauri packaging failed" }
+      - name: Verify both formats and report signature
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='crates/pravda-app/target/release/bundle'
+          $msi=@(Get-ChildItem "$dir/msi" -Filter '*.msi' -File -ErrorAction SilentlyContinue)
+          $nsis=@(Get-ChildItem "$dir/nsis" -Filter '*-setup.exe' -File -ErrorAction SilentlyContinue)
+          if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'MSI or NSIS is missing' }
+          foreach ($f in @($msi)+@($nsis)) {
+            $hash=(Get-FileHash $f.FullName -Algorithm SHA256).Hash
+            Write-Host "$($f.Name): SHA256=$hash"
+            $signature=(Get-AuthenticodeSignature $f.FullName).Status
+            if ($signature -ne 'Valid') {
+              Write-Warning "UNSIGNED TEST PACKAGE: $($f.Name) ($signature). Do not publish as Enterprise."
+            }
+          }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-unsigned-test-installers
+          path: |
+            crates/pravda-app/target/release/bundle/msi/*.msi
+            crates/pravda-app/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 3
