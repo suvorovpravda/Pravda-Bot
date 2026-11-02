@@ -70,6 +70,9 @@ function executableStatements(path, lines) {
       }
       continue;
     }
+    // YAML literal blocks can contain completely blank, unindented lines.
+    // They must not terminate the run block before later commands.
+    if(blockIndent!==null && trim==="") continue;
     if(blockIndent!==null && indent>blockIndent) {
       commands.push({text:trim,line:index+1});
       continue;
@@ -99,6 +102,7 @@ const yamlFixture=[
   "      - name: Enforce Rust only (no active Python)",
   "        run: |",
   "          echo ok",
+  "",
   "          python blocked.py"
 ];
 const executable=executableStatements(".github/workflows/rust.yml",yamlFixture);
