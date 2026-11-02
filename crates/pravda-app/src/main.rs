@@ -147,6 +147,19 @@ async fn main() {
             ipc::ipc_fx_status
         ])
         .setup(|app| {
+            // WebDriver's Windows Edge adapter may only enumerate the primary
+            // WebView. A debug-only test mode starts the unauthorized local
+            // window ALONE, with no new capability or JS command permissions.
+            // The regular main window is used in a separate native test run.
+            #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
+            if std::env::var("PRAVDA_E2E_PROBE_ONLY").as_deref() == Ok("true") {
+                let probe_url = WebviewUrl::App("security-probe.html".into());
+                WebviewWindowBuilder::new(app, "security-probe", probe_url)
+                    .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
+                    .inner_size(700.0, 500.0)
+                    .build()?;
+                return Ok(());
+            }
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Pravda-Bot")
                 .inner_size(1280.0, 800.0)

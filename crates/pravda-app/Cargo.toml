@@ -4,6 +4,11 @@ version = "0.3.4"
 edition = "2021"
 description = "Pravda-Bot desktop app with Tauri"
 
+# Explicit opt-in for debug-only native WebView2 security acceptance.
+# No probe window is built in release binaries, even with this feature.
+[features]
+security-e2e = []
+
 [workspace]
 
 [dependencies]
