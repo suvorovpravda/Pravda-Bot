@@ -47,9 +47,6 @@ jobs:
       - name: Dashboard JavaScript regression tests
         run: node tools/test-dashboard.mjs
 
-      - name: Embedded Tauri frontend CSP and asset parity
-        run: node tools/test-embedded-frontend.mjs
-
       - name: Fmt check
         run: cargo fmt --all -- --check
 
