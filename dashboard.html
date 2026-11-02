@@ -385,6 +385,7 @@
             priceAlertsTitle: "Alertes de prix EUR / CHF", above: "Au-dessus", below: "En-dessous",
             priceThreshold: "Seuil de prix", addAlert: "Ajouter l’alerte", noAlerts: "Aucune alerte configurée.",
             alertNeedsPage: "Les alertes sont évaluées avec les cotations récentes lorsque le dashboard est ouvert.",
+            priceAlertsUnavailable: "Création d’alertes de seuil indisponible dans cette version Rust. Les alertes de simulation restent visibles.",
             alertTriggered: "{symbol} a franchi le seuil de {target} {currency}.",
             alertFailure: "Impossible d’enregistrer ou d’évaluer les alertes.",
             sourceStatusTitle: "État des sources", sourceStatusSubtitle: "Disponibilité et dernier événement observé",
@@ -452,6 +453,7 @@
             priceAlertsTitle: "Ценовые оповещения EUR / CHF", above: "Выше", below: "Ниже",
             priceThreshold: "Ценовой порог", addAlert: "Добавить оповещение", noAlerts: "Оповещений пока нет.",
             alertNeedsPage: "Оповещения проверяются по свежим котировкам, пока панель открыта.",
+            priceAlertsUnavailable: "Создание пороговых оповещений пока недоступно в версии Rust. События симуляции видны ниже.",
             alertTriggered: "{symbol}: достигнут порог {target} {currency}.",
             alertFailure: "Не удалось сохранить или проверить оповещения.",
             sourceStatusTitle: "Состояние источников", sourceStatusSubtitle: "Доступность и время последнего события",
@@ -520,6 +522,7 @@
             priceAlertsTitle: "EUR / CHF price alerts", above: "Above", below: "Below",
             priceThreshold: "Price threshold", addAlert: "Add alert", noAlerts: "No alerts configured.",
             alertNeedsPage: "Alerts are evaluated against fresh quotes while the dashboard is open.",
+            priceAlertsUnavailable: "Price threshold alerts are not yet implemented in Rust. Paper simulation alerts remain visible below.",
             alertTriggered: "{symbol} crossed the {target} {currency} threshold.",
             alertFailure: "Could not save or evaluate alerts.",
             sourceStatusTitle: "Source status", sourceStatusSubtitle: "Availability and latest observed event",
@@ -570,6 +573,7 @@
         if (latestFx) renderFx(latestFx);
         refreshAlerts();
         refreshSources();
+        $("alert-notice").textContent = t("priceAlertsUnavailable");
     }
 
     const $ = (id) => document.getElementById(id);
@@ -761,7 +765,7 @@
         $("price-chart").dataset.selectedCurrency = currency;
         if (selectedPrice === null && hasPrice) $("chart-price").textContent += ` · ${t("conversionUnavailableShort")}`;
         $("chart-age").textContent = quote
-            ? `${quote.status === "live" ? t("receivedAge", { age: quote.age_seconds }) : t("staleAgeLabel", { age: quote.age_seconds })} · ${formatDate(quote.received_at)}`
+            ? `${quote.status === "live" ? t("receivedAge", { age: quote.age_seconds }) : t("staleAgeLabel", { age: quote.age_seconds })} · ${formatDate(quote.timestamp)}`
             : t("chartWaiting");
         drawPriceChart();
     }
@@ -829,21 +833,33 @@
             const row = document.createElement("div");
             row.className = "alert-row";
             const label = document.createElement("span");
-            label.textContent = `${alert.symbol} · ${alert.exchange} · ${t(alert.direction)} ${formatCurrency(alert.target, alert.currency)}`;
-            const remove = document.createElement("button");
-            remove.className = "button";
-            remove.type = "button";
-            remove.textContent = t("deleteAlert");
-            remove.addEventListener("click", async () => {
-                try {
-                    const response = await fetch(`/api/alerts/${alert.id}`, { method: "DELETE" });
-                    if (!response.ok) throw new Error("alert delete failed");
-                    await refreshAlerts();
-                } catch {
-                    $("alert-notice").textContent = t("alertFailure");
-                }
-            });
-            row.append(label, remove);
+            // The Rust API emits paper-simulation events (message/timestamp)
+            // rather than editable price-threshold records. Never try to format
+            // missing currency/target fields, or create a fake delete control.
+            const isPriceAlert = typeof alert.id === "string"
+                && Number.isFinite(alert.target)
+                && ["EUR", "CHF"].includes(alert.currency)
+                && ["above", "below"].includes(alert.direction);
+            label.textContent = isPriceAlert
+                ? `${safeText(alert.symbol)} · ${safeText(alert.exchange)} · ${t(alert.direction)} ${formatCurrency(alert.target, alert.currency)}`
+                : `${safeText(alert.symbol)} · ${safeText(alert.message)} · ${formatDate(alert.timestamp)}`;
+            row.append(label);
+            if (isPriceAlert) {
+                const remove = document.createElement("button");
+                remove.className = "button";
+                remove.type = "button";
+                remove.textContent = t("deleteAlert");
+                remove.addEventListener("click", async () => {
+                    try {
+                        const response = await fetch(`/api/alerts/${encodeURIComponent(alert.id)}`, { method: "DELETE" });
+                        if (!response.ok) throw new Error("alert delete failed");
+                        await refreshAlerts();
+                    } catch {
+                        $("alert-notice").textContent = t("alertFailure");
+                    }
+                });
+                row.append(remove);
+            }
             list.append(row);
         }
     }
@@ -1193,6 +1209,10 @@
     $("chart-exchange").addEventListener("change", refreshHistory);
     $("chart-period").addEventListener("change", refreshHistory);
     $("chart-currency").addEventListener("change", drawPriceChart);
+    // Do not offer a form that the Rust backend cannot save or persist.
+    for (const field of $("price-alert-form").querySelectorAll("input, select, button")) {
+        field.disabled = true;
+    }
     $("price-alert-form").addEventListener("submit", async event => {
         event.preventDefault();
         const target = Number($("alert-target").value);
