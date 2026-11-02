@@ -4,7 +4,10 @@
 const guarded = [
   "ipc_auth_status",
   "ipc_market_snapshot",
-  "ipc_history_export_csv"
+  "ipc_history_recent",
+  "ipc_history_export_csv",
+  "plugin:fs|write_text_file",
+  "plugin:shell|execute"
 ];
 let sequence = 0;
 async function check() {
@@ -13,7 +16,9 @@ async function check() {
   const validArguments = {
     ipc_history_export_csv: {
       query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
-    }
+    },
+    "plugin:fs|write_text_file": {path:"__PRAVDA_E2E_NEVER_CREATE__",contents:"denied"},
+    "plugin:shell|execute": {program:"__PRAVDA_E2E_FORBIDDEN_PROGRAM__"}
   };
   for (const command of guarded) {
     if (typeof invoke !== "function") {
