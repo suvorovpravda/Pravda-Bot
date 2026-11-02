@@ -1,31 +1,68 @@
-# Architecture cible Windows — Pravda-Bot
+# 🏛️ Architecture — Pravda-Bot Windows
 
-**Statut :** RFC-0001 en revue — documentation de décision uniquement, aucune fonctionnalité implémentée par cette PR.  
-**Référence auditée :** `main` au commit `423ab09c85228466d90a23269d903db3415df0c6` (2026-11-02).  
-**Application :** Rust + Tauri 2 + SQLite, Windows x64.
+![Phase 1](https://img.shields.io/badge/PR--01-Contrats%20int%C3%A9gr%C3%A9s-16a34a)
+![SQLite](https://img.shields.io/badge/SQLite-Import%20transactionnel-16a34a)
+![Phase 2](https://img.shields.io/badge/PR%20%2364-IPC%20fusionn%C3%A9-16a34a)
+![Release](https://img.shields.io/badge/MSI%20sign%C3%A9-%C3%80%20faire-ea580c)
 
-Documents :
-- [RFC-0001 : architecture et séquencement](RFC-0001-windows-enterprise.md)
-- [Modèle de menace et frontières de confiance](threat-model.md)
-- [Inventaire réel des routes et contrat de migration UI → IPC](ui-ipc-contract.md)
-- [Critères d'acceptation et contrôle de release](acceptance.md)
-- [Tâche 3 — migration SQLite legacy transactionnelle](sqlite-legacy-migration.md)
+> **État au 2 novembre 2026.** La [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) est **fusionnée dans `main`**. Le desktop intègre Tauri 2, les assets locaux et les commandes IPC, **sans lancer Axum**. Les documents RFC historiques restent des **instantanés de décision**, pas des constats de ce qui manque encore dans le code actuel.
 
-## Invariants
+## 🧭 Navigation documentaire
 
-1. `pravda-app.exe` est l'unique entrée du desktop **production** ; le moteur Rust tourne dans le processus de l'application, sans script shell.
-2. UI embarquée (`frontendDist`) et communication locale via **IPC Tauri** ; aucune écoute TCP requise par le desktop. Le serveur Axum reste une **cible de diagnostic distincte**, exclue du MSI.
-3. Permissions minimales par fenêtre **et** restriction explicite des commandes personnalisées ; commandes métiers validant elles-mêmes authentification et autorisation.
-4. SQLite et l'authentification existante ne sont ni supprimés ni réinitialisés par les migrations ; évolution atomique et retour arrière documenté.
-5. Un paquet destiné à la production exige binaire et MSI **signés Authenticode**, horodatage RFC 3161 et vérification d'intégrité en CI. En l'absence de certificat/accès au service de signature approuvés : **pas de publication enterprise**.
-6. Aucun contournement de contrôle Host/Origin, de politique Windows ou de défaut de certificat pour « faire fonctionner » l'interface.
-7. La sortie Release est graphique (pas de console), avec erreurs consultables sans divulguer des secrets ; pas de script CMD/PS1 dans le produit livré.
+| Document | Nature | À lire pour |
+|---|---|---|
+| [README principal](../../README.md) | Guide utilisateur actualisé | Prérequis, installation, périmètre, roadmap |
+| [Politique de sécurité](../../SECURITY.md) | État + menaces + remédiations | Permissions IPC, risques, divulgation |
+| [Phase 2 — Tauri IPC](tauri-ipc-phase2.md) | Architecture implémentée | Commandes, tests, limites |
+| [Tâche 3 — Migration SQLite legacy](sqlite-legacy-migration.md) | Contrat transactionnel | Import, idempotence, rollback |
+| [RFC-0001 Windows Enterprise](RFC-0001-windows-enterprise.md) | **Référence historique** avant implémentation | Choix d'architecture et étapes futures |
+| [Modèle de menace](threat-model.md) | Baseline de menaces | STRIDE et frontières |
+| [Contrat HTTP → IPC](ui-ipc-contract.md) | **Inventaire historique** + différences | Migration des routes |
+| [Critères d'acceptation](acceptance.md) | Exigences, **non certification** | Portes de publication Windows |
+| [Suivi de migration](../../MIGRATION_STATUS.md) | Journal historique + état de reprise | Travail restant |
 
-## Portée actuelle
+## 🧱 Vue cible, partiellement réalisée
 
-Le travail PR-01 est strictement documentaire : il établit les contrats, la gouvernance et les critères mesurables avant modification du code. La PR de dépannage HTTP [#48](https://github.com/suvorovpravda/Pravda-Bot/pull/48) est une branche parallèle en revue, **pas** la preuve de l'architecture cible.
+```mermaid
+flowchart LR
+    classDef desktop fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef rust fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef data fill:#fef3c7,stroke:#d97706,color:#78350f
+    classDef plan fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
 
-## Références éditeur
+    UI["Tauri 2 · main · assets embarqués"]:::desktop -->|"12 IPC nommées"| GUARD["ACL + session Rust"]:::rust
+    GUARD --> CORE["DesktopRuntime + marché papier"]:::rust
+    CORE --> DB[("SQLite WAL")]:::data
+    GUARD --> AUTH["PBKDF2 · auth locale"]:::rust
+    CLI["Axum CLI diagnostic · séparé"]:::desktop --> CORE
+    MSI["MSI signé + SBOM · NON LIVRÉ"]:::plan
+```
 
-- Tauri v2 — [structure](https://v2.tauri.app/start/project-structure/), [assets embarqués](https://v2.tauri.app/reference/config/#frontenddist), [permissions et capacités](https://v2.tauri.app/reference/acl/permission/), [code signing Windows](https://v2.tauri.app/distribute/sign/windows/)
-- NIST SP 800-207 — [Zero Trust Architecture](https://csrc.nist.gov/pubs/sp/800/207/final)
+**Implémenté :** une fenêtre Windows native sans port HTTP d'interface ; 12 commandes IPC explicitement autorisées pour `main` ; contrôle de session Rust ; moteur marché/SQLite partagé et migration legacy transactionnelle ; serveur CLI diagnostic distinct.
+
+**À compléter :** tests négatifs IPC multi-fenêtres/origines, revue humaine indépendante, contrôle administratif « no bypass », modules de données non migrés, métriques CPU/RSS, limitations globales de charge, distribution Windows signée et SBOM.
+
+## ⚖️ Invariants de livraison
+
+1. Le desktop utilisateur démarre comme **EXE Tauri autonome**, sans `pravda-server.exe` enfant, serveur Axum ni fichier de script de lancement dans le paquet destiné à l'utilisateur.
+2. L'interface embarquée communique via **IPC**, les handlers valident eux-mêmes l'autorisation ; pas d'origine distante, ni permissions générales shell/fs.
+3. Auth/SQLite dans le profil Windows ; aucune réinitialisation silencieuse du vérificateur ou des données lors d'une mise à niveau.
+4. Le serveur Axum reste **strictement séparé** et réservé au diagnostic local.
+5. Toute distribution Enterprise exige **signature Authenticode EXE + MSI, horodatage RFC 3161, validation de la provenance et test Windows propre**. `bundle.active=false` à ce stade.
+6. CI verte sur la **tête exacte du changement**, puis observation des checks post-fusion ; tests dynamiques Windows, approbation indépendante et protections GitHub sans bypass à démontrer, non à supposer.
+
+## 🗂️ Feuille de route
+
+- **Terminé en code :** PR-01 documentaire, migration SQLite transactionnelle, [PR #64 — Phase 2 IPC](https://github.com/suvorovpravda/Pravda-Bot/pull/64).
+- **P0 :** prouver les protections de branche, examiner les jobs post-merge, réaliser l'audit IPC négatif et la revue de sécurité.
+- **P1 :** migrer les sources et commandes fonctionnelles manquantes, contrôler historique/export avec fichiers fictifs, renforcer la résilience.
+- **P2 :** produire et contrôler une distribution Windows Enterprise signée, SBOM, provenance, installation et rollback.
+
+> Cette page documente la **situation du dépôt** ; les RFC peuvent contenir des captures antérieures à l'IPC et doivent être lues à leur date d'analyse, sans les appliquer comme état actuel.
+
+## 📚 Références techniques
+
+- [Tauri 2 : configuration et frontendDist](https://v2.tauri.app/reference/config/#frontenddist)
+- [Tauri 2 : permissions et capabilities](https://v2.tauri.app/security/capabilities/)
+- [Signature Windows Tauri](https://v2.tauri.app/distribute/sign/windows/)
+- [NIST SP 800-207 — Zero Trust](https://csrc.nist.gov/pubs/sp/800/207/final)
