@@ -159,6 +159,36 @@ mod tests {
     }
 
     #[test]
+    fn existing_file_uses_wal_and_survives_reopen_without_schema_migration() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("existing.db");
+        let now = Utc::now();
+        {
+            let store = PravdaStore::open(path.to_str().unwrap()).unwrap();
+            store
+                .insert_tick("BTC/USDT", 12345.0, "Kraken", now)
+                .unwrap();
+            let mode: String = store
+                .conn
+                .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(mode.to_ascii_lowercase(), "wal");
+        }
+        // An idle WAL sidecar may be checkpointed and removed on clean close.
+        // SQLite's journal mode and row persistence, not file existence, are
+        // the durable acceptance criteria.
+        let reopened = PravdaStore::open(path.to_str().unwrap()).unwrap();
+        let mode: String = reopened
+            .conn
+            .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(mode.to_ascii_lowercase(), "wal");
+        let rows = reopened.latest_ticks("BTC/USDT", 10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].0, 12345.0);
+    }
+
+    #[test]
     fn test_store_roundtrip() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.db");
