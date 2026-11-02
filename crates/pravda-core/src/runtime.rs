@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+use crate::process_metrics;
 use tokio::sync::{broadcast, RwLock};
 
 /// All market thresholds are injected by the caller, not read from environment.
@@ -25,6 +26,7 @@ pub struct RuntimePolicy {
 /// and by IPC commands when PR-04/05 introduce them.
 pub struct PravdaRuntime {
     pub started_at: Instant,
+    cpu_sample: std::sync::Mutex<Option<(f64, Instant)>>,
     pub tick_tx: broadcast::Sender<Tick>,
     pub last_ticks: RwLock<Vec<Tick>>,
     pub prices: RwLock<HashMap<Symbol, HashMap<Exchange, Tick>>>,
@@ -48,6 +50,7 @@ impl PravdaRuntime {
     pub fn new(store: PravdaStore, tick_tx: broadcast::Sender<Tick>) -> Self {
         Self {
             started_at: Instant::now(),
+            cpu_sample: std::sync::Mutex::new(None),
             tick_tx,
             last_ticks: RwLock::new(Vec::new()),
             prices: RwLock::new(HashMap::new()),
@@ -121,11 +124,28 @@ impl PravdaRuntime {
     }
 
     pub fn metrics_snapshot(&self) -> Value {
+        let memory = process_metrics::resident_memory_mb();
+        let cpu_time = process_metrics::process_cpu_seconds();
+        let cpu = cpu_time.and_then(|current| {
+            let mut guard = self.cpu_sample.lock().ok()?;
+            let now = Instant::now();
+            let value = guard.and_then(|(previous, then)| {
+                let seconds = now.saturating_duration_since(then).as_secs_f64();
+                let delta = current - previous;
+                if seconds >= 0.05 && delta >= 0.0 && delta.is_finite() {
+                    Some((100.0 * delta / seconds).min(100.0 * f64::from(std::thread::available_parallelism().map_or(1, |n| n.get() as u32))))
+                } else {
+                    None
+                }
+            });
+            *guard = Some((current, now));
+            value
+        });
         json!({
             "uptime_seconds": self.started_at.elapsed().as_secs_f64(),
-            "memory_usage_mb": null,
-            "cpu_percent": null,
-            "status": "partial",
+            "memory_usage_mb": memory,
+            "cpu_percent": cpu,
+            "status": if memory.is_some() && cpu.is_some() { "available" } else { "partial" },
             "pid": std::process::id()
         })
     }
@@ -403,6 +423,8 @@ mod tests {
         let paper = runtime.alerts_snapshot().await;
         assert_eq!(paper["paper"]["cash_usdt"], 1000.0);
         assert!(runtime.history_recent().await.unwrap().is_empty());
-        assert_eq!(runtime.metrics_snapshot()["status"], "partial");
+        let metrics = runtime.metrics_snapshot();
+        assert_eq!(metrics["status"], "partial");
+        assert_eq!(metrics["pid"].as_u64(), Some(u64::from(std::process::id())));
     }
 }
