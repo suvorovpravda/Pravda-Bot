@@ -292,7 +292,11 @@ mod tests {
                 StatusCode::FORBIDDEN
             );
         }
-        for (mode, dest) in [("cors", "empty"), ("navigate", "empty"), ("no-cors", "document")] {
+        for (mode, dest) in [
+            ("cors", "empty"),
+            ("navigate", "empty"),
+            ("no-cors", "document"),
+        ] {
             let request = Request::builder()
                 .method(Method::POST)
                 .uri("/setup")
