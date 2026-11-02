@@ -84,7 +84,11 @@ impl DesktopRuntime {
     }
 
     pub async fn history_recent(&self) -> Result<DesktopPayload, &'static str> {
-        let rows = self.runtime.history_recent().await.map_err(|_| "STORAGE_FAILURE")?;
+        let rows = self
+            .runtime
+            .history_recent()
+            .await
+            .map_err(|_| "STORAGE_FAILURE")?;
         Ok(DesktopPayload(json!({
             "symbol": "BTC/USDT",
             "ticks": rows.into_iter().map(|(price, ts)| json!({"price": price, "ts": ts})).collect::<Vec<_>>()
@@ -125,10 +129,7 @@ impl DesktopRuntime {
         Ok((rows, truncated))
     }
 
-    pub async fn history_query(
-        &self,
-        query: HistoryQuery,
-    ) -> Result<DesktopPayload, &'static str> {
+    pub async fn history_query(&self, query: HistoryQuery) -> Result<DesktopPayload, &'static str> {
         let (rows, truncated) = self.history_rows(query).await?;
         Ok(DesktopPayload(json!({
             "symbol": query.symbol,
@@ -145,10 +146,7 @@ impl DesktopRuntime {
 
     /// Returns CSV content only: there is no arbitrary filesystem or shell
     /// command in the Tauri capability. The renderer owns any download flow.
-    pub async fn history_export_csv(
-        &self,
-        query: HistoryQuery,
-    ) -> Result<String, &'static str> {
+    pub async fn history_export_csv(&self, query: HistoryQuery) -> Result<String, &'static str> {
         let (rows, _) = self.history_rows(query).await?;
         let mut csv = String::from("timestamp,symbol,exchange,price\r\n");
         for row in rows {
@@ -173,7 +171,8 @@ mod tests {
     fn typed_history_query_is_deny_unknown_and_strictly_enumerated() {
         assert!(serde_json::from_value::<HistoryQuery>(json!({
             "symbol": "BTC/USDT", "exchange": "Kraken", "period": "day"
-        })).is_ok());
+        }))
+        .is_ok());
         for input in [
             json!({"symbol": "DROP TABLE ticks", "exchange": "Kraken", "period": "day"}),
             json!({"symbol": "BTC/USDT", "exchange": "Other", "period": "day"}),
