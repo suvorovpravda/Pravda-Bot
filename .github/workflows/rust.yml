@@ -56,7 +56,7 @@ jobs:
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
 
-      - name: Enforce Rust-only production boundary (no active Python)
+      - name: Enforce Rust-only production boundary
         run: node tools/test-rust-production-boundary.mjs
 
       - name: Verify single documentation, links and prioritized progress percentages
