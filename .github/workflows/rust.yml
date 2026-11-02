@@ -11,6 +11,12 @@ on:
       - '**/rust/**'
       - 'crates/**'
       - 'tools/**'
+      - 'archive/**'
+      - '.gitattributes'
+      - '.github/dependabot.yml'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'docs/**'
   pull_request:
     branches: [main]
 
@@ -49,6 +55,12 @@ jobs:
         run: node tools/test-dashboard.mjs
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
+
+      - name: Enforce Rust-only production boundary
+        run: node tools/test-rust-production-boundary.mjs
+
+      - name: Verify single documentation, links and prioritized progress percentages
+        run: node tools/test-docs-consistency.mjs
 
       - name: Fmt check
         run: cargo fmt --all -- --check
@@ -231,9 +243,14 @@ jobs:
             'security-probe: no arbitrary disk modification',
             'security-probe: shell plugin denied',
             'concurrent: ipc_auth_status denied with main authenticated',
+            'concurrent: ipc_session_check denied with main authenticated',
             'concurrent: ipc_market_snapshot denied with main authenticated',
             'concurrent: ipc_history_recent denied with main authenticated',
+            'concurrent: ipc_history_query denied with main authenticated',
             'concurrent: ipc_history_export_csv denied with main authenticated',
+            'concurrent: ipc_paper_alerts_snapshot denied with main authenticated',
+            'concurrent: ipc_runtime_metrics denied with main authenticated',
+            'concurrent: ipc_fx_status denied with main authenticated',
             'concurrent: plugin:fs|write_text_file denied with main authenticated',
             'concurrent: plugin:shell|execute denied with main authenticated',
             'main: native WebView2 CSP blocks injected inline script',
