@@ -144,7 +144,9 @@ async fn main() {
             ipc::ipc_history_export_csv,
             ipc::ipc_paper_alerts_snapshot,
             ipc::ipc_runtime_metrics,
-            ipc::ipc_fx_status
+            ipc::ipc_fx_status,
+            ipc::ipc_public_feed,
+            ipc::ipc_open_source
         ])
         .setup(|app| {
             // WebDriver's Windows Edge adapter may only enumerate the primary

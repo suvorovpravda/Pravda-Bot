@@ -214,14 +214,75 @@ pub fn ipc_runtime_metrics(
 }
 
 #[tauri::command]
-pub fn ipc_fx_status(
+pub async fn ipc_fx_status(
     window: Window,
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<pravda_server::DesktopPayload, String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    Ok(desktop.fx_status())
+    Ok(desktop.fx_status().await)
 }
+
+
+#[tauri::command]
+pub async fn ipc_public_feed(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    source: String,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    if !matches!(source.as_str(), "energy" | "news" | "revolut" | "sources") {
+        return Err("INVALID_PUBLIC_SOURCE".to_owned());
+    }
+    Ok(desktop.public_feed(&source).await)
+}
+
+/// Opens a FIXED, allowlisted public documentation URL through the OS browser.
+/// Never pass an arbitrary URL from an exchange response, a web page, or the UI.
+#[tauri::command]
+pub fn ipc_open_source(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    source: String,
+) -> Result<(), String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    let url = match source.as_str() {
+        "ecb" => "https://data.ecb.europa.eu/data/datasets/EXR",
+        "frankfurter" => "https://frankfurter.dev/",
+        "entsog" => "https://transparency.entsog.eu/",
+        "gdelt" => "https://www.gdeltproject.org/",
+        "aisstream" => "https://aisstream.io/",
+        "revolutx" => "https://exchange.revolut.com/",
+        "ice" => "https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures",
+        "github" => "https://github.com/suvorovpravda/Pravda-Bot",
+        _ => return Err("INVALID_SOURCE_LINK".to_owned()),
+    };
+    #[cfg(windows)]
+    {
+        use std::ffi::c_void;
+        #[link(name = "shell32")]
+        unsafe extern "system" {
+            fn ShellExecuteW(hwnd: *mut c_void, action: *const u16, file: *const u16,
+                parameters: *const u16, directory: *const u16, display: i32) -> *mut c_void;
+        }
+        let wide: Vec<u16> = url.encode_utf16().chain(std::iter::once(0)).collect();
+        let open: Vec<u16> = "open".encode_utf16().chain(std::iter::once(0)).collect();
+        // SAFETY: ShellExecuteW receives only hardcoded HTTPS URLs, no caller strings.
+        let result = unsafe {
+            ShellExecuteW(std::ptr::null_mut(), open.as_ptr(), wide.as_ptr(),
+                std::ptr::null(), std::ptr::null(), 1)
+        } as isize;
+        if result <= 32 { return Err("EXTERNAL_BROWSER_UNAVAILABLE".to_owned()); }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err("WINDOWS_DESKTOP_REQUIRED".to_owned())
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

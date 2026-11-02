@@ -33,7 +33,7 @@ assert.match(css,/\.ipc-auth-card label\[hidden\]/);
 assert.doesNotMatch(js,/\bfetch\s*\(|\bnew\s+WebSocket\s*\(|location\.assign\s*\(/);
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,12);
+assert.equal(new Set(handlers).size,14);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -41,7 +41,7 @@ for(const cmd of handlers) {
 }
 for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query",
  "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics",
- "ipc_fx_status","ipc_session_check","ipc_auth_logout"]) {
+ "ipc_fx_status","ipc_public_feed","ipc_open_source","ipc_session_check","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
   const part=ipc.slice(i,next>i?next:ipc.length);
