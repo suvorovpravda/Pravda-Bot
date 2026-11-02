@@ -1,3 +1,6 @@
+pub mod backtest;
+pub use backtest::{replay, ReplayConfig, ReplayError, ReplayResult, ReplayTick};
+
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, HashSet};
 
