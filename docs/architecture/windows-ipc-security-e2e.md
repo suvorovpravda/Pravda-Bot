@@ -1,21 +1,21 @@
 # Issue #66 — Preuves de sécurité IPC natives Windows
 
-> [!WARNING]
-> **Condition de gouvernance non démontrée.** La connexion GitHub du projet retourne HTTP **403** sur la lecture des protections détaillées de `main`. `protected=true` n'atteste **pas** « Do not allow bypassing ». **Aucune fusion de cette PR sécurité, ni clôture de #66, sans validation administrative ET preuves natives réussies.**
+> [!NOTE]
+> **Mise à jour après fusion de la [PR #67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) le 2 novembre 2026.** La batterie E2E a été **exécutée sur Windows réel**, avec **22 assertions réussies** et les **8 checks CI verts** sur le SHA `c5f2cfb4672747adc215d5edc820157822c0a525`. [Job E2E natif](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/job/125359902577) · [Artefact JSON](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/artifacts/13154268900).
+>
+> **Limites vérifiées :** deux processus/WebView2 **successifs** (pas de concurrence dans une session Rust), origine locale, pas de navigation hostile distante. La suite des tests doit traiter ces deux scénarios indépendamment. Le binaire Release ne construit pas la fenêtre `security-probe`.
+>
+> **Gouvernance solo :** le propriétaire du dépôt a retiré l'obligation d'une approbation provenant d'un deuxième développeur, puisqu'il est le seul mainteneur. Les PR, les checks obligatoires et la protection no-bypass doivent être conservés. Une capture de la règle montrait **« Do not allow bypassing » coché**, mais la configuration sauvegardée n'est toujours pas vérifiable via l'intégration GitHub (HTTP 403).
 
-## 1. Confirmer la protection de `main` (administrateur GitHub)
+## 1. Gouvernance GitHub — dépôt maintenu en solo
 
-Ouvrir les paramètres effectifs depuis **Settings → Branches** et, si applicables, **Settings → Rules → Rulesets**. Vérifier et capturer (sans jetons) :
+- [x] Décision du propriétaire : PR obligatoire avant fusion ; **pas de review externe obligatoire**.
+- [x] Check-runs 8/8 verts sur la PR #67, tests E2E Windows compris.
+- [x] Capture utilisateur de `main` avec « Do not allow bypassing » coché.
+- [ ] Confirmation des règles sauvegardées par un administrateur dans GitHub : requêtes API de l'intégration bloquées par HTTP 403.
+- [ ] Maintien du job E2E sur chaque PR et sur `main` : proposé dans la nouvelle PR de CI permanente, à valider avant merge.
 
-- [ ] Require a pull request before merging.
-- [ ] Require at least **one independent human approval** par un réviseur habilité. L'approbation de l'auteur ne compte pas.
-- [ ] Dismiss stale reviews / réexamen après nouveaux commits.
-- [ ] Require conversation resolution.
-- [ ] Require status checks to pass (jobs Windows, Linux, MSRV et sécurité choisis).
-- [ ] **Do not allow bypassing the above settings** actif ; aucun acteur de bypass ou admin exempté.
-- [ ] Validation négative de l'interface GitHub : une PR **sans review indépendante** reste bloquée, sans essayer de la fusionner.
-
-Consigner les preuves dans [#66](https://github.com/suvorovpravda/Pravda-Bot/issues/66).
+**Ne pas confondre** des cases cochées dans une capture avec une inspection API des protections enregistrées. L'absence d'approbation externe est une **décision explicite de gouvernance solo**, pas une attestation d'une revue inexistante.
 
 ## 2. Ce que le test Windows prouve réellement
 
@@ -31,7 +31,7 @@ flowchart LR
     B -->|"security-probe"| ACL["Refus capability / pont IPC absent"]:::blocked
 ```
 
-Le projet contient déjà des tests unitaires Rust pour les gardes de session et des contrats JS statiques : ils ne prouvent pas le **comportement du vrai runtime WebView2**.
+Les tests unitaires Rust et contrats JS statiques subsistent ; **la PR #67 a également démontré le comportement d'un vrai runtime WebView2 Windows** pour les scénarios détaillés ci-dessous. Elle ne démontre pas toutes les frontières d'origine ou la coexistence multi-fenêtre.
 
 Ce lot active une **fenêtre de sonde uniquement en Debug Windows et avec la feature explicite** `security-e2e` (`#[cfg(all(windows, debug_assertions, feature = "security-e2e"))]`). Le pilote Windows utilisé n'a exposé qu'un handle WebDriver malgré la création initiale de deux fenêtres ; le test lance désormais **deux sessions natives successives**, d'abord `main` (HTML normal), puis `security-probe` seule comme WebView primaire (`PRAVDA_E2E_PROBE_ONLY=true`), depuis un **second processus** sur les mêmes fichiers temporaires. La sonde charge `security-probe.html`, possède un titre HTML distinct, et demeure absente de `capabilities/main.json`.
 
@@ -83,7 +83,7 @@ node .\tools\test-ipc-security-windows.mjs
 | Invocation directe `plugin:shell|execute` depuis `main` | Refus (aucun plugin shell autorisé) |
 | Logout puis nouveau snapshot depuis `main` | **`UNAUTHORIZED` (Rust)** |
 
-L'outil doit rendre exit code `0` et `passed=true` **uniquement si tous les scénarios réussissent**. Le démarrage d'un pilote absent, une fenêtre manquante, une réponse inattendue, un échec sans verdict, une défaillance de setup ou un refus d'auth d'un type inattendu empêchent l'approbation.
+Le [run de référence](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/job/125359902577) a produit **22 résultats PASS et zéro FAIL**. L'outil doit toujours rendre exit code `0` et `passed=true` **uniquement si tous les scénarios réussissent**. Le démarrage d'un pilote absent, une fenêtre manquante, une réponse inattendue, un échec sans verdict, une défaillance de setup ou un refus d'auth d'un type inattendu empêchent l'approbation.
 
 **Limitations :** la navigation explicite depuis une origine distante, l'exploitabilité d'un XSS, les ACL Windows sur le disque, les scénarios d'expiration 12 h et le packaging Authenticode restent **hors périmètre de ce premier test natif**. La sonde sans capability vérifie le refus dans un **processus de test séparé**, pas la frontière simultanée entre deux fenêtres d'un même processus ni toutes les origines hostiles.
 
@@ -93,4 +93,4 @@ Dans [#66](https://github.com/suvorovpravda/Pravda-Bot/issues/66), transmettre :
 
 **Ne jamais transmettre de vraie base de production, de mot de passe, de token, ni de fichier `pravda_auth.json`.**
 
-**Critère de sortie :** (A) protections GitHub vérifiées par administrateur, (B) batterie native réussie sur Windows, (C) revue de sécurité humaine. Cette PR reste Draft et non fusionnée tant que (A) et (B) et (C) ne sont pas remplis.
+**État final de la PR #67 :** fusionnée par le propriétaire après batterie native Windows réussie et 8 checks verts. L'obligation d'une deuxième revue a été **explicitement retirée** pour ce dépôt solo ; la vérification API des protections de branche n'est **pas attestée**. Les prochaines livraisons restent soumises aux checks et règles réellement enregistrées.
