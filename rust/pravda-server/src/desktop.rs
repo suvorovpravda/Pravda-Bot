@@ -74,13 +74,39 @@ impl DesktopRuntime {
         DesktopPayload(self.runtime.metrics_snapshot())
     }
 
-    pub fn fx_status(&self) -> DesktopPayload {
-        DesktopPayload(json!({
-            "status": "unavailable",
-            "rates": {},
-            "timestamp": null,
-            "notice": "FX connector not migrated"
-        }))
+    /// Public FX references, not exchange execution quotes. No credentials.
+    pub async fn fx_status(&self) -> DesktopPayload {
+        DesktopPayload(pravda_fetchers::public_feeds::reference_fx().await)
+    }
+
+    /// Strict enum dispatch. Never turns caller text into an HTTP URL.
+    pub async fn public_feed(&self, source: &str) -> DesktopPayload {
+        let payload = match source {
+            "energy" => pravda_fetchers::public_feeds::energy_flows().await,
+            "news" => pravda_fetchers::public_feeds::geopolitical_news().await,
+            "revolut" => {
+                use pravda_fetchers::revolut_x::RevolutXPublicClient;
+                match RevolutXPublicClient::new() {
+                    Ok(client) => match client.order_book("BTC-USD").await {
+                        Ok(book) => json!({"status":"delayed","source":"Revolut X public",
+                            "symbol":"BTC-USD","book":book,"notice":"Carnet public, aucun solde ni ordre réel."}),
+                        Err(_) => json!({"status":"unavailable","source":"Revolut X public",
+                            "notice":"PUBLIC_ORDER_BOOK_UNAVAILABLE"}),
+                    },
+                    Err(_) => json!({"status":"unavailable","notice":"NETWORK_UNAVAILABLE"}),
+                }
+            }
+            "sources" => json!({"sources":[
+                {"name":"Kraken / Binance","status":"stale","detail":"Statut à vérifier dans le terminal marchés"},
+                {"name":"BCE via Frankfurter","status":"stale","detail":"Référence quotidienne à demander depuis l'écran Forex"},
+                {"name":"ENTSOG","status":"stale","detail":"Observations publiques à demander depuis l'écran Énergie"},
+                {"name":"GDELT","status":"stale","detail":"Articles rapportés à consulter depuis Veille"},
+                {"name":"Revolut X","status":"stale","detail":"Carnet public uniquement ; aucun ordre réel"},
+                {"name":"AIS","status":"unavailable","detail":"Source AIS autorisée ou clé serveur nécessaire"}
+            ]}),
+            _ => json!({"status":"unavailable","notice":"UNKNOWN_PUBLIC_SOURCE"}),
+        };
+        DesktopPayload(payload)
     }
 
     pub async fn history_recent(&self) -> Result<DesktopPayload, &'static str> {
