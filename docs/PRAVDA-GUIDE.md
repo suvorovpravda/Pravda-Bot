@@ -16,7 +16,7 @@
 ---
 
 > [!IMPORTANT]
-> **Document de référence consolidé au 2 novembre 2026**, fondé sur le dépôt `main@93f2775311ecf26bda0857ffc3523fb7f6318154` et la branche de préparation `migration/rust-production-boundary-20261102`. **Cette page n'est pas une attestation de release**. Les travaux non fusionnés sont signalés comme tels. Les anciens guides éliminés de l'arborescence restent consultables via l'[historique Git antérieur à la consolidation](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154).
+> **Document de référence consolidé au 2 novembre 2026**, actualisé après la fusion de #72 et #75 sur `main@6b1b91693916529f317436c2e9e060e06b3d35a2` (contrôle Rust-only réussi sur `main`). **Cette page n'est pas une attestation de release**. Les travaux non fusionnés sont signalés comme tels. Les anciens guides éliminés de l'arborescence restent consultables via l'[historique Git antérieur à la consolidation](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154).
 
 ## 🎯 Doctrine : une production Rust, une archive Python
 
@@ -41,7 +41,7 @@ Pravda-Bot est une **application locale Windows** de surveillance de cotations p
 | `docs/PRAVDA-GUIDE.md` | **Guide unique** | Architecture, contrats, migration, versions et avancement |
 | `README.md` / `SECURITY.md` | Pages essentielles | Accueil utilisateur et politique de sécurité |
 
-Les anciens `pyproject.toml`, `requirements*.txt/.in`, `MANIFEST.in`, métadonnées `egg-info` et le `rust/market-core/pyproject.toml` ont été **déplacés dans l'archive**, dans la branche de nettoyage, pour éviter de présenter un package Python à la racine comme méthode de lancement actuelle. **Ils ne sont pas supprimés de l'historique Git.** L'exclusion `linguist-vendored` permet à GitHub d'ignorer cette archive dans ses statistiques **après fusion et recalcul**. Cela ne convertit pas magiquement les fonctionnalités Python historiques en Rust.
+Les anciens `pyproject.toml`, `requirements*.txt/.in`, `MANIFEST.in`, métadonnées `egg-info` et le `rust/market-core/pyproject.toml` ont été **déplacés dans l'archive**, par la PR #72 fusionnée, pour éviter de présenter un package Python à la racine comme méthode de lancement actuelle. **Ils ne sont pas supprimés de l'historique Git.** L'exclusion `linguist-vendored` permet à GitHub d'ignorer cette archive dans ses statistiques **après fusion et recalcul GitHub**. Cela ne convertit pas magiquement les fonctionnalités Python historiques en Rust.
 
 ## 📊 Tableau de bord priorisé
 
@@ -49,10 +49,10 @@ Les pourcentages sont des **indicateurs de jalons techniques**, **pas** des mesu
 
 | Priorité | Chantier | Progression des jalons | Livré / vérifié | Prochaine condition pour 100 % |
 |:--|:--|--:|:--|:--|
-| **P0** | **Séparation Python → Rust** | **3/6 · 50 % (branche PR)** | Python source archivé ; packaging racine déplacé sur branche ; Linguist configuré sur branche | CI de frontière validée, fusion, preuve que \`main\` ne dépend d'aucune entrée Python |
+| **P0** | **Séparation Python → Rust** | **6/6 · 100 % (`main`)** | PR #72 fusionnée : archive Python, packaging racine retiré, Linguist, CI de frontière et contrôle réussi sur `main` `6b1b916` | Ne pas confondre séparation du code de production et parité fonctionnelle Rust (chantier distinct) |
 | **P0** | **Sécurité IPC Windows** | **2/4 · 50 %** | 22 assertions natives WebView2 validées ; test E2E permanent intégré via #69 | Deux fenêtres simultanées / même session, puis origine distante hostile (#70) |
 | **P0** | **Parité des fonctions Rust** | **3/8 · 38 %** | Cours publics, auth/IPC, historique SQLite | FX, énergie, news/AIS, alertes configurables, intégrations optionnelles avec provenance prouvée |
-| **P0** | **Vérifications CI et gouvernance** | **3/5 · 60 %** | Rust multi-OS, CodeQL, E2E WebView2 permanent | Contrôle CI « Python hors production » et check sur la tête de PR ; confirmation règles administratives enregistrées |
+| **P0** | **Vérifications CI et gouvernance** | **3/5 · 60 %** | Rust multi-OS, CodeQL, E2E WebView2 permanent ; contrôle Python hors production vert | Vérifier protection GitHub sans bypass (API 403), checks requis sur HEAD et validation post-fusion |
 | **P1** | **Historique / migration SQLite** | **3/4 · 75 %** | Source legacy lecture seule, import transactionnel, tests de non-régression | Restauration réelle / interruption avec WAL sur Windows, preuve d'export CSV |
 | **P1** | **Interface et robustesse desktop** | **2/4 · 50 %** | Fenêtre Tauri IPC et authentification persistante | Gestion complète des sources indisponibles et recette ergonomique multi-scénarios |
 | **P1** | **Packaging Windows Enterprise** | **0/4 · 0 %** | Le binaire est compilable, **pas de paquet signé** | MSI/EXE signé, horodatage, SBOM/provenance, installation/rollback sur Windows propre |
@@ -60,7 +60,7 @@ Les pourcentages sont des **indicateurs de jalons techniques**, **pas** des mesu
 | **P2** | **Notifications / LLM / sources facultatives** | **0/4 · 0 %** | Archives de référence uniquement, pas de parité attestée | Contrats, adaptateurs réels, permissions/secrets, tests d'intégration reproductibles |
 
 > [!WARNING]
-> **Un 50 % n'est pas « moitié du produit fini ».** La progression reflète le nombre de jalons listés ; la complexité et l'effort restant peuvent être très différents. Pour la séparation Rust, **50 % désigne la branche de travail, pas `main`**. En cas de changement des critères, actualiser aussi le dénominateur.
+> **Un 50 % n'est pas « moitié du produit fini ».** La progression reflète le nombre de jalons listés ; la complexité et l'effort restant peuvent être très différents. La séparation Python/Rust atteint **6/6 jalons techniques sur `main`** ; la parité métier Rust reste distincte et incomplète. En cas de changement des critères, actualiser aussi le dénominateur.
 
 ### Vue d'ensemble des étapes
 
@@ -212,7 +212,7 @@ cargo test --locked --workspace
 cargo test --locked --manifest-path .\crates\pravda-app\Cargo.toml
 node tools/test-desktop-ipc.mjs
 node tools/test-dashboard.mjs
-# Garde de frontière Rust / Python (sur branche de migration) :
+# Garde de frontière Rust / Python (intégrée à main via #72) :
 node tools/test-rust-production-boundary.mjs
 ```
 
@@ -259,8 +259,8 @@ flowchart TB
 
 | Ordre | Chantier technique | Jalons préparés / total | Avancement | Critère suivant |
 |:--|:--|--:|--:|:--|
-| 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 3/6 | **50 % (branche #72)** | CI complète verte, fusion validée, nouveaux tests Windows |
-| 2 · P0 | Sécurité du poste et modèle de secrets | 0/5 | **0 %** | Inventaire secrets, coffre OS, effacement mémoire, rotation/backup, tests d'accès négatifs |
+| 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 6/6 | **100 % (frontière #72)** | Contrôle Rust-only fusionné et vert sur `main` ; tests multi-WebView #70 suivis séparément |
+| 2 · P0 | Sécurité du poste et modèle de secrets | 1/5 | **20 %** | Inventaire et menaces documentés ; #75 coffre Windows fusionné, mais mock/rotation/négatifs de #77 et acceptation finale encore requis |
 | 3 · P1 | Contrats exchange et Revolut X public | 2/4 | **50 %** | Adaptateur public fusionné et CI 8/8 sur #73 ; validation de réponses live et branchement explicite encore à faire |
 | 4 · P1 | Résilience et outbox durable | 0/4 | **0 %** | Idempotence, journal local, reprise après crash, scénarios de rejouement |
 | 5 · P1 | Backtesting/paper trading | 1/5 | **20 %** | Simulateur papier existant ; moteur reproductible, coûts, données historiques, tests de biais |
@@ -287,7 +287,7 @@ Le coffre **n'est pas une API à appeler depuis la WebView**. Le seul contrat de
 4. **Sauvegarde/restauration :** ne jamais exporter les octets en clair dans JSON, SQLite/WAL, CSV, log, dump ni sauvegarde. Conserver uniquement les données métier et les références non sensibles. Sur un nouveau poste/profil, réapprovisionner une **nouvelle** clé, la précédente étant révoquée ; aucune restauration portable du Credential Manager n'est prévue.
 5. **Incident :** bloquer les connexions privées, révoquer les clés exposées chez le fournisseur, renouveler les sessions, analyser l'historique Git, journaux et artefacts, et documenter une alerte sans révéler les octets. Un historique Git contenant une clé reste sensible même si la ligne est supprimée ultérieurement.
 
-**Contrôles d'acceptation :** #75 fusionnée et 8/8 vérifications ; #77 en cours pour le mock, le test natif rotation/suppression, l'absence de fuite par signatures et l'historique Git *y compris commits de fusion*. Ces contrôles ne garantissent ni absence de secret sous un format inconnu ni résistance à un malware utilisant le même compte Windows. Pas d'ordre réel, pas d'API privée activée.
+**Contrôles d'acceptation :** #75 fusionnée et 8/8 vérifications ; inventaire documenté (1/5 jalon #74). #77 en cours pour le mock, le test natif rotation/suppression, l'absence de fuite par signatures et l'historique Git *y compris commits de fusion*. Ces contrôles ne garantissent ni absence de secret sous un format inconnu ni résistance à un malware utilisant le même compte Windows. Pas d'ordre réel, pas d'API privée activée.
 
 ### Revolut X : schéma réel et barrières de sécurité
 

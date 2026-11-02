@@ -23,6 +23,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     name: Rust check (${{ matrix.os }})
@@ -80,6 +84,21 @@ jobs:
       - name: Build backend in release mode
         run: cargo build --locked --release --workspace
 
+  secret_history_audit:
+    name: Secret boundary and full Git history audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Check private credential isolation and fetched history
+        run: node tools/test-secret-boundary.mjs
+
   msrv:
     name: Rust MSRV
     runs-on: ubuntu-latest
@@ -90,6 +109,75 @@ jobs:
 
       - name: Check workspace with MSRV
         run: cargo check --locked --workspace --all-targets
+
+  portable_windows_release:
+    name: Build and verify portable Windows release executable
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Enforce reproducible Tauri desktop lockfile
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo metadata --locked --format-version 1 --manifest-path crates/pravda-app/Cargo.toml | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw "Tauri Cargo.lock is stale" }
+          git diff --exit-code -- crates/pravda-app/Cargo.lock
+          if ($LASTEXITCODE -ne 0) { throw "Tauri Cargo.lock changed during resolution" }
+      - name: Build Windows release executable from locked sources
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --locked --release --manifest-path crates/pravda-app/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { throw "Release build failed" }
+      - name: Verify PE executable, isolated launch and no listening socket
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = Join-Path (Get-Location).Path 'crates/pravda-app/target/release/pravda-app.exe'
+          if (-not (Test-Path -LiteralPath $exe -PathType Leaf)) { throw "Release executable missing" }
+          $info = Get-Item -LiteralPath $exe
+          if ($info.Length -lt 100000) { throw "Release executable unreasonably small" }
+          $stream = [System.IO.File]::OpenRead($exe)
+          try {
+            $header = New-Object byte[] 2
+            if ($stream.Read($header, 0, 2) -ne 2 -or $header[0] -ne 0x4D -or $header[1] -ne 0x5A) {
+              throw "Release file is not a Windows PE executable"
+            }
+          } finally { $stream.Dispose() }
+          $hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "Verified Windows release PE build: SHA-256=$hash; bytes=$($info.Length)"
+          $env:PRAVDA_MARKET_FEEDS_ENABLED = 'false'
+          $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP 'pravda-release-smoke.db'
+          $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP 'pravda-release-smoke-auth.json'
+          Remove-Item Env:PRAVDA_LEGACY_DB_PATH -ErrorAction SilentlyContinue
+          Remove-Item Env:MARKET_HISTORY_DB -ErrorAction SilentlyContinue
+          $app = Start-Process -FilePath $exe -WorkingDirectory (Get-Location).Path -PassThru
+          try {
+            $started = $false
+            for ($i = 0; $i -lt 60; $i++) {
+              $app.Refresh()
+              if ($app.HasExited) { throw "Windows release process exited early: $($app.ExitCode)" }
+              if (Test-Path -LiteralPath $env:PRAVDA_DB_PATH) { $started = $true; break }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $started) { throw 'Release executable did not initialize isolated SQLite' }
+            Start-Sleep -Seconds 3
+            $app.Refresh()
+            if ($app.HasExited) { throw "Release executable terminated after startup" }
+            $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+              Where-Object { $_.OwningProcess -eq $app.Id })
+            if ($listeners.Count -gt 0) { throw 'Windows release executable opened an unexpected local HTTP port' }
+            if (Test-Path -LiteralPath $env:PRAVDA_AUTH_PATH) { throw 'Release startup wrote an unexpected password verifier' }
+            Write-Host "Release executable startup, SQLite and no HTTP listener verified."
+            Write-Host "Requires a compatible Windows WebView2 Runtime; no code-signing claim."
+          } finally {
+            $app.Refresh()
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
 
   desktop_windows:
     name: Windows desktop build and startup
@@ -173,6 +261,16 @@ jobs:
       - name: Build opt-in DEBUG security probe (no release capabilities changed)
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml --features security-e2e
 
+      - name: Diagnose stale Tauri lockfile after locked-build failure (non-gating diagnostic)
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          # The preceding --locked build remains mandatory and failed closed.
+          # Resolve only to inspect Cargo's proposed lockfile diff; never build or commit it here.
+          cargo metadata --format-version 1 --no-deps --manifest-path crates/pravda-app/Cargo.toml | Out-Null
+          git diff -- crates/pravda-app/Cargo.lock
+
       - name: Install Tauri's native Windows WebDriver adapter
         run: cargo install tauri-driver --locked
 
@@ -199,6 +297,8 @@ jobs:
           }
           $binDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           Write-Host "Matched Microsoft EdgeDriver version $version"
+          "PRAVDA_E2E_WEBVIEW2_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "PRAVDA_E2E_WINDOWS_VERSION=$([System.Environment]::OSVersion.VersionString)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Execute native IPC deny tests (no JS mocks)
         shell: pwsh
@@ -222,6 +322,17 @@ jobs:
           if ($report.git_sha -ne $env:GITHUB_SHA) {
             throw "Evidence SHA does not match checked out commit"
           }
+          if ($report.webview2_version -notmatch '^\d+\.\d+\.\d+\.\d+      - name: Attach redacted JSON test report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-native-ipc-security
+          path: ${{ runner.temp }}/Pravda-IPC-security-report.json
+          if-no-files-found: error
+ -or
+              -not $report.windows_version) {
+            throw "Native E2E report must specify Windows OS and WebView2 runtime versions"
+          }
           $tests = @($report.tests)
           if ($tests.Count -lt 22) { throw "Incomplete native E2E test coverage" }
           if (@($tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
@@ -235,12 +346,31 @@ jobs:
             'security-probe: bootstrap auth_status denied',
             'security-probe: market snapshot denied',
             'security-probe: no arbitrary disk modification',
-            'security-probe: shell plugin denied'
+            'security-probe: shell plugin denied',
+            'concurrent: ipc_auth_status denied with main authenticated',
+            'concurrent: ipc_session_check denied with main authenticated',
+            'concurrent: ipc_market_snapshot denied with main authenticated',
+            'concurrent: ipc_history_recent denied with main authenticated',
+            'concurrent: ipc_history_query denied with main authenticated',
+            'concurrent: ipc_history_export_csv denied with main authenticated',
+            'concurrent: ipc_paper_alerts_snapshot denied with main authenticated',
+            'concurrent: ipc_runtime_metrics denied with main authenticated',
+            'concurrent: ipc_fx_status denied with main authenticated',
+            'concurrent: plugin:fs|write_text_file denied with main authenticated',
+            'concurrent: plugin:shell|execute denied with main authenticated',
+            'main: native WebView2 CSP blocks injected inline script',
+            'main: authenticated again for hostile HTTPS test'
           )
           foreach ($name in $required) {
             if (@($tests | Where-Object { $_.name -eq $name -and $_.passed -eq $true }).Count -ne 1) {
               throw "Required native assertion absent: $name"
             }
+          }
+          $hostileEvidence = @($tests | Where-Object { $_.passed -eq $true -and
+            ($_.name -eq 'untrusted HTTPS origin cannot invoke market IPC' -or
+             $_.name -eq 'untrusted HTTPS navigation blocked in authenticated main window') })
+          if ($hostileEvidence.Count -ne 1) {
+            throw "Missing controlled HTTPS-hostile-origin native test outcome"
           }
           Write-Host "Verified $($tests.Count) native WebView2 security assertions on $env:GITHUB_SHA."
 

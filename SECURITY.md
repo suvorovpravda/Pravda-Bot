@@ -22,11 +22,11 @@
 
 ### 📊 État des chantiers et sécurité — priorités
 
-La même échelle que celle du [README](README.md#-avancement-par-priorité) est utilisée ici : **pourcentage = jalons documentés accomplis ÷ jalons prévus**. Les éléments marqués *branche* ne sont **pas fusionnés**. Un test CI ne remplace pas un audit indépendant.
+La même échelle que celle du [README](README.md#-avancement-par-priorité) est utilisée ici : **pourcentage = jalons documentés accomplis ÷ jalons prévus**. Les éléments marqués *branche* ne sont **pas fusionnés** ; la séparation Python/Rust de la PR #72 est désormais intégrée à `main` et validée par le contrôle CI de frontière. Un test CI ne remplace pas un audit indépendant.
 
 | Priorité | Chantier | Jalons / total | Progression | Preuve ou réserve |
 |:--|:--|--:|--:|:--|
-| **P0** | Séparation Python / Rust | 3/6 (branche) | **50 %** | Archive seule ; contrôle CI et fusion à valider |
+| **P0** | Séparation Python / Rust | 6/6 (main) | **100 %** | PR #72 fusionnée ; contrôle Rust-only production boundary vert sur `main` `6b1b916` ; parité métier distincte |
 | **P0** | Sécurité IPC Windows | 2/4 | **50 %** | 22 tests Windows et job permanent ; issue #70 ouverte |
 | **P0** | Parité Rust métier | 3/8 | **38 %** | Sources et fonctions historiques non entièrement portées |
 | **P0** | CI / règles GitHub | 3/5 | **60 %** | Checks actifs ; règles admin non lisibles (HTTP 403) |
@@ -37,7 +37,7 @@ La même échelle que celle du [README](README.md#-avancement-par-priorité) est
 | **P2** | Feeds optionnels / LLM | 0/4 | **0 %** | Non démontrés ; pas de succès fictif |
 
 ![Sécurité IPC](https://img.shields.io/badge/IPC%20Windows-50%25%20des%20jalons-2563eb)
-![Production Rust](https://img.shields.io/badge/Fronti%C3%A8re%20Rust-50%25%20branche-f97316)
+![Production Rust](https://img.shields.io/badge/Fronti%C3%A8re%20Rust-100%25%20jalons-16a34a)
 ![Release](https://img.shields.io/badge/MSI%20sign%C3%A9-0%25-dc2626)
 
 **[Tableau de bord complet, critères de sortie et preuves](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.

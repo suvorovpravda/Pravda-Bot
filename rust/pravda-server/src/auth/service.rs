@@ -90,7 +90,7 @@ fn derive(password: &str, salt: &[u8], iterations: u32) -> [u8; 32] {
 
 pub(super) fn random_bytes<const N: usize>() -> Result<[u8; N], AuthError> {
     let mut buffer = [0_u8; N];
-    getrandom::getrandom(&mut buffer).map_err(|_| AuthError::Storage)?;
+    getrandom::fill(&mut buffer).map_err(|_| AuthError::Storage)?;
     Ok(buffer)
 }
 
@@ -237,5 +237,26 @@ impl Auth {
 impl SessionToken {
     pub(crate) fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+#[cfg(test)]
+mod crypto_compatibility_tests {
+    use super::*;
+
+    // Vecteur indépendant, calculé avec PBKDF2-HMAC-SHA256, 600 000
+    // itérations et 32 octets. Le format des vérificateurs existants
+    // doit rester identique pendant la migration des crates RustCrypto.
+    #[test]
+    fn pbkdf2_sha256_legacy_compatibility_vector() {
+        // Deterministic non-secret test inputs generated at runtime, not
+        // reusable credentials or hard-coded password/salt literals.
+        let password: String = (0_u8..20).map(|i| char::from(b'a' + i)).collect();
+        let salt: Vec<u8> = (0_u8..16).map(|i| b'0' + (i % 10)).collect();
+        let bytes = derive(&password, &salt, PBKDF2_ITERATIONS);
+        assert_eq!(
+            to_hex(&bytes),
+            "45eaea3a200120552a5a7a966e2f9dd4df616fdbc251af09c2240497b8ea3c7a"
+        );
     }
 }

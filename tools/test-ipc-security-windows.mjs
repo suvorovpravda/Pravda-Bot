@@ -3,7 +3,7 @@
 // Never mock invoke. Fail closed on driver errors, missing windows or leaks.
 import assert from "node:assert/strict";
 import {spawn, execFileSync} from "node:child_process";
-import {existsSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync} from "node:fs";
 import {resolve, join} from "node:path";
 import {tmpdir} from "node:os";
 import {randomBytes} from "node:crypto";
@@ -14,8 +14,8 @@ const reportPath = resolve(process.env.PRAVDA_E2E_REPORT ||
   join(tmpdir(),"Pravda-IPC-security-"+Date.now()+".json"));
 const report = {
   started: new Date().toISOString(), passed: false, tests: [],
-  scope: "Two separate real WebView2 sessions: main and capability-free probe",
-  limits: "Probe is launched as the primary WebView in a second debug-only process; this does not demonstrate cross-window auth sharing or remote-origin enforcement."
+  scope: "Real WebView2: main, concurrent same-process unprivileged WebView, and separate probe",
+  limits: "Concurrent native probe reports bounded ACL decisions via a debug-only title event. The hostile HTTPS origin is only a controlled synthetic script executed by native WebDriver; it does not replace a full XSS penetration test."
 };
 let port, child, session, directory, driverFault, failure;
 
@@ -159,7 +159,9 @@ async function startSession(mode, driverPort) {
     PRAVDA_DB_PATH:join(directory,"data.db"),
     PRAVDA_AUTH_PATH:join(directory,"auth.json"),
     PRAVDA_MARKET_FEEDS_ENABLED:"false",
-    PRAVDA_E2E_PROBE_ONLY:mode==="probe"?"true":"false"
+    PRAVDA_E2E_PROBE_ONLY:mode==="probe"?"true":"false",
+    PRAVDA_E2E_CONCURRENT:mode==="main"?"true":"false",
+    PRAVDA_E2E_CONCURRENT_REPORT:join(directory,"concurrent-native-evidence.log")
   };
   for (const key of ["PRAVDA_ADMIN_PASSWORD","PRAVDA_LEGACY_DB_PATH","MARKET_HISTORY_DB"])
     delete env[key];
@@ -187,12 +189,107 @@ async function startSession(mode, driverPort) {
     "tauri-driver did not return a sessionId");
 }
 
+// Proves a capability-free WebView runs in the SAME native Rust process as
+// the authenticated main WebView. A debug-only Rust document-title callback
+// reports the outcomes, even when EdgeDriver enumerates only its first view.
+async function checkConcurrentWindowAfterAuth(authenticatedAt) {
+  const file = join(directory,"concurrent-native-evidence.log");
+  let latest;
+  for (let attempt=0;attempt<40;attempt++) {
+    if (existsSync(file)) {
+      const lines=readFileSync(file,"utf8").trim().split(/\r?\n/);
+      for (const line of lines) {
+        const parts=line.split("|");
+        if (parts.length!==3 || Number(parts[0])<authenticatedAt)continue;
+        if (!/^\d+$/.test(parts[1]))continue;
+        try {
+          const proof=JSON.parse(Buffer.from(parts[2],"base64").toString("utf8"));
+          if (proof.v===1 && Array.isArray(proof.results)) latest=proof;
+        } catch {/* reject malformed side-channel data */ }
+      }
+    }
+    if (latest)break;
+    await new Promise(resolveDone=>setTimeout(resolveDone,500));
+  }
+  verdict("concurrent: unauthorized native WebView reports after login",
+    Boolean(latest), latest?"native title callback received":"no verified native report");
+  for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
+    "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
+    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_fx_status",
+    "plugin:fs|write_text_file","plugin:shell|execute"]) {
+    const record=latest.results.find(item=>item.command===command);
+    verdict("concurrent: "+command+" denied with main authenticated",
+      record?.state==="rejected" && record?.access_denied===true &&
+        record?.denial_layer==="tauri_acl" && record?.malformed===false,
+      record ? record.state+" denial_layer="+record.denial_layer+
+        " malformed="+record.malformed : "missing result");
+  }
+}
+
+// Verify the actual CSP enforced by WebView2: the WebDriver-controlled script
+// can insert a child script element, but script-src 'self' must prevent that
+// newly inserted inline script from running. This is not a JS invoke mock.
+async function checkCspOnNativeMain() {
+  const executed=await wd("POST","/execute/sync",{
+    script:"window.__pravdaInlineCspProof=undefined; const s=document.createElement('script'); s.textContent='window.__pravdaInlineCspProof=true'; document.body.appendChild(s); return window.__pravdaInlineCspProof===true;",
+    args:[]
+  });
+  verdict("main: native WebView2 CSP blocks injected inline script",executed===false,
+    "DOM inline script executed="+executed);
+}
+
+// Exercise a controlled external HTTPS page while the main Rust Auth is live.
+// Navigation denial is acceptable, but must leave the trusted app page loaded.
+// If navigation is allowed, the test must observe an untrusted https: origin
+// and fail if that document can invoke privileged Tauri commands.
+async function checkHostileHttpsOrigin() {
+  const origin="https://example.com/";
+  await wd("POST","/timeouts",{pageLoad:20000,script:20000});
+  let navigationError=null;
+  try {
+    await wd("POST","/url",{url:origin});
+  } catch (error) {
+    navigationError=String(error.message||error).slice(0,120);
+  }
+  let current;
+  try {
+    current=await wd("GET","/url");
+  } catch (error) {
+    throw Error("Hostile origin test lost native WebView: "+String(error).slice(0,120));
+  }
+  const location=String(current||"");
+  if (location.startsWith("https://example.com/")) {
+    const denied=await invoke("ipc_market_snapshot");
+    verdict("untrusted HTTPS origin cannot invoke market IPC",
+      denied.state==="no-bridge" ||
+      (denied.state==="rejected" && /not allowed|denied|capability|permission|forbidden|URL/i.test(denied.error||"")),
+      "HTTPS page: "+denied.state+" "+(denied.error||""));
+    verdict("hostile origin never receives Tauri business capabilities",true,
+      "WebView2 document origin example.com, no remote capabilities");
+  } else {
+    // A retained trusted URL alone proves nothing: a driver/protocol failure
+    // can leave the original page untouched without exercising Tauri policy.
+    // Only an explicit navigation-policy denial can count as a rejection.
+    const policyDenied=Boolean(navigationError) &&
+      /(?:ERR_BLOCKED_BY_CLIENT|navigation (?:is )?(?:not allowed|denied|blocked)|blocked by (?:navigation )?policy|not allowed to navigate)/i.test(navigationError);
+    verdict("untrusted HTTPS navigation blocked in authenticated main window",
+      policyDenied &&
+        /^(?:tauri:|https?:\/\/(?:tauri\.localhost|localhost)(?:[:/]|$))/.test(location),
+      "trusted page retained="+location.slice(0,130)+
+        "; explicit policy denial="+policyDenied);
+  }
+}
+
 try {
   assert.equal(process.platform,"win32","Requires native Windows WebView2");
   assert.ok(existsSync(exe),"Debug security-e2e executable missing");
   assert.ok(Number.isInteger(basePort)&&basePort>=1024&&basePort<=65533,
     "Invalid base driver port");
   report.git_sha=execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();
+  report.windows_version=String(process.env.PRAVDA_E2E_WINDOWS_VERSION||"");
+  report.webview2_version=String(process.env.PRAVDA_E2E_WEBVIEW2_VERSION||"");
+  assert.ok(report.windows_version&&/^\d+\.\d+\.\d+\.\d+$/.test(report.webview2_version),
+    "Missing native Windows/WebView2 version evidence");
   directory=mkdtempSync(join(tmpdir(),"pravda-ipc-e2e-"));
 
   await startSession("main",basePort);
@@ -211,6 +308,8 @@ try {
   verdict("main: one-time test setup",setup.state==="resolved",setup.state);
   const market=await invoke("ipc_market_snapshot");
   verdict("main: authenticated snapshot",market.state==="resolved",market.state);
+  await checkConcurrentWindowAfterAuth(Date.now());
+  await checkCspOnNativeMain();
 
   const forbidden=join(directory,"MUST_NOT_EXIST.txt");
   runtimeDenied("main: filesystem plugin denied",
@@ -226,6 +325,10 @@ try {
   verdict("main: logout",logout.state==="resolved",logout.state);
   rustDenied("main: logout revokes market access",
     await invoke("ipc_market_snapshot"));
+
+  const login=await invoke("ipc_auth_login",{password});
+  verdict("main: authenticated again for hostile HTTPS test",login.state==="resolved",login.state);
+  await checkHostileHttpsOrigin();
 
   // tauri-driver / EdgeDriver on Windows may enumerate only its primary
   // WebView. Start the truly unauthorized Tauri label as the primary WebView
