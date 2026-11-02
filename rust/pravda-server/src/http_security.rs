@@ -202,7 +202,7 @@ mod tests {
         }
         // Cross-site scripts, API reads, mutations and WebSocket handshakes
         // are still denied, even if they forge navigation metadata.
-        for path in ["/api/metrics", "/ws/ticks", "/setup", "/logout"] {
+        for path in ["/api/metrics", "/ws/ticks", "/setup/secret", "/logout"] {
             let request = Request::builder()
                 .method(Method::GET)
                 .uri(path)
