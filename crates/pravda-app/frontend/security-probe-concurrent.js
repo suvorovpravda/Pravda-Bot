@@ -3,9 +3,14 @@
 // Reports *only* rejection status over the test-only document title bridge.
 const guarded = [
   "ipc_auth_status",
+  "ipc_session_check",
   "ipc_market_snapshot",
   "ipc_history_recent",
+  "ipc_history_query",
   "ipc_history_export_csv",
+  "ipc_paper_alerts_snapshot",
+  "ipc_runtime_metrics",
+  "ipc_fx_status",
   "plugin:fs|write_text_file",
   "plugin:shell|execute"
 ];
@@ -14,6 +19,9 @@ async function check() {
   const invoke = window.__TAURI__?.core?.invoke;
   const results = [];
   const validArguments = {
+    ipc_history_query: {
+      query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
+    },
     ipc_history_export_csv: {
       query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
     },
