@@ -24,15 +24,15 @@
 ## Français
 
 > [!IMPORTANT]
-> **État après les fusions des [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) (2 novembre 2026).** Desktop Windows Tauri 2 avec assets embarqués et **IPC natif sans serveur HTTP pour son UI**, plus serveur Axum de diagnostic séparé. La PR #67 a confirmé **8/8 checks verts et 22 assertions de sécurité IPC sous Windows WebView2 réel**. Ces vérifications portent sur **deux sessions natives successives**, pas sur deux fenêtres simultanées du même processus ni sur une origine distante. **Aucun MSI Enterprise signé n'est livré.**
+> **État après les fusions des [PR #72](https://github.com/suvorovpravda/Pravda-Bot/pull/72) et [#75](https://github.com/suvorovpravda/Pravda-Bot/pull/75), ainsi que des [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) (2 novembre 2026).** Desktop Windows Tauri 2 avec assets embarqués et **IPC natif sans serveur HTTP pour son UI**, plus serveur Axum de diagnostic séparé. La PR #67 a confirmé **8/8 checks verts et 22 assertions de sécurité IPC sous Windows WebView2 réel**. Ces vérifications portent sur **deux sessions natives successives**, pas sur deux fenêtres simultanées du même processus ni sur une origine distante. **Aucun MSI Enterprise signé n'est livré.**
 
 ### 📈 Avancement par priorité
 
-**Suivi au 2 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées. Le travail Rust/Python en cours est indiqué comme **branche de PR, non fusionné**. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
+**Suivi au 2 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées. La séparation Python/Rust est **fusionnée** et son contrôle de frontière a réussi sur `main` (`6b1b916`) ; cela ne prouve pas la parité de toutes les anciennes fonctions. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
 
 | Priorité | Chantier | Jalons validés ou préparés | Avancement |
 |---|---|---:|---:|
-| **P0** | Isoler définitivement Python hors production | 3/6, **branche de migration** | **50 %** |
+| **P0** | Isoler définitivement Python hors production | 6/6, **fusionnée et contrôlée sur `main`** | **100 %** |
 | **P0** | Sécurité IPC Windows | 2/4 | **50 %** |
 | **P0** | Parité Rust des anciennes fonctionnalités | 3/8 | **38 %** |
 | **P0** | CI et gouvernance de production | 3/5 | **60 %** |
