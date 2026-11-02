@@ -2,8 +2,16 @@
 name = "pravda-core"
 version = "0.1.0"
 edition = "2021"
+rust-version.workspace = true
 
 [dependencies]
 thiserror = "1.0"
+pravda-market-core = { path = "../../rust/market-core" }
+pravda-fetchers = { path = "../pravda-fetchers" }
+pravda-engine = { path = "../pravda-engine" }
+pravda-store = { path = "../pravda-store" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+serde_json = "1"
 chrono = { version = "0.4", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
