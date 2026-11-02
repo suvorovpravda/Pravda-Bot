@@ -149,8 +149,6 @@ pub fn replay(ticks: &[ReplayTick], config: ReplayConfig) -> Result<ReplayResult
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::Duration;
-
     fn tick(offset: i64, k: f64, b: f64, approved: bool) -> ReplayTick {
         ReplayTick {
             at: DateTime::from_timestamp(1_700_000_000 + offset, 0).unwrap(),
