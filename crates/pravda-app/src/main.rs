@@ -153,7 +153,8 @@ async fn main() {
             // The regular main window is used in a separate native test run.
             #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
             if std::env::var("PRAVDA_E2E_PROBE_ONLY").as_deref() == Ok("true") {
-                WebviewWindowBuilder::new(app, "security-probe", WebviewUrl::App("security-probe.html".into()))
+                let probe_url = WebviewUrl::App("security-probe.html".into());
+                WebviewWindowBuilder::new(app, "security-probe", probe_url)
                 .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
                 .inner_size(700.0, 500.0)
                 .build()?;
