@@ -239,3 +239,20 @@ impl SessionToken {
         &self.0
     }
 }
+
+#[cfg(test)]
+mod crypto_compatibility_tests {
+    use super::*;
+
+    // Vecteur indépendant, calculé avec PBKDF2-HMAC-SHA256, 600 000
+    // itérations et 32 octets. Le format des vérificateurs existants
+    // doit rester identique pendant la migration des crates RustCrypto.
+    #[test]
+    fn pbkdf2_sha256_legacy_compatibility_vector() {
+        let bytes = derive("password", b"salt", 600_000);
+        assert_eq!(
+            to_hex(&bytes),
+            "669cfe52482116fda1aa2cbe409b2f56c8e4563752b7a28f6eaab614ee005178"
+        );
+    }
+}
