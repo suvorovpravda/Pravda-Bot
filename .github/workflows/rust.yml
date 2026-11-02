@@ -10,6 +10,7 @@ on:
       - 'dashboard.html'
       - '**/rust/**'
       - 'crates/**'
+      - 'tools/**'
   pull_request:
     branches: [main]
 
