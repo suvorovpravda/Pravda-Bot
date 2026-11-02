@@ -63,6 +63,8 @@ function verifyMergePatchDetection() {
   }
   try {
     run("init","-q","-b","main");
+    run("config","user.name","Pravda CI");
+    run("config","user.email","ci@invalid.local");
     writeFileSync(join(temp,"base.txt"),"base\n");
     run("add","."); commit("base");
     run("checkout","-q","-b","topic");
