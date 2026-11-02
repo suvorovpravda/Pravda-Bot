@@ -43,6 +43,10 @@ fn allowed(request: &Request, port: u16) -> bool {
     {
         return false;
     }
+    // A browser may send Sec-Fetch-Site: cross-site on a local Tauri form
+    // submission. Such a submission is safe only if its browser-controlled
+    // Origin independently matches this exact loopback host and port.
+    let mut matched_origin = false;
     match single_header(request.headers(), "origin") {
         Ok(None) => {} // CLI clients and ordinary same-origin navigation may omit Origin.
         Ok(Some(origin)) => {
@@ -65,26 +69,30 @@ fn allowed(request: &Request, port: u16) -> bool {
             {
                 return false;
             }
+            matched_origin = true;
         }
         Err(()) => return false,
     }
     match single_header(request.headers(), "sec-fetch-site") {
         Ok(None | Some("same-origin" | "none")) => true,
-        // WebView2 may classify the *first* Tauri -> HTTP navigation as cross-site.
-        // Permit document navigation ONLY to the public login or dashboard page;
-        // never exempt API, WebSocket, form POSTs or arbitrary cross-site fetches.
+        // Chromium/WebView2 can classify browser-internal top-level navigations
+        // as cross-site. Only public HTML pages and authenticated-origin form
+        // submissions receive an exception; no API, WS, or cross-site script.
         Ok(Some("cross-site")) => {
-            request.method() == Method::GET
-                && matches!(request.uri().path(), "/" | "/login")
-                && matches!(
-                    single_header(request.headers(), "sec-fetch-mode"),
-                    Ok(Some("navigate"))
-                )
-                && matches!(
-                    single_header(request.headers(), "sec-fetch-dest"),
-                    Ok(Some("document"))
-                )
-                && matches!(single_header(request.headers(), "origin"), Ok(None))
+            let document_navigation = matches!(
+                single_header(request.headers(), "sec-fetch-mode"),
+                Ok(Some("navigate"))
+            ) && matches!(
+                single_header(request.headers(), "sec-fetch-dest"),
+                Ok(Some("document"))
+            );
+            document_navigation && match request.method() {
+                &Method::GET => matches!(request.uri().path(), "/" | "/login" | "/setup")
+                    && matches!(single_header(request.headers(), "origin"), Ok(None)),
+                &Method::POST => matches!(request.uri().path(), "/login" | "/setup")
+                    && matched_origin,
+                _ => false,
+            }
         }
         _ => false,
     }
@@ -125,6 +133,7 @@ mod tests {
         Router::new()
             .route("/", get(|| async { "dashboard page" }))
             .route("/login", get(|| async { "login page" }))
+            .route("/setup", get(|| async { "setup page" }))
             .route("/api/metrics", get(|| async { "local metrics" }))
             .route("/ws/ticks", get(|| async { "upgrade boundary" }))
             .layer(middleware::from_fn_with_state(8081_u16, local_only))
@@ -174,7 +183,7 @@ mod tests {
     #[tokio::test]
     async fn permits_only_cross_site_top_level_document_navigation() {
         // Matches the browser fetch metadata emitted by WebView2 on initial launch.
-        for path in ["/", "/login"] {
+        for path in ["/", "/login", "/setup"] {
             let request = Request::builder()
                 .method(Method::GET)
                 .uri(path)
@@ -233,6 +242,72 @@ mod tests {
             );
         }
     }
+    #[tokio::test]
+    async fn cross_site_setup_post_requires_exact_same_origin_and_document_navigation() {
+        // A local WebView2 password form can carry cross-site Fetch Metadata.
+        // The independent Origin header must still be the exact local origin.
+        for path in ["/login", "/setup"] {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri(path)
+                .header(header::HOST, "127.0.0.1:8081")
+                .header(header::ORIGIN, "http://127.0.0.1:8081")
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-mode", "navigate")
+                .header("sec-fetch-dest", "document")
+                .body(Body::empty())
+                .unwrap();
+            // Router handles GET only; 405 confirms the security boundary passed.
+            assert_eq!(
+                app().oneshot(request).await.unwrap().status(),
+                StatusCode::METHOD_NOT_ALLOWED
+            );
+        }
+        for origin in [
+            None,
+            Some("null"),
+            Some("http://localhost:8081"),
+            Some("http://127.0.0.1:8082"),
+            Some("https://127.0.0.1:8081"),
+            Some("https://attacker.invalid"),
+        ] {
+            let mut request = Request::builder()
+                .method(Method::POST)
+                .uri("/setup")
+                .header(header::HOST, "127.0.0.1:8081")
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-mode", "navigate")
+                .header("sec-fetch-dest", "document");
+            if let Some(origin) = origin {
+                request = request.header(header::ORIGIN, origin);
+            }
+            assert_eq!(
+                app()
+                    .oneshot(request.body(Body::empty()).unwrap())
+                    .await
+                    .unwrap()
+                    .status(),
+                StatusCode::FORBIDDEN
+            );
+        }
+        for (mode, dest) in [("cors", "empty"), ("navigate", "empty"), ("no-cors", "document")] {
+            let request = Request::builder()
+                .method(Method::POST)
+                .uri("/setup")
+                .header(header::HOST, "127.0.0.1:8081")
+                .header(header::ORIGIN, "http://127.0.0.1:8081")
+                .header("sec-fetch-site", "cross-site")
+                .header("sec-fetch-mode", mode)
+                .header("sec-fetch-dest", dest)
+                .body(Body::empty())
+                .unwrap();
+            assert_eq!(
+                app().oneshot(request).await.unwrap().status(),
+                StatusCode::FORBIDDEN
+            );
+        }
+    }
+
     #[tokio::test]
     async fn rejects_rebinding_cross_origin_and_wrong_port_for_http_and_ws() {
         for path in ["/api/metrics", "/ws/ticks"] {
