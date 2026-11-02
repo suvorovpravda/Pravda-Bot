@@ -14,7 +14,6 @@ use axum::{
 use config::ServerConfig;
 use futures_util::{SinkExt, StreamExt};
 use pravda_core::{PravdaRuntime, RuntimePolicy};
-use pravda_fetchers::types::{Exchange, Symbol, Tick};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
 use std::net::SocketAddr;
