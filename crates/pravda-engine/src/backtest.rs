@@ -105,7 +105,10 @@ pub fn replay(ticks: &[ReplayTick], config: ReplayConfig) -> Result<ReplayResult
         previous = Some(tick.at);
         if tick.symbol.is_empty()
             || tick.symbol.len() > 32
-            || !tick.symbol.bytes().all(|ch| ch.is_ascii_alphanumeric() || ch == b'/')
+            || !tick
+                .symbol
+                .bytes()
+                .all(|ch| ch.is_ascii_alphanumeric() || ch == b'/')
             || !tick.kraken_price.is_finite()
             || !tick.binance_price.is_finite()
             || tick.kraken_price <= 0.0
@@ -113,14 +116,17 @@ pub fn replay(ticks: &[ReplayTick], config: ReplayConfig) -> Result<ReplayResult
         {
             return Err(ReplayError::InvalidRow);
         }
-        match sim.update_with_execution_approval(
-            &tick.symbol,
-            tick.kraken_price,
-            tick.binance_price,
-            tick.opportunity_confirmed,
-            tick.execution_approved,
-            tick.at,
-        ).as_deref() {
+        match sim
+            .update_with_execution_approval(
+                &tick.symbol,
+                tick.kraken_price,
+                tick.binance_price,
+                tick.opportunity_confirmed,
+                tick.execution_approved,
+                tick.at,
+            )
+            .as_deref()
+        {
             Some("opened") => opened += 1,
             Some("closed") => closed += 1,
             _ => {}
@@ -142,7 +148,7 @@ pub fn replay(ticks: &[ReplayTick], config: ReplayConfig) -> Result<ReplayResult
         book_equity_usdt,
         realized_pnl_usdt: sim.realized_pnl_usdt,
         first_timestamp: ticks[0].at,
-        last_timestamp: ticks[ticks.len()-1].at,
+        last_timestamp: ticks[ticks.len() - 1].at,
     })
 }
 
@@ -183,14 +189,23 @@ mod tests {
     #[test]
     fn strict_clock_order_rejects_future_and_duplicate_ticks() {
         let data = [tick(5, 101.0, 100.0, true), tick(2, 99.0, 100.0, true)];
-        assert!(matches!(replay(&data, ReplayConfig::default()), Err(ReplayError::OutOfOrder)));
+        assert!(matches!(
+            replay(&data, ReplayConfig::default()),
+            Err(ReplayError::OutOfOrder)
+        ));
         let duplicates = [tick(1, 101.0, 100.0, true), tick(1, 99.0, 100.0, true)];
-        assert!(matches!(replay(&duplicates, ReplayConfig::default()), Err(ReplayError::OutOfOrder)));
+        assert!(matches!(
+            replay(&duplicates, ReplayConfig::default()),
+            Err(ReplayError::OutOfOrder)
+        ));
     }
 
     #[test]
     fn rejects_invalid_market_data_and_configuration() {
-        assert!(matches!(replay(&[], ReplayConfig::default()), Err(ReplayError::EmptyInput)));
+        assert!(matches!(
+            replay(&[], ReplayConfig::default()),
+            Err(ReplayError::EmptyInput)
+        ));
         assert!(matches!(
             replay(&[tick(0, f64::NAN, 100.0, true)], ReplayConfig::default()),
             Err(ReplayError::InvalidRow)
