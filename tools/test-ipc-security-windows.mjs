@@ -3,7 +3,7 @@
 // Never mock invoke. Fail closed on driver errors, missing windows or leaks.
 import assert from "node:assert/strict";
 import {spawn, execFileSync} from "node:child_process";
-import {existsSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
+import {existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync} from "node:fs";
 import {resolve, join} from "node:path";
 import {tmpdir} from "node:os";
 import {randomBytes} from "node:crypto";
@@ -14,8 +14,8 @@ const reportPath = resolve(process.env.PRAVDA_E2E_REPORT ||
   join(tmpdir(),"Pravda-IPC-security-"+Date.now()+".json"));
 const report = {
   started: new Date().toISOString(), passed: false, tests: [],
-  scope: "Two separate real WebView2 sessions: main and capability-free probe",
-  limits: "Probe is launched as the primary WebView in a second debug-only process; this does not demonstrate cross-window auth sharing or remote-origin enforcement."
+  scope: "Real WebView2: main, concurrent same-process unprivileged WebView, and separate probe",
+  limits: "Concurrent native probe emits only denied/allowed status via a debug-only window-title event. No remote-origin navigation is tested; the later separate-process probe alone does not show shared-session enforcement."
 };
 let port, child, session, directory, driverFault, failure;
 
@@ -159,7 +159,9 @@ async function startSession(mode, driverPort) {
     PRAVDA_DB_PATH:join(directory,"data.db"),
     PRAVDA_AUTH_PATH:join(directory,"auth.json"),
     PRAVDA_MARKET_FEEDS_ENABLED:"false",
-    PRAVDA_E2E_PROBE_ONLY:mode==="probe"?"true":"false"
+    PRAVDA_E2E_PROBE_ONLY:mode==="probe"?"true":"false",
+    PRAVDA_E2E_CONCURRENT:mode==="main"?"true":"false",
+    PRAVDA_E2E_CONCURRENT_REPORT:join(directory,"concurrent-native-evidence.log")
   };
   for (const key of ["PRAVDA_ADMIN_PASSWORD","PRAVDA_LEGACY_DB_PATH","MARKET_HISTORY_DB"])
     delete env[key];
@@ -187,6 +189,38 @@ async function startSession(mode, driverPort) {
     "tauri-driver did not return a sessionId");
 }
 
+// Proves a capability-free WebView runs in the SAME native Rust process as
+// the authenticated main WebView. A debug-only Rust document-title callback
+// reports the outcomes, even when EdgeDriver enumerates only its first view.
+async function checkConcurrentWindowAfterAuth(authenticatedAt) {
+  const file = join(directory,"concurrent-native-evidence.log");
+  let latest;
+  for (let attempt=0;attempt<40;attempt++) {
+    if (existsSync(file)) {
+      const lines=readFileSync(file,"utf8").trim().split(/\r?\n/);
+      for (const line of lines) {
+        const parts=line.split("|");
+        if (parts.length!==3 || Number(parts[0])<authenticatedAt)continue;
+        if (!/^\d+$/.test(parts[1]))continue;
+        try {
+          const proof=JSON.parse(Buffer.from(parts[2],"base64").toString("utf8"));
+          if (proof.v===1 && Array.isArray(proof.results)) latest=proof;
+        } catch {/* reject malformed side-channel data */ }
+      }
+    }
+    if (latest)break;
+    await new Promise(resolveDone=>setTimeout(resolveDone,500));
+  }
+  verdict("concurrent: unauthorized native WebView reports after login",
+    Boolean(latest), latest?"native title callback received":"no verified native report");
+  for (const command of ["ipc_auth_status","ipc_market_snapshot","ipc_history_export_csv"]) {
+    const record=latest.results.find(item=>item.command===command);
+    verdict("concurrent: "+command+" denied with main authenticated",
+      record?.state==="rejected",
+      record?.state||"missing result");
+  }
+}
+
 try {
   assert.equal(process.platform,"win32","Requires native Windows WebView2");
   assert.ok(existsSync(exe),"Debug security-e2e executable missing");
@@ -211,6 +245,7 @@ try {
   verdict("main: one-time test setup",setup.state==="resolved",setup.state);
   const market=await invoke("ipc_market_snapshot");
   verdict("main: authenticated snapshot",market.state==="resolved",market.state);
+  await checkConcurrentWindowAfterAuth(Date.now());
 
   const forbidden=join(directory,"MUST_NOT_EXIST.txt");
   runtimeDenied("main: filesystem plugin denied",
