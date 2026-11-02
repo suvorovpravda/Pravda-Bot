@@ -240,7 +240,7 @@ pub async fn ipc_public_feed(
 
 
 fn safe_article_link(raw: &str) -> Result<String, &'static str> {
-    if raw.len() > 1500 || raw.contains(['\\r', '\\n']) {
+    if raw.len() > 1500 || raw.contains('\r') || raw.contains('\n') {
         return Err("INVALID_ARTICLE_LINK");
     }
     let link = reqwest::Url::parse(raw).map_err(|_| "INVALID_ARTICLE_LINK")?;
@@ -255,7 +255,7 @@ fn safe_article_link(raw: &str) -> Result<String, &'static str> {
         || host.ends_with(".onion") {
         return Err("INVALID_ARTICLE_LINK");
     }
-    Ok(link.into())
+    Ok(link.to_string())
 }
 
 /// Opens allowlisted source websites or a user-clicked public HTTPS news URL.
@@ -276,7 +276,7 @@ pub fn ipc_open_source(
         "aisstream" => "https://aisstream.io/".to_owned(),
         "revolutx" => "https://exchange.revolut.com/".to_owned(),
         "ice" => "https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures".to_owned(),
-         "github" => "https://github.com/suvorovpravda/Pravda-Bot".to_owned(),
+        "github" => "https://github.com/suvorovpravda/Pravda-Bot".to_owned(),
         "article" => safe_article_link(link.as_deref().unwrap_or_default()).map_err(str::to_string)?,
         _ => return Err("INVALID_SOURCE_LINK".to_owned()),
     };
