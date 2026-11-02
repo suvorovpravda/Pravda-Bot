@@ -10,7 +10,8 @@ use axum::{
 };
 use serde::Deserialize;
 use service::*;
-pub(crate) use service::{Auth, AuthError, SessionToken, PBKDF2_ITERATIONS};
+pub use service::{Auth, AuthError, PBKDF2_ITERATIONS};
+pub(crate) use service::SessionToken;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
