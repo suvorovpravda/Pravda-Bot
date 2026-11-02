@@ -231,10 +231,7 @@ mod tests {
         let rng = ring::rand::SystemRandom::new();
         let der = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
         let pair = Ed25519KeyPair::from_pkcs8(der.as_ref()).unwrap();
-        let pem = format!(
-            "{PEM_START}\n{}\n{PEM_END}",
-            STANDARD.encode(der.as_ref())
-        );
+        let pem = format!("{PEM_START}\n{}\n{PEM_END}", STANDARD.encode(der.as_ref()));
         let signature = sign_balances("1785313433816", pem.as_bytes()).unwrap();
         let signature = STANDARD.decode(signature).unwrap();
         UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
