@@ -94,7 +94,7 @@ jobs:
       - name: Diagnose desktop Cargo.lock drift
         shell: pwsh
         run: |
-          cargo metadata --format-version 1 --no-deps --manifest-path crates/pravda-app/Cargo.toml | Out-Null
+          cargo metadata --format-version 1 --manifest-path crates/pravda-app/Cargo.toml | Out-Null
           git diff -- crates/pravda-app/Cargo.lock
 
       - name: Test desktop storage path selection (Windows)
