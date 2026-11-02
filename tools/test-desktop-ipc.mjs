@@ -24,6 +24,8 @@ assert.doesNotMatch(html,/<script(?![^>]*\bsrc=)|<style\b|style="/i);
 assert.match(html,/src="\.\/auth\.js"/);
 assert.match(auth,/setup = false/);
 assert.match(css,/\.ipc-auth-screen\[hidden\]/);
+assert.match(auth,/if \(loginVisible\) return;/);
+assert.match(css,/\.ipc-auth-card label\[hidden\]/);
 assert.doesNotMatch(js,/\bfetch\s*\(|\bnew\s+WebSocket\s*\(|location\.assign\s*\(/);
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
