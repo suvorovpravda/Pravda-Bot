@@ -32,9 +32,15 @@ async function http(method,path,body,timeout=20_000) {
     signal:AbortSignal.timeout(timeout)
   });
   const data=await response.json();
-  if(!response.ok||data.value?.error) {
+  // Application-level IPC rejections are successful WebDriver replies:
+  // value={state:"rejected",error:"UNAUTHORIZED"}. Only a W3C WebDriver
+  // protocol error has BOTH error and message, typically with an HTTP 4xx/5xx.
+  const wdError = typeof data.value?.error === "string" &&
+    typeof data.value?.message === "string";
+  if(!response.ok || wdError) {
     throw Error("WebDriver "+method+" "+path+": "+
-      String(data.value?.message || response.status).slice(0,220));
+      String(wdError ? data.value.error+": "+data.value.message :
+        response.status).slice(0,220));
   }
   return data.value;
 }
