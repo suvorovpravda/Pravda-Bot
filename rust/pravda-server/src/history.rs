@@ -198,10 +198,8 @@ mod tests {
         routing::get,
         Router,
     };
-    use pravda_engine::{PaperMode, PaperSimulator};
     use pravda_store::PravdaStore;
-    use std::{collections::HashMap, time::Instant};
-    use tokio::sync::{broadcast, Mutex, RwLock};
+    use tokio::sync::broadcast;
     use tower::ServiceExt;
 
     fn test_state() -> Arc<AppState> {
@@ -222,22 +220,7 @@ mod tests {
         let (tick_tx, _) = broadcast::channel(8);
         Arc::new(AppState {
             config: crate::config::ServerConfig::default(),
-            started_at: Instant::now(),
-            tick_tx,
-            last_ticks: RwLock::new(Vec::new()),
-            prices: RwLock::new(HashMap::new()),
-            alert_gates: RwLock::new(HashMap::new()),
-            paper_sim: RwLock::new(PaperSimulator::new(
-                PaperMode::Fixed,
-                1000.0,
-                10.0,
-                100.0,
-                0.05,
-                3600.0,
-                0.36,
-            )),
-            alerts: RwLock::new(Vec::new()),
-            store: Arc::new(Mutex::new(store)),
+            runtime: Arc::new(crate::PravdaRuntime::new(store, tick_tx)),
             auth: Arc::new(
                 crate::auth::Auth::load(
                     std::env::temp_dir().join(format!(
