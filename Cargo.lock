@@ -1126,6 +1126,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pravda-core"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "pravda-engine",
+ "pravda-fetchers",
+ "pravda-market-core",
+ "pravda-store",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "pravda-engine"
 version = "0.1.0"
 dependencies = [
@@ -1169,6 +1185,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.2.17",
  "pbkdf2",
+ "pravda-core",
  "pravda-engine",
  "pravda-fetchers",
  "pravda-market-core",
