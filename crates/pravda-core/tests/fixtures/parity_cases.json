@@ -1,0 +1,171 @@
+{
+  "provenance": [
+    "archive/python-legacy/tests/test_paper_simulator.py",
+    "archive/python-legacy/tests/test_security_and_fees.py"
+  ],
+  "money_comparison": "Legacy Python CSV writes 8 digits after the decimal point; compare monetary outcomes at that precision.",
+  "cases": [
+    {
+      "name": "portfolio_open_close",
+      "legacy_test": "test_portfolio_position_opens_closes_and_logs_estimated_pnl",
+      "mode": "portfolio",
+      "initial_cash": 1000,
+      "steps": [
+        {
+          "symbol": "BTC/USDT",
+          "kraken": 100.5,
+          "binance": 100,
+          "confirmed": true,
+          "execution_approved": true,
+          "at": "2026-01-01T00:00:00Z",
+          "action": "opened",
+          "notional": 100,
+          "cash": 900,
+          "realized_pnl": 0,
+          "completed": 0,
+          "open_positions": 1
+        },
+        {
+          "symbol": "BTC/USDT",
+          "kraken": 100.05,
+          "binance": 100,
+          "confirmed": false,
+          "execution_approved": true,
+          "at": "2026-01-01T00:00:05Z",
+          "action": "closed",
+          "cash": 1000.09,
+          "realized_pnl": 0.09,
+          "completed": 1,
+          "open_positions": 0
+        }
+      ]
+    },
+    {
+      "name": "fixed_position_capped_to_cash",
+      "legacy_test": "test_fixed_mode_caps_position_to_available_cash",
+      "mode": "fixed",
+      "initial_cash": 40,
+      "steps": [
+        {
+          "symbol": "ETH/USDT",
+          "kraken": 100.5,
+          "binance": 100,
+          "confirmed": true,
+          "execution_approved": true,
+          "at": "2026-01-01T00:00:00Z",
+          "action": "opened",
+          "notional": 40,
+          "cash": 0,
+          "realized_pnl": 0,
+          "completed": 0,
+          "open_positions": 1
+        }
+      ]
+    },
+    {
+      "name": "execution_rejection_is_fail_closed",
+      "legacy_test": "test_execution_rejection_prevents_opening_a_new_position",
+      "mode": "portfolio",
+      "initial_cash": 1000,
+      "steps": [
+        {
+          "symbol": "BTC/USDT",
+          "kraken": 100.5,
+          "binance": 100,
+          "confirmed": true,
+          "execution_approved": false,
+          "at": "2026-01-01T00:00:00Z",
+          "action": null,
+          "cash": 1000,
+          "realized_pnl": 0,
+          "completed": 0,
+          "open_positions": 0
+        }
+      ]
+    },
+    {
+      "name": "short_spread_reversal",
+      "legacy_test": "test_short_spread_direction_and_maximum_holding_exit",
+      "mode": "portfolio",
+      "initial_cash": 1000,
+      "steps": [
+        {
+          "symbol": "ETH/USDT",
+          "kraken": 99,
+          "binance": 100,
+          "confirmed": true,
+          "execution_approved": true,
+          "at": "2026-01-01T00:00:00Z",
+          "action": "opened",
+          "notional": 100,
+          "cash": 900,
+          "realized_pnl": 0,
+          "completed": 0,
+          "open_positions": 1
+        },
+        {
+          "symbol": "ETH/USDT",
+          "kraken": 99.95,
+          "binance": 100,
+          "confirmed": false,
+          "execution_approved": true,
+          "at": "2026-01-01T00:00:01Z",
+          "action": "closed",
+          "cash": 1000.59,
+          "realized_pnl": 0.59,
+          "completed": 1,
+          "open_positions": 0
+        }
+      ]
+    },
+    {
+      "name": "maximum_holding_exit",
+      "legacy_test": "test_short_spread_direction_and_maximum_holding_exit",
+      "mode": "portfolio",
+      "initial_cash": 1000,
+      "steps": [
+        {
+          "symbol": "SOL/USDT",
+          "kraken": 100.5,
+          "binance": 100,
+          "confirmed": true,
+          "execution_approved": true,
+          "at": "2026-01-01T00:00:02Z",
+          "action": "opened",
+          "notional": 100,
+          "cash": 900,
+          "realized_pnl": 0,
+          "completed": 0,
+          "open_positions": 1
+        },
+        {
+          "symbol": "SOL/USDT",
+          "kraken": 100.6,
+          "binance": 100,
+          "confirmed": false,
+          "execution_approved": true,
+          "at": "2026-01-01T01:00:02Z",
+          "action": "closed",
+          "cash": 999.54,
+          "realized_pnl": -0.46,
+          "completed": 1,
+          "open_positions": 0
+        }
+      ]
+    }
+  ],
+  "security_cases": [
+    {
+      "first_price": 100,
+      "second_price": 101.2,
+      "fee_rate": 0.0036,
+      "expected_net_rate": 0.0084
+    },
+    {
+      "first_price": 100,
+      "second_price": 100,
+      "fee_rate": 0.0036,
+      "expected_net_rate": -0.0036
+    }
+  ]
+}
