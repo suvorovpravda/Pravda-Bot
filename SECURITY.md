@@ -62,7 +62,7 @@ Le présent document couvre **le code Rust actuellement maintenu** :
 
 **Hors garanties :** composants Python archivés (`archive/python-legacy/`), poste déjà compromis par un logiciel malveillant, compte Windows administrateur hostile, réseau d'exchange non fiable, publication de données via un logiciel tiers, paquet binaire distribué en dehors de la chaîne contrôlée.
 
-**Ce que le logiciel ne fait pas :** trading réel, ordres aux exchanges, stockage de clés d'API de trading pour ordonner des transactions, signature Authenticode du paquet actuel. Aucun scénario de sécurité ne doit supposer qu'une simulation papier équivaut à un ordre réel.
+**Ce que le logiciel ne fait pas :** trading réel ou transmission d'ordres aux exchanges ; le nouveau client Revolut X ne contient qu'un **GET fixe de soldes signé Ed25519**, sans permission IPC ni route HTTP privée. Le workflow d'installateurs peut exiger Authenticode si un certificat du mainteneur est configuré, mais **aucune distribution signée n'est revendiquée**. Aucun scénario de sécurité ne doit supposer qu'une simulation papier équivaut à un ordre réel.
 
 **Intégration publique Revolut X :** le module de carnet [#73](https://github.com/suvorovpravda/Pravda-Bot/pull/73) est fusionné, mais sa lecture n'est pas activée dans le runtime desktop. Il ne contient aucune authentification privée ni méthode d'exécution d'ordre. Le coffre Windows [fusionné en PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) reste **isolé des commandes Tauri/HTTP** ; ses tests avancés sont regroupés dans #88.
 
@@ -190,6 +190,14 @@ flowchart TB
 | Exécutable remplacé | Poste Windows | Aucune signature Enterprise attestée | **P0 release :** signature éditeur, horodatage et contrôle chaîne |
 | Contournement de gouvernance | `main` | Ruleset actif, aucun acteur de bypass, branche à jour et discussions résolues | Ruleset GitHub consulté : 3 contrôles requis (CodeQL, Rust Windows, desktop Windows), zéro approbation extérieure ; vérifier la CI du SHA à fusionner |
 
+### 🔗 Revolut X privé et signature Windows : garde-fous obligatoires
+
+**Lecture privée seulement (PR #88) :** la [spécification officielle Revolut X](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange) exige `X-Revx-API-Key`, `X-Revx-Timestamp` (millisecondes) et `X-Revx-Signature` (Ed25519). Le client Rust effectue exclusivement `GET https://revx.revolut.com/api/1.0/balances`, avec URL figée, sans redirection, réponses bornées, validation des décimaux sous forme de chaînes et erreurs expurgées. Les secrets sont récupérables uniquement via l'abstraction `SecretStore` (`revolut_x:api_key` et `revolut_x:ed25519_pkcs8_pem`), **sans commande WebView de provisionnement**. Les tests sont hors ligne ; aucun compte réel n'a été connecté ici.
+
+**Ordres réels : NON activés.** Le futur passage à l'exécution nécessite une demande explicite de l'utilisateur, une validation des permissions de la clé par le fournisseur, des limites de pertes/montants, une prévisualisation des frais/slippage, des identifiants d'ordres idempotents, une vérification de fraîcheur et un mécanisme d'arrêt d'urgence. La simulation papier ne doit jamais déclencher un ordre automatiquement.
+
+**Signature Enterprise :** `.github/workflows/windows-package.yml` est **manuel**. Sans `signed=true`, ses MSI/NSIS sont des candidats non signés ; si `signed=true`, il utilise les secrets d'environnement `windows-signing` pour importer un certificat de **signature de code**, activer la signature Tauri de l'EXE et des installateurs, puis échoue si l'empreinte, la validité Authenticode ou l'horodatage ne conviennent pas. Les secrets ne doivent jamais être commités, les clés restent isolées du frontend. Un installateur signé n'atteste pas sa recette d'installation ni la sécurité du logiciel.
+
 ### 🔐 Coffre Windows — inventaire, menaces et réversibilité (#74)
 
 **État prouvé :** la [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) a fusionné une abstraction Rust `SecretStore` et `WindowsCredentialStore` utilisant les API Win32 `CredWriteW/CredReadW/CredDeleteW`; les 8 contrôles CI de cette PR sont verts. Le composant est **non branché aux commandes Tauri/HTTP** et ne permet aucun ordre réel. Les tests supplémentaires préparés en #77 (mock, rotation, suppression, historique Git) ont été transférés en [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) ; ils ne sont **pas livrés sur `main`** tant que #88 n'est pas fusionnée.
@@ -244,7 +252,7 @@ flowchart LR
 | **P2 — dépendances** | Cartographier dépendances et produire SBOM, audit et provenance artefacts | SBOM + rapport d'audit associé à un SHA |
 | **P2 — livraison** | Signer **EXE et MSI** Authenticode, horodater RFC 3161, vérifier sur Windows propre, sécuriser rollback | Signatures `signtool` et tests install/upgrade/uninstall |
 
-**Règle de publication :** tant qu'un certificat de signature approuvé, les tests de Windows réel, l'intégrité de la chaîne de build et une revue de sécurité ne sont pas démontrés, **aucune promesse de release Enterprise prête à déployer**. Les jalons P0/P1/P2 ne sont pas des échéances calendaires.
+**Règle de publication :** la chaîne de signature est préparée avec mode d'activation explicite, **mais la release Enterprise reste interdite** sans certificat de signature approuvé, horodatage valide, recette sur Windows propre, intégrité de build et revue de sécurité. La cible client « délai –50 % » n'autorise aucun contournement des validations. Les jalons P0/P1/P2 ne sont pas des échéances calendaires.
 
 ### 🧪 Procédures de contrôle reproductibles
 

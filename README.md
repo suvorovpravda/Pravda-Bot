@@ -115,7 +115,7 @@ flowchart LR
   AXUM["Axum diagnostic séparé<br/>127.0.0.1:8080"]:::net -.-> ENGINE
 ```
 
-**Ce qui est proposé dans [#88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) :** pages modernes, connecteurs publics sans clés, carnet Revolut X public, mesures CPU/RAM et génération de candidats MSI/NSIS. La disponibilité effective des sources reste conditionnée à leurs réponses et à la réussite des tests de la branche. Les blocs AIS et TTF prix ne sont **pas** des flux actifs ; le coffre Windows n'autorise aucun ordre réel.
+**Ce qui est proposé dans [#88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) :** pages modernes, connecteurs publics sans clés, carnet Revolut X public, **client privé de consultation des soldes signé Ed25519 en Rust uniquement**, mesures CPU/RAM et génération de candidats MSI/NSIS avec **signature Authenticode manuelle optionnelle**. La disponibilité effective des sources reste conditionnée à leurs réponses et à la réussite des tests de la branche. Les blocs AIS et TTF prix ne sont **pas** des flux actifs ; le coffre Windows n'autorise aucun ordre réel.
 
 [Architecture et contrats](docs/PRAVDA-GUIDE.md) · [Modèle de menace](SECURITY.md).
 
@@ -194,8 +194,8 @@ Puis ouvrir [http://127.0.0.1:8080](http://127.0.0.1:8080). Arrêt par `Ctrl+C`.
 | Alertes d'événements du simulateur papier | ✅ | Consultation ; pas de création/suppression d'alertes personnalisées |
 | Métriques runtime | 🔧 | Dans #88 : CPU échantillonné, RAM résidente Windows/Linux, uptime et PID ; absence de mesures signalée explicitement |
 | Forex, énergie, géopolitique, actualités, AIS | 🔧 | Dans #88 : BCE/Frankfurter, GDELT et ENTSOG en HTTPS sans clé ; AIS non branché (droit fournisseur requis), TTF prix live non disponible |
-| Revolut X public / solde privé / ordres réels | 🟡 | Page de carnet public dans #88 ; solde et ordres nécessitent clé Ed25519, stockage sécurisé et confirmation explicite ; **ordres réels désactivés** |
-| Installateurs NSIS/MSI et signature Authenticode | 🔧 | Bundle Tauri et workflow manuel de candidats non signés dans #88 ; certificat, horodatage, recette de mise à jour et release signée non réalisés |
+| Revolut X public / solde privé / ordres réels | 🟡 | Carnet public disponible en #88 ; **client Rust signé Ed25519 de consultation des soldes** et pont vers le coffre Windows préparés dans #88. Aucune exposition des secrets à la WebView ; pas de parcours de provisionnement utilisateur final ni de méthode d'envoi d'ordre : **trading réel désactivé** jusqu'à recette et confirmation explicite. |
+| Installateurs NSIS/MSI et signature Authenticode | 🟡 | Bundle Tauri 2 et workflow manuel de candidats NSIS/MSI dans #88 ; **mode signature Authenticode activable** avec certificat Windows du mainteneur, horodatage et vérification bloquante de l'EXE/MSI/NSIS. Aucun certificat fourni, aucune release signée publiée, validation installateur/rollback encore requise. |
 
 > [!NOTE]
 > **Provenance des données :** le ticker Kraken v1 est daté à sa **réception** côté client, pas à l'heure certifiée de la transaction sur l'exchange. Binance conserve un temps événement quand fourni. Les frais de simulation sont une estimation fixe de **0,36 %** ; aucun calcul ne reproduit toutes les contraintes d'exécution réelle.
@@ -262,6 +262,21 @@ node tools/test-desktop-ipc.mjs
 **CI GitHub :** Rust Linux/Windows, MSRV 1.95, smoke Windows desktop sans listener, serveur navigateur et CodeQL. **La PR #88 ajoute** audit complet d'historique Git, tests WebView2 multi-fenêtres et origine hostile, compilation Windows release et contrôle des deux workspaces avec `--locked`. Le badge est dynamique : un commit fusionné demande une **nouvelle vérification des jobs de `main`**, pas seulement des checks verts sur la PR.
 
 **Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis, dont refus `UNAUTHORIZED` sans session/après logout, refus des IPC depuis `security-probe` et blocage shell/fs avec absence d'écriture. **Limites de la preuve historique #67 :** origine distante et deux fenêtres simultanées ; des tests complémentaires ont réussi sur le commit `a7f822e` de #88, mais doivent encore être réexécutés après modification et vérifiés sur `main` après fusion. Export CSV réel, reprise historique complexe et distribution signée restent hors preuve.
+
+### 🚀 Réduction du délai de livraison : objectif client –50 %
+
+La demande du client final est de **diviser par deux le délai initial**. Comme aucune durée de référence contractuelle n'est précisée dans le dépôt, ce **–50 % est un objectif de planification et non une date de livraison garantie**. Le chemin critique est réduit par quatre chantiers **en parallèle**, sans supprimer les contrôles :
+
+| Chantier parallèle | Premier livrable testable | Bloque la mise en production tant que… |
+|:--|:--|:--|
+| **Revolut X** | Carnet public + GET de soldes signé Ed25519 dans Rust, hors UI | Enrôlement sécurisé des clés du client, tests API authentifiée, contrôle des risques et confirmation individuelle des ordres non validés |
+| **Windows** | `pravda-app.exe` release et candidats MSI/NSIS, signature optionnelle contrôlée | Certificat Authenticode valide, horodatage et tests installation/mise à niveau/désinstallation manquants |
+| **Sécurité** | CI Rust/CodeQL, WebView2 réel, audit des secrets, `Cargo.lock --locked` | Dernier commit de la PR et commit `main` non validés |
+| **Recette utilisateur** | Profil Windows isolé, connexion/arrêt/redémarrage, sources indisponibles | Validation du client final avec données fictives et compte Revolut X autorisé non réalisée |
+
+**Deux niveaux de livraison :** (1) *candidat desktop en lecture seule* après CI et recette ; (2) *trading réel et distribution Enterprise signée* uniquement après vérifications financières, configuration du certificat et approbation explicite du client. Les dépendances externes ne peuvent pas être « accélérées » en supprimant les barrières de sécurité.
+
+**Configuration requise pour signer :** GitHub Actions → `Windows installer packaging` → `Run workflow`, option `signed=true`. L'environnement GitHub `windows-signing` doit contenir `WINDOWS_CERTIFICATE_BASE64` (PFX de signature de code encodé en base64) et `WINDOWS_CERTIFICATE_PASSWORD`. La signature est refusée si absente, non valide ou non horodatée. Ne jamais versionner le PFX, la clé Revolut X ou des tokens.
 
 ### 🗺️ Feuille de route
 

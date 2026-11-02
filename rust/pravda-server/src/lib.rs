@@ -4,6 +4,7 @@ pub use auth::{Auth, AuthError, PBKDF2_ITERATIONS};
 mod config;
 mod desktop;
 mod history;
+pub mod revolut_x_account;
 pub mod secret_store;
 pub use desktop::{DesktopPayload, DesktopRuntime};
 pub use history::HistoryQuery as DesktopHistoryQuery;

@@ -239,6 +239,12 @@ L'objectif annoncé est de **réduire de moitié le délai initial**, sous rése
 
 L'interface et l'installateur **de démonstration** ne doivent pas être bloqués par les flux privés sous licence. Une publication **Enterprise** reste bloquée sans signature et recette Windows. **Aucune date finale ou réduction de délai n'est garantie sans mesurer le planning initial.**
 
+### Signature Authenticode préparée (PR #88)
+
+Le workflow manuel `.github/workflows/windows-package.yml` peut compiler les installateurs **NSIS + MSI**. Par défaut, il produit des candidats **non signés**. Pour réclamer la signature du binaire de release et des deux formats, activer explicitement `signed=true` et configurer, dans l'environnement GitHub `windows-signing`, les secrets `WINDOWS_CERTIFICATE_BASE64` et `WINDOWS_CERTIFICATE_PASSWORD` d'un certificat de **signature de code**. Le certificat est importé sur le runner éphémère et la configuration Tauri est générée uniquement durant le workflow. La vérification est bloquante sur le statut Authenticode, l'empreinte et l'horodatage ; les empreintes SHA-256 sont journalisées sans divulguer les secrets.
+
+**Ce workflow n'a pas encore été testé avec un véritable certificat dans ce dépôt.** La publication Enterprise, la réputation SmartScreen, l'installation propre, la mise à jour, la désinstallation et la reprise après échec nécessitent des essais complémentaires. Ne pas confondre candidat MSI, binaire signé et produit prêt à distribuer.
+
 ### Barrières avant une distribution Windows Enterprise
 
 1. **Rust/Tauri local** : création, login, logout, redémarrage, SQLite/WAL et mode hors ligne validés, sans port HTTP pour l'UI.
@@ -310,9 +316,15 @@ Le coffre **n'est pas une API à appeler depuis la WebView**. Le seul contrat de
 
 **Contrôles d'acceptation :** #75 fusionnée et 8/8 vérifications ; inventaire documenté (1/5 jalon #74). #77 fermée sans fusion et reprise par #88 pour le mock, le test natif rotation/suppression, les détections par signatures et l'historique Git *y compris commits de fusion* ; validations de #88 et de `main` après fusion requises. Ces contrôles ne garantissent ni absence de secret sous un format inconnu ni résistance à un malware utilisant le même compte Windows. Pas d'ordre réel, pas d'API privée activée.
 
+### Objectif client : raccourcir de 50 % le chemin critique, sans raccourcir les contrôles
+
+**Cible demandée : D/2**, avec `D` = durée de livraison initiale à confirmer contractuellement ; ce n'est **ni une nouvelle date ferme ni un engagement de délai non vérifié**. L'accélération vient de l'exécution **en parallèle** des chantiers Revolut X (données publiques puis compte privé en lecture seule), installateurs Windows, sécurité/CI et recette utilisateur. Les jeux de tests isolés et les contrôles obligatoires restent intacts.
+
+**Deux jalons contractuels à distinguer :** candidat de démonstration *lecture seule + MSI/NSIS de test* ; puis production *ordres réels + installateurs signés* uniquement après certificat, validations d'API, limites d'exposition, tests réels autorisés et acceptation écrite. Une fonctionnalité demandée n'est pas livrée parce qu'une case de tableau change de statut.
+
 ### Revolut X : schéma réel et barrières de sécurité
 
-**Référence officielle :** [Revolut X Crypto Exchange API](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange).
+**Référence officielle :** [Revolut X Crypto Exchange API](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange). **En PR #88**, un client Rust privé a été préparé pour `GET /api/1.0/balances`, signé Ed25519 avec clés de `SecretStore`, sans connexion de compte réel ni ordre, sans accès direct du JavaScript. Les secrets doivent être provisionnés dans le coffre Windows par un parcours local à auditer ; aucun identifiant n'est inclus dans le dépôt.
 
 | Fonction | API officielle identifiée | Mode Pravda |
 |---|---|---|
