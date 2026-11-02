@@ -4,7 +4,12 @@
   "identifier": "com.pravda.bot",
   "build": {},
   "app": {
-    "windows": []
+    "windows": [],
+    "security": {
+      "capabilities": [
+        "main-ipc"
+      ]
+    }
   },
   "bundle": {
     "active": false
