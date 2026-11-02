@@ -187,7 +187,10 @@ pub async fn ipc_history_export_csv(
     query: pravda_server::DesktopHistoryQuery,
 ) -> Result<String, String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    desktop.history_export_csv(query).await.map_err(str::to_string)
+    desktop
+        .history_export_csv(query)
+        .await
+        .map_err(str::to_string)
 }
 
 #[tauri::command]
