@@ -68,6 +68,21 @@ jobs:
       - name: Build backend in release mode
         run: cargo build --locked --release --workspace
 
+  secret_history_audit:
+    name: Secret boundary and full Git history audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check private credential isolation and fetched history
+        run: node tools/test-secret-boundary.mjs
+
   msrv:
     name: Rust MSRV
     runs-on: ubuntu-latest
