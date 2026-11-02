@@ -173,6 +173,16 @@ jobs:
       - name: Build opt-in DEBUG security probe (no release capabilities changed)
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml --features security-e2e
 
+      - name: Diagnose stale Tauri lockfile after locked-build failure (non-gating diagnostic)
+        if: failure()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Continue'
+          # The preceding --locked build remains mandatory and failed closed.
+          # Resolve only to inspect Cargo's proposed lockfile diff; never build or commit it here.
+          cargo metadata --format-version 1 --no-deps --manifest-path crates/pravda-app/Cargo.toml | Out-Null
+          git diff -- crates/pravda-app/Cargo.lock
+
       - name: Install Tauri's native Windows WebDriver adapter
         run: cargo install tauri-driver --locked
 
