@@ -125,10 +125,10 @@ flowchart TB
 | Historique | `ipc_history_recent`, `ipc_history_query` | Lecture filtrée JSON | Réponses bornées (10 000 lignes max) |
 | Export | `ipc_history_export_csv` | Endpoint CSV | Contrôle téléchargement WebView à compléter |
 | Alertes papier | `ipc_paper_alerts_snapshot` | Endpoints simulation | Pas de création d'alertes personnalisées prouvée |
-| Métriques | `ipc_runtime_metrics` | Métriques serveur | CPU/RSS non fournis de façon fiable |
+| Métriques | `ipc_runtime_metrics` | Mesures du processus Rust | Dans #88 : CPU échantillonné et RAM résidente Windows/Linux ; première mesure ou OS non pris en charge : résultat partiel |
 | FX | `ipc_fx_status` | Référence/route partielle | Retour « indisponible » si absence de fournisseur |
 
-**Modules non encore portés avec preuve de parité :** alertes configurables, données énergétiques ENTSOG/TTF, GDELT/actualités, AIS/cartes, modules OSINT, moteur LLM local, notifications et analyses avancées des carnets d'ordres. Leurs anciens fichiers existent **uniquement à titre de référence** dans l'archive. Ne pas faire passer des stubs « unavailable » pour une intégration réelle.
+**Fonctionnalités ajoutées dans #88, encore à valider sur `main` :** pages interactives, alertes locales côté frontend, BCE/Frankfurter (références Forex), GDELT (articles), ENTSOG (flux publics), carnet Revolut X lecture seule et télémétrie CPU/RAM. Une réponse externe invalide doit apparaître indisponible, jamais comme succès vide. **Restent hors preuve de parité complète :** AIS live et prix TTF sous licence, accès privé/ordres Revolut X (Ed25519), modules OSINT, LLM et notifications distantes.
 
 ## 🪟 Windows — installation, essais et sauvegardes
 
@@ -226,6 +226,19 @@ node tools/test-rust-production-boundary.mjs
 
 Les workflows testent Rust Ubuntu/Windows, MSRV, desktop Windows, mode navigateur, CodeQL et **E2E WebView2 permanent**. Dans #88 s'ajoutent le **scan de l'historique Git complet**, les scénarios natifs multi-fenêtres, la vérification de l'exécutable Windows release et l'annulation des anciens runs d'une même PR. Un statut « vert » n'est significatif que si le job a **vraiment été exécuté** (et non `skipped`), sur le SHA approprié, avec un rapport de preuve exploitable.
 
+### Livraison accélérée — objectif commercial de −50 % de délai
+
+L'objectif annoncé est de **réduire de moitié le délai initial**, sous réserve de disposer d'une durée de référence vérifiable et d'une validation client. Les travaux suivants avancent **en parallèle**, sans diminuer les contrôles :
+
+| Voie | Livrable et limites | Validation de sortie |
+|:--|:--|:--|
+| **Application fonctionnelle** | UI moderne multi-pages, alertes locales, liens officiels dans le navigateur Windows, sources publiques BCE/Frankfurter, GDELT, ENTSOG et Revolut X carnet public | CI de #88 sur dernier SHA, tests Windows interactifs réels, erreurs et indisponibilités gérées |
+| **Packaging Windows** | Tauri 2 NSIS et MSI ; workflow manuel pour candidats non signés, SHA-256 et vérification de signature | Certificat d'éditeur et horodatage, tests installation/mise à jour/désinstallation, puis release signée |
+| **Comptes et ordres privés Revolut X** | API officielle Ed25519 ; coffre Windows, soldes et contrôles d'exécution | Clé API de l'utilisateur, approbations fournisseur et tests négatifs ; **aucun ordre réel activé à ce stade** |
+| **Données sous licence** | AIS live et prix TTF | Clé fournisseur et droits d'utilisation compatibles, sans proxy public non autorisé |
+
+L'interface et l'installateur **de démonstration** ne doivent pas être bloqués par les flux privés sous licence. Une publication **Enterprise** reste bloquée sans signature et recette Windows. **Aucune date finale ou réduction de délai n'est garantie sans mesurer le planning initial.**
+
 ### Barrières avant une distribution Windows Enterprise
 
 1. **Rust/Tauri local** : création, login, logout, redémarrage, SQLite/WAL et mode hors ligne validés, sans port HTTP pour l'UI.
@@ -269,7 +282,7 @@ flowchart TB
 |:--|:--|--:|--:|:--|
 | 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 6/6 | **100 % (frontière #72)** | Contrôle Rust-only fusionné et vert sur `main` ; tests multi-WebView regroupés dans #88, non assimilés à la frontière Rust/Python |
 | 2 · P0 | Sécurité du poste et modèle de secrets | 1/5 | **20 %** | Inventaire et menaces documentés ; #75 coffre Windows fusionné ; tests mock/rotation/négatifs transférés dans #88, validation post-fusion encore requise |
-| 3 · P1 | Contrats exchange et Revolut X public | 2/4 | **50 %** | Adaptateur public fusionné et CI 8/8 sur #73 ; validation de réponses live et branchement explicite encore à faire |
+| 3 · P1 | Contrats exchange et Revolut X public | 2/4 | **50 %** | Adaptateur public fusionné ; branchement dans l'interface de #88 en validation, API privée distincte |
 | 4 · P1 | Résilience et outbox durable | 0/4 | **0 %** | Idempotence, journal local, reprise après crash, scénarios de rejouement |
 | 5 · P1 | Backtesting/paper trading | 1/5 | **20 %** | Simulateur papier existant ; moteur reproductible, coûts, données historiques, tests de biais |
 | 6 · P2 | Observabilité locale | 1/4 | **25 %** | Uptime existant ; métriques CPU/RSS, tracing expurgé, alertes pertinentes |
@@ -310,7 +323,7 @@ Le coffre **n'est pas une API à appeler depuis la WebView**. Le seul contrat de
 
 La proposition HMAC / `X-Revolut-Api-*` / `https://api-sandbox.revolut.com` **ne correspond pas au contrat Revolut X vérifié** ; ne pas intégrer ce code. Les prix, tailles, et paires sont des données **en chaînes décimales**, et les chemins de paire utilisent le tiret (`BTC-USD`) — ne pas comparer silencieusement ces marchés avec `BTC/USDT`.
 
-La **PR #73 a été fusionnée** avec le contrat `PublicMarketDataAdapter`, un client public limité au carnet et des tests de parsing. Les huit checks CI de la PR ont réussi. **Le module n'est pas branché au runtime/dashboard**, et aucune validation de cotations live n'est attestée. Il n'y a ni clé privée, ni accès à un compte, ni ordre réel.
+La **PR #73 a été fusionnée** avec le contrat `PublicMarketDataAdapter`, un client public limité au carnet et des tests de parsing. Les huit checks CI de la PR ont réussi. **La PR #88 raccorde ce module public à une page Tauri**, sans accès privé. Aucun test live de disponibilité externe ni exécution réelle n'est encore attesté. Il n'y a ni clé privée, ni accès à un compte, ni ordre réel.
 
 ### Évolution de l'infrastructure : déclencheurs plutôt qu'empilement
 
