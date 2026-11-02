@@ -1,3 +1,6 @@
+mod migration;
+pub use migration::{MigrationError, MigrationReport};
+
 use chrono::{DateTime, Utc};
 use rusqlite::{params, Connection};
 use thiserror::Error;
