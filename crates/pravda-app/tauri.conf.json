@@ -2,7 +2,9 @@
   "productName": "Pravda-Bot",
   "version": "0.3.4",
   "identifier": "com.pravda.bot",
-  "build": {},
+  "build": {
+    "frontendDist": "frontend"
+  },
   "app": {
     "windows": []
   },
