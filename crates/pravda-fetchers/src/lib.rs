@@ -1,11 +1,9 @@
 pub mod binance;
 pub mod energy;
-pub mod health;
 pub mod kraken;
 pub mod types;
 
 pub use binance::BinanceClient;
-pub use health::{assess_market_data, calculate_spread, HealthStatus, MarketHealth};
 pub use kraken::KrakenClient;
 pub use types::{Exchange, Spread, Symbol, Tick};
 
