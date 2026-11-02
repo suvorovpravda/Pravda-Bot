@@ -7,7 +7,7 @@ use std::{
     collections::HashMap,
     fmt::Write as _,
     path::PathBuf,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{Mutex, MutexGuard},
     time::{Duration, Instant},
 };
 use subtle::ConstantTimeEq;
@@ -48,7 +48,7 @@ struct Failures {
 }
 
 #[derive(Clone)]
-pub(super) struct SessionToken(pub(super) String);
+pub(crate) struct SessionToken(pub(crate) String);
 
 pub struct Auth {
     path: PathBuf,
@@ -235,7 +235,7 @@ impl Auth {
 }
 
 impl SessionToken {
-    pub(super) fn as_str(&self) -> &str {
+    pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
 }
