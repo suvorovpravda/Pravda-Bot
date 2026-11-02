@@ -142,7 +142,10 @@ jobs:
   security_native_webview2:
     name: Windows native WebView2 IPC security E2E
     if: github.event_name == 'pull_request' && github.head_ref == 'security/ipc-windows-native-e2e-20261102'
-    runs-on: windows-latest
+    # Temporary WebView2/EdgeDriver upstream compatibility workaround.
+    # See actions/runner-images#14738: windows-2025 DevToolsActivePort failure.
+    # Keep fail-closed; move back only after native E2E passes.
+    runs-on: windows-2022
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
@@ -161,14 +164,15 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $edgeCandidates = @(
-            "${env:ProgramFiles(x86)}\Microsoft\Edge\Application\msedge.exe",
-            "$env:ProgramFiles\Microsoft\Edge\Application\msedge.exe"
-          )
-          $edgeExe = $edgeCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $edgeExe) { throw "Microsoft Edge executable not found" }
-          $version = (Get-Item $edgeExe).VersionInfo.ProductVersion
-          if ($version -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw "Unexpected Edge version" }
+          # Tauri WebView2 uses Microsoft Edge WebView2 Runtime, NOT the
+          # separate msedge.exe browser. Driver major must match runtime.
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $webview = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+          $version = $webview.pv
+          if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Cannot determine installed Microsoft WebView2 Runtime version; fail closed"
+          }
+          Write-Host "WebView2 Runtime version $version (registry)"
           $zipPath = Join-Path $env:RUNNER_TEMP 'edgedriver.zip'
           $binDir = Join-Path $env:RUNNER_TEMP 'edgedriver-bin'
           $uri = "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip"
@@ -182,6 +186,8 @@ jobs:
 
       - name: Execute native IPC deny tests (no JS mocks)
         shell: pwsh
+        env:
+          PRAVDA_E2E_REPORT: ${{ runner.temp }}/Pravda-IPC-security-report.json
         run: |
           $ErrorActionPreference = 'Stop'
           node tools/test-ipc-security-windows.mjs
@@ -192,5 +198,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: pravda-windows-native-ipc-security
-          path: ${{ runner.temp }}/Pravda-IPC-security-*.json
+          path: ${{ runner.temp }}/Pravda-IPC-security-report.json
           if-no-files-found: warn
