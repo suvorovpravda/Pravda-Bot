@@ -1,5 +1,14 @@
 # Migration Rust — point de reprise / передача / handoff
 
+> [!IMPORTANT]
+> **État actuel — 2 novembre 2026.** Ce fichier est un **journal historique** : ses notes du 30–31 octobre et ses assertions « Tauri à adapter », « auth absente » ou « desktop HTTP » sont **antérieures** aux migrations fusionnées. **Les sources de vérité à jour sont [README.md](README.md), [SECURITY.md](SECURITY.md) et [Phase 2 IPC](docs/architecture/tauri-ipc-phase2.md).**
+>
+> **Réalisé :** serveur Rust et contrôles HTTP, authentification locale, historique CSV/JSON, migration SQLite Python transactionnelle, desktop Tauri 2 à assets embarqués et IPC sans écoute HTTP UI ([PR #64 fusionnée](https://github.com/suvorovpravda/Pravda-Bot/pull/64)), recette Windows native du responsable.
+>
+> **P0 à finaliser :** revues IPC négatives et indépendantes, confirmation de la politique GitHub « no bypass », CI du commit de fusion sur `main`. **P1 :** sources métier manquantes, alertes configurables, métriques CPU/RSS, tests avancés de persistance/export. **P2 :** MSI Authenticode signé et testé, chaîne de provenance/SBOM. **Aucun ordre réel.**
+>
+> ---
+>
 Base du lot historique : `9e910ace0091d83b68bacfd9276f39e67ed775e4` (PR #19 fusionnée).
 
 ## FR
