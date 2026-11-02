@@ -56,6 +56,8 @@ Le présent document couvre **le code Rust actuellement maintenu** :
 
 **Ce que le logiciel ne fait pas :** trading réel, ordres aux exchanges, stockage de clés d'API de trading pour ordonner des transactions, signature Authenticode du paquet actuel. Aucun scénario de sécurité ne doit supposer qu'une simulation papier équivaut à un ordre réel.
 
+**Intégration publique Revolut X :** le module de carnet [#73](https://github.com/suvorovpravda/Pravda-Bot/pull/73) est fusionné, mais sa lecture n'est pas activée dans le runtime desktop. Il ne contient aucune authentification privée ni méthode d'exécution d'ordre. Le coffre Windows proposé en [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) reste une étape distincte soumise aux tests, sans exposition à l'UI.
+
 ### 🔭 Frontières de confiance
 
 ```mermaid

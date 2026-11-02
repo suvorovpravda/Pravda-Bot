@@ -261,7 +261,7 @@ flowchart TB
 |:--|:--|--:|--:|:--|
 | 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 3/6 | **50 % (branche #72)** | CI complète verte, fusion validée, nouveaux tests Windows |
 | 2 · P0 | Sécurité du poste et modèle de secrets | 0/5 | **0 %** | Inventaire secrets, coffre OS, effacement mémoire, rotation/backup, tests d'accès négatifs |
-| 3 · P1 | Contrats exchange et Revolut X public | 1/4 | **25 % (branche #73)** | Contrat/parseur proposés ; tests CI, validation données réelles puis branchement explicite |
+| 3 · P1 | Contrats exchange et Revolut X public | 2/4 | **50 %** | Adaptateur public fusionné et CI 8/8 sur #73 ; validation de réponses live et branchement explicite encore à faire |
 | 4 · P1 | Résilience et outbox durable | 0/4 | **0 %** | Idempotence, journal local, reprise après crash, scénarios de rejouement |
 | 5 · P1 | Backtesting/paper trading | 1/5 | **20 %** | Simulateur papier existant ; moteur reproductible, coûts, données historiques, tests de biais |
 | 6 · P2 | Observabilité locale | 1/4 | **25 %** | Uptime existant ; métriques CPU/RSS, tracing expurgé, alertes pertinentes |
@@ -283,14 +283,14 @@ flowchart TB
 
 | Fonction | API officielle identifiée | Mode Pravda |
 |---|---|---|
-| Carnet public | `GET https://revx.revolut.com/api/2.0/public/order-book/BTC-USD` | Lecture publique **uniquement**, PR #73 en attente de CI |
+| Carnet public | `GET https://revx.revolut.com/api/2.0/public/order-book/BTC-USD` | Lecture publique **uniquement**, PR #73 fusionnée ; données non encore exposées dans l'UI |
 | Authentification de compte | `X-Revx-API-Key`, `X-Revx-Timestamp`, `X-Revx-Signature` | Non implémentée |
 | Signature | **Ed25519** avec clé privée utilisateur | Aucune clé ni signature actuellement |
 | Ordres réels et soldes | Endpoints authentifiés distincts `/api/1.0/...` | **Interdits dans le connecteur public** |
 
 La proposition HMAC / `X-Revolut-Api-*` / `https://api-sandbox.revolut.com` **ne correspond pas au contrat Revolut X vérifié** ; ne pas intégrer ce code. Les prix, tailles, et paires sont des données **en chaînes décimales**, et les chemins de paire utilisent le tiret (`BTC-USD`) — ne pas comparer silencieusement ces marchés avec `BTC/USDT`.
 
-La **PR #73** propose une frontière `PublicMarketDataAdapter`, un client public strictement limité au carnet et des tests de parsing, sans changer le runtime, sans clé, sans compte et sans ordre réel. **Statut : en revue/CI, non livré.** Il n'y a **pas** de validation live attestée.
+La **PR #73 a été fusionnée** avec le contrat `PublicMarketDataAdapter`, un client public limité au carnet et des tests de parsing. Les huit checks CI de la PR ont réussi. **Le module n'est pas branché au runtime/dashboard**, et aucune validation de cotations live n'est attestée. Il n'y a ni clé privée, ni accès à un compte, ni ordre réel.
 
 ### Évolution de l'infrastructure : déclencheurs plutôt qu'empilement
 
