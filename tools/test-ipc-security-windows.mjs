@@ -216,8 +216,9 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
   for (const command of ["ipc_auth_status","ipc_market_snapshot","ipc_history_export_csv"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
-      record?.state==="rejected",
-      record?.state||"missing result");
+      record?.state==="rejected" && record?.access_denied===true && record?.malformed===false,
+      record ? record.state+" access_denied="+record.access_denied+
+        " malformed="+record.malformed : "missing result");
   }
 }
 
