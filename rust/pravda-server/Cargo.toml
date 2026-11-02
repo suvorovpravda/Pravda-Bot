@@ -19,7 +19,7 @@ pravda-store = { path = "../../crates/pravda-store" }
 futures-util = "0.3"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
-pbkdf2 = "0.12"
+pbkdf2 = "0.13"
 sha2 = "0.10"
 getrandom = "0.2"
 subtle = "2"
