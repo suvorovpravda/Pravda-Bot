@@ -57,7 +57,7 @@ fn imports_preserves_values_and_existing_ticks_and_is_idempotent_across_reopen()
                 "Kraken",
                 chrono::DateTime::parse_from_rfc3339("2026-10-27T11:59:00Z")
                     .unwrap()
-                    .to_utc(),
+                    .with_timezone(&chrono::Utc),
             )
             .unwrap();
         assert_eq!(
