@@ -181,6 +181,24 @@ flowchart TB
 | Exécutable remplacé | Poste Windows | Aucune signature Enterprise attestée | **P0 release :** signature éditeur, horodatage et contrôle chaîne |
 | Contournement de gouvernance | `main` | Protection activée ; capture propriétaire : « Do not allow bypassing » coché | **L'enregistrement effectif n'est pas lisible via l'intégration (HTTP 403)** ; gouvernance solo sans approbateur externe |
 
+### 🔐 Coffre Windows — inventaire, menaces et réversibilité (#74)
+
+**État prouvé :** la [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) a fusionné une abstraction Rust `SecretStore` et `WindowsCredentialStore` utilisant les API Win32 `CredWriteW/CredReadW/CredDeleteW`; les 8 contrôles CI de cette PR sont verts. Le composant est **non branché aux commandes Tauri/HTTP** et ne permet aucun ordre réel. La [PR #77](https://github.com/suvorovpravda/Pravda-Bot/pull/77) propose des tests supplémentaires (mock, rotation, histoire Git), **non considérés comme livrés avant fusion**.
+
+| Actif / surface | Menace | Contrôle et limite |
+|:--|:--|:--|
+| Mot de passe local | Fuite du mot de passe | Vérificateur PBKDF2 salé en fichier, pas une clé d'exchange |
+| Clé d'exchange future | Fuite via JSON/YAML/`.env`/Git | À conserver exclusivement dans Credential Manager sous l'identité Windows ; aucune clé privée actuellement nécessaire |
+| Processus Rust | Dump mémoire, spyware, débogueur même utilisateur | `SecretValue` nettoie ses propres octets au `Drop`, mais les copies temporaires, OS et crash dumps **ne sont pas garantis purgés** |
+| Frontend WebView / Tauri / Axum | Exfiltration IPC ou export | Aucune commande de lecture de coffre ; **ne pas en créer** sans nouveau modèle de menace |
+| SQLite/WAL, exports CSV et journaux | Secrets accidentels sur disque | Pas de stockage intentionnel de clés ; contrôles négatifs automatisés proposés en #77, signature-based **non exhaustive** |
+| Sauvegardes et appareil perdu | Restauration impossible ou accès via session compromise | Chiffrement du volume/disque et hygiène OS à organiser hors app ; ne **jamais** exporter une clé dans une sauvegarde en clair |
+| Git historique | Clé autrefois committée toujours récupérable | Contrôle de signatures haute confiance et des *merge diffs* proposé en #77 ; fuite constatée ⇒ révoquer la clé, ne pas se contenter de supprimer la ligne |
+
+**Procédure sans clés réelles :** pour une rotation, révoquer la clé auprès de l'exchange, générer une nouvelle clé avec permissions minimales, remplacer l'entrée par `SecretStore::put`, vérifier le retour via `get` seulement dans Rust puis supprimer l'ancienne identité via `remove` si elle diffère. Pour une suppression, `remove` doit rendre le prochain `get` indisponible. Pour une restauration après perte du profil Windows, **recréer et réapprovisionner** une nouvelle clé chez le fournisseur ; il n'existe pas de sauvegarde plaintext ou d'export de coffre supporté. Les tests utilisent uniquement des identifiants fictifs. La révocation côté fournisseur est **obligatoire** si une clé pouvait être compromise, la suppression locale ne suffit pas.
+
+**Périmètre non couvert :** malware actif sur le même compte, capture par crash dump, matériel HSM/Windows Hello/YubiKey, test d'intrusion tiers, sauvegarde automatique de secrets, clé de production réellement provisionnée ou trading réel.
+
 ### ⚠️ Risques résiduels et limites
 
 > [!CAUTION]
