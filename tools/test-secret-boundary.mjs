@@ -4,7 +4,9 @@
 // rotation or an independent security audit. Never echo matched credentials.
 import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
-import {readFileSync, existsSync} from "node:fs";
+import {readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync, unlinkSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
 
 function git(...args) {
   return execFileSync("git",args,{encoding:"utf8",maxBuffer:128*1024*1024,
@@ -49,7 +51,46 @@ assert.equal(git("rev-parse","--is-shallow-repository").trim(),"false",
   "History secret audit requires full checkout; refuse shallow or partial history");
 // Check all Git patch history for recognizable HIGH-CONFIDENCE key formats.
 // This does NOT prove the absence of other secret formats; manual audit stays required.
-const patch=git("log","--all","--format=","--patch","--no-ext-diff");
+// Regression: a merge-only credential must be detectable even if removed
+// afterwards. Git omits merge commit patches without --diff-merges.
+function verifyMergePatchDetection() {
+  const temp=mkdtempSync(join(tmpdir(),"pravda-history-audit-"));
+  function run(...args) {
+    return execFileSync("git",args,{cwd:temp,encoding:"utf8",timeout:15000,windowsHide:true});
+  }
+  function commit(message) {
+    run("-c","user.name=Pravda CI","-c","user.email=ci@invalid.local","commit","-m",message);
+  }
+  try {
+    run("init","-q","-b","main");
+    writeFileSync(join(temp,"base.txt"),"base\n");
+    run("add","."); commit("base");
+    run("checkout","-q","-b","topic");
+    writeFileSync(join(temp,"topic.txt"),"feature\n");
+    run("add","."); commit("topic");
+    run("checkout","-q","main");
+    writeFileSync(join(temp,"main.txt"),"main\n");
+    run("add","."); commit("main");
+    run("merge","--no-ff","--no-commit","topic");
+    // Construct a harmless synthetic GitHub-style marker at runtime; never
+    // commit a literal test credential to this production repository.
+    const sentinel="ghp_"+"A".repeat(36);
+    writeFileSync(join(temp,"merge-only.txt"),sentinel+"\n");
+    run("add","."); commit("merge with deliberate synthetic marker");
+    unlinkSync(join(temp,"merge-only.txt"));
+    run("add","-A"); commit("scrub synthetic marker");
+    const plain=run("log","--all","--format=","--patch","--no-ext-diff");
+    const complete=run("log","--all","--format=","--patch","--diff-merges=separate","--no-ext-diff");
+    assert.equal(plain.includes(sentinel),false,
+      "Fixture invalid: default history unexpectedly contains merge diff");
+    assert.equal(complete.includes(sentinel),true,
+      "Merge-only synthetic secret was missed by full-history scan");
+  } finally {
+    rmSync(temp,{recursive:true,force:true});
+  }
+}
+verifyMergePatchDetection();
+const patch=git("log","--all","--format=","--patch","--diff-merges=separate","--no-ext-diff");
 inspect("historical Git patch (all fetched refs)",patch);
 console.log("Secret boundary: active source, IPC isolation and fetched Git patch "+
   "high-confidence signatures OK (no credential values printed).");
