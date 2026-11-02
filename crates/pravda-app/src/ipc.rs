@@ -146,6 +146,80 @@ pub fn ipc_session_check(window: Window, session: State<'_, IpcAuth>) -> Result<
     Ok(true)
 }
 
+// Every read command must authorize against the Rust-owned live session
+// BEFORE touching snapshots, SQLite, CSV or any other business data.
+#[tauri::command]
+pub async fn ipc_market_snapshot(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(desktop.market_snapshot().await)
+}
+
+#[tauri::command]
+pub async fn ipc_history_recent(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    desktop.history_recent().await.map_err(str::to_string)
+}
+
+#[tauri::command]
+pub async fn ipc_history_query(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    query: pravda_server::DesktopHistoryQuery,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    desktop.history_query(query).await.map_err(str::to_string)
+}
+
+#[tauri::command]
+pub async fn ipc_history_export_csv(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    query: pravda_server::DesktopHistoryQuery,
+) -> Result<String, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    desktop.history_export_csv(query).await.map_err(str::to_string)
+}
+
+#[tauri::command]
+pub async fn ipc_paper_alerts_snapshot(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(desktop.alerts_snapshot().await)
+}
+
+#[tauri::command]
+pub fn ipc_runtime_metrics(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(desktop.metrics_snapshot())
+}
+
+#[tauri::command]
+pub fn ipc_fx_status(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+) -> Result<pravda_server::DesktopPayload, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(desktop.fx_status())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
