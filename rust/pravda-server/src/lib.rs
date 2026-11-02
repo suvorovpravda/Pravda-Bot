@@ -3,6 +3,9 @@ mod auth;
 pub use auth::{Auth, AuthError, PBKDF2_ITERATIONS};
 mod config;
 mod history;
+mod desktop;
+pub use desktop::{DesktopPayload, DesktopRuntime};
+pub use history::HistoryQuery as DesktopHistoryQuery;
 mod http_security;
 use axum::{
     extract::State,
