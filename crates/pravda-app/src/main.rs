@@ -157,14 +157,10 @@ async fn main() {
             // even when the main window has an authenticated Rust session.
             // Debug+opt-in only: never compiled into production/release.
             #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
-            WebviewWindowBuilder::new(
-                app,
-                "security-probe",
-                WebviewUrl::App("index.html".into()),
-            )
-            .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
-            .inner_size(700.0, 500.0)
-            .build()?;
+            WebviewWindowBuilder::new(app, "security-probe", WebviewUrl::App("index.html".into()))
+                .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
+                .inner_size(700.0, 500.0)
+                .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
