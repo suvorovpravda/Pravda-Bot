@@ -152,6 +152,19 @@ async fn main() {
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
                 .build()?;
+            // E2E SECURITY PROBE: this second local WebView is intentionally
+            // absent from capabilities/main.json. It must NOT invoke IPC,
+            // even when the main window has an authenticated Rust session.
+            // Debug+opt-in only: never compiled into production/release.
+            #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
+            WebviewWindowBuilder::new(
+                app,
+                "security-probe",
+                WebviewUrl::App("index.html".into()),
+            )
+            .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
+            .inner_size(700.0, 500.0)
+            .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
