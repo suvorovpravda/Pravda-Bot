@@ -147,19 +147,26 @@ async fn main() {
             ipc::ipc_fx_status
         ])
         .setup(|app| {
+            // WebDriver's Windows Edge adapter may only enumerate the primary
+            // WebView. A debug-only test mode starts the unauthorized local
+            // window ALONE, with no new capability or JS command permissions.
+            // The regular main window is used in a separate native test run.
+            #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
+            if std::env::var("PRAVDA_E2E_PROBE_ONLY").as_deref() == Ok("true") {
+                WebviewWindowBuilder::new(
+                    app,
+                    "security-probe",
+                    WebviewUrl::App("security-probe.html".into()),
+                )
+                .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
+                .inner_size(700.0, 500.0)
+                .build()?;
+                return Ok(());
+            }
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
                 .title("Pravda-Bot")
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
-                .build()?;
-            // E2E SECURITY PROBE: this second local WebView is intentionally
-            // absent from capabilities/main.json. It must NOT invoke IPC,
-            // even when the main window has an authenticated Rust session.
-            // Debug+opt-in only: never compiled into production/release.
-            #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
-            WebviewWindowBuilder::new(app, "security-probe", WebviewUrl::App("index.html".into()))
-                .title("Pravda-Bot Security Probe (NO IPC PERMISSION)")
-                .inner_size(700.0, 500.0)
                 .build()?;
             Ok(())
         })
