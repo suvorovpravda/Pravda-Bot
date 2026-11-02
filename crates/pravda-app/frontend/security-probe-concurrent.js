@@ -42,8 +42,9 @@ async function check() {
       // A missing command, malformed payload, or Rust UNAUTHORIZED is NOT
       // evidence that Tauri rejected the call before dispatching the handler.
       const denial_layer = malformed ? "malformed" :
+        /\bFORBIDDEN_WINDOW\b/i.test(description) ? "rust_window_guard" :
         /\bUNAUTHORIZED\b/i.test(description) ? "rust_auth" :
-        /not allowed|permission denied|capability|forbidden|access denied/i.test(description) ?
+        /not allowed|permission denied|capability|access denied/i.test(description) ?
           "tauri_acl" : "other";
       results.push({command, state:"rejected",
         access_denied:denial_layer==="tauri_acl", denial_layer, malformed});
