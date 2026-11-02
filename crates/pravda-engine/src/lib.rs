@@ -178,7 +178,12 @@ impl PaperSimulator {
         now: DateTime<Utc>,
     ) -> Option<String> {
         self.update_with_execution_approval(
-            symbol, kraken_price, binance_price, opportunity_confirmed, true, now,
+            symbol,
+            kraken_price,
+            binance_price,
+            opportunity_confirmed,
+            true,
+            now,
         )
     }
 
