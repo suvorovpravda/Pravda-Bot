@@ -46,7 +46,7 @@ const launchScripts=active.filter(p=>
   /^tools\/[^/]+\.(?:bat|cmd|ps1)$/i.test(p) ||
   /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(p)
 );
-const interpreter=/(?:^|[\\s;&|])(?:python(?:3(?:\\.\\d+)?)?(?:\\.exe)?|py(?:\\.exe)?)\\b/i;
+const interpreter=/(?:^|[\s;&|])(?:python(?:3(?:\.\d+)?)?(?:\.exe)?|py(?:\.exe)?)\b/i;
 function executableStatements(path, lines) {
   if(!path.startsWith(".github/workflows/")) {
     return lines.map((text,index)=>({text:text.trim(),line:index+1}));
@@ -59,11 +59,11 @@ function executableStatements(path, lines) {
   for(let index=0;index<lines.length;index++) {
     const raw=lines[index], trim=raw.trim();
     const indent=raw.length-raw.trimStart().length;
-    const match=raw.match(/^\\s*(?:-\\s+)?run\\s*:\\s*(.*)$/);
+    const match=raw.match(/^\s*(?:-\s+)?run\s*:\s*(.*)$/);
     if(match) {
       blockIndent=null;
       const value=match[1].trim();
-      if(/^[|>][-+]?\\s*(?:#.*)?$/.test(value)) {
+      if(/^[|>][-+]?\s*(?:#.*)?$/.test(value)) {
         blockIndent=indent;
       } else if(value) {
         commands.push({text:value,line:index+1});
@@ -75,17 +75,17 @@ function executableStatements(path, lines) {
       continue;
     }
     blockIndent=null;
-    if(/^\\s*(?:-\\s+)?uses\\s*:\\s*actions\\/setup-python@/i.test(raw)
-      || /^\\s*shell\\s*:\\s*(?:python|py)(?:\\s|$)/i.test(raw)) {
+    if(/^\s*(?:-\s+)?uses\s*:\s*actions\/setup-python@/i.test(raw)
+      || /^\s*shell\s*:\s*(?:python|py)(?:\s|$)/i.test(raw)) {
       commands.push({text:"python",line:index+1});
     }
   }
   return commands;
 }
 for(const path of launchScripts) {
-  const lines=readFileSync(path,"utf8").split(/\\r?\\n/);
+  const lines=readFileSync(path,"utf8").split(/\r?\n/);
   for(const {text:line,line:number} of executableStatements(path,lines)) {
-    if(!line || /^(?:#|rem(?:\\s|$)|::)/i.test(line))continue;
+    if(!line || /^(?:#|rem(?:\s|$)|::)/i.test(line))continue;
     if(interpreter.test(line)) {
       problems.push("Python executable reference in active "+path+":"+number);
     }
