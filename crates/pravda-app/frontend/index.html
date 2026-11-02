@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="fr">
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-src 'none'; form-action 'self'">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#091426">
+    <title>Pravda | Terminal marchés & énergie</title>
+    <link rel="stylesheet" href="./assets/styles.css">
+</head>
+<body>
+<main class="shell">
+    <header class="topbar">
+        <div class="brand">
+            <div class="brand-mark">P</div>
+            <div><h2 class="brand-title">PRAVDA <span style="color:var(--cyan)">/</span> MARKET</h2><div class="brand-sub" data-i18n="brandSubtitle">Terminal marchés &amp; énergie</div></div>
+        </div>
+        <div class="top-actions">
+            <label class="language-picker" for="language-select"><span data-i18n="language">Langue</span>
+                <select id="language-select" aria-label="Langue d’affichage" data-i18n-aria="languageAria">
+                    <option value="fr">Français</option>
+                    <option value="ru">Русский</option>
+                    <option value="en">English</option>
+                </select>
+            </label>
+            <div class="clock"><strong id="clock">--:--:--</strong><span data-i18n="clockCaption">Heure locale · rafraîchissement auto</span></div>
+            <button class="button" id="refresh-button" type="button" data-i18n="refresh">↻ Actualiser</button>
+            <form method="post" action="/logout"><button class="button" id="logout-button" type="submit">Déconnexion</button></form>
+        </div>
+    </header>
+
+    <section class="intro">
+        <div><p class="eyebrow" data-i18n="eyebrow">Terminal de marché · données sourcées</p><h1 data-i18n="pageTitle">Marchés, énergie &amp; risques</h1></div>
+        <p data-i18n="intro">Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.</p>
+    </section>
+
+    <nav class="tabs" aria-label="Navigation par onglet">
+        <button class="tab-btn active" data-tab="all" data-i18n="tabAll">Tous</button>
+        <button class="tab-btn" data-tab="markets" data-i18n="tabMarkets">Marchés</button>
+        <button class="tab-btn" data-tab="energy" data-i18n="tabEnergy">Énergie</button>
+        <button class="tab-btn" data-tab="risks" data-i18n="tabRisks">Veille</button>
+        <button class="tab-btn" data-tab="ais" data-i18n="tabAIS">AIS</button>
+    </nav>
+
+
+    <section class="grid" aria-label="Marchés en direct" data-i18n-aria="marketsAria">
+        <article class="card crypto-live-card" data-category="markets">
+            <div class="card-head">
+                <div><h2 data-i18n="cryptoTitle">Marchés crypto · cotations live</h2><p data-i18n="cryptoSubtitle">Ticks Kraken et Binance · conversions indicatives en EUR et CHF</p></div>
+                <span class="status pending" id="market-feed-status"><i class="dot"></i><span data-i18n="waitingBot">En attente du bot</span></span>
+            </div>
+            <div class="card-body">
+                <div class="market-grid">
+                    <div>
+                        <div class="market-controls">
+                            <label for="chart-symbol" data-i18n="asset">Actif</label>
+                            <select id="chart-symbol"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select>
+                            <label for="chart-exchange" data-i18n="exchange">Flux</label>
+                            <select id="chart-exchange"><option>Binance</option><option>Kraken</option></select>
+                            <label for="chart-currency" data-i18n="currency">Devise</label>
+                            <select id="chart-currency"><option>USDT</option><option>EUR</option><option>CHF</option></select>
+                            <label for="chart-period" data-i18n="period">Période</label>
+                            <select id="chart-period"><option value="day" data-i18n="day">Jour</option><option value="week" data-i18n="week">Semaine</option><option value="month" data-i18n="month">Mois</option></select>
+                        </div>
+                        <canvas class="market-chart" id="price-chart" aria-label="Graphique de prix crypto live" data-i18n-aria="chartAria"></canvas>
+                        <div class="market-caption"><span id="chart-price">—</span><span id="chart-age" data-i18n="chartWaiting">Démarre le bot pour recevoir les ticks.</span></div>
+                        <div class="market-tools"><small id="history-status" data-i18n="historyLoading">Historique local persistant</small><a class="button" id="history-export" href="/api/market/history.csv" data-i18n="exportHistory">Exporter les ticks CSV</a></div>
+                        <h3 data-i18n="priceAlertsTitle">Alertes de prix EUR / CHF</h3>
+                        <form class="alert-form" id="price-alert-form">
+                            <select id="alert-symbol" aria-label="Actif"><option>BTC/USDT</option><option>ETH/USDT</option><option>SOL/USDT</option></select>
+                            <select id="alert-exchange" aria-label="Plateforme"><option>Binance</option><option>Kraken</option></select>
+                            <select id="alert-direction" aria-label="Condition"><option value="above" data-i18n="above">Au-dessus</option><option value="below" data-i18n="below">En-dessous</option></select>
+                            <input id="alert-target" type="number" min="0" step="any" required aria-label="Seuil de prix" data-i18n-aria="priceThreshold">
+                            <select id="alert-currency" aria-label="Devise"><option>EUR</option><option>CHF</option></select>
+                            <button class="button" type="submit" data-i18n="addAlert">Ajouter l’alerte</button>
+                        </form>
+                        <div class="alert-list" id="price-alerts"><div class="empty" data-i18n="noAlerts">Aucune alerte configurée.</div></div>
+                        <p class="fine-print" id="alert-notice" data-i18n="alertNeedsPage">Les alertes sont évaluées avec les cotations récentes lorsque le dashboard est ouvert.</p>
+                    </div>
+                    <div class="table-wrap">
+                        <table class="quote-table">
+                            <thead><tr><th data-i18n="asset">Actif</th><th>Binance · EUR / CHF</th><th>Kraken · EUR / CHF</th><th data-i18n="spread">Écart</th></tr></thead>
+                            <tbody id="crypto-quotes"><tr><td colspan="4" data-i18n="startBotPrices">Démarre le bot pour charger les prix.</td></tr></tbody>
+                        </table>
+                        <p class="fine-print" data-i18n="cryptoDisclaimer">Prix du dernier échange public, pas un prix d’achat garanti. Conversion indicative depuis USDT≈USD avec les taux de référence quotidiens BCE. Le graphique conserve les ticks reçus depuis l’ouverture de la page.</p>
+                    </div>
+                </div>
+            </div>
+        </article>
+        <article class="card fx-live-card" data-category="markets">
+            <div class="card-head"><div><h2 data-i18n="fiatTitle">Devises fiduciaires</h2><p data-i18n="fiatSubtitle">Unités de devise pour 1 EUR</p></div><span class="status pending" id="fx-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body">
+                <div class="fx-list" id="fx-rates"><div class="empty" data-i18n="loadingFx">Chargement des taux de référence…</div></div>
+                <div class="market-caption"><span id="fx-asof">—</span><span data-i18n="dailyReference">Référence quotidienne</span></div>
+                <p class="fine-print" data-i18n="fxDisclaimer">Taux de référence BCE via Frankfurter — ce ne sont pas des cotations Forex tick par tick.</p>
+                <div class="source-line"><a href="https://data.ecb.europa.eu/data/datasets/EXR" target="_blank" rel="noopener noreferrer" data-i18n="ecbLink">BCE · taux de change ↗</a></div>
+            </div>
+        </article>
+    </section>
+    <article class="card secondary-card" style="margin-top:15px">
+        <div class="card-head"><div><h2 data-i18n="sourceStatusTitle">État des sources</h2><p data-i18n="sourceStatusSubtitle">Disponibilité et dernier événement observé</p></div><span class="status pending" id="sources-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+        <div class="card-body source-grid" id="source-status-list"><div class="empty" data-i18n="loadingSources">Chargement des sources…</div></div>
+    </article>
+    <div class="market-tools"><span class="fine-print" data-i18n="dailyReportHint">Rapport journalier : cours observés, flux ENTSOG et titres rapportés.</span><a class="button" id="daily-report" href="/api/daily-report.csv" data-i18n="downloadDailyReport">Télécharger le rapport CSV du jour</a></div>
+
+    <section class="grid">
+        <div class="metrics">
+            <article class="card metric" data-category="energy"><div class="metric-label" data-i18n="inboundFlows">Flux entrants observés</div><div class="metric-value" id="entry-count">—</div><div class="metric-foot" id="entry-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric" data-category="energy"><div class="metric-label" data-i18n="outboundFlows">Flux sortants observés</div><div class="metric-value" id="exit-count">—</div><div class="metric-foot" id="exit-foot">Chargement ENTSOG…</div></article>
+            <article class="card metric" data-category="energy"><div class="metric-label" data-i18n="latestSource">Dernière publication source</div><div class="metric-value" style="font-size:18px" id="source-update">—</div><div class="metric-foot" id="flow-status">Connexion à ENTSOG…</div></article>
+        </div>
+
+        <article class="card map-card" data-category="energy">
+            <div class="card-head"><div><h2 data-i18n="networkTitle">Réseau gazier européen</h2><p data-i18n="networkSubtitle">Points transfrontaliers et sens des observations publiées</p></div><span class="status pending" id="map-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body">
+                <div class="map-wrap">
+                    <svg id="flow-map" viewBox="0 0 800 430" role="img" aria-label="Carte schématique des points de flux gazier ENTSOG" data-i18n-aria="mapAria">
+                        <text x="400" y="210" text-anchor="middle" class="map-axis" data-i18n="loadingPoints">Chargement des points ENTSOG…</text>
+                    </svg>
+                    <div class="map-legend"><span class="legend-key"><i></i><span data-i18n="entry">Entrée</span></span><span class="legend-key exit"><i></i><span data-i18n="exit">Sortie</span></span></div>
+                </div>
+                <p class="map-caption" data-i18n="mapDisclaimer">Schéma de positions publié par ENTSOG, pas une carte de routes de pipelines. Les données sont des observations de points, pas des totaux nationaux.</p>
+            </div>
+        </article>
+
+        <article class="card news-card" data-category="risks">
+            <div class="card-head"><div><h2 data-i18n="newsTitle">Actualités &amp; risques géopolitiques</h2><p id="news-source">Mentions liées au gaz · dernières 24 h</p></div><span class="status pending" id="news-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body"><div class="news-list" id="news-list"><div class="empty" data-i18n="loadingSources">Chargement des sources…</div></div><div class="source-line" data-i18n="newsDisclaimer">Les articles sont des informations rapportées, non des incidents vérifiés ni des prédictions.</div></div>
+        </article>
+
+        <article class="card price-card" data-category="energy">
+            <div class="card-head"><div><h2 data-i18n="ttfTitle">TTF · aucune cotation vérifiée</h2><p data-i18n="ttfSubtitle">Prix du gaz européen — fournisseur de marché requis</p></div><span class="status stale"><i class="dot"></i><span data-i18n="unavailable">Indisponible</span></span></div>
+            <div class="card-body">
+                <div class="price-state"><strong data-i18n="ttfUnavailableTitle">Prix et unité non affichés</strong><p data-i18n="ttfUnavailableText">Aucune cotation TTF vérifiable n’est connectée. Le tableau de bord n’invente ni cours ni unité de cotation. Les spécifications ICE décrivent le contrat, elles ne fournissent pas un flux de prix.</p></div>
+                <div class="source-line"><span data-i18n="ttfSource">Référence du contrat uniquement :</span> <a href="https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures" target="_blank" rel="noopener noreferrer" data-i18n="iceLink">ICE Dutch TTF ↗</a></div>
+            </div>
+        </article>
+
+        <article class="card flows-card" data-category="energy">
+            <div class="card-head"><div><h2 data-i18n="flowsTitle">Dernières observations de flux</h2><p data-i18n="flowsSubtitle">Valeurs publiées au point · unité native de la source</p></div><a class="status" href="https://transparency.entsog.eu/" target="_blank" rel="noopener noreferrer" data-i18n="entsogLink">Source ENTSOG ↗</a></div>
+            <div class="card-body">
+                <div class="flow-row flow-header"><span data-i18n="pointOperator">Point / opérateur</span><span data-i18n="direction">Sens</span><span data-i18n="publishedValue">Valeur publiée</span><span class="flow-updated" data-i18n="periodUpdated">Période / mise à jour</span></div>
+                <div class="rows" id="flow-rows"><div class="empty" data-i18n="waitingFlows">En attente des données ENTSOG.</div></div>
+                <p class="fine-print" id="flow-notice" data-i18n="flowDisclaimer">Les valeurs aux points ne sont ni dédoublonnées ni équivalentes aux importations nettes d’un pays.</p>
+            </div>
+        </article>
+
+        <article class="card secondary-card" data-category="markets">
+            <div class="card-head"><div><h2 data-i18n="cryptoMonitor">Surveillance crypto</h2><p data-i18n="cryptoMonitorSubtitle">Résumé du bot Kraken / Binance · panneau secondaire</p></div><span class="status pending" id="bot-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body table-wrap" id="crypto-data" data-i18n="readingLocal">Lecture des observations locales…</div>
+        </article>
+
+        <article class="card secondary-card" data-category="ais">
+            <div class="card-head"><div><h2 data-i18n="aisTitle">Suivi maritime AIS</h2><p data-i18n="aisSubtitle">Proxy non-commercial · couverture terrestre uniquement</p></div><span class="status pending" id="ais-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-body">
+                <p class="fine-print" data-i18n="aisDisclaimer">Données AIS via aisstream.io proxy non-commercial. Pas de redistribution, pas de données satellite, quota API. Marqué <strong>non-commercial proxy</strong> et non vérifié.</p>
+                <div class="map-wrap" style="min-height:300px; position:relative; margin-bottom:12px;">
+  <svg id="ais-map" viewBox="0 0 800 430" style="width:100%;height:100%;"></svg>
+  <div class="map-legend" style="left:13px;bottom:12px;"><span class="legend-key"><i></i><span>Vessel</span></span></div>
+</div>
+<div class="table-wrap" id="ais-data"><div class="empty" data-i18n="aisLoading">Chargement des positions AIS…</div></div>
+                <div class="market-tools" style="margin-top:10px"><a class="button" id="ais-geojson" href="/api/ais/geojson" target="_blank" rel="noopener" data-i18n="aisGeojson">Télécharger GeoJSON</a></div>
+            </div>
+        </article>
+    </section>
+    <p class="fine-print" data-i18n="footerDisclaimer">Données gaz : ENTSOG Transparency Platform. Actualités : GDELT ou flux BBC World de repli, avec liens vers les éditeurs d’origine. Les flux peuvent être publiés avec retard et les actualités nécessitent une vérification indépendante.</p>
+</main>
+<script src="./assets/app.js" defer></script>
+</body>
+</html>
