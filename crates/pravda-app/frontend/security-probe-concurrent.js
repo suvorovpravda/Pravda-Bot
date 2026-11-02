@@ -10,16 +10,24 @@ let sequence = 0;
 async function check() {
   const invoke = window.__TAURI__?.core?.invoke;
   const results = [];
+  const validArguments = {
+    ipc_history_export_csv: {
+      query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
+    }
+  };
   for (const command of guarded) {
     if (typeof invoke !== "function") {
       results.push({command, state:"no-bridge"});
       continue;
     }
     try {
-      await invoke(command);
+      await invoke(command, validArguments[command] || {});
       results.push({command, state:"resolved"});
-    } catch {
-      results.push({command, state:"rejected"});
+    } catch (error) {
+      const description = String(error);
+      const malformed = /invalid args|missing field|missing required|deserialize|invalid type|expected.*argument/i.test(description);
+      const denied = !malformed && /UNAUTHORIZED|permission|capability|forbidden|not allowed|denied|not found/i.test(description);
+      results.push({command, state:"rejected", access_denied:denied, malformed});
     }
   }
   const payload = JSON.stringify({v:1,seq:sequence++,results});
