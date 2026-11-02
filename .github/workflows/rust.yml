@@ -11,6 +11,12 @@ on:
       - '**/rust/**'
       - 'crates/**'
       - 'tools/**'
+      - 'archive/**'
+      - '.gitattributes'
+      - '.github/dependabot.yml'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'docs/**'
   pull_request:
     branches: [main]
 
@@ -49,6 +55,9 @@ jobs:
         run: node tools/test-dashboard.mjs
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
+
+      - name: Enforce Rust-only production boundary (no active Python)
+        run: node tools/test-rust-production-boundary.mjs
 
       - name: Fmt check
         run: cargo fmt --all -- --check
