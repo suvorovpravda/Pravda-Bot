@@ -86,13 +86,15 @@ fn allowed(request: &Request, port: u16) -> bool {
                 single_header(request.headers(), "sec-fetch-dest"),
                 Ok(Some("document"))
             );
-            document_navigation && match request.method() {
-                &Method::GET => matches!(request.uri().path(), "/" | "/login" | "/setup")
-                    && matches!(single_header(request.headers(), "origin"), Ok(None)),
-                &Method::POST => matches!(request.uri().path(), "/login" | "/setup")
-                    && matched_origin,
-                _ => false,
-            }
+            document_navigation
+                && if request.method() == Method::GET {
+                    matches!(request.uri().path(), "/" | "/login" | "/setup")
+                        && matches!(single_header(request.headers(), "origin"), Ok(None))
+                } else if request.method() == Method::POST {
+                    matches!(request.uri().path(), "/login" | "/setup") && matched_origin
+                } else {
+                    false
+                }
         }
         _ => false,
     }
