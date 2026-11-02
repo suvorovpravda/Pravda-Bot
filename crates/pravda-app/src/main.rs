@@ -101,8 +101,8 @@ async fn main() {
 
     // One Rust password/session authority shared by the compatibility HTTP
     // adapter and IPC. No independent password caches or parallel verifiers.
-    let auth_path = std::env::var_os("PRAVDA_AUTH_PATH")
-        .unwrap_or_else(|| "pravda_auth.json".into());
+    let auth_path =
+        std::env::var_os("PRAVDA_AUTH_PATH").unwrap_or_else(|| "pravda_auth.json".into());
     if auth_path.is_empty() {
         eprintln!("Pravda-Bot cannot start: authentication path is empty");
         std::process::exit(1);
