@@ -1,117 +1,269 @@
 <div align="center">
 
-# Pravda-Bot · Rust
+# 🛰️ PRAVDA-BOT
+### Observatoire de marché local · Rust + Tauri 2 · Windows
 
-Surveillance des marchés · Simulation papier · Données locales
+**Marchés en temps réel · historique SQLite · simulation papier · interface native IPC**
 
 [![Rust CI](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml/badge.svg)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml)
 [![CodeQL](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml/badge.svg)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml)
-![Rust 1.95+](https://img.shields.io/badge/rust-1.95%2B-orange)
-![Local only](https://img.shields.io/badge/server-127.0.0.1-blue)
+![Rust 1.95+](https://img.shields.io/badge/Rust-1.95%2B-f97316?logo=rust&logoColor=white)
+![Desktop](https://img.shields.io/badge/Desktop-Tauri%202-2563eb)
+![Database](https://img.shields.io/badge/Database-SQLite-0e7490?logo=sqlite&logoColor=white)
+![Trading](https://img.shields.io/badge/Ordres%20r%C3%A9els-AUCUN-16a34a)
+![Enterprise](https://img.shields.io/badge/MSI%20sign%C3%A9-NON%20LIVR%C3%89-d97706)
 
-[FR](#français) · [RU](#русский) · [EN](#english)
+**[Démarrage](#-démarrage-rapide--windows)** · **[Architecture](#-architecture-actuelle)** · **[Fonctions](#-périmètre-réel)** · **[Sécurité](SECURITY.md)** · **[Feuille de route](#-feuille-de-route)**
+
+[Français](#français) · [Русский](#русский) · [English](#english)
 
 </div>
 
-> **Refonte Windows Enterprise — PR-01 :** [architecture cible, modèle de menace, inventaire HTTP→IPC et critères de validation](docs/architecture/README.md). Ce document décrit un **projet de migration** ; le desktop publié n'implémente pas encore l'IPC natif ni la signature Authenticode.
+---
 
 ## Français
 
-Pravda-Bot est un observatoire local des prix publics Kraken/Binance. Il sert à étudier les écarts, conserver des ticks dans SQLite et expérimenter une simulation papier. **Il ne passe aucun ordre et ne vérifie aucun compte d'exchange.**
+> [!IMPORTANT]
+> **État après la fusion de la [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) (2 novembre 2026).** Le desktop Windows charge désormais des ressources **embarquées** et communique avec Rust par **IPC Tauri** : il **n'ouvre pas de serveur HTTP local** pour son interface. Le serveur Axum existe toujours, mais c'est une **application de diagnostic distincte**. Cette architecture intégrée au code source ne signifie **pas** qu'un installeur MSI signé ou une release Enterprise a été publiée.
 
-Le serveur actif est en Rust (Tokio/Axum). Les anciennes implémentations Python sont conservées dans `archive/python-legacy/` comme références : elles ne sont pas exécutées par le serveur Rust. La migration fonctionnelle complète reste en cours.
+### 🎯 À quoi sert Pravda-Bot ?
 
-### Démarrage
+Pravda-Bot observe des cours **publics** Kraken/Binance, évalue leur fraîcheur et des écarts avec garde-fous, conserve un historique local et permet d'explorer une **simulation papier**.
 
-Installer Rust avec Cargo, puis depuis le dépôt :
+- **Aucun ordre réel**, retrait, transaction bancaire, gestion de compte exchange ou connexion à un portefeuille.
+- La simulation papier est **en mémoire** : ses résultats ne sont pas un portefeuille réellement exécuté, ni une garantie de profit.
+- Les cotations live nécessitent Internet et dépendent de la disponibilité des sources. Désactiver les flux n'invente pas des prix.
+- Les anciens composants Python sont conservés à titre de **référence** sous `archive/python-legacy/` ; le chemin de production Rust ne les exécute pas.
 
-```sh
+### 🏗️ Architecture actuelle
+
+```mermaid
+flowchart TB
+    classDef ui fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px
+    classDef rust fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:2px
+    classDef data fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px
+    classDef diag fill:#f3e8ff,stroke:#9333ea,color:#581c87,stroke-width:2px
+    classDef external fill:#f1f5f9,stroke:#64748b,color:#334155
+
+    subgraph DESKTOP["🪟 Windows · pravda-app.exe (Tauri 2)"]
+        UI["WebView2 · HTML/CSS/JS locaux"]:::ui
+        IPC["12 commandes IPC autorisées · fenêtre main"]:::ui
+        AUTH["Session et mot de passe · côté Rust"]:::rust
+        RUNTIME["DesktopRuntime · logique marché Rust"]:::rust
+        UI -->|"invoke() · aucun port HTTP"| IPC
+        IPC --> AUTH
+        AUTH --> RUNTIME
+    end
+    subgraph STORAGE["Données locales"]
+        DB[("SQLite · historique + WAL")]:::data
+        PASS["Vérificateur PBKDF2 salé"]:::data
+    end
+    RUNTIME --> DB
+    AUTH --> PASS
+    EX["Kraken / Binance · flux publics"]:::external --> RUNTIME
+
+    subgraph DIAGNOSTIC["🧪 Mode navigateur séparé"]
+        BROWSER["Navigateur local"]:::diag -->|"127.0.0.1:8080"| AXUM["pravda-server · Axum"]:::diag
+    end
+    AXUM -.->|"mêmes composants Rust · instance séparée"| DB
+```
+
+**Deux modes, deux transports.** Le **desktop** charge `crates/pravda-app/frontend/` via `WebviewUrl::App`, utilise des commandes IPC typées et ne démarre **ni Axum ni WebSocket HTTP local**. Le **serveur de diagnostic** reste démarrable indépendamment avec `cargo run -p pravda-server`, écoute exclusivement sur `127.0.0.1` et sert une interface navigateur avec authentification HTTP. Ne pas faire tourner les deux modes simultanément sur les mêmes fichiers de données pour les tests.
+
+Pour les décisions et contrats détaillés : [architecture](docs/architecture/README.md), [Phase 2 IPC](docs/architecture/tauri-ipc-phase2.md), [menaces](docs/architecture/threat-model.md), [migration SQLite](docs/architecture/sqlite-legacy-migration.md).
+
+### 🪟 Démarrage rapide — Windows
+
+**Prérequis :** Windows x64 et WebView2, [Rust/Cargo](https://rustup.rs/) (outillage Windows MSVC), prérequis C++ requis par Tauri 2 et accès aux dépendances Cargo. L'application se **compile depuis les sources** ; `bundle.active=false`, donc ce parcours **ne produit pas un MSI**.
+
+```powershell
+git clone https://github.com/suvorovpravda/Pravda-Bot.git
+cd Pravda-Bot
+
+# Vérifications du cœur Rust (workspace racine)
 cargo test --locked --workspace
+
+# Desktop natif : manifeste Cargo distinct
+cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml
+```
+
+**Premier lancement :** création d'un mot de passe local d'au moins **15 caractères** → dashboard. Les lancements suivants demandent le mot de passe existant. Déconnexion et reconnexion restent dans la fenêtre native.
+
+**Données Windows par défaut :**
+
+| Fichier | Chemin | Rôle |
+|:--|:--|:--|
+| SQLite | `%LOCALAPPDATA%\Pravda-Bot\pravda.db` | Ticks/historique et index |
+| SQLite WAL | même dossier, suffixe `-wal` / `-shm` si présents | Journaux transactionnels |
+| Authentification | `%LOCALAPPDATA%\Pravda-Bot\pravda_auth.json` | Sel et vérificateur de mot de passe, **pas** le mot de passe en clair |
+
+Les variables `PRAVDA_DB_PATH` et `PRAVDA_AUTH_PATH` prennent le dessus si elles sont définies. **N'effacez pas ces fichiers pour résoudre une erreur de connexion.** Pour une migration d'ancienne installation, sauvegarder de façon cohérente SQLite/WAL et le fichier auth ; voir [migration legacy](docs/architecture/sqlite-legacy-migration.md).
+
+<details>
+<summary><strong>🧪 Lancer un profil de test isolé, sans toucher aux données habituelles</strong></summary>
+
+Depuis la racine du dépôt, dans **la même fenêtre PowerShell** :
+
+```powershell
+$test = Join-Path $env:TEMP ("Pravda-IPC-Test-" + (Get-Date -Format "yyyyMMdd-HHmmss"))
+New-Item -ItemType Directory -Path $test | Out-Null
+$env:PRAVDA_DB_PATH = Join-Path $test "pravda.db"
+$env:PRAVDA_AUTH_PATH = Join-Path $test "pravda_auth.json"
+$env:PRAVDA_MARKET_FEEDS_ENABLED = "false"
+Remove-Item Env:PRAVDA_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+Remove-Item Env:PRAVDA_LEGACY_DB_PATH -ErrorAction SilentlyContinue
+Remove-Item Env:MARKET_HISTORY_DB -ErrorAction SilentlyContinue
+cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml
+```
+
+Pour tester la **persistance**, fermer l'application puis relancer la dernière commande **sans recréer `$test` ni changer les variables**. Le mot de passe déjà créé doit rester valable. Les variables d'environnement définies dans une fenêtre PowerShell ne sont pas automatiquement visibles depuis une autre.
+
+</details>
+
+<details>
+<summary><strong>🌐 Mode diagnostic navigateur (distinct du desktop)</strong></summary>
+
+```powershell
+# À lancer séparément, avec ses propres fichiers de données
+$env:PRAVDA_DB_PATH = Join-Path $env:TEMP "pravda-diagnostic.db"
+$env:PRAVDA_AUTH_PATH = Join-Path $env:TEMP "pravda-diagnostic-auth.json"
 cargo run --locked -p pravda-server
 ```
 
-Ouvrir http://127.0.0.1:8080. Le serveur écoute uniquement la boucle locale et crée `pravda.db` dans le répertoire de lancement. Arrêt : Ctrl+C. Il nécessite un accès Internet pour les flux publics ; local ne signifie pas hors ligne. Le serveur n'a pas besoin de Python.
+Puis ouvrir [http://127.0.0.1:8080](http://127.0.0.1:8080). Arrêt par `Ctrl+C`. `DASHBOARD_PORT` ne concerne **que l'écoute du serveur diagnostic** ; le desktop IPC n'utilise pas ce port pour ses vues. Ne jamais publier ce serveur par tunnel, proxy ou redirection de port.
 
-### Configuration du serveur Rust
+</details>
 
-Définir les variables dans l'environnement du processus avant le lancement. Le serveur ne charge pas automatiquement les fichiers `.env` de l'ancienne version.
+### 📊 Périmètre réel
 
-| Variable | Défaut | Validation |
-|---|---|---|
-| `DASHBOARD_PORT` | 8080 | Entier de 1 à 65535 ; écoute toujours sur 127.0.0.1 |
-| `PRAVDA_DB_PATH` | pravda.db | Chemin non vide, sans octet nul ; base mémoire refusée ; dossier parent existant |
-| `PRAVDA_MARKET_FEEDS_ENABLED` | true | `true` ou `false` ; `false` désactive les connexions Kraken/Binance pour le diagnostic |
-| `MARKET_DATA_STALE_SECONDS` | 4 | Durée strictement positive, au plus 3600 secondes |
-| `MAX_EXCHANGE_SKEW_SECONDS` | 2 | Durée de 0 à 3600 secondes |
-| `MAX_ALLOWED_SPREAD_PERCENT` | 5 | Valeur finie strictement positive, au plus 100 points de pourcentage |
-| `PRAVDA_AUTH_PATH` | pravda_auth.json | Fichier de l'empreinte du mot de passe local ; sans fichier, le mot de passe (15 caractères minimum) est créé à la première visite ou depuis `PRAVDA_ADMIN_PASSWORD` |
+| Fonctionnalité | Desktop IPC | Statut / limite |
+|:--|:--:|:--|
+| Démarrage Windows sans port HTTP UI | ✅ | `frontendDist` local, WebView2, fenêtre `main` |
+| Mot de passe, setup, login, logout | ✅ | PBKDF2 salé, session côté Rust |
+| BTC / ETH / SOL et indicateurs marché | ✅ | Kraken/Binance publics ; dépendants du réseau |
+| Contrôles de cours et de fraîcheur | ✅ | Prix finis positifs, 4 s et 2 s par défaut, écart brut 5 % |
+| Historique SQLite récent et filtré | ✅ | Requêtes typées ; maximum **10 000** lignes retournées |
+| Export historique CSV | ✅ | Texte borné, téléchargement depuis la WebView ; **vérification utilisateur de l'export à compléter** |
+| Alertes d'événements du simulateur papier | ✅ | Consultation ; pas de création/suppression d'alertes personnalisées |
+| Métriques runtime | 🟡 | Uptime/PID ; CPU/RSS **indisponibles** |
+| Forex, énergie, géopolitique, actualités, AIS | ⏳ | Parties d'UI visibles possibles, **pas de source opérationnelle garantie** |
+| Véritable trading / ordres / solde exchange | ❌ | Hors périmètre |
+| MSI Enterprise et signature Authenticode | ❌ | **Non livrés** ; barrière de publication à respecter |
 
-Sous PowerShell, `$env:DASHBOARD_PORT='8081'` puis `cargo run --locked -p pravda-server` utilise http://127.0.0.1:8081. Une configuration invalide ou un port occupé interrompt le démarrage avant les connexions marché. Les frais restent fixés à 0,36 %. Augmenter les limites de fraîcheur ou d'anomalie réduit la protection. Le lanceur Tauri utilise le même DASHBOARD_PORT.
+> [!NOTE]
+> **Provenance des données :** le ticker Kraken v1 est daté à sa **réception** côté client, pas à l'heure certifiée de la transaction sur l'exchange. Binance conserve un temps événement quand fourni. Les frais de simulation sont une estimation fixe de **0,36 %** ; aucun calcul ne reproduit toutes les contraintes d'exécution réelle.
 
-### Windows : synchronisation contrôlée et lancement de l'application
+### ⚙️ Configuration et garde-fous
 
-Le script `tools/sync-and-run-windows.ps1` vérifie l'URL du dépôt, refuse toute modification d'un dossier contenant des fichiers locaux non enregistrés, récupère `main` sans réécriture de l'historique, compare son commit à `origin/main`, lance les vérifications Rust, compile Tauri puis ouvre l'application avec l'option `-Launch`. **Une PR non fusionnée n'est pas encore incluse dans `main`**.
+Les variables sont lues depuis **l'environnement du processus**, sans chargement implicite de `.env`.
 
-Dans PowerShell, une fois ce script présent dans ton clone Windows :
+| Variable | Valeur par défaut | Usage / validation |
+|:--|:--|:--|
+| `PRAVDA_DB_PATH` | `pravda.db` dans le serveur ; AppData dans Tauri Windows | SQLite, chemin non vide ; `:memory:` refusé |
+| `PRAVDA_AUTH_PATH` | `pravda_auth.json` dans le serveur ; AppData dans Tauri Windows | Vérificateur local ; chemin non vide |
+| `PRAVDA_MARKET_FEEDS_ENABLED` | `true` | `true` ou `false` exclusivement |
+| `MARKET_DATA_STALE_SECONDS` | `4` | > 0 et ≤ 3 600 secondes |
+| `MAX_EXCHANGE_SKEW_SECONDS` | `2` | Entre 0 et 3 600 secondes |
+| `MAX_ALLOWED_SPREAD_PERCENT` | `5` | Nombre fini > 0 et ≤ 100 |
+| `PRAVDA_LEGACY_DB_PATH` | Non définie | Source SQLite Python **lecture seule**, si migration demandée |
+| `MARKET_HISTORY_DB` | Non définie | Chemin legacy alternatif, priorité moindre |
+| `DASHBOARD_PORT` | `8080` | **Serveur navigateur uniquement** ; 1 à 65 535 |
 
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\sync-and-run-windows.ps1 -Destination "$env:USERPROFILE\Pravda-Bot" -Launch
+Un paramètre invalide interrompt le démarrage ; augmenter les seuils ne résout pas la provenance incertaine d'un cours. Pour `PRAVDA_ADMIN_PASSWORD` (provisionnement optionnel), préférer le setup interactif sur un poste utilisateur et éviter l'exposition de secrets dans les commandes et les journaux.
+
+### 🔐 Modèle de sécurité, en résumé
+
+```mermaid
+flowchart LR
+    classDef allow fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef block fill:#fee2e2,stroke:#dc2626,color:#7f1d1d
+    classDef step fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    LOCAL["Fenêtre Tauri main + assets embarqués"]:::step --> ACL{"Capability + fenêtre autorisées ?"}:::step
+    ACL -->|non| DENY["Refus IPC"]:::block
+    ACL -->|oui| AUTH{"Session Rust valide ?"}:::step
+    AUTH -->|non · hors bootstrap auth| DENY
+    AUTH -->|oui| READ["Snapshot / historique / CSV borné"]:::allow
 ```
 
-Le binaire compilé se trouve sous `crates/pravda-app/target/debug/pravda-app.exe`. Les exécutables distribués indépendamment et les fichiers locaux de l'ancien projet ne sont pas remplacés par cette opération.
+- **Défense en profondeur :** capabilities Tauri restreintes à `main`, manifeste de commandes nommé, contrôle de session dans les handlers Rust.
+- **Aucune permission IPC générale `shell` / `fs`**, aucun script distant, ressources JS/CSS locales et CSP spécifique au desktop.
+- **Séparation des transports :** le desktop ne démarre pas de service HTTP ; le serveur diagnostic applique ses propres contrôles Host/Origin, cookies et en-têtes.
+- **Limites non résolues :** un logiciel malveillant ayant les droits de l'utilisateur peut atteindre ses fichiers ; l'analyse de code, la CI verte et un mot de passe local **ne garantissent pas l'absence de vulnérabilités**.
+- **Statut gouvernance PR #64 :** recette Windows validée par le responsable, mais **approbation GitHub indépendante non enregistrée** et règle de non-bypass non vérifiée au moment de la fusion. Ne pas présenter ces contrôles comme attestés.
 
-**Stockage stable de l'application Windows (après installation de cette version du code)** : la base SQLite et l'empreinte du mot de passe se trouvent par défaut dans `%LOCALAPPDATA%\Pravda-Bot\pravda.db` et `%LOCALAPPDATA%\Pravda-Bot\pravda_auth.json`, indépendamment du dossier depuis lequel l'EXE est lancé. Les variables `PRAVDA_DB_PATH` et `PRAVDA_AUTH_PATH`, si définies explicitement, restent prioritaires. Ce changement concerne **l'application Windows Tauri**, pas le serveur Rust lancé seul depuis un terminal, qui conserve ses chemins relatifs par défaut. Si le dossier AppData ne peut pas être créé, l'application échoue au démarrage au lieu d'enregistrer des données ailleurs.
+➡️ **Lire la [politique SECURITY.md](SECURITY.md)** pour les menaces, les mesures vérifiées, les risques restants et le signalement privé.
 
-**Migration depuis v0.3.2 ou une version antérieure** : les anciens fichiers de données créés dans un autre répertoire de travail ne sont **pas copiés ni supprimés automatiquement**. Fermer toutes les instances du programme ; localiser le couple `pravda.db` / `pravda_auth.json` de l'installation précédente, le sauvegarder, puis le copier manuellement dans le dossier AppData si les fichiers cibles n'existent pas. En cas de doute, conserver les anciens fichiers et ne pas remplacer ceux qui existent déjà.
+### 🧪 Tests et vérification
 
-### Fonctionnement et limites
+```powershell
+# Workspace Rust du serveur : Linux et Windows
+cargo fmt --all -- --check
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
+cargo build --locked --release --workspace
 
-| Composant | État réel |
-|---|---|
-| Réception | Binance ticker avec temps événement ; Kraken v1 ticker avec temps de réception uniquement |
-| Contrôles | Prix finis positifs, fraîcheur 4 s, désynchronisation 2 s, plafond d'écart brut 5 % |
-| Frais | Estimation fixe de 0,0036 en fraction, soit 0,36 point de pourcentage |
-| Simulation | Moteur Rust en mémoire ; aucun ordre, carnet exécuté, solde réel ou transfert |
-| Historique | SQLite WAL ; JSON/CSV filtrés BTC/ETH/SOL, Kraken/Binance, jour/semaine/mois ; 10 000 ticks maximum avec indicateur de troncature |
-| Métriques | Uptime et PID réels ; CPU et mémoire indisponibles (`null`) |
-| Interface | HTML/JavaScript servi par Rust ; certains panneaux de l'ancienne interface restent à raccorder |
-| Énergie, actualités, Forex, AIS | Migration non terminée : aucune promesse de données opérationnelles |
-| Desktop Tauri | Projet séparé, avec CI Windows dédiée : compilation, test de lancement, requête de navigation WebView2, création du mot de passe local, accès API, déconnexion et reconnexion ; validation graphique sur les postes utilisateurs toujours nécessaire |
+# Le desktop Tauri est un workspace Cargo distinct
+cargo fmt --manifest-path .\crates\pravda-app\Cargo.toml -- --check
+cargo test --locked --manifest-path .\crates\pravda-app\Cargo.toml
+cargo build --locked --manifest-path .\crates\pravda-app\Cargo.toml
 
-Un ticker Kraken v1 est actualisé à chaque transaction ; une absence de transaction peut produire un état STALE. Son horodatage local ne prouve pas l'âge de la transaction à l'exchange. Le seuil ne doit pas être élargi pour cacher ce manque d'information.
+# Contrats JavaScript statiques (Node.js, idéalement v22)
+node tools/test-dashboard.mjs
+node tools/test-desktop-ipc.mjs
+```
 
-L'interface utilise encore des scripts inline. La liaison locale ne remplace pas une authentification : ne pas exposer le port par un proxy public. Les résultats papier ne modélisent pas les contraintes de remplissage, marge, emprunt, inventaire ou latence de placement.
+**CI GitHub :** Rust Linux/Windows, MSRV 1.95, smoke Windows desktop sans listener, serveur navigateur, CodeQL. Le badge est dynamique : un commit fusionné demande une **nouvelle vérification des jobs de `main`**, pas seulement des checks verts sur la PR.
 
-Le serveur contrôle désormais `Host`, `Origin` et le contexte navigateur avant les routes HTTP/WebSocket. Les requêtes vers un hôte ou un port inattendu sont refusées. Les clients locaux sans `Origin` restent utilisables ; ce contrôle ne protège pas contre un programme malveillant exécuté sur le poste. Voir [SECURITY.md](SECURITY.md).
+**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. Les tests négatifs IPC depuis fenêtre/origine non autorisée, le CSV réel, la reprise de données historiques et la distribution signée exigent encore des preuves dédiées.
 
-### Contribuer et reprendre le travail
+### 🗺️ Feuille de route
 
-Chaque lot doit avoir des tests Rust, un commit identifiable et une CI Windows/Linux vérifiée avant fusion. Ne pas présenter un module isolé comme intégré. Les archives ne sont pas une suite de validation de la nouvelle application. Consulter [MIGRATION_STATUS.md](MIGRATION_STATUS.md) pour les travaux restants et les commandes de contrôle.
+```mermaid
+flowchart LR
+    classDef done fill:#dcfce7,stroke:#16a34a,color:#14532d
+    classDef next fill:#dbeafe,stroke:#2563eb,color:#1e3a8a
+    classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12
+    A["PR-01 · Contrats, architecture, menaces"]:::done --> B["SQLite · Import legacy transactionnel"]:::done
+    B --> C["PR #64 · Desktop Tauri IPC intégré"]:::done
+    C --> D["Sécurité · E2E négatif, revue indépendante"]:::next
+    D --> E["Parité · FX/énergie/news/AIS, alertes"]:::pending
+    E --> F["Distribution · MSI signé, SBOM, rollback"]:::pending
+```
 
-Ces composants peuvent servir à construire d'autres observatoires locaux, outils de qualité des données et simulateurs reproductibles. Les contributions prioritaires sont la parité des routes HTTP, les tests d'intégration, les sources avec provenance et le packaging Windows.
+| Priorité | Chantier | Critère de sortie |
+|:--|:--|:--|
+| **P0** | Auditer la fusion #64, protections `main` et jobs post-merge | Checks verts sur SHA `main`, règles vérifiées, risques documentés |
+| **P0** | Recette sécurité IPC négative | Refus hors session, hors fenêtre autorisée et origine distante ; compte rendu Windows |
+| **P1** | Compléter la parité Rust | Sources avec provenance vérifiée, UI affichant « indisponible » si absent |
+| **P1** | Qualité des données et persistance | Rejeu/migration SQLite, CSV borné, tests redémarrage/rollback |
+| **P2** | Packaging Enterprise | MSI/EXE **signés et horodatés**, SBOM et intégrité CI, tests sur Windows propre |
+| **P2** | Observabilité et ergonomie | CPU/RSS mesurés, erreurs redigées, diagnostics compatibles Windows |
 
-Disponibilité annoncée par le responsable : la moitié de l'équipe est en vacances, reprise prévue vers le 2 novembre 2026.
+**Pas de date de livraison inventée.** Une fonctionnalité reste « prévue » tant que ses tests et preuves de sortie ne sont pas intégrés. Voir le [suivi de migration](MIGRATION_STATUS.md) et les [critères de release](docs/architecture/acceptance.md).
+
+### 🤝 Contribuer et obtenir de l'aide
+
+1. Créer une branche dédiée, garder les modifications atomiques et ajouter des tests.
+2. Exécuter les commandes adaptées au **workspace Rust** et au **desktop Tauri**.
+3. Ouvrir une PR, faire revoir le modèle de menace/capabilities si une permission IPC change.
+4. Contrôler les checks **du SHA exact**, documenter les essais Windows et obtenir les approbations requises avant fusion.
+
+[Issues](https://github.com/suvorovpravda/Pravda-Bot/issues) · [Pull requests](https://github.com/suvorovpravda/Pravda-Bot/pulls) · [Sécurité privée](SECURITY.md#-signaler-une-vulnérabilité)
+
+---
 
 ## Русский
 
-Rust-сервер читает переменные окружения процесса, но не загружает `.env` автоматически. Порт задаётся `DASHBOARD_PORT`, база — `PRAVDA_DB_PATH`, ограничения — переменными из таблицы выше. Для диагностики `PRAVDA_MARKET_FEEDS_ENABLED=false` отключает подключения к биржам. Ошибочные значения останавливают запуск. Клиент Tauri использует тот же DASHBOARD_PORT. Доступ защищён локальным паролем (не менее 15 символов, хранится соленый хеш PBKDF2): пароль задаётся при первом открытии либо через PRAVDA_ADMIN_PASSWORD; файл хеша — PRAVDA_AUTH_PATH (по умолчанию pravda_auth.json).
+**Pravda-Bot** — локальный монитор публичных котировок Kraken/Binance, истории SQLite и **бумажной симуляции**, без реальных торговых ордеров и доступа к счетам. После [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) Windows-приложение Tauri 2 использует **встроенный интерфейс и IPC** без локального HTTP-сервера для UI. `pravda-server` (Axum, `127.0.0.1:8080`) существует отдельно для диагностики.
 
-Pravda-Bot — локальное приложение наблюдения за публичными ценами Kraken/Binance. Сервер написан на Rust (Tokio/Axum), история хранится в SQLite. Реальные ордера не отправляются; счета и остатки не проверяются. Старый Python-код находится в `archive/python-legacy/` и не запускается Rust-сервером.
+**Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. При первом запуске требуется пароль от 15 символов; данные по умолчанию находятся в `%LOCALAPPDATA%\Pravda-Bot`. Для отключения биржевых потоков установите `PRAVDA_MARKET_FEEDS_ENABLED=false`. Firefox/Chrome не нужны для Tauri, но WebView2 необходим.
 
-Запуск: `cargo test --locked --workspace`, затем `cargo run --locked -p pravda-server`. Интерфейс: http://127.0.0.1:8080. Для рыночных данных требуется Интернет.
-
-Полный перенос функций ещё не завершён: энергетика, новости, валюты, AIS, часть HTTP-маршрутов и приложение Tauri требуют дальнейшей работы. CPU и память возвращаются как недоступные, а не как нулевые измерения. Данные Kraken v1 имеют локальное время получения, но не подтверждённое время сделки. Симуляция не отражает реальное исполнение.
-
-Каждое изменение проходит тесты и отдельный коммит; перед слиянием требуется CI Windows/Linux. План: [MIGRATION_STATUS.md](MIGRATION_STATUS.md). По информации руководителя, половина команды в отпуске, возвращение ожидается около 2 ноября 2026 года.
+**Ограничения:** FX, энергетика, новости и AIS реализованы не полностью. Готового подписанного Enterprise MSI нет; зелёная CI не подтверждает безопасность выпуска. Полные инструкции, таблица переменных и план находятся во [французском разделе](#français) и [SECURITY.md](SECURITY.md).
 
 ## English
 
-The Rust server reads process environment variables; it does not automatically load `.env`. Configure the port with `DASHBOARD_PORT`, storage with `PRAVDA_DB_PATH`, and guard thresholds using the table above. For diagnostics, `PRAVDA_MARKET_FEEDS_ENABLED=false` disables exchange connections. Invalid values stop startup. The Tauri client uses the same DASHBOARD_PORT. Access requires a local password (at least 15 characters, stored as a salted PBKDF2 hash): it is created on first visit or from PRAVDA_ADMIN_PASSWORD; the hash file is PRAVDA_AUTH_PATH (default pravda_auth.json).
+**Pravda-Bot** is a local observer of public Kraken/Binance prices with SQLite history and **paper-only simulation**. No real orders, account access or real portfolio execution. Since [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64), the Windows Tauri 2 desktop loads **bundled assets and typed IPC** with **no local HTTP listener for its UI**. The Axum `pravda-server` remains a **separate diagnostic CLI**, loopback-bound.
 
-Pravda-Bot observes public Kraken/Binance prices locally. Its active server uses Rust, Tokio/Axum and SQLite. It sends no real orders and verifies no exchange accounts. Python sources under `archive/python-legacy/` are reference material, not part of the Rust runtime.
+**Build/run on Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. Create a local password of at least 15 characters on first run. Default data storage: `%LOCALAPPDATA%\Pravda-Bot`. To disable feeds for testing, set `PRAVDA_MARKET_FEEDS_ENABLED=false`.
 
-Run `cargo test --locked --workspace`, then `cargo run --locked -p pravda-server`. Open http://127.0.0.1:8080. Public market feeds require Internet access.
-
-Functional migration is incomplete: energy, news, FX, AIS, several dashboard routes and the separate Tauri desktop build need further work. CPU and memory are explicitly unavailable, not fabricated zero measurements. Kraken v1 reception time does not establish exchange trade age. Paper results do not model real fills or account constraints.
-
-Changes require tests, identifiable commits and Windows/Linux CI before merging. See [MIGRATION_STATUS.md](MIGRATION_STATUS.md). The project owner reports that half the team is on holiday, returning around November 2, 2026.
+**Current limitations:** FX, energy, news, AIS and customizable alerts are not fully migrated. No signed Enterprise MSI has been delivered. CI and manual Windows acceptance are meaningful evidence, **not a security certification**. See [the full French guide](#français), [SECURITY.md](SECURITY.md) and the [roadmap](#-feuille-de-route).
