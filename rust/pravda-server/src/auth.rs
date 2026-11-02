@@ -277,7 +277,7 @@ pub(crate) async fn require_auth(
 ) -> Response {
     let public = matches!(
         (request.method().as_str(), request.uri().path()),
-        ("GET", "/login") | ("POST", "/login") | ("POST", "/setup")
+        ("GET", "/login") | ("GET", "/setup") | ("POST", "/login") | ("POST", "/setup")
     );
     if public {
         return next.run(request).await;
@@ -301,7 +301,7 @@ pub(crate) async fn require_auth(
 pub(crate) fn routes<S: Clone + Send + Sync + 'static>(auth: Arc<Auth>) -> Router<S> {
     Router::new()
         .route("/login", get(login_page).post(login_submit))
-        .route("/setup", post(setup_submit))
+        .route("/setup", get(login_page).post(setup_submit))
         .route("/logout", post(logout))
         .with_state(auth)
 }
