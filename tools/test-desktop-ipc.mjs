@@ -7,7 +7,7 @@ const read=p=>readFileSync(join(root,p),"utf8");
 const cfg=JSON.parse(read("tauri.conf.json"));
 const cap=JSON.parse(read("capabilities/main.json"));
 const main=read("src/main.rs"), ipc=read("src/ipc.rs"), build=read("build.rs");
-const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js");
+const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
 assert.equal(cfg.build.frontendDist,"frontend");
 assert.equal(cfg.app.withGlobalTauri,true);
 assert.deepEqual(cfg.app.security.capabilities,["main-ipc"]);
@@ -22,6 +22,8 @@ assert.doesNotMatch(main,/WebviewUrl::External|TcpListener|run_server_with_auth|
 assert.match(main,/\.manage\(desktop\)/);
 assert.doesNotMatch(html,/<script(?![^>]*\bsrc=)|<style\b|style="/i);
 assert.match(html,/src="\.\/auth\.js"/);
+assert.match(auth,/setup = false/);
+assert.match(css,/\.ipc-auth-screen\[hidden\]/);
 assert.doesNotMatch(js,/\bfetch\s*\(|\bnew\s+WebSocket\s*\(|location\.assign\s*\(/);
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
