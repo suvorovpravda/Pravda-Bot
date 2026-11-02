@@ -197,11 +197,8 @@ async fn main() {
                                 .open(&report_path)
                             {
                                 use std::io::Write;
-                                let _ = writeln!(
-                                    report,
-                                    "{millis}|{}|{payload}",
-                                    std::process::id()
-                                );
+                                let _ =
+                                    writeln!(report, "{millis}|{}|{payload}", std::process::id());
                             }
                         }
                     })
