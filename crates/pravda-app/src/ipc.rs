@@ -168,7 +168,10 @@ mod tests {
     fn all_protected_commands_reject_unauthenticated_and_other_windows() {
         let (session, path) = new_session();
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
-        assert_eq!(require_authenticated(&session, "other"), Err("FORBIDDEN_WINDOW"));
+        assert_eq!(
+            require_authenticated(&session, "other"),
+            Err("FORBIDDEN_WINDOW")
+        );
         assert_eq!(require_main("main"), Ok(()));
         assert_eq!(require_main("other"), Err("FORBIDDEN_WINDOW"));
 
@@ -179,7 +182,10 @@ mod tests {
         let token = session.authority.login(&password).unwrap();
         session.accept_token(token);
         assert_eq!(require_authenticated(&session, "main"), Ok(()));
-        assert_eq!(require_authenticated(&session, "other"), Err("FORBIDDEN_WINDOW"));
+        assert_eq!(
+            require_authenticated(&session, "other"),
+            Err("FORBIDDEN_WINDOW")
+        );
 
         session.logout();
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
