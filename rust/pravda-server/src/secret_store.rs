@@ -310,7 +310,10 @@ mod tests {
         let old = SecretValue::new(b"fictional-credential-ONE".to_vec());
         let replacement = SecretValue::new(b"fictional-credential-TWO".to_vec());
         store.put("revolut_x:market", &old).unwrap();
-        assert_eq!(store.get("revolut_x:market").unwrap().expose(), old.expose());
+        assert_eq!(
+            store.get("revolut_x:market").unwrap().expose(),
+            old.expose()
+        );
         store.put("revolut_x:market", &replacement).unwrap();
         assert_eq!(
             store.get("revolut_x:market").unwrap().expose(),
@@ -407,9 +410,14 @@ mod tests {
         // Rotation uses the same user-scoped OS record. The old value must
         // never be returned after a successful atomic CredWriteW replacement.
         let replacement = SecretValue::new(b"test-only-rotated-456".to_vec());
-        store.put(&unique, &replacement).expect("Credential Manager rotate");
+        store
+            .put(&unique, &replacement)
+            .expect("Credential Manager rotate");
         assert_eq!(
-            store.get(&unique).expect("Credential Manager rotated read").expose(),
+            store
+                .get(&unique)
+                .expect("Credential Manager rotated read")
+                .expose(),
             replacement.expose()
         );
         store.remove(&unique).expect("Credential Manager delete");
