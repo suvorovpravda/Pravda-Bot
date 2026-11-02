@@ -227,6 +227,81 @@ Les workflows testent Rust Ubuntu/Windows, MSRV, desktop Windows, mode navigateu
 
 **Ne pas appeler « Enterprise prêt » un binaire non signé, ni annoncer une date non étayée.**
 
+## 🏛️ Architecture cible évolutive — lecture seule d'abord
+
+![Statut](https://img.shields.io/badge/Architecture-PLAN%20EN%20COURS-f97316)
+![Ordres](https://img.shields.io/badge/Trading%20r%C3%A9el-D%C3%89SACTIV%C3%89-dc2626)
+![Revolut X](https://img.shields.io/badge/Revolut%20X-Public%20read--only-2563eb)
+
+> [!IMPORTANT]
+> **Architecture envisagée, non livrée.** Ne pas confondre l'objectif « robuste/enterprise » et un système HFT. Pravda-Bot reste aujourd'hui un **desktop Windows local, mono-utilisateur, simulations papier**. Une API réseau et des identifiants d'exchange ne sont **pas** nécessaires pour ce mode. Les technologies supplémentaires doivent être justifiées par des besoins mesurés et validées séparément.
+
+### Vue cible : frontières explicites, aucun contournement d'IPC
+
+```mermaid
+flowchart TB
+    classDef desktop fill:#dbeafe,stroke:#2563eb,color:#1e3a8a,stroke-width:2px
+    classDef core fill:#dcfce7,stroke:#16a34a,color:#14532d,stroke-width:2px
+    classDef optional fill:#ffedd5,stroke:#ea580c,color:#7c2d12
+    classDef storage fill:#f3e8ff,stroke:#9333ea,color:#581c87
+    DESKTOP["Windows · Tauri 2 WebView2 · IPC local"]:::desktop --> CORE["pravda-core · Rust · moteur papier et risques"]:::core
+    CORE --> STORE[("SQLite WAL · stockage local transactionnel")]:::storage
+    PUBLIC["Kraken / Binance publics · Revolut X public (PR #73)"]:::desktop --> FEEDS["pravda-fetchers · adaptateurs lecture seule"]:::core --> CORE
+    MOBILE["Mobile / Web · FUTUR"]:::optional --> GW["API Gateway Axum + auth dédiée · FUTUR"]:::optional
+    GW --> CORE
+    CORE -.->|"uniquement si multi-instance nécessaire"| QUEUE["Outbox durable / NATS · FUTUR"]:::optional
+    CORE -.->|"si volume mesuré"| TIMESERIES["PostgreSQL / TimescaleDB · FUTUR"]:::optional
+```
+
+**Invariants :** le desktop ne passe **jamais** par un API Gateway distant pour appeler sa logique locale ; mobile/web ne réutilisent pas directement les capabilities Tauri. Le serveur Axum actuel est uniquement **diagnostique et loopback**, pas une API distante de production. Des accès distants futurs exigeraient une authentification distincte, TLS, droits minimaux, contrôle d'accès et audit. Les ordres réels restent désactivés.
+
+### Priorités techniques : sous-jalons vérifiables
+
+| Ordre | Chantier technique | Jalons préparés / total | Avancement | Critère suivant |
+|:--|:--|--:|--:|:--|
+| 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 3/6 | **50 % (branche #72)** | CI complète verte, fusion validée, nouveaux tests Windows |
+| 2 · P0 | Sécurité du poste et modèle de secrets | 0/5 | **0 %** | Inventaire secrets, coffre OS, effacement mémoire, rotation/backup, tests d'accès négatifs |
+| 3 · P1 | Contrats exchange et Revolut X public | 1/4 | **25 % (branche #73)** | Contrat/parseur proposés ; tests CI, validation données réelles puis branchement explicite |
+| 4 · P1 | Résilience et outbox durable | 0/4 | **0 %** | Idempotence, journal local, reprise après crash, scénarios de rejouement |
+| 5 · P1 | Backtesting/paper trading | 1/5 | **20 %** | Simulateur papier existant ; moteur reproductible, coûts, données historiques, tests de biais |
+| 6 · P2 | Observabilité locale | 1/4 | **25 %** | Uptime existant ; métriques CPU/RSS, tracing expurgé, alertes pertinentes |
+| 7 · P2 | Infrastructure multi-utilisateur | 0/5 | **0 %** | Besoin démontré, RBAC, migrations PostgreSQL, séparation des locataires, reprise |
+| 8 · P2 | Exécution d'ordres réels | 0/7 | **0 % · DÉSACTIVÉ** | Autorisation explicite, spécification officielle, coffre clés, limites, idempotence, sandbox **si réellement disponible**, revue de sécurité |
+
+*Ces sous-jalons sont des indicateurs de préparation et non des taux de couverture de code ou une attestation de production. Ils complètent les neuf chantiers généraux synchronisés dans README et SECURITY.*
+
+### Secrets : distinguer mot de passe local et clés d'exchange
+
+- **PBKDF2 salé** est destiné à vérifier un **mot de passe** ; ce n'est pas un coffre pour clés privées ou API. Ne pas déduire « insuffisant » sans préciser cet usage.
+- Avant de stocker une clé d'exchange, isoler un composant Rust de secrets : **Windows Credential Manager / DPAPI** (via intégration OS contrôlée), droits utilisateurs, journaux expurgés, contrôle des erreurs et tests de restauration. Ne jamais garder des clés dans `config/production.yaml`, `.env` public, logs ni dans la WebView.
+- Pour SQLite, les données sont aujourd'hui locales **non déclarées chiffrées**. Le chiffrement au repos exigera un choix documenté (p. ex. SQLCipher et gestion de clé dédiée), migrations/récupération testées et sauvegardes cohérentes avec WAL. « AES-256-GCM SQLite » n'est pas une option qu'on active sans bibliothèque, schéma et gestion du cycle des clés.
+- **Windows Hello / YubiKey / HSM / rotation automatique** ne sont pas implémentés. Chaque option dépend de la disponibilité matérielle et du protocole d'exchange ; imposer un renouvellement arbitraire de 90 jours sans compatibilité API serait incorrect.
+
+### Revolut X : schéma réel et barrières de sécurité
+
+**Référence officielle :** [Revolut X Crypto Exchange API](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange).
+
+| Fonction | API officielle identifiée | Mode Pravda |
+|---|---|---|
+| Carnet public | `GET https://revx.revolut.com/api/2.0/public/order-book/BTC-USD` | Lecture publique **uniquement**, PR #73 en attente de CI |
+| Authentification de compte | `X-Revx-API-Key`, `X-Revx-Timestamp`, `X-Revx-Signature` | Non implémentée |
+| Signature | **Ed25519** avec clé privée utilisateur | Aucune clé ni signature actuellement |
+| Ordres réels et soldes | Endpoints authentifiés distincts `/api/1.0/...` | **Interdits dans le connecteur public** |
+
+La proposition HMAC / `X-Revolut-Api-*` / `https://api-sandbox.revolut.com` **ne correspond pas au contrat Revolut X vérifié** ; ne pas intégrer ce code. Les prix, tailles, et paires sont des données **en chaînes décimales**, et les chemins de paire utilisent le tiret (`BTC-USD`) — ne pas comparer silencieusement ces marchés avec `BTC/USDT`.
+
+La **PR #73** propose une frontière `PublicMarketDataAdapter`, un client public strictement limité au carnet et des tests de parsing, sans changer le runtime, sans clé, sans compte et sans ordre réel. **Statut : en revue/CI, non livré.** Il n'y a **pas** de validation live attestée.
+
+### Évolution de l'infrastructure : déclencheurs plutôt qu'empilement
+
+- **Local mono-instance :** conserver SQLite/WAL. Pour les opérations à rejouer, définir d'abord un **outbox durable SQLite**, clés d'idempotence, journal d'événements et tests d'interruption ; un simple broadcast mémoire n'est pas un bus persistant.
+- **NATS/Redis Streams :** utiles **si** plusieurs services ou consommateurs réellement séparés existent. Ajouter un serveur de messages à un exécutable Tauri local augmenterait la surface d'attaque et les pannes possibles.
+- **PostgreSQL/TimescaleDB/ClickHouse :** envisager après métriques de volume, concurrence et requêtes historiques. « HFT » n'est pas l'objectif établi et PostgreSQL n'est pas requis pour le desktop actuel.
+- **Observabilité :** `tracing` structuré et redaction d'abord, puis OpenTelemetry/Prometheus seulement pour une architecture multi-services justifiée. Aucun endpoint métrique distant ni dashboard d'administration ne doit exposer des secrets ou des données sensibles.
+- **CI/CD :** `cargo fmt`, Clippy, tests Rust, Windows Tauri natif, CodeQL, `cargo-audit` et fuzzing ciblé ; backtesting reproductible, fixtures de réponses externes, tests de reprise/crash, SBOM/signature Windows comme barrière de release.
+
+---
+
 ## 🗃️ Historique technique et versions
 
 Les anciens fichiers Markdown mêlaient **plans futurs**, **rapports historiques Python** et **affirmations de release parfois contradictoires**. Ils sont consolidés dans les repères ci-dessous, mais restent consultables via **[l'historique Git immuable du commit précédent](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154)** pour l'exactitude documentaire.
