@@ -40,6 +40,13 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Dashboard JavaScript regression tests
+        run: node tools/test-dashboard.mjs
+
       - name: Fmt check
         run: cargo fmt --all -- --check
 
