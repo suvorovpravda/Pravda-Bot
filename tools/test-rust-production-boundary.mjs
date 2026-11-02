@@ -46,16 +46,65 @@ const launchScripts=active.filter(p=>
   /^tools\/[^/]+\.(?:bat|cmd|ps1)$/i.test(p) ||
   /^\.github\/workflows\/[^/]+\.ya?ml$/i.test(p)
 );
-const interpreter=/(?:^|[\s;&|])(?:python(?:3(?:\.\d+)?)?(?:\.exe)?|py(?:\.exe)?)\b/i;
-for(const path of launchScripts) {
-  const lines=readFileSync(path,"utf8").split(/\r?\n/);
+const interpreter=/(?:^|[\\s;&|])(?:python(?:3(?:\\.\\d+)?)?(?:\\.exe)?|py(?:\\.exe)?)\\b/i;
+function executableStatements(path, lines) {
+  if(!path.startsWith(".github/workflows/")) {
+    return lines.map((text,index)=>({text:text.trim(),line:index+1}));
+  }
+  // GitHub Actions YAML: descriptive metadata (name, comments, env names)
+  // must never count as a Python interpreter invocation. Only inspect
+  // executable run commands and explicitly configured Python action/shells.
+  const commands=[];
+  let blockIndent=null;
   for(let index=0;index<lines.length;index++) {
-    const line=lines[index].trim();
-    if(!line || /^(?:#|rem(?:\s|$)|::)/i.test(line))continue;
-    if(interpreter.test(line))
-      problems.push("Python executable reference in active "+path+":"+(index+1));
+    const raw=lines[index], trim=raw.trim();
+    const indent=raw.length-raw.trimStart().length;
+    const match=raw.match(/^\\s*(?:-\\s+)?run\\s*:\\s*(.*)$/);
+    if(match) {
+      blockIndent=null;
+      const value=match[1].trim();
+      if(/^[|>][-+]?\\s*(?:#.*)?$/.test(value)) {
+        blockIndent=indent;
+      } else if(value) {
+        commands.push({text:value,line:index+1});
+      }
+      continue;
+    }
+    if(blockIndent!==null && indent>blockIndent) {
+      commands.push({text:trim,line:index+1});
+      continue;
+    }
+    blockIndent=null;
+    if(/^\\s*(?:-\\s+)?uses\\s*:\\s*actions\\/setup-python@/i.test(raw)
+      || /^\\s*shell\\s*:\\s*(?:python|py)(?:\\s|$)/i.test(raw)) {
+      commands.push({text:"python",line:index+1});
+    }
+  }
+  return commands;
+}
+for(const path of launchScripts) {
+  const lines=readFileSync(path,"utf8").split(/\\r?\\n/);
+  for(const {text:line,line:number} of executableStatements(path,lines)) {
+    if(!line || /^(?:#|rem(?:\\s|$)|::)/i.test(line))continue;
+    if(interpreter.test(line)) {
+      problems.push("Python executable reference in active "+path+":"+number);
+    }
   }
 }
+// Scanner regression: metadata must not fail CI; executable run blocks must.
+const yamlFixture=[
+  "jobs:",
+  "  test:",
+  "    steps:",
+  "      - name: Enforce Rust only (no active Python)",
+  "        run: |",
+  "          echo ok",
+  "          python blocked.py"
+];
+const executable=executableStatements(".github/workflows/rust.yml",yamlFixture);
+assert.equal(executable.length,2);
+assert.equal(executable.filter(({text})=>interpreter.test(text)).length,1);
+
 const cap=JSON.parse(readFileSync("crates/pravda-app/capabilities/main.json","utf8"));
 requireCheck(JSON.stringify(cap.windows)==='["main"]',
   "Only main may have Tauri IPC capability");
