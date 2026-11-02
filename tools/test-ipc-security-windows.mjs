@@ -105,40 +105,80 @@ async function ensureWebviewTitle(title) {
   verdict("WebView2 document: "+title,false,
     "Observed: "+found.map(x=>x.title).join(" | "));
 }
+// On Windows, ChildProcess.killed only means the signal was requested;
+// it does NOT prove tauri-driver/msedgedriver exited. Reusing the listening
+// port before a full process-tree exit makes the next session unreliable.
+function driverStopped(processHandle) {
+  return processHandle.exitCode !== null || processHandle.signalCode !== null;
+}
 async function stopSession() {
-  if(session) {
-    try{await wd("DELETE","");}catch{/* best effort */}
-    session=null;
+  const active = child;
+  if (session) {
+    try { await wd("DELETE", ""); } catch { /* cleanup continues */ }
+    session = null;
   }
-  if(child) {
-    const old=child;
-    old.kill();
-    await new Promise(resolveDone=>{
-      if(old.exitCode!==null||old.killed) return resolveDone();
-      const done=()=>resolveDone();
-      old.once("exit",done);
-      setTimeout(done,2500).unref();
-    });
-    child=null;
+  if (!active) return;
+  child = null;
+  if (!driverStopped(active)) {
+    // The Windows-only test harness owns this exact PID. Kill the driver
+    // and any child EdgeDriver/app process, not unrelated applications.
+    try {
+      execFileSync("taskkill", ["/PID", String(active.pid), "/T", "/F"], {
+        windowsHide: true,
+        timeout: 15_000,
+        stdio: "ignore"
+      });
+    } catch { /* It may have already exited during DELETE /session. */ }
+    if (!driverStopped(active)) {
+      await Promise.race([
+        new Promise(resolveDone => active.once("exit", resolveDone)),
+        new Promise(resolveDone => setTimeout(resolveDone, 8_000))
+      ]);
+    }
+  }
+  if (!driverStopped(active)) {
+    throw Error("Native WebDriver process tree did not stop cleanly");
   }
 }
-async function startSession(mode,driverPort) {
+async function assertDriverPortFree(driverPort) {
+  port = driverPort;
+  try {
+    const response = await http("GET", "/status", undefined, 1_000);
+    throw Error("Native WebDriver port still active: " + driverPort);
+  } catch (error) {
+    if (String(error).includes("still active")) throw error;
+    // An unreachable status endpoint is expected before binding a new driver.
+  }
+}
+async function startSession(mode, driverPort) {
   await stopSession();
-  port=driverPort;
-  driverFault=null;
-  const env={...process.env,
+  await assertDriverPortFree(driverPort);
+  driverFault = null;
+  let stderrTail = "";
+  const env = {...process.env,
     PRAVDA_DB_PATH:join(directory,"data.db"),
     PRAVDA_AUTH_PATH:join(directory,"auth.json"),
     PRAVDA_MARKET_FEEDS_ENABLED:"false",
     PRAVDA_E2E_PROBE_ONLY:mode==="probe"?"true":"false"
   };
-  for(const key of ["PRAVDA_ADMIN_PASSWORD","PRAVDA_LEGACY_DB_PATH","MARKET_HISTORY_DB"])
+  for (const key of ["PRAVDA_ADMIN_PASSWORD","PRAVDA_LEGACY_DB_PATH","MARKET_HISTORY_DB"])
     delete env[key];
-  child=spawn("tauri-driver",["--port",String(port)],{
+  child = spawn("tauri-driver", ["--port", String(port)], {
     cwd:process.cwd(),env,stdio:["ignore","ignore","pipe"],windowsHide:true
   });
-  child.on("error",err=>{driverFault=err;});
-  await waitForDriver();
+  child.stderr?.on("data", data => {
+    // Consume stderr so the pipe cannot block the driver.
+    stderrTail = (stderrTail + String(data)).slice(-1200);
+  });
+  child.on("error", error => { driverFault=error; });
+  try {
+    await waitForDriver();
+  } catch (error) {
+    // Do not print full driver stderr (it could contain local paths).
+    throw Error(String(error.message||error) +
+      " [driver exit=" + (child.exitCode ?? child.signalCode ?? "running") +
+      ", stderr bytes captured=" + stderrTail.length + "]");
+  }
   const created=await http("POST","/session",{capabilities:{alwaysMatch:{
     browserName:"wry","tauri:options":{application:exe}
   }}},120_000);
@@ -146,6 +186,7 @@ async function startSession(mode,driverPort) {
   assert.ok(typeof session==="string"&&session.length>0,
     "tauri-driver did not return a sessionId");
 }
+
 try {
   assert.equal(process.platform,"win32","Requires native Windows WebView2");
   assert.ok(existsSync(exe),"Debug security-e2e executable missing");
@@ -190,7 +231,7 @@ try {
   // WebView. Start the truly unauthorized Tauri label as the primary WebView
   // in a SECOND native process against the same disposable auth/db files.
   // This proves window capability enforcement, NOT shared-session isolation.
-  await startSession("probe",basePort+1);
+  await startSession("probe",basePort);
   await ensureWebviewTitle("Pravda Security Probe - NO IPC");
   runtimeDenied("security-probe: bootstrap auth_status denied",
     await invoke("ipc_auth_status"));
@@ -201,7 +242,11 @@ try {
   failure=error;
   console.error("[SECURITY E2E FAILED] "+String(error.message||error).slice(0,500));
 } finally {
-  await stopSession();
+  try { await stopSession(); }
+  catch (error) {
+    report.cleanupError=String(error.message||error).slice(0,200);
+    report.passed=false;
+  }
   if(directory) {
     try{rmSync(directory,{recursive:true,force:true});}
     catch(error){
