@@ -357,6 +357,7 @@ const translations = {
 
     function renderMarket(payload) {
         latestMarket = payload;
+        if (typeof checkLocalAlerts === "function") checkLocalAlerts();
         const symbols = payload.symbols || {};
         const rows = [];
         for (const symbol of ["BTC/USDT", "ETH/USDT", "SOL/USDT"]) {
@@ -439,6 +440,7 @@ const translations = {
 
     function renderFx(payload) {
         latestFx = payload;
+        if (typeof checkLocalAlerts === "function") checkLocalAlerts();
         const fxAvailable = payload.status !== "unavailable" && Object.keys(payload.rates || {}).length > 0;
         setStatus($("fx-status"), !fxAvailable ? "error" : payload.freshness === "stale" ? "stale" : "pending",
             fxAvailable ? t(payload.freshness || "delayed") : t("fxUnavailable"));
@@ -525,12 +527,9 @@ const translations = {
     }
 
     async function refreshAlerts() {
-        try {
-            const payload = await fetchJson("/api/alerts");
-            renderAlerts(payload.alerts || []);
-        } catch {
-            $("alert-notice").textContent = t("alertFailure");
-        }
+        // Simulator events (read-only) remain separate from editable local thresholds.
+        // Local thresholds never reach an exchange and cannot create orders.
+        showLocalAlerts();
     }
 
     async function checkPriceAlerts() {
@@ -770,7 +769,11 @@ const translations = {
         }
     }
     async function refreshFlows() {
-        try { renderFlows(await fetchJson("/api/eu/flows")); }
+        try {
+            const data=await fetchJson("/api/eu/flows");
+            if(data.status==="unavailable")throw new Error(data.notice || "SOURCE_UNAVAILABLE");
+            renderFlows(data);
+        }
         catch (error) {
             setStatus($("map-status"), "error", t("unavailable"));
             $("flow-status").textContent = t("unavailable");
@@ -781,6 +784,8 @@ const translations = {
         const list = $("news-list");
         try {
             const payload = await fetchJson("/api/geopolitics");
+            if(payload.status==="unavailable"||!payload.articles?.length)
+                throw new Error(payload.notice || "NEWS_UNAVAILABLE");
             const sourceName = payload.source?.startsWith("BBC") ? "BBC World" : "GDELT";
             setStatus($("news-status"), "live", `${sourceName} · ${payload.articles.length}`);
             $("news-source").textContent = `${t("newsWindow")} · ${t("publishedOn", { date: formatDate(payload.retrieved_at) })}`;
@@ -816,43 +821,32 @@ const translations = {
     }
     async function refreshCrypto() {
         try {
-            const payload = await fetchJson("/data");
-            const botStatusKey = {
-                "Données récentes": "botStatusFresh",
-                "Données obsolètes": "botStatusStale",
-                "Aucune observation": "botStatusNone"
-            }[payload.status] || "botStatusStale";
-            setStatus($("bot-status"), payload.status === "Données récentes" ? "live" : "stale", t(botStatusKey));
-            const rows = payload.observations || [];
-            if (!rows.length) { $("crypto-data").textContent = t("noCryptoObservation"); return; }
-            const table = document.createElement("table");
-            const header = table.createTHead().insertRow();
-            for (const label of [t("utc"), t("pair"), "Kraken · EUR / CHF", "Binance · EUR / CHF", t("grossSpread"), t("health")]) {
-                const cell = document.createElement("th"); cell.textContent = label; header.append(cell);
+            const payload=await fetchJson("/api/market");
+            const symbols=payload.symbols || {};
+            const rows=Object.entries(symbols).flatMap(([symbol,exchanges])=>
+                Object.entries(exchanges).map(([exchange,quote])=>({symbol,exchange,quote})));
+            const live=rows.filter(row=>row.quote?.status==="live");
+            setStatus($("bot-status"),live.length?"live":"stale",
+                live.length?`${live.length} cotation(s) fraîche(s)`:"Aucune cotation récente");
+            const container=$("crypto-data");container.replaceChildren();
+            if(!rows.length){container.textContent="Aucune cotation observée. Le mode hors ligne reste disponible.";return;}
+            const table=document.createElement("table");table.className="quote-table";
+            const head=table.createTHead().insertRow();
+            for(const label of ["Actif","Plateforme","Prix USDT","Fraîcheur"]){
+                const th=document.createElement("th");th.textContent=label;head.append(th);
             }
-            const body = table.createTBody();
-            for (const row of rows.slice(0, 5)) {
-                const tr = body.insertRow();
-                for (const value of [row.Timestamp_UTC, row.Symbol]) {
-                    const cell = tr.insertCell(); cell.textContent = safeText(value);
-                }
-                for (const value of [row.Kraken_Price, row.Binance_Price]) {
-                    const cell = tr.insertCell();
-                    const rawPrice = parsePrice(value);
-                    const eur = rawPrice === null ? null : convertQuote(rawPrice, "EUR");
-                    const chf = rawPrice === null ? null : convertQuote(rawPrice, "CHF");
-                    cell.textContent = eur === null || chf === null
-                        ? "—"
-                        : `${formatCurrency(eur, "EUR")} · ${formatCurrency(chf, "CHF")}`;
-                }
-                for (const value of [row.Gross_Spread_Percent, row.Market_Data_Status]) {
-                    const cell = tr.insertCell(); cell.textContent = safeText(value);
+            for(const row of rows.slice(0,12)){
+                const tr=table.insertRow();
+                for(const value of [row.symbol,row.exchange,
+                    Number.isFinite(row.quote?.price)?numericFormat(row.quote.price)+" USDT":"—",
+                    row.quote?.status==="live"?"Récent":"Périmé"]){
+                    const td=tr.insertCell();td.textContent=value;
                 }
             }
-            $("crypto-data").replaceChildren(table);
-        } catch (error) {
-            setStatus($("bot-status"), "error", t("cryptoLogUnavailable"));
-            $("crypto-data").textContent = t("unknownError");
+            container.append(table);
+        } catch {
+            setStatus($("bot-status"),"error","Flux local indisponible");
+            $("crypto-data").textContent="Lecture des cours indisponible ; aucun prix n'est inventé.";
         }
     }
     async function refreshAIS() {
@@ -945,13 +939,65 @@ const translations = {
     $("chart-exchange").addEventListener("change", refreshHistory);
     $("chart-period").addEventListener("change", refreshHistory);
     $("chart-currency").addEventListener("change", drawPriceChart);
-    // Do not offer a form that the Rust backend cannot save or persist.
-    for (const field of $("price-alert-form").querySelectorAll("input, select, button")) {
-        field.disabled = true;
+    const alertStorageKey = "pravda-local-price-alerts-v1";
+    let localAlerts = [];
+    try {
+        const parsed = JSON.parse(localStorage.getItem(alertStorageKey) || "[]");
+        if (Array.isArray(parsed)) localAlerts = parsed.filter(a =>
+            typeof a.id==="string" && ["EUR","CHF"].includes(a.currency) &&
+            ["above","below"].includes(a.direction) && Number.isFinite(a.target) &&
+            a.target>0 && ["BTC/USDT","ETH/USDT","SOL/USDT"].includes(a.symbol) &&
+            ["Kraken","Binance"].includes(a.exchange)).slice(0,30);
+    } catch { localAlerts=[]; }
+    const storeLocalAlerts = () => {
+        try { localStorage.setItem(alertStorageKey, JSON.stringify(localAlerts)); }
+        catch { $("alert-notice").textContent="Stockage local inaccessible : alertes conservées en mémoire uniquement."; }
+    };
+    const showLocalAlerts = () => {
+        const container = $("price-alerts");
+        container.replaceChildren();
+        if(!localAlerts.length){container.textContent="Aucune alerte locale configurée.";return;}
+        for(const alert of localAlerts){
+            const row=document.createElement("div");row.className="alert-row";
+            const label=document.createElement("span");
+            label.textContent=`${alert.symbol} · ${alert.exchange} · ${alert.direction==="above"?"≥":"≤"} ${formatCurrency(alert.target,alert.currency)}${alert.triggered?" · SEUIL ATTEINT":""}`;
+            const del=document.createElement("button");del.type="button";del.className="button";del.textContent="Supprimer";
+            del.addEventListener("click",()=>{localAlerts=localAlerts.filter(a=>a.id!==alert.id);storeLocalAlerts();showLocalAlerts();});
+            row.append(label,del);container.append(row);
+        }
+    };
+    function checkLocalAlerts(){
+        if(!latestMarket || !latestFx?.rates?.USD)return;
+        let changed=false;
+        for(const alert of localAlerts){
+            const tick=latestMarket.symbols?.[alert.symbol]?.[alert.exchange];
+            if(tick?.status!=="live" || !Number.isFinite(tick.price))continue;
+            const value=convertQuote(tick.price,alert.currency);
+            if(!Number.isFinite(value))continue;
+            const hit=alert.direction==="above"?value>=alert.target:value<=alert.target;
+            if(hit && !alert.triggered){
+                alert.triggered=true;changed=true;
+                $("alert-notice").textContent=`Seuil local atteint : ${alert.symbol} ${formatCurrency(value,alert.currency)}.`;
+            }
+            if(!hit && alert.triggered){alert.triggered=false;changed=true;}
+        }
+        if(changed){storeLocalAlerts();showLocalAlerts();}
     }
+    showLocalAlerts();
+    $("alert-notice").textContent="Alertes locales actives tant que Pravda-Bot est ouvert, sans ordre de trading ni notification distante.";
     $("price-alert-form").addEventListener("submit", event => {
         event.preventDefault();
-        $("alert-notice").textContent = t("unavailable");
+        if(localAlerts.length>=30){$("alert-notice").textContent="Limite de 30 alertes locales.";return;}
+        const target=Number($("alert-target").value);
+        if(!Number.isFinite(target)||target<=0){$("alert-notice").textContent="Seuil positif requis.";return;}
+        const alert={
+            id:String(Date.now())+"-"+String(Math.random()),
+            symbol:$("alert-symbol").value,exchange:$("alert-exchange").value,
+            direction:$("alert-direction").value,currency:$("alert-currency").value,
+            target,triggered:false
+        };
+        localAlerts.push(alert);storeLocalAlerts();showLocalAlerts();
+        $("alert-notice").textContent="Alerte locale enregistrée. Évaluation uniquement sur des cours récents pendant l'ouverture de l'application.";
     });
     $("history-export").addEventListener("click", async event => {
         event.preventDefault();
