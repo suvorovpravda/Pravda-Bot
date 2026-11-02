@@ -223,12 +223,26 @@ jobs:
             'security-probe: bootstrap auth_status denied',
             'security-probe: market snapshot denied',
             'security-probe: no arbitrary disk modification',
-            'security-probe: shell plugin denied'
+            'security-probe: shell plugin denied',
+            'concurrent: ipc_auth_status denied with main authenticated',
+            'concurrent: ipc_market_snapshot denied with main authenticated',
+            'concurrent: ipc_history_recent denied with main authenticated',
+            'concurrent: ipc_history_export_csv denied with main authenticated',
+            'concurrent: plugin:fs|write_text_file denied with main authenticated',
+            'concurrent: plugin:shell|execute denied with main authenticated',
+            'main: native WebView2 CSP blocks injected inline script',
+            'main: authenticated again for hostile HTTPS test'
           )
           foreach ($name in $required) {
             if (@($tests | Where-Object { $_.name -eq $name -and $_.passed -eq $true }).Count -ne 1) {
               throw "Required native assertion absent: $name"
             }
+          }
+          $hostileEvidence = @($tests | Where-Object { $_.passed -eq $true -and
+            ($_.name -eq 'untrusted HTTPS origin cannot invoke market IPC' -or
+             $_.name -eq 'untrusted HTTPS navigation blocked in authenticated main window') })
+          if ($hostileEvidence.Count -ne 1) {
+            throw "Missing controlled HTTPS-hostile-origin native test outcome"
           }
           Write-Host "Verified $($tests.Count) native WebView2 security assertions on $env:GITHUB_SHA."
 
