@@ -9,8 +9,15 @@ import {tmpdir} from "node:os";
 import {join} from "node:path";
 
 function git(...args) {
-  return execFileSync("git",args,{encoding:"utf8",maxBuffer:128*1024*1024,
-    timeout:120000,windowsHide:true});
+  try {
+    return execFileSync("git",args,{encoding:"utf8",maxBuffer:128*1024*1024,
+      timeout:120000,windowsHide:true,stdio:["ignore","pipe","pipe"]});
+  } catch {
+    // Node child-process errors can embed the entire captured stdout/output,
+    // including historical credentials. Never propagate the original error.
+    throw new Error("Git secret audit failed or exceeded its bounded buffer; "+
+      "captured output withheld. Inspect repository history securely offline.");
+  }
 }
 const files=git("ls-files","-z").split("\0").filter(Boolean);
 const active=files.filter(p=>!p.startsWith("archive/"));
