@@ -34,17 +34,15 @@ pub struct MigrationReport {
 }
 
 /// Returns true only if a table contains every required column.
-fn has_columns(
-    conn: &Connection,
-    table: &str,
-    required: &[&str],
-) -> Result<bool, rusqlite::Error> {
+fn has_columns(conn: &Connection, table: &str, required: &[&str]) -> Result<bool, rusqlite::Error> {
     // Table names are code-owned constants, never interpolated from input.
     let mut stmt = conn.prepare(&format!("PRAGMA table_info({table})"))?;
     let names = stmt
         .query_map([], |row| row.get::<_, String>(1))?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(required.iter().all(|column| names.iter().any(|name| name == column)))
+    Ok(required
+        .iter()
+        .all(|column| names.iter().any(|name| name == column)))
 }
 
 impl PravdaStore {
@@ -70,7 +68,8 @@ impl PravdaStore {
         }
 
         // Never create an empty source by accident.
-        let mut source = Connection::open_with_flags(&source_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+        let mut source =
+            Connection::open_with_flags(&source_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
         let exists: bool = source.query_row(
             "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'market_ticks')",
             [],
@@ -102,7 +101,9 @@ impl PravdaStore {
         )?;
         let mut rows = stmt.query([])?;
 
-        let tx = self.conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
         tx.execute_batch(
             "CREATE TABLE IF NOT EXISTS legacy_tick_imports (
                 source_path TEXT NOT NULL,
