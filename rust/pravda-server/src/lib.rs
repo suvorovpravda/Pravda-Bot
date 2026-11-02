@@ -13,10 +13,10 @@ use axum::{
 };
 use config::ServerConfig;
 use futures_util::{SinkExt, StreamExt};
+use pravda_core::{PravdaRuntime, RuntimePolicy};
 use pravda_fetchers::types::{Exchange, Symbol, Tick};
 use pravda_store::PravdaStore;
 use serde_json::{json, Value};
-use pravda_core::{PravdaRuntime, RuntimePolicy};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -208,7 +208,11 @@ pub async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let store = PravdaStore::open(&config.database_path)?;
     let policy = runtime_policy(&config);
     let runtime = Arc::new(PravdaRuntime::new(store, tick_tx));
-    let state = Arc::new(AppState { config, runtime, auth });
+    let state = Arc::new(AppState {
+        config,
+        runtime,
+        auth,
+    });
     state.runtime.start_market_streams(policy).await;
 
     let app = Router::new()
@@ -256,9 +260,9 @@ fn configured_spread(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::{Duration, Instant};
     use chrono::Utc;
     use pravda_fetchers::types::{Exchange, Symbol, Tick};
+    use std::time::{Duration, Instant};
     fn actionable_spread(k: &Tick, b: &Tick, now: Instant) -> Option<pravda_market_core::Spread> {
         configured_spread(k, b, now, &ServerConfig::default())
     }

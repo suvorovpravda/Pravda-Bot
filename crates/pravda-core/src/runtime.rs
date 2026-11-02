@@ -79,11 +79,14 @@ impl PravdaRuntime {
                         quote.insert("price".to_owned(), json!(tick.price));
                         let age = tick.observed_at.elapsed().as_secs_f64();
                         quote.insert("age_seconds".to_owned(), json!(age));
-                        quote.insert("status".to_owned(), json!(if age <= stale_after.as_secs_f64() {
-                            "live"
-                        } else {
-                            "stale"
-                        }));
+                        quote.insert(
+                            "status".to_owned(),
+                            json!(if age <= stale_after.as_secs_f64() {
+                                "live"
+                            } else {
+                                "stale"
+                            }),
+                        );
                         quote.insert("timestamp".to_owned(), json!(tick.timestamp.to_rfc3339()));
                         entry.insert(format!("{:?}", exchange), Value::Object(quote));
                     }
@@ -227,12 +230,9 @@ impl PravdaRuntime {
                     ) {
                         let kraken_tick = kraken.clone();
                         let binance_tick = binance.clone();
-                        let Some(spread) = guard_spread(
-                            &kraken_tick,
-                            &binance_tick,
-                            Instant::now(),
-                            &policy,
-                        ) else {
+                        let Some(spread) =
+                            guard_spread(&kraken_tick, &binance_tick, Instant::now(), &policy)
+                        else {
                             runtime.alert_gates.write().await.remove(&tick.symbol);
                             continue;
                         };
@@ -246,13 +246,8 @@ impl PravdaRuntime {
                         let gate = gates
                             .entry(tick.symbol)
                             .or_insert_with(|| AlertGate::new(3.0));
-                        if guard_spread(
-                            &kraken_tick,
-                            &binance_tick,
-                            Instant::now(),
-                            &policy,
-                        )
-                        .is_none()
+                        if guard_spread(&kraken_tick, &binance_tick, Instant::now(), &policy)
+                            .is_none()
                         {
                             gate.reset_candidate(&tick.symbol.to_string());
                             continue;
@@ -287,13 +282,8 @@ impl PravdaRuntime {
 
                         // Paper simulator
                         let mut sim = runtime.paper_sim.write().await;
-                        if guard_spread(
-                            &kraken_tick,
-                            &binance_tick,
-                            Instant::now(),
-                            &policy,
-                        )
-                        .is_none()
+                        if guard_spread(&kraken_tick, &binance_tick, Instant::now(), &policy)
+                            .is_none()
                         {
                             continue;
                         }
@@ -319,7 +309,6 @@ impl PravdaRuntime {
                 }
             }
         });
-
     }
 }
 
@@ -342,7 +331,8 @@ pub fn guard_spread(
         now,
         policy.stale_after,
         policy.max_skew,
-    ).ok()?;
+    )
+    .ok()?;
     if health.status != HealthStatus::Ok {
         return None;
     }
@@ -366,8 +356,11 @@ mod tests {
     }
     fn quote(exchange: Exchange, price: f64, observed_at: Instant) -> Tick {
         Tick {
-            symbol: Symbol::BTCUSDT, price, exchange,
-            timestamp: Utc::now(), observed_at
+            symbol: Symbol::BTCUSDT,
+            price,
+            exchange,
+            timestamp: Utc::now(),
+            observed_at,
         }
     }
     #[test]
@@ -376,7 +369,10 @@ mod tests {
         let binance = quote(Exchange::Binance, 100.0, now);
         let mut policy = test_policy();
         for price in [-1.0, 0.0, f64::NAN, f64::INFINITY, 106.0] {
-            assert!(guard_spread(&quote(Exchange::Kraken, price, now), &binance, now, &policy).is_none());
+            assert!(
+                guard_spread(&quote(Exchange::Kraken, price, now), &binance, now, &policy)
+                    .is_none()
+            );
         }
         let kraken = quote(Exchange::Kraken, 101.0, now);
         let spread = guard_spread(&kraken, &binance, now, &policy).unwrap();
@@ -394,7 +390,12 @@ mod tests {
         let empty = runtime.market_snapshot(Duration::from_secs(4)).await;
         assert!(empty["symbols"]["BTC/USDT"].as_object().unwrap().is_empty());
         let now = Instant::now();
-        runtime.prices.write().await.entry(Symbol::BTCUSDT).or_default()
+        runtime
+            .prices
+            .write()
+            .await
+            .entry(Symbol::BTCUSDT)
+            .or_default()
             .insert(Exchange::Kraken, quote(Exchange::Kraken, 101.0, now));
         let snapshot = runtime.market_snapshot(Duration::from_secs(4)).await;
         assert_eq!(snapshot["symbols"]["BTC/USDT"]["Kraken"]["price"], 101.0);
