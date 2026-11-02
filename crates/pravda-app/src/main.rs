@@ -147,15 +147,11 @@ async fn main() {
             ipc::ipc_fx_status
         ])
         .setup(|app| {
-            WebviewWindowBuilder::new(
-                app,
-                "main",
-                WebviewUrl::App("index.html".into()),
-            )
-            .title("Pravda-Bot")
-            .inner_size(1280.0, 800.0)
-            .resizable(true)
-            .build()?;
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+                .title("Pravda-Bot")
+                .inner_size(1280.0, 800.0)
+                .resizable(true)
+                .build()?;
             Ok(())
         })
         .run(tauri::generate_context!())
