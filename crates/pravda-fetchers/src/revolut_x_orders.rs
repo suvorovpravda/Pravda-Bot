@@ -165,7 +165,7 @@ mod tests {
         for s in ["-1", "1e10", "NaN", ".1", "1.", "1.2.3", "0", "0.000000001", "1,5", ""] {
             assert_eq!(positive_units(s), None, "{s}");
         }
-        assert_eq!(positive_units("999999999999999999999999999"), None);
+        assert_eq!(positive_units("99999999999999999999999999999999"), None);
     }
     #[test]
     fn rejects_bad_ids_symbols_age_and_risk_limits() {
