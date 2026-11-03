@@ -114,10 +114,7 @@ impl OrderJournal {
         // an in-flight submission for permission to retry.
         // SEC: Persist STOPPED before potentially fallible legacy migrations.
         // A duplicate venue identity must never roll back the kill switch.
-        connection.execute(
-            "UPDATE order_journal_control SET stopped=1 WHERE id=1",
-            [],
-        )?;
+        connection.execute("UPDATE order_journal_control SET stopped=1 WHERE id=1", [])?;
         // SEC: Validate original historical lifecycle records before any
         // normalization; malformed 'submitting' rows must never be hidden.
         Self::verify_existing_rows(&connection)?;
@@ -444,7 +441,10 @@ mod tests {
                 )
                 .unwrap();
         }
-        assert!(matches!(OrderJournal::open(&file), Err(JournalError::Inconsistent)));
+        assert!(matches!(
+            OrderJournal::open(&file),
+            Err(JournalError::Inconsistent)
+        ));
         let connection = Connection::open(&file).unwrap();
         let state: String = connection
             .query_row(
