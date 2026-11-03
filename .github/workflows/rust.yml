@@ -82,6 +82,9 @@ jobs:
       - name: Run tests
         run: cargo test --locked --workspace
 
+      - name: Air-gapped Rust harness smoke (parallel, gate rejection, timeout)
+        run: cargo run --locked -p pravda-server --bin pravda-harness -- --smoke
+
       - name: Inspect dependency tree
         run: cargo tree --locked --workspace
 
