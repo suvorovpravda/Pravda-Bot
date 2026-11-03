@@ -159,8 +159,19 @@ pub fn validate_limit_order(
 /// It contains no API credential and cannot transmit itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreparedLimitOrder {
-    pub body: String,
-    pub quote_notional_units: u128,
+    body: String,
+    quote_notional_units: u128,
+}
+
+impl PreparedLimitOrder {
+    /// Redacted public preview; the signed body cannot be modified by callers.
+    pub fn body(&self) -> &str {
+        &self.body
+    }
+
+    pub fn quote_notional_units(&self) -> u128 {
+        self.quote_notional_units
+    }
 }
 
 /// Prepare the exact compact JSON used in the official signed POST example.
