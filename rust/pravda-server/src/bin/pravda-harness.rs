@@ -553,21 +553,21 @@ async fn smoke() -> Result<(), &'static str> {
             "--fixture-timeout",
             "--fixture-crash",
         ]
-            .iter()
-            .enumerate()
-            .map(|(n, arg)| TestCase {
-                id: format!("smoke{n}"),
-                binary: binary.into(),
-                expected_sha256: hash.clone(),
-                repetitions: 1,
-                timeout_ms: if *arg == "--fixture-timeout" {
-                    150
-                } else {
-                    5_000
-                },
-                args: vec![(*arg).into()],
-            })
-            .collect(),
+        .iter()
+        .enumerate()
+        .map(|(n, arg)| TestCase {
+            id: format!("smoke{n}"),
+            binary: binary.into(),
+            expected_sha256: hash.clone(),
+            repetitions: 1,
+            timeout_ms: if *arg == "--fixture-timeout" {
+                150
+            } else {
+                5_000
+            },
+            args: vec![(*arg).into()],
+        })
+        .collect(),
     };
     let binaries = check_manifest(&manifest, parent)?;
     let summary = orchestrate(manifest, binaries).await;
@@ -712,7 +712,11 @@ mod tests {
     #[test]
     fn rejects_tampering_and_cannot_weaken_financial_gates() {
         let dir = tempfile::tempdir().unwrap();
-        let binary = if cfg!(windows) { "replay.exe" } else { "replay" };
+        let binary = if cfg!(windows) {
+            "replay.exe"
+        } else {
+            "replay"
+        };
         let path = dir.path().join(binary);
         fs::write(&path, b"known offline binary").unwrap();
         let hash = hash_file(&path).unwrap();
@@ -757,7 +761,10 @@ mod tests {
         let mut manifest = example_manifest("replay.exe", "a".repeat(64));
         manifest.cases[0].repetitions = MAX_TOTAL_RUNS + 1;
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(check_manifest(&manifest, dir.path()), Err("invalid_run_count"));
+        assert_eq!(
+            check_manifest(&manifest, dir.path()),
+            Err("invalid_run_count")
+        );
     }
 
     #[test]
