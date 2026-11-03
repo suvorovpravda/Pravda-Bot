@@ -350,7 +350,7 @@ try {
     existsSync(authFile)&&existsSync(dbFile), "Both private storage files exist");
   const authHash=createHash("sha256").update(readFileSync(authFile)).digest("hex");
   const sqliteHeader=readFileSync(dbFile).subarray(0,16).toString("ascii");
-  verdict("restart: SQLite file header",sqliteHeader==="SQLite format 3\\0",
+  verdict("restart: SQLite file header",sqliteHeader==="SQLite format 3\0",
     "SQLite format header present");
   await startSession("main",basePort);
   await ensureWebviewTitle("Pravda | Terminal marchés & énergie");
@@ -370,7 +370,7 @@ try {
   verdict("restart: market IPC authorized only after login",
     marketAfterRestart.state==="resolved",marketAfterRestart.state);
   verdict("restart: SQLite remains accessible",
-    existsSync(dbFile)&&readFileSync(dbFile).subarray(0,16).toString("ascii")==="SQLite format 3\\0",
+    existsSync(dbFile)&&readFileSync(dbFile).subarray(0,16).toString("ascii")==="SQLite format 3\0",
     "Same database path and valid SQLite header");
   await checkHostileHttpsOrigin();
 
