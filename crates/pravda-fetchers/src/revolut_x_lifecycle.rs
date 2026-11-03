@@ -173,7 +173,10 @@ impl OrderLedger {
 
     pub fn request_cancel(&mut self, id: &str) -> Result<(), LedgerError> {
         let order = self.orders.get_mut(id).ok_or(LedgerError::NotFound)?;
-        if !matches!(order.state, OrderState::Accepted | OrderState::PartiallyFilled) {
+        if !matches!(
+            order.state,
+            OrderState::Accepted | OrderState::PartiallyFilled
+        ) {
             return Err(LedgerError::InvalidTransition);
         }
         order.state = OrderState::CancelRequested;
@@ -205,7 +208,11 @@ impl OrderLedger {
         if exchange_id.is_empty() || exchange_id.len() > 128 {
             return Err(LedgerError::ExchangeIdMismatch);
         }
-        if order.exchange_order_id.as_deref().is_some_and(|known| known != exchange_id) {
+        if order
+            .exchange_order_id
+            .as_deref()
+            .is_some_and(|known| known != exchange_id)
+        {
             return Err(LedgerError::ExchangeIdMismatch);
         }
         if cumulative < order.filled_base_units || cumulative > order.base_units {
@@ -233,9 +240,7 @@ impl OrderLedger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::revolut_x_orders::{
-        prepare_limit_order, LimitOrderIntent, OrderRiskLimits, Side,
-    };
+    use crate::revolut_x_orders::{prepare_limit_order, LimitOrderIntent, OrderRiskLimits, Side};
 
     const ID: &str = "3b364427-1f4f-4f66-9935-86b6fb115d26";
 
@@ -280,11 +285,20 @@ mod tests {
         ledger.cumulative_fill(ID, 250_000).unwrap();
         ledger.cumulative_fill(ID, 250_000).unwrap();
         assert_eq!(ledger.get(ID).unwrap().filled_base_units, 250_000);
-        assert_eq!(ledger.cumulative_fill(ID, 249_999), Err(LedgerError::InvalidFill));
-        assert_eq!(ledger.cumulative_fill(ID, 1_000_001), Err(LedgerError::InvalidFill));
+        assert_eq!(
+            ledger.cumulative_fill(ID, 249_999),
+            Err(LedgerError::InvalidFill)
+        );
+        assert_eq!(
+            ledger.cumulative_fill(ID, 1_000_001),
+            Err(LedgerError::InvalidFill)
+        );
         ledger.cumulative_fill(ID, 1_000_000).unwrap();
         assert_eq!(ledger.get(ID).unwrap().state, OrderState::Filled);
-        assert_eq!(ledger.request_cancel(ID), Err(LedgerError::InvalidTransition));
+        assert_eq!(
+            ledger.request_cancel(ID),
+            Err(LedgerError::InvalidTransition)
+        );
     }
 
     #[test]
@@ -294,14 +308,22 @@ mod tests {
         ledger.mark_submitted(ID).unwrap();
         ledger.mark_disconnected(ID).unwrap();
         assert_eq!(ledger.get(ID).unwrap().state, OrderState::Unknown);
-        assert_eq!(ledger.mark_submitted(ID), Err(LedgerError::InvalidTransition));
+        assert_eq!(
+            ledger.mark_submitted(ID),
+            Err(LedgerError::InvalidTransition)
+        );
         assert_eq!(
             ledger.reconcile_unknown(ID, "exchange-001", ExchangeOrderStatus::Filled, 1),
             Err(LedgerError::Reconciliation)
         );
         assert_eq!(ledger.get(ID).unwrap().state, OrderState::Unknown);
         ledger
-            .reconcile_unknown(ID, "exchange-001", ExchangeOrderStatus::PartiallyFilled, 200_000)
+            .reconcile_unknown(
+                ID,
+                "exchange-001",
+                ExchangeOrderStatus::PartiallyFilled,
+                200_000,
+            )
             .unwrap();
         assert_eq!(ledger.get(ID).unwrap().state, OrderState::PartiallyFilled);
         assert_eq!(ledger.get(ID).unwrap().filled_base_units, 200_000);
