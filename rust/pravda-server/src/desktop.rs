@@ -87,17 +87,15 @@ impl DesktopRuntime {
         let payload = match source {
             "energy" => pravda_fetchers::public_feeds::energy_flows().await,
             "news" => pravda_fetchers::public_feeds::geopolitical_news().await,
-            "revolut" => {
-                match self.revolut_public.as_ref() {
-                    Some(client) => match client.order_book("BTC-USD").await {
-                        Ok(book) => json!({"status":"delayed","source":"Revolut X public",
-                            "symbol":"BTC-USD","book":book,"notice":"Carnet public, aucun solde ni ordre réel."}),
-                        Err(_) => json!({"status":"unavailable","source":"Revolut X public",
-                            "notice":"PUBLIC_ORDER_BOOK_UNAVAILABLE"}),
-                    },
-                    Err(_) => json!({"status":"unavailable","notice":"NETWORK_UNAVAILABLE"}),
-                }
-            }
+            "revolut" => match self.revolut_public.as_ref() {
+                Some(client) => match client.order_book("BTC-USD").await {
+                    Ok(book) => json!({"status":"delayed","source":"Revolut X public",
+                        "symbol":"BTC-USD","book":book,"notice":"Carnet public, aucun solde ni ordre réel."}),
+                    Err(_) => json!({"status":"unavailable","source":"Revolut X public",
+                        "notice":"PUBLIC_ORDER_BOOK_UNAVAILABLE"}),
+                },
+                None => json!({"status":"unavailable","notice":"NETWORK_UNAVAILABLE"}),
+            },
             "sources" => json!({"sources":[
                 {"name":"Kraken / Binance","status":"stale","detail":"Statut à vérifier dans le terminal marchés"},
                 {"name":"BCE via Frankfurter","status":"stale","detail":"Référence quotidienne à demander depuis l'écran Forex"},
