@@ -23,6 +23,39 @@
 
 ## Français
 
+## État de livraison — 3 novembre 2026 (objectif : fin novembre)
+
+> **Niveau de sécurité visé : plateforme financière réglementée, défense en profondeur.** Il s'agit d'un **objectif d'architecture et de vérification**, et non d'une certification, d'une équivalence avec l'infrastructure de Revolut, ni d'une garantie d'aptitude à la négociation réelle. Les modules actuels sont expérimentaux; toute mise en production requiert des preuves indépendantes.
+
+**Entrée de référence :** le desktop Windows est un client **Tauri 2 / Rust** avec ressources HTML/CSS/JavaScript locales et IPC typé. Il ne doit pas démarrer le serveur HTTP de compatibilité Axum : celui-ci est un exécutable/mode séparé. Le backend et les calculs de simulation sont en Rust; **le dépôt entier n'est pas 100 % Rust** tant que l'interface JS et les scripts de CI existent. Python ne doit pas être exécuté : ses anciennes sources sont confinées à `archive/python-legacy/`.
+
+| Composant | Livré dans le code | Limite de livraison / preuve restante |
+| --- | --- | --- |
+| Desktop / historique / authentification locale | Tauri IPC, Rust, SQLite WAL, garde Host/Origin séparé pour Axum | Vérification de l'exécutable **du commit exact** sur Windows propre, sans socket UI ni ancien serveur |
+| `pravda-doctor.exe` | PR [#98](https://github.com/suvorovpravda/Pravda-Bot/pull/98) intégrée : rapport texte expurgé, contrôles Windows / auth / SQLite, aucun appel DNS/TCP | Diagnostic passif : ne prouve pas qu'une interface ou un compte fonctionne; rapport utilisateur nécessaire |
+| `pravda-harness.exe` | PR [#99](https://github.com/suvorovpravda/Pravda-Bot/pull/99) : orchestration Tokio, métriques Serde, tests N exécutions, refus des seuils | Vérifier la fusion et les artefacts du dernier commit; exiger un isolement réseau **OS/VM**; les fixtures synthétiques ne prouvent aucun PnL |
+| Revolut X | Lecture de soldes privée encadrée, ordres préparés hors ligne et réconciliation simulée, PR [#94](https://github.com/suvorovpravda/Pravda-Bot/pull/94), [#96](https://github.com/suvorovpravda/Pravda-Bot/pull/96), [#97](https://github.com/suvorovpravda/Pravda-Bot/pull/97) | **Aucun POST d'ordre réel**, approbation, état durable et limites de risque par acteur à valider — [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) |
+| Distribution Windows | Build PE x64, contrôles CI, vérification SHA-256, workflow manuel MSI/NSIS | Certificat Authenticode, signature EXE/MSI/NSIS, horodatage et validation SmartScreen sur PC propre — [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) |
+
+### Téléchargement et démarrage Windows
+
+1. Ne pas confondre **Release** et **Artifacts** : une archive `v0.3.4` n'intègre pas automatiquement les PR suivantes. Télécharger la build à partir du workflow **réussi sur le commit souhaité** dans [GitHub Actions](https://github.com/suvorovpravda/Pravda-Bot/actions). Vérifier l'empreinte SHA-256 et la signature lorsqu'elle est requise.
+2. Avant toute compilation locale Rust MSVC, installer Visual Studio Build Tools avec la charge **Desktop development with C++** (MSVC, SDK Windows), puis ouvrir **Developer PowerShell for VS**. Si `link.exe not found`, la compilation a échoué et l'ancien `target/release/pravda-app.exe` **reste présent** : ne pas le prendre pour un nouveau build.
+3. Dans le clone local, lancer `git status --short` puis `git pull --ff-only origin main`. Ne jamais supprimer automatiquement `%LOCALAPPDATA%\\Pravda-Bot`, ni `*.db-wal` / `*.db-shm` : fermer d'abord le logiciel, créer une copie cohérente avec l'API de sauvegarde SQLite et vérifier les restaurations.
+4. Compiler le desktop : `cargo build --locked --release --manifest-path crates/pravda-app/Cargo.toml`. Attendre `Finished release profile`, puis exécuter `crates/pravda-app/target/release/pravda-app.exe`. Le mode normal ouvre une fenêtre **WebView2 native**, pas `http://127.0.0.1:8080`.
+
+**Diagnostics :** lancer `pravda-doctor.exe` par double clic, copier le bloc `PRAVDA-DOCTOR REPORT` complet. Le rapport utilise `PASS / WARN / FAIL / SKIP`; **SKIP ne vaut pas PASS**. Un avertissement « adjacent_app_binary » signifie que le diagnostic ne trouve pas l'EXE à proximité, et non que l'application est compromise. La checklist de dépannage et la procédure de rapport sont dans le [guide unique](docs/PRAVDA-GUIDE.md).
+
+### Architecture de sécurité cible — contrôle bancaire/fintech
+
+Les fonctions financées par des actifs réels doivent être séparées en **plans indépendants** : (1) **replay air-gapped / simulation** sans clé ni socket, (2) **lecture seule** pour les soldes, (3) **routeur d'ordres** optionnel et bloqué par défaut, dans un processus avec privilèges réseau strictement limités, (4) **gestion des clés et approbations** hors WebView. Une requête Tauri venant de JavaScript ne constitue jamais une autorisation de trading.
+
+Avant tout ordre réel : identité opérateur vérifiée; double confirmation du passage en live; permissions d'API minimales **sans retrait**; limites instrument, notionnel, exposition quotidienne, soldes et fraîcheur; identifiants idempotents persistés avant émission; kill switch local durable; réconciliation des états inconnus sans retransmission automatique; preuve de tests négatifs (timeouts, 429, déconnexion, fills partiels, crash, redémarrage). **Aucun ordre live n'est activé** par cette architecture cible.
+
+Les engagements de sécurité de niveau institutionnel (gouvernance des identités, séparation des fonctions, audits, SBOM/provenance, vulnérabilités et dépendances, réponse à incident, restauration, exigences contractuelles et réglementaires) sont documentés dans [SECURITY.md](SECURITY.md) et détaillés opérationnellement dans le [guide complet](docs/PRAVDA-GUIDE.md). La date du **30 novembre 2026** est une cible de programme, pas une autorisation de contourner une barrière de publication.
+
+---
+
 > [!IMPORTANT]
 > La [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) a été **fusionnée dans `main`** au commit [`b2a6fc3`](https://github.com/suvorovpravda/Pravda-Bot/commit/b2a6fc399213e07504f8949ec4664bf0d3c5840d). La [CI Rust de ce commit](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41557110751) a réussi, notamment les contrôles Windows et WebView2 ; ces résultats ne valent que pour ce commit. Aucun MSI signé ni ordre réel n'est livré.
 
