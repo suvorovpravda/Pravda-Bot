@@ -134,6 +134,47 @@ pub fn validate_limit_order(
     Ok(quote)
 }
 
+/// A validated, serialized order request for review and dry-run diagnostics.
+/// It contains no API credential and cannot transmit itself.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PreparedLimitOrder {
+    pub body: String,
+    pub quote_notional_units: u128,
+}
+
+/// Prepare the exact compact JSON used in the official signed POST example.
+/// Keeping serialization in one place avoids signing bytes different from
+/// those sent to the exchange when the execution layer is implemented.
+pub fn prepare_limit_order(
+    intent: &LimitOrderIntent,
+    limits: OrderRiskLimits,
+    now_ms: u64,
+    live_trading_enabled: bool,
+) -> Result<PreparedLimitOrder, OrderIntentError> {
+    let quote_notional_units =
+        validate_limit_order(intent, limits, now_ms, live_trading_enabled)?;
+    let side = match intent.side {
+        Side::Buy => "BUY",
+        Side::Sell => "SELL",
+    };
+    let body = serde_json::json!({
+        "client_order_id": intent.client_order_id,
+        "symbol": intent.symbol,
+        "side": side,
+        "order_configuration": {
+            "limit": {
+                "base_size": intent.base_size,
+                "price": intent.price
+            }
+        }
+    })
+    .to_string();
+    Ok(PreparedLimitOrder {
+        body,
+        quote_notional_units,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +225,22 @@ mod tests {
         l.remaining_daily_quote_units = 899 * SCALE;
         assert_eq!(validate_limit_order(&order(), l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
     }
+    #[test]
+    fn preparing_order_is_local_and_requires_explicit_activation() {
+        assert_eq!(
+            prepare_limit_order(&order(), limits(), 1_000_000, false),
+            Err(OrderIntentError::TradingDisabled)
+        );
+        let prepared = prepare_limit_order(&order(), limits(), 1_000_000, true).unwrap();
+        let body: serde_json::Value = serde_json::from_str(&prepared.body).unwrap();
+        assert_eq!(body["symbol"], "BTC-USD");
+        assert_eq!(body["side"], "BUY");
+        assert_eq!(body["order_configuration"]["limit"]["base_size"], "0.01");
+        assert_eq!(body["order_configuration"]["limit"]["price"], "90000");
+        assert_eq!(prepared.quote_notional_units, 900 * SCALE);
+        assert!(body.get("api_key").is_none());
+    }
+
     #[test]
     fn fractional_notional_rounds_up_and_cannot_bypass_ceiling() {
         let mut o = order();
