@@ -1,5 +1,16 @@
 name: Windows installer packaging (manual; optional Authenticode)
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/windows-package.yml'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'rust/**'
+      - 'tools/Verify-Pravda-Installer.ps1'
+      - 'tools/test-windows-installer-verifier.ps1'
+      - 'tools/Test-Pravda-Msi-Install.ps1'
   pull_request:
     paths:
       - '.github/workflows/windows-package.yml'
