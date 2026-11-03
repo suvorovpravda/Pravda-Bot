@@ -126,6 +126,7 @@ jobs:
           if ($summary.aggregate.pass -ne 1 -or
               $summary.aggregate.rejected -ne 1 -or
               $summary.aggregate.timeout -ne 1 -or
+              $summary.aggregate.crash -ne 1 -or
               $summary.build_accepted -ne $false) {
             throw 'Harness fail-closed smoke output invalid'
           }
