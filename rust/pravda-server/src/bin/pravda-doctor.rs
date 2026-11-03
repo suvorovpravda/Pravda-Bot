@@ -7,6 +7,13 @@
 
 #[cfg(windows)]
 use std::process::Command;
+#[cfg(windows)]
+use std::net::{SocketAddr, TcpStream};
+#[cfg(windows)]
+use std::time::Duration;
+
+const DOCTOR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
 
 use std::{
     fs::{self, OpenOptions},
@@ -19,6 +26,7 @@ enum Status {
     Pass,
     Warn,
     Fail,
+    Skip,
 }
 
 impl Status {
@@ -27,6 +35,7 @@ impl Status {
             Self::Pass => "PASS",
             Self::Warn => "WARN",
             Self::Fail => "FAIL",
+            Self::Skip => "SKIP",
         }
     }
 }
@@ -62,10 +71,10 @@ fn inspect_file(path: &Path, label: &'static str) -> Check {
 
 fn report_lines(checks: &[Check]) -> String {
     let mut result = String::from(
-        "PRAVDA-DOCTOR REPORT v1\n\
+        "PRAVDA-DOCTOR REPORT v2\n\
          Copy only this report into your support conversation.\n\
          SAFE MODE: no repairs, exchange connections, orders or credentials.\n\
-         No filesystem paths, account IDs or logs collected.\n\n",
+         No filesystem paths, account IDs, log text or secrets collected.\n\n",
     );
     for check in checks {
         result.push_str(check.status.label());
@@ -77,8 +86,128 @@ fn report_lines(checks: &[Check]) -> String {
     }
     let failed = checks.iter().filter(|c| matches!(c.status, Status::Fail)).count();
     let warned = checks.iter().filter(|c| matches!(c.status, Status::Warn)).count();
-    result.push_str(&format!("SUMMARY | failures={failed} | warnings={warned}\n"));
+    let skipped = checks.iter().filter(|c| matches!(c.status, Status::Skip)).count();
+    result.push_str(&format!("SUMMARY | failures={failed} | warnings={warned} | skipped={skipped}\n"));
     result
+}
+
+/// Check only that a local file can be opened. Never print contents,
+/// metadata containing identities, file names or raw OS errors.
+#[cfg(windows)]
+fn inspect_readonly_file(path: &Path, label: &'static str) -> Check {
+    match fs::File::open(path) {
+        Ok(_) => Check::new(label, Status::Pass, "Readable without changing contents"),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            Check::new(label, Status::Warn, "File not configured yet")
+        }
+        Err(_) => Check::new(label, Status::Warn, "File cannot be opened for reading"),
+    }
+}
+
+/// Do not execute the application: a header probe must not start trading,
+/// create new configuration, or change any process state.
+#[cfg(windows)]
+fn inspect_pe_header(path: &Path) -> Check {
+    use io::Read;
+    if !path.is_file() {
+        return Check::new(
+            "adjacent_app_binary",
+            Status::Warn,
+            "Application not next to Doctor; may be installed elsewhere",
+        );
+    }
+    let mut header = [0_u8; 2];
+    match fs::File::open(path).and_then(|mut file| file.read_exact(&mut header)) {
+        Ok(()) if header == [b'M', b'Z'] => {
+            Check::new("adjacent_app_binary", Status::Pass, "Windows executable header detected")
+        }
+        Ok(()) => Check::new("adjacent_app_binary", Status::Fail, "Executable header invalid"),
+        Err(_) => Check::new("adjacent_app_binary", Status::Warn, "Cannot read executable header"),
+    }
+}
+
+/// Fixed Windows registry command: never interpolate user-provided strings.
+/// Only the command exit status is included in the support report.
+#[cfg(windows)]
+fn inspect_windows_webview2() -> Check {
+    let status = Command::new("reg.exe")
+        .args([
+            "query",
+            r"HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            "/v",
+            "pv",
+        ])
+        .output();
+    match status {
+        Ok(result) if result.status.success() => {
+            Check::new("webview2_runtime", Status::Pass, "WebView2 registry entry detected")
+        }
+        Ok(_) => Check::new(
+            "webview2_runtime",
+            Status::Warn,
+            "WebView2 not detected at standard machine registry location",
+        ),
+        Err(_) => Check::new(
+            "webview2_runtime",
+            Status::Skip,
+            "Registry diagnostic utility unavailable",
+        ),
+    }
+}
+
+#[cfg(windows)]
+fn inspect_pravda_process() -> Check {
+    let result = Command::new("tasklist.exe")
+        .args(["/FI", "IMAGENAME eq pravda-app.exe", "/NH", "/FO", "CSV"])
+        .output();
+    match result {
+        Ok(output) if output.status.success() => {
+            let found = String::from_utf8_lossy(&output.stdout)
+                .lines()
+                .any(|line| line.trim_start().starts_with("\"pravda-app.exe\""));
+            if found {
+                Check::new("application_process", Status::Pass, "Pravda-Bot process observed")
+            } else {
+                Check::new(
+                    "application_process",
+                    Status::Warn,
+                    "Pravda-Bot process not observed during snapshot",
+                )
+            }
+        }
+        _ => Check::new(
+            "application_process",
+            Status::Skip,
+            "Process inspection unavailable",
+        ),
+    }
+}
+
+/// The desktop should use native IPC and need not bind a local HTTP port.
+/// This check observes ONLY a preselected diagnostic port; it does not scan
+/// user ports and cannot prove that no listener exists on any other port.
+#[cfg(windows)]
+fn inspect_local_port() -> Check {
+    let addr = SocketAddr::from(([127, 0, 0, 1], 8765));
+    match TcpStream::connect_timeout(&addr, Duration::from_millis(200)) {
+        Ok(_) => Check::new(
+            "legacy_local_http_port",
+            Status::Warn,
+            "Legacy diagnostic port 8765 has a listener; ownership unknown",
+        ),
+        Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
+            Check::new(
+                "legacy_local_http_port",
+                Status::Pass,
+                "No listener on checked legacy port 8765",
+            )
+        }
+        Err(_) => Check::new(
+            "legacy_local_http_port",
+            Status::Skip,
+            "Local port availability could not be determined",
+        ),
+    }
 }
 
 #[cfg(windows)]
@@ -88,6 +217,39 @@ fn checks() -> Vec<Check> {
         Status::Pass,
         "Windows native diagnostic executable running",
     )];
+    checks.push(Check::new(
+        "doctor_version",
+        Status::Pass,
+        DOCTOR_VERSION,
+    ));
+    checks.push(Check::new(
+        "process_architecture",
+        if cfg!(target_arch = "x86_64") { Status::Pass } else { Status::Warn },
+        if cfg!(target_arch = "x86_64") {
+            "Native 64-bit x86 application"
+        } else {
+            "Not an x86-64 diagnostic executable"
+        },
+    ));
+    checks.push(if std::env::temp_dir().is_dir() {
+        Check::new("temporary_directory", Status::Pass, "Temporary report directory exists")
+    } else {
+        Check::new("temporary_directory", Status::Fail, "Temporary report directory unavailable")
+    });
+    checks.push(inspect_windows_webview2());
+    checks.push(inspect_pravda_process());
+    checks.push(inspect_local_port());
+    checks.push(Check::new(
+        "application_gui",
+        Status::Skip,
+        "Interactive GUI behavior requires a user session and is not asserted",
+    ));
+    checks.push(Check::new(
+        "live_trading",
+        Status::Skip,
+        "Live trading intentionally not tested or activated",
+    ));
+
 
     let root = std::env::var_os("LOCALAPPDATA")
         .filter(|value| !value.is_empty())
@@ -97,6 +259,9 @@ fn checks() -> Vec<Check> {
         Some(ref root) => {
             let auth = inspect_file(&root.join("pravda_auth.json"), "local_auth_file");
             checks.push(auth);
+            checks.push(inspect_readonly_file(&root.join("pravda_auth.json"), "auth_readability"));
+            checks.push(inspect_file(&root.join("pravda.db-wal"), "sqlite_wal_sidecar"));
+            checks.push(inspect_file(&root.join("pravda.db-shm"), "sqlite_shm_sidecar"));
 
             let db_path = root.join("pravda.db");
             use pravda_store::doctor::{inspect_database, DatabaseHealth};
@@ -133,7 +298,7 @@ fn checks() -> Vec<Check> {
         .ok()
         .and_then(|path| path.parent().map(|dir| dir.join("pravda-app.exe")));
     checks.push(match application {
-        Some(path) => inspect_file(&path, "adjacent_app_binary"),
+        Some(path) => inspect_pe_header(&path),
         None => Check::new(
             "adjacent_app_binary",
             Status::Warn,
@@ -143,13 +308,13 @@ fn checks() -> Vec<Check> {
 
     checks.push(Check::new(
         "revolut_exchange",
-        Status::Warn,
-        "Not tested offline: no credential or trading access by design",
+        Status::Skip,
+        "Private API disabled for diagnostics: no keys accessed",
     ));
     checks.push(Check::new(
         "installer_signature",
-        Status::Warn,
-        "Not attested by this probe; signed release validation is separate",
+        Status::Skip,
+        "Authenticode release signing must be checked independently",
     ));
     checks
 }
@@ -228,7 +393,7 @@ mod tests {
         ]);
         assert!(report.contains("PASS | local_auth_file"));
         assert!(report.contains("FAIL | sqlite_health"));
-        assert!(report.contains("SUMMARY | failures=1 | warnings=0"));
+        assert!(report.contains("SUMMARY | failures=1 | warnings=0 | skipped=0"));
         assert!(!report.contains("C:\\Users"));
         assert!(!report.contains("API_KEY"));
     }
