@@ -146,7 +146,12 @@ pub(crate) fn sign_prepared_limit_order(
     if validated_json_body.is_empty() || validated_json_body.len() > 4096 {
         return Err(PrivateReadError::InvalidResponse);
     }
-    sign_fixed_request(timestamp, key_pem, FixedOperation::LimitOrder, validated_json_body)
+    sign_fixed_request(
+        timestamp,
+        key_pem,
+        FixedOperation::LimitOrder,
+        validated_json_body,
+    )
 }
 
 fn sign_fixed_request(
