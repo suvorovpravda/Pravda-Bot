@@ -5,11 +5,13 @@
 //! The report is intentionally allowlisted: never print raw OS errors, paths,
 //! environment variables, SQLite contents, machine names or process lists.
 
+#[cfg(windows)]
+use std::process::Command;
+
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
     path::Path,
-    process::Command,
 };
 
 #[derive(Clone, Copy)]
