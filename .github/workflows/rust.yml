@@ -88,6 +88,50 @@ jobs:
       - name: Build backend in release mode
         run: cargo build --locked --release --workspace
 
+  doctor_windows:
+    name: Build and verify one-click Pravda Doctor
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Check Doctor formatting and tests
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+          cargo test --locked -p pravda-server --bin pravda-doctor
+          if ($LASTEXITCODE -ne 0) { throw 'Doctor tests failed' }
+      - name: Build independent Windows diagnostic EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --locked --release -p pravda-server --bin pravda-doctor
+          if ($LASTEXITCODE -ne 0) { throw 'Doctor release compilation failed' }
+          $exe = 'target/release/pravda-doctor.exe'
+          $file = Get-Item -LiteralPath $exe -ErrorAction Stop
+          if ($file.Length -lt 100000) { throw 'Doctor executable is unexpectedly small' }
+          $bytes = [IO.File]::ReadAllBytes($file.FullName)
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'Doctor is not a Windows PE executable' }
+          $output = @(& $exe --no-open)
+          if ($LASTEXITCODE -ne 0) { throw 'Doctor failed at startup' }
+          if (($output -join "`n") -notmatch 'PRAVDA-DOCTOR REPORT v2' -or
+              ($output -join "`n") -notmatch 'SUMMARY') {
+            throw 'Doctor diagnostic output is missing'
+          }
+          Write-Host 'Doctor release executable generated and startup report verified.'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pravda-doctor-windows-unsigned-test
+          path: target/release/pravda-doctor.exe
+          if-no-files-found: error
+          retention-days: 7
+
   secret_history_audit:
     name: Secret boundary and full Git history audit
     runs-on: ubuntu-latest
