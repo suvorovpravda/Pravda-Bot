@@ -233,7 +233,15 @@ jobs:
             if ($env:SIGNED -eq 'true' -and (-not $ok -or $sig.SignerCertificate.Thumbprint -ne $env:PRAVDA_SIGNING_THUMBPRINT)) {
               throw 'Enterprise artifact signature invalid'
             }
-            $results += @{ path=$relative; sha256=$hash; authenticode_valid=[bool]$ok; timestamped=[bool]($null -ne $sig.TimeStamperCertificate) }
+            $results += @{
+              path = $relative
+              sha256 = $hash
+              authenticode_status = [string]$sig.Status
+              authenticode_valid = [bool]$ok
+              signer_thumbprint = if ($sig.SignerCertificate) { $sig.SignerCertificate.Thumbprint } else { $null }
+              timestamped = [bool]($null -ne $sig.TimeStamperCertificate)
+              timestamp_authority_thumbprint = if ($sig.TimeStamperCertificate) { $sig.TimeStamperCertificate.Thumbprint } else { $null }
+            }
           }
           $evidence = @{ schema_version=1; commit_sha=$env:RELEASE_COMMIT; git_ref=$env:RELEASE_REF;
             signed_release=($env:SIGNED -eq 'true'); generated_utc=(Get-Date).ToUniversalTime().ToString('o'); artifacts=$results }
@@ -271,4 +279,4 @@ jobs:
             crates/pravda-app/target/release/pravda-harness.exe
             crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
-          retention-days: 3
+          retention-days: 30
