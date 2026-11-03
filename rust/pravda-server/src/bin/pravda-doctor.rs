@@ -44,15 +44,15 @@ impl Status {
 struct Check {
     code: &'static str,
     status: Status,
-    advice: &'static str,
+    advice: String,
 }
 
 impl Check {
-    fn new(code: &'static str, status: Status, advice: &'static str) -> Self {
+    fn new(code: &'static str, status: Status, advice: impl Into<String>) -> Self {
         Self {
             code,
             status,
-            advice,
+            advice: advice.into(),
         }
     }
 }
@@ -86,7 +86,7 @@ fn report_lines(checks: &[Check]) -> String {
         result.push_str(" | ");
         result.push_str(check.code);
         result.push_str(" | ");
-        result.push_str(check.advice);
+        result.push_str(&check.advice);
         result.push('\n');
     }
     let failed = checks
@@ -168,6 +168,78 @@ fn inspect_pe_header(path: &Path) -> Check {
             "adjacent_app_binary",
             Status::Warn,
             "Cannot read executable header",
+        ),
+    }
+}
+
+/// Fingerprint the installed executable so support can distinguish exact
+/// builds. Only the 64-character SHA-256 is emitted; never the local path.
+#[cfg(windows)]
+fn inspect_application_digest(path: &Path) -> Check {
+    use io::Read;
+    use sha2::{Digest, Sha256};
+    let mut file = match fs::File::open(path) {
+        Ok(file) => file,
+        Err(_) => {
+            return Check::new(
+                "application_sha256",
+                Status::Skip,
+                "No readable executable to fingerprint",
+            )
+        }
+    };
+    let mut hasher = Sha256::new();
+    let mut buf = [0_u8; 65_536];
+    loop {
+        let bytes = match file.read(&mut buf) {
+            Ok(n) => n,
+            Err(_) => {
+                return Check::new(
+                    "application_sha256",
+                    Status::Warn,
+                    "Executable fingerprint could not be calculated",
+                )
+            }
+        };
+        if bytes == 0 {
+            break;
+        }
+        hasher.update(&buf[..bytes]);
+    }
+    let fingerprint = format!("{:x}", hasher.finalize());
+    Check::new(
+        "application_sha256",
+        Status::Pass,
+        format!("SHA256={fingerprint}"),
+    )
+}
+
+/// Reuse the production password-record validation, but do not ask for
+/// passwords or authenticate. No serialized verifier values enter the report.
+#[cfg(windows)]
+fn inspect_auth_record(path: &Path) -> Check {
+    if !path.is_file() {
+        return Check::new(
+            "auth_record_validity",
+            Status::Skip,
+            "Authentication record has not been created",
+        );
+    }
+    match pravda_server::Auth::load(path, pravda_server::PBKDF2_ITERATIONS) {
+        Ok(auth) if auth.is_configured() => Check::new(
+            "auth_record_validity",
+            Status::Pass,
+            "Password verifier schema and algorithm valid; login not tested",
+        ),
+        Ok(_) => Check::new(
+            "auth_record_validity",
+            Status::Warn,
+            "Password record has not been configured",
+        ),
+        Err(_) => Check::new(
+            "auth_record_validity",
+            Status::Fail,
+            "Authentication record invalid or cannot be loaded",
         ),
     }
 }
@@ -347,6 +419,7 @@ fn checks() -> Vec<Check> {
                 &root.join("pravda_auth.json"),
                 "auth_readability",
             ));
+            checks.push(inspect_auth_record(&root.join("pravda_auth.json")));
             checks.push(inspect_optional_file(
                 &root.join("pravda.db-wal"),
                 "sqlite_wal_sidecar",
@@ -415,6 +488,14 @@ fn checks() -> Vec<Check> {
             "adjacent_app_binary",
             Status::Warn,
             "Cannot locate application in known installation layouts",
+        ),
+    });
+    checks.push(match application {
+        Some(path) => inspect_application_digest(path),
+        None => Check::new(
+            "application_sha256",
+            Status::Skip,
+            "Application executable not detected",
         ),
     });
 
