@@ -3,8 +3,9 @@
 .SYNOPSIS
   Windows hosted-runner MSI clean-install and uninstall acceptance test.
 .DESCRIPTION
-  Never executes the trading application, contacts an exchange, or modifies
-  existing installations. Run only in a disposable Windows test environment.
+  Launches the installed desktop once with isolated test-only storage and
+  disabled market feeds. Never sends orders or modifies existing installations.
+  Run only in a disposable Windows test environment.
 #>
 [CmdletBinding()]
 param(
@@ -68,18 +69,70 @@ try {
         (Join-Path $env:LOCALAPPDATA 'Programs/Pravda-Bot')
     ) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique
     $found = $false
+    $installedExe = $null
     foreach ($folder in $roots) {
         if (-not (Test-Path -LiteralPath $folder -PathType Container)) { continue }
         $executables = @(Get-ChildItem -LiteralPath $folder -Filter '*.exe' -File -Recurse -ErrorAction Stop)
-        if (@($executables | Where-Object {
+        $applications = @($executables | Where-Object {
             $_.Name -in @('pravda-app.exe', 'Pravda-Bot.exe')
-        }).Count -gt 0) {
+        })
+        if ($applications.Count -eq 1) {
             $found = $true
+            $installedExe = $applications[0].FullName
             break
         }
     }
     if (-not $found) {
         throw 'MSI registration exists but its application executable was not found'
+    }
+    # Exercise the *installed* desktop binary, not the build-tree EXE.
+    # A disposable database/auth path prevents touching normal user data.
+    $smokeDir = Join-Path $env:RUNNER_TEMP ('pravda-installed-smoke-' + [guid]::NewGuid().ToString('N'))
+    New-Item -Path $smokeDir -ItemType Directory -Force | Out-Null
+    $dbPath = Join-Path $smokeDir 'data.db'
+    $authPath = Join-Path $smokeDir 'auth.json'
+    $keys = @('PRAVDA_DB_PATH', 'PRAVDA_AUTH_PATH', 'PRAVDA_MARKET_FEEDS_ENABLED')
+    $previous = @{}
+    foreach ($key in $keys) {
+        $previous[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
+    }
+    $app = $null
+    try {
+        $env:PRAVDA_DB_PATH = $dbPath
+        $env:PRAVDA_AUTH_PATH = $authPath
+        $env:PRAVDA_MARKET_FEEDS_ENABLED = 'false'
+        $app = Start-Process -FilePath $installedExe -PassThru
+        $initialized = $false
+        for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            $app.Refresh()
+            if ($app.HasExited) { throw "Installed desktop exited prematurely: $($app.ExitCode)" }
+            if (Test-Path -LiteralPath $dbPath -PathType Leaf) {
+                $initialized = $true
+                break
+            }
+            Start-Sleep -Milliseconds 500
+        }
+        if (-not $initialized) { throw 'Installed desktop did not initialize SQLite' }
+        Start-Sleep -Seconds 2
+        $app.Refresh()
+        if ($app.HasExited) { throw 'Installed desktop exited after SQLite initialization' }
+        $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $_.OwningProcess -eq $app.Id })
+        if ($listeners.Count -ne 0) { throw 'Installed desktop opened an unexpected TCP listener' }
+        if (Test-Path -LiteralPath $authPath) {
+            throw 'Installed desktop created password verifier before onboarding'
+        }
+        Write-Host 'PASS: installed release desktop starts, initializes isolated SQLite and has no HTTP listener'
+    }
+    finally {
+        if ($null -ne $app) {
+            $app.Refresh()
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction Stop }
+        }
+        foreach ($key in $keys) {
+            [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process')
+        }
+        Remove-Item -LiteralPath $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
     }
     # This sentinel represents an existing per-user file; the installer must not
     # delete the Tauri app data directory on uninstall. It does not replace a
