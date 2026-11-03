@@ -1,0 +1,15 @@
+PRAVDA-BOT — APPLICATION DE DEPANNAGE WINDOWS
+
+Programme : pravda-doctor.exe (Rust natif, executable independant du MSI).
+Double-cliquer sur pravda-doctor.exe pour ouvrir un rapport local dans Bloc-notes.
+Aucune reparation automatique, aucun ordre, aucun DNS/TCP/HTTP.
+
+Mode non interactif pour validation :
+  .\pravda-doctor.exe --no-open
+
+Lire les lignes PASS / WARN / FAIL / SKIP et SUMMARY. SKIP n'est pas PASS.
+Ne jamais joindre une base SQLite, une cle d'exchange ou un mot de passe au support.
+La presence d'un executable voisin est une verification optionnelle.
+Consulter docs/PRAVDA-GUIDE.md pour le depannage et la sauvegarde.
+Verifier SHA256SUMS.txt et release-evidence.json avec le commit de la release.
+Sans signature Authenticode valide : build de test uniquement.
