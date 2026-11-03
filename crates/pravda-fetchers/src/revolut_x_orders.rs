@@ -160,10 +160,20 @@ pub fn validate_limit_order(
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PreparedLimitOrder {
     body: String,
+    client_order_id: String,
+    base_units: u128,
     quote_notional_units: u128,
 }
 
 impl PreparedLimitOrder {
+    pub fn client_order_id(&self) -> &str {
+        &self.client_order_id
+    }
+
+    pub fn base_units(&self) -> u128 {
+        self.base_units
+    }
+
     /// Redacted public preview; the signed body cannot be modified by callers.
     pub fn body(&self) -> &str {
         &self.body
@@ -202,6 +212,8 @@ pub fn prepare_limit_order(
     .to_string();
     Ok(PreparedLimitOrder {
         body,
+        client_order_id: intent.client_order_id.clone(),
+        base_units: positive_units(&intent.base_size).ok_or(OrderIntentError::InvalidDecimal)?,
         quote_notional_units,
     })
 }
