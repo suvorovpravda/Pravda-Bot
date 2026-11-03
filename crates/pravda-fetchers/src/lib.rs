@@ -6,6 +6,7 @@ pub mod revolut_x;
 pub mod revolut_x_lifecycle;
 pub mod revolut_x_orders;
 pub mod revolut_x_private;
+pub mod revolut_x_reconcile;
 pub mod types;
 
 pub use binance::BinanceClient;
