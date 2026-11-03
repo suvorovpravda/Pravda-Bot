@@ -133,15 +133,33 @@ jobs:
           $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
           if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
           $files = @($exe) + $msi + $nsis
+          $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
           $manifest = foreach ($file in ($files | Sort-Object FullName)) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $file.FullName).Replace([char]92, '/')
+            # Artifact upload strips the common release/ prefix. Hash paths must
+            # therefore be relative to that directory, not the repository root.
+            $relative = [IO.Path]::GetRelativePath($releaseRoot, $file.FullName).Replace([char]92, '/')
             "$hash  $relative"
           }
           $manifest | Set-Content -LiteralPath "$bundle/SHA256SUMS.txt" -Encoding ascii
           if ((Get-Content "$bundle/SHA256SUMS.txt").Count -ne $files.Count) {
             throw 'Incomplete release candidate manifest'
           }
+      - name: Verify portable manifest and Authenticode before upload
+        shell: pwsh
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $args = @{
+            ReleaseRoot = 'crates/pravda-app/target/release'
+          }
+          if ($env:PRAVDA_SIGNED -eq 'true') {
+            $args.RequireSigned = $true
+            $args.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          }
+          & ./tools/Verify-Pravda-Installer.ps1 @args
+          if ($LASTEXITCODE -ne 0) { throw 'Independent installer evidence verification failed' }
       - name: Clean up temporary signing config
         if: always()
         shell: pwsh
