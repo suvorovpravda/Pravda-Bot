@@ -394,8 +394,14 @@ fn checks() -> Vec<Check> {
     checks.push(inspect_pravda_process());
     checks.push(inspect_local_port());
     checks.push(inspect_public_tcp("api.kraken.com", "public_kraken_tcp443"));
-    checks.push(inspect_public_tcp("api.binance.com", "public_binance_tcp443"));
-    checks.push(inspect_public_tcp("revx.revolut.com", "public_revolutx_tcp443"));
+    checks.push(inspect_public_tcp(
+        "api.binance.com",
+        "public_binance_tcp443",
+    ));
+    checks.push(inspect_public_tcp(
+        "revx.revolut.com",
+        "public_revolutx_tcp443",
+    ));
     checks.push(Check::new(
         "application_gui",
         Status::Skip,
