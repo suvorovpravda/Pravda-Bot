@@ -3,11 +3,12 @@ pub use backtest::{replay, ReplayConfig, ReplayError, ReplayResult, ReplayTick};
 
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct AlertGate {
     confirmation_seconds: f64,
-    candidate_since: HashMap<String, DateTime<Utc>>,
+    candidate_since: HashMap<String, Instant>,
     active: HashSet<String>,
     activation_ids: HashMap<String, u64>,
     next_activation_id: u64,
@@ -60,7 +61,7 @@ impl AlertGate {
         profitable: bool,
         spread: f64,
         rearm_threshold: f64,
-        now: DateTime<Utc>,
+        now: Instant,
     ) -> bool {
         if !spread.is_finite()
             || spread < 0.0
@@ -89,11 +90,11 @@ impl AlertGate {
             .entry(symbol.to_string())
             .or_insert(now);
 
-        let elapsed = now
-            .signed_duration_since(*candidate_since)
-            .num_milliseconds() as f64
-            / 1000.0;
-        if elapsed + 1e-9 < self.confirmation_seconds {
+        let Some(elapsed) = now.checked_duration_since(*candidate_since) else {
+            *candidate_since = now;
+            return false;
+        };
+        if elapsed.as_secs_f64() + 1e-9 < self.confirmation_seconds {
             return false;
         }
 
@@ -112,12 +113,25 @@ pub enum PaperMode {
     Portfolio,
 }
 
+#[derive(Debug, Clone, Copy)]
+enum PaperClock {
+    Recorded,
+    Live(Instant),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PaperTime {
+    Recorded(DateTime<Utc>),
+    Live(DateTime<Utc>, Instant),
+}
+
 #[derive(Debug, Clone)]
 pub struct PaperPosition {
     pub symbol: String,
     pub notional_usdt: f64,
     pub entry_signed_spread_percent: f64,
     pub opened_at: DateTime<Utc>,
+    clock: PaperClock,
 }
 
 pub struct PaperSimulator {
@@ -170,8 +184,8 @@ impl PaperSimulator {
         (kraken_price - binance_price) / binance_price * 100.0
     }
 
-    /// Production entry point: execution approval has already been checked by
-    /// the upstream market guard. Preserve the existing API for callers.
+    /// Recorded-time entry point retained for historical replay and parity.
+    /// Live callers should use `update_live` for monotonic holding durations.
     pub fn update(
         &mut self,
         symbol: &str,
@@ -201,6 +215,46 @@ impl PaperSimulator {
         execution_approved: bool,
         now: DateTime<Utc>,
     ) -> Option<String> {
+        self.update_at(
+            symbol,
+            kraken_price,
+            binance_price,
+            opportunity_confirmed,
+            execution_approved,
+            PaperTime::Recorded(now),
+        )
+    }
+
+    /// Live simulation uses wall time for display and monotonic time for age.
+    /// A position opened in one clock mode cannot be updated in the other.
+    pub fn update_live(
+        &mut self,
+        symbol: &str,
+        kraken_price: f64,
+        binance_price: f64,
+        opportunity_confirmed: bool,
+        now: DateTime<Utc>,
+        monotonic_now: Instant,
+    ) -> Option<String> {
+        self.update_at(
+            symbol,
+            kraken_price,
+            binance_price,
+            opportunity_confirmed,
+            true,
+            PaperTime::Live(now, monotonic_now),
+        )
+    }
+
+    fn update_at(
+        &mut self,
+        symbol: &str,
+        kraken_price: f64,
+        binance_price: f64,
+        opportunity_confirmed: bool,
+        execution_approved: bool,
+        now: PaperTime,
+    ) -> Option<String> {
         if !kraken_price.is_finite()
             || !binance_price.is_finite()
             || kraken_price <= 0.0
@@ -220,7 +274,15 @@ impl PaperSimulator {
                 -1.0
             };
             let remaining_signed_spread = signed_spread * entry_direction;
-            let age_seconds = now.signed_duration_since(pos.opened_at).num_seconds() as f64;
+            let age_seconds = match (pos.clock, now) {
+                (PaperClock::Recorded, PaperTime::Recorded(timestamp)) => {
+                    timestamp.signed_duration_since(pos.opened_at).num_seconds() as f64
+                }
+                (PaperClock::Live(started), PaperTime::Live(_, current)) => {
+                    current.checked_duration_since(started)?.as_secs_f64()
+                }
+                _ => return None,
+            };
             let should_close = remaining_signed_spread <= self.exit_spread_percent
                 || age_seconds >= self.max_hold_seconds;
             if should_close {
@@ -253,7 +315,13 @@ impl PaperSimulator {
                 symbol: symbol.to_string(),
                 notional_usdt: notional,
                 entry_signed_spread_percent: signed_spread,
-                opened_at: now,
+                opened_at: match now {
+                    PaperTime::Recorded(timestamp) | PaperTime::Live(timestamp, _) => timestamp,
+                },
+                clock: match now {
+                    PaperTime::Recorded(_) => PaperClock::Recorded,
+                    PaperTime::Live(_, instant) => PaperClock::Live(instant),
+                },
             },
         );
         Some("opened".to_string())
@@ -300,11 +368,26 @@ mod tests {
     #[test]
     fn test_alert_gate_basic_flow() {
         let mut gate = AlertGate::new(3.0);
-        let now = Utc::now();
+        let now = Instant::now();
         assert!(!gate.update("BTC/USDT", true, 0.01, 0.005, now));
-        let later = now + Duration::seconds(4);
+        let later = now + std::time::Duration::from_secs(4);
         assert!(gate.update("BTC/USDT", true, 0.01, 0.005, later));
         assert!(gate.is_active("BTC/USDT"));
+    }
+
+    #[test]
+    fn confirmation_uses_monotonic_elapsed_time_and_resets_on_backward_input() {
+        let mut gate = AlertGate::new(3.0);
+        let start = Instant::now();
+        let seconds = std::time::Duration::from_secs;
+        assert!(!gate.update("BTC/USDT", true, 0.5, 0.005, start));
+        assert!(!gate.update("BTC/USDT", true, 0.5, 0.005, start + seconds(2)));
+        assert!(gate.update("BTC/USDT", true, 0.5, 0.005, start + seconds(3)));
+        let mut backwards = AlertGate::new(3.0);
+        assert!(!backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(10)));
+        assert!(!backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(9)));
+        assert!(!backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(11)));
+        assert!(backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(12)));
     }
 
     #[test]
@@ -321,5 +404,99 @@ mod tests {
             sim.update("BTC/USDT", 100.01, 100.0, false, later),
             Some("closed".to_string())
         );
+    }
+
+    #[test]
+    fn live_paper_max_hold_must_not_follow_wall_clock_jumps() {
+        let mut sim =
+            PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+        let wall = Utc::now();
+        let start = Instant::now();
+        let seconds = std::time::Duration::from_secs;
+        assert_eq!(
+            sim.update_live("BTC/USDT", 101.0, 100.0, true, wall, start),
+            Some("opened".to_owned())
+        );
+        assert_eq!(
+            sim.update_live(
+                "BTC/USDT",
+                101.0,
+                100.0,
+                false,
+                wall + Duration::hours(2),
+                start + seconds(1)
+            ),
+            None,
+            "clock adjustment must not close a live position early"
+        );
+        assert_eq!(
+            sim.update_live(
+                "BTC/USDT",
+                101.0,
+                100.0,
+                false,
+                wall - Duration::hours(2),
+                start + seconds(3599)
+            ),
+            None
+        );
+        assert_eq!(
+            sim.update_live(
+                "BTC/USDT",
+                101.0,
+                100.0,
+                false,
+                wall - Duration::hours(2),
+                start + seconds(3600)
+            ),
+            Some("closed".to_owned())
+        );
+    }
+
+    #[test]
+    fn live_and_recorded_paper_clocks_cannot_be_mixed() {
+        let mut live =
+            PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+        let wall = Utc::now();
+        let start = Instant::now();
+        assert_eq!(
+            live.update_live("BTC/USDT", 101.0, 100.0, true, wall, start),
+            Some("opened".to_owned())
+        );
+        assert_eq!(
+            live.update("BTC/USDT", 100.0, 100.0, false, wall + Duration::hours(2)),
+            None
+        );
+        assert!(live.positions.contains_key("BTC/USDT"));
+
+        let mut recorded =
+            PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+        assert_eq!(
+            recorded.update("BTC/USDT", 101.0, 100.0, true, wall),
+            Some("opened".to_owned())
+        );
+        assert_eq!(
+            recorded.update_live("BTC/USDT", 100.0, 100.0, false, wall, start),
+            None
+        );
+        assert!(recorded.positions.contains_key("BTC/USDT"));
+    }
+
+    #[test]
+    fn backwards_live_timestamp_does_not_close_a_position() {
+        let mut sim =
+            PaperSimulator::new(PaperMode::Fixed, 1000.0, 10.0, 100.0, 0.05, 3600.0, 0.36);
+        let wall = Utc::now();
+        let start = Instant::now();
+        let seconds = std::time::Duration::from_secs;
+        assert_eq!(
+            sim.update_live("BTC/USDT", 101.0, 100.0, true, wall, start + seconds(10)),
+            Some("opened".to_owned())
+        );
+        assert_eq!(
+            sim.update_live("BTC/USDT", 100.0, 100.0, false, wall, start + seconds(9)),
+            None
+        );
+        assert!(sim.positions.contains_key("BTC/USDT"));
     }
 }
