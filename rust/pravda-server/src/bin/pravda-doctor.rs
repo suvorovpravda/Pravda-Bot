@@ -206,7 +206,13 @@ fn inspect_application_digest(path: &Path) -> Check {
         }
         hasher.update(&buf[..bytes]);
     }
-    let fingerprint = format!("{:x}", hasher.finalize());
+    let digest = hasher.finalize();
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut fingerprint = String::with_capacity(64);
+    for &byte in digest.iter() {
+        fingerprint.push(char::from(HEX[usize::from(byte >> 4)]));
+        fingerprint.push(char::from(HEX[usize::from(byte & 0x0f)]));
+    }
     Check::new(
         "application_sha256",
         Status::Pass,
