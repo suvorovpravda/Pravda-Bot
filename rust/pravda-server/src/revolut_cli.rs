@@ -5,6 +5,7 @@ use std::ffi::OsString;
 enum Command {
     Setup(OsString),
     Balances,
+    OrderDetails(OsString),
 }
 
 fn parse_command(args: &[OsString]) -> Option<Result<Command, &'static str>> {
@@ -14,8 +15,11 @@ fn parse_command(args: &[OsString]) -> Option<Result<Command, &'static str>> {
             Some(Ok(Command::Setup(args[1].clone())))
         }
         "--revolut-x-balances" if args.len() == 1 => Some(Ok(Command::Balances)),
-        "--revolut-x-setup" | "--revolut-x-balances" => Some(Err(
-            "Usage: --revolut-x-setup <private-pem-path> OR --revolut-x-balances",
+        "--revolut-x-order-status" if args.len() == 2 && !args[1].is_empty() => {
+            Some(Ok(Command::OrderDetails(args[1].clone())))
+        }
+        "--revolut-x-setup" | "--revolut-x-balances" | "--revolut-x-order-status" => Some(Err(
+            "Usage: --revolut-x-setup <private-pem-path> OR --revolut-x-balances OR --revolut-x-order-status <venue-uuid>",
         )),
         _ => None,
     }
@@ -29,8 +33,9 @@ pub async fn run(args: &[OsString]) -> Option<Result<(), &'static str>> {
     };
     #[cfg(not(windows))]
     {
-        if let Command::Setup(path) = command {
-            drop(path);
+        match command {
+            Command::Setup(path) | Command::OrderDetails(path) => drop(path),
+            Command::Balances => {}
         }
         Some(Err("Revolut X credential management requires Windows"))
     }
@@ -173,6 +178,22 @@ mod windows {
                         ),
                     }
                 }
+            }
+            Command::OrderDetails(id) => {
+                let venue_id = id.to_str().ok_or("Invalid exchange order UUID")?;
+                // SEC: No WebView route, no POST/DELETE or credential exposure.
+                let detail = account.order_details(venue_id).await.map_err(|_| {
+                    "Unable to reconcile this order; check venue UUID and API permissions"
+                })?;
+                println!(
+                    "Revolut X read-only status: venue={} client={} symbol={} status={} filled={}/{}",
+                    detail.venue_order_id,
+                    detail.client_order_id,
+                    detail.symbol,
+                    detail.status,
+                    detail.filled_quantity,
+                    detail.quantity
+                );
             }
         }
         Ok(())
