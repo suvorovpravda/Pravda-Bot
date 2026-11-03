@@ -334,12 +334,13 @@ impl PravdaRuntime {
                             continue;
                         }
                         let now = Utc::now();
-                        if let Some(action) = sim.update(
+                        if let Some(action) = sim.update_live(
                             &tick.symbol.to_string(),
                             kraken_tick.price,
                             binance_tick.price,
                             opportunity_confirmed,
                             now,
+                            Instant::now(),
                         ) {
                             let mut alerts = runtime.alerts.write().await;
                             alerts.push(AlertEvent {
