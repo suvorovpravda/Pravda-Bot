@@ -1,5 +1,10 @@
 name: Windows installer packaging (manual; optional Authenticode)
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/windows-package.yml'
+      - 'tools/Verify-Pravda-Installer.ps1'
+      - 'tools/test-windows-installer-verifier.ps1'
   workflow_dispatch:
     inputs:
       signed:
@@ -23,6 +28,22 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+      - name: Verify protected Enterprise signing prerequisites
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        env:
+          CERT_AVAILABLE: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+          PASSWORD_AVAILABLE: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:CERT_AVAILABLE -ne 'true' -or $env:PASSWORD_AVAILABLE -ne 'true') {
+            throw 'Enterprise signing secrets missing (fail closed)'
+          }
+          if ($env:RELEASE_REF -ne 'refs/heads/main' -and
+              $env:RELEASE_REF -notmatch '^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$') {
+            throw 'Enterprise signing requires main or versioned tag'
+          }
       - name: Verify root and Tauri locks
         shell: pwsh
         run: |
@@ -98,6 +119,34 @@ jobs:
             cargo tauri build --ci --bundles nsis,msi -- --locked
           }
           if ($LASTEXITCODE -ne 0) { throw 'Tauri Windows package build failed' }
+      - name: Build and stage Rust Doctor and offline Harness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --locked --release -p pravda-server --bin pravda-doctor --bin pravda-harness
+          if ($LASTEXITCODE -ne 0) { throw 'Rust companions build failed' }
+          foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
+            $source = Get-Item -LiteralPath (Join-Path 'target/release' $name) -ErrorAction Stop
+            if ($source.Length -lt 100000) { throw 'Invalid Rust companion binary' }
+            Copy-Item -LiteralPath $source.FullName -Destination (Join-Path 'crates/pravda-app/target/release' $name) -Force
+          }
+      - name: Sign standalone companions with Authenticode
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $thumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Signing identity missing' }
+          $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $tools = @(Get-ChildItem -LiteralPath $kit -Recurse -File -Filter signtool.exe -ErrorAction Stop |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool.exe$' } |
+            Sort-Object FullName -Descending)
+          if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
+          foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
+            $file = Join-Path 'crates/pravda-app/target/release' $name
+            & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+            if ($LASTEXITCODE -ne 0) { throw 'Companion signing failed' }
+          }
       - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
         shell: pwsh
         env:
@@ -108,8 +157,10 @@ jobs:
           $msi=@(Get-ChildItem "$dir/msi" -Filter '*.msi' -File -ErrorAction SilentlyContinue)
           $nsis=@(Get-ChildItem "$dir/nsis" -Filter '*-setup.exe' -File -ErrorAction SilentlyContinue)
           $exe=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          $doctor=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-doctor.exe' -ErrorAction Stop
+          $harness=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-harness.exe' -ErrorAction Stop
           if ($msi.Count -lt 1 -or $nsis.Count -lt 1) { throw 'MSI or NSIS installer missing' }
-          foreach ($file in @($exe)+@($msi)+@($nsis)) {
+          foreach ($file in @($exe)+@($doctor)+@($harness)+@($msi)+@($nsis)) {
             $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             Write-Host "$($file.Name) SHA256=$hash"
             $sig=Get-AuthenticodeSignature -FilePath $file.FullName
@@ -129,10 +180,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $bundle = 'crates/pravda-app/target/release/bundle'
           $exe = Get-Item 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          $doctor = Get-Item 'crates/pravda-app/target/release/pravda-doctor.exe' -ErrorAction Stop
+          $harness = Get-Item 'crates/pravda-app/target/release/pravda-harness.exe' -ErrorAction Stop
           $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
           $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
           if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
-          $files = @($exe) + $msi + $nsis
+          $files = @($exe) + @($doctor) + @($harness) + $msi + $nsis
           $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
           $manifest = foreach ($file in ($files | Sort-Object FullName)) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -153,12 +206,38 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $verifyArgs = @{
             ReleaseRoot = 'crates/pravda-app/target/release'
+            RequireCompanions = $true
           }
           if ($env:PRAVDA_SIGNED -eq 'true') {
             $verifyArgs.RequireSigned = $true
             $verifyArgs.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
           }
           & ./tools/Verify-Pravda-Installer.ps1 @verifyArgs
+      - name: Produce commit-bound SHA-256 and Authenticode evidence
+        shell: pwsh
+        env:
+          SIGNED: ${{ inputs.signed }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path 'crates/pravda-app/target/release').Path
+          $results = @()
+          foreach ($line in @(Get-Content -LiteralPath (Join-Path $root 'bundle/SHA256SUMS.txt') -Encoding ascii)) {
+            if ($line -cnotmatch '^([0-9a-f]{64})  (.+)$') { throw 'Invalid checksum entry' }
+            $hash = $Matches[1]
+            $relative = $Matches[2]
+            $file = Get-Item -LiteralPath (Join-Path $root $relative) -ErrorAction Stop
+            $sig = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            $ok = $sig.Status -eq 'Valid' -and $null -ne $sig.SignerCertificate -and $null -ne $sig.TimeStamperCertificate
+            if ($env:SIGNED -eq 'true' -and (-not $ok -or $sig.SignerCertificate.Thumbprint -ne $env:PRAVDA_SIGNING_THUMBPRINT)) {
+              throw 'Enterprise artifact signature invalid'
+            }
+            $results += @{ path=$relative; sha256=$hash; authenticode_valid=[bool]$ok; timestamped=[bool]($null -ne $sig.TimeStamperCertificate) }
+          }
+          $evidence = @{ schema_version=1; commit_sha=$env:RELEASE_COMMIT; git_ref=$env:RELEASE_REF;
+            signed_release=($env:SIGNED -eq 'true'); generated_utc=(Get-Date).ToUniversalTime().ToString('o'); artifacts=$results }
+          $evidence | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $root 'bundle/release-evidence.json') -Encoding utf8
       - name: Remove imported code-signing certificate from runner
         if: ${{ always() && inputs.signed }}
         shell: pwsh
@@ -187,6 +266,9 @@ jobs:
             crates/pravda-app/target/release/bundle/msi/*.msi
             crates/pravda-app/target/release/bundle/nsis/*-setup.exe
             crates/pravda-app/target/release/bundle/SHA256SUMS.txt
+            crates/pravda-app/target/release/bundle/release-evidence.json
+            crates/pravda-app/target/release/pravda-doctor.exe
+            crates/pravda-app/target/release/pravda-harness.exe
             crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 3
