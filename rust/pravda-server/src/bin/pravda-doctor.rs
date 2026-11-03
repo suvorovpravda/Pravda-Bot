@@ -5,10 +5,6 @@
 //! The report is intentionally allowlisted: never print raw OS errors, paths,
 //! environment variables, SQLite contents, machine names or process lists.
 
-use std::{
-    fs::OpenOptions,
-    io::{self, Write},
-};
 #[cfg(windows)]
 use std::{
     fs,
@@ -16,6 +12,10 @@ use std::{
     path::Path,
     process::Command,
     time::Duration,
+};
+use std::{
+    fs::OpenOptions,
+    io::{self, Write},
 };
 
 #[cfg(windows)]
@@ -64,9 +64,11 @@ fn inspect_file(path: &Path, label: &'static str) -> Check {
             Check::new(label, Status::Pass, "File present")
         }
         Ok(_) => Check::new(label, Status::Fail, "Expected regular file is unavailable"),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            Check::new(label, Status::Warn, "File not found; installation or setup may be incomplete")
-        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Check::new(
+            label,
+            Status::Warn,
+            "File not found; installation or setup may be incomplete",
+        ),
         Err(_) => Check::new(label, Status::Warn, "File metadata unavailable"),
     }
 }
@@ -86,10 +88,21 @@ fn report_lines(checks: &[Check]) -> String {
         result.push_str(check.advice);
         result.push('\n');
     }
-    let failed = checks.iter().filter(|c| matches!(c.status, Status::Fail)).count();
-    let warned = checks.iter().filter(|c| matches!(c.status, Status::Warn)).count();
-    let skipped = checks.iter().filter(|c| matches!(c.status, Status::Skip)).count();
-    result.push_str(&format!("SUMMARY | failures={failed} | warnings={warned} | skipped={skipped}\n"));
+    let failed = checks
+        .iter()
+        .filter(|c| matches!(c.status, Status::Fail))
+        .count();
+    let warned = checks
+        .iter()
+        .filter(|c| matches!(c.status, Status::Warn))
+        .count();
+    let skipped = checks
+        .iter()
+        .filter(|c| matches!(c.status, Status::Skip))
+        .count();
+    result.push_str(&format!(
+        "SUMMARY | failures={failed} | warnings={warned} | skipped={skipped}\n"
+    ));
     result
 }
 
@@ -101,10 +114,16 @@ fn inspect_optional_file(path: &Path, label: &'static str) -> Check {
         Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => {
             Check::new(label, Status::Pass, "Optional SQLite sidecar detected")
         }
-        Ok(_) => Check::new(label, Status::Warn, "Optional SQLite sidecar has invalid type"),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            Check::new(label, Status::Skip, "SQLite sidecar absent; normal when database is idle")
-        }
+        Ok(_) => Check::new(
+            label,
+            Status::Warn,
+            "Optional SQLite sidecar has invalid type",
+        ),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Check::new(
+            label,
+            Status::Skip,
+            "SQLite sidecar absent; normal when database is idle",
+        ),
         Err(_) => Check::new(label, Status::Warn, "SQLite sidecar metadata unreadable"),
     }
 }
@@ -134,11 +153,21 @@ fn inspect_pe_header(path: &Path) -> Check {
     }
     let mut header = [0_u8; 2];
     match fs::File::open(path).and_then(|mut file| file.read_exact(&mut header)) {
-        Ok(()) if header == [b'M', b'Z'] => {
-            Check::new("adjacent_app_binary", Status::Pass, "Windows executable header detected")
-        }
-        Ok(()) => Check::new("adjacent_app_binary", Status::Fail, "Executable header invalid"),
-        Err(_) => Check::new("adjacent_app_binary", Status::Warn, "Cannot read executable header"),
+        Ok(()) if header == [b'M', b'Z'] => Check::new(
+            "adjacent_app_binary",
+            Status::Pass,
+            "Windows executable header detected",
+        ),
+        Ok(()) => Check::new(
+            "adjacent_app_binary",
+            Status::Fail,
+            "Executable header invalid",
+        ),
+        Err(_) => Check::new(
+            "adjacent_app_binary",
+            Status::Warn,
+            "Cannot read executable header",
+        ),
     }
 }
 
@@ -155,9 +184,11 @@ fn inspect_windows_webview2() -> Check {
         ])
         .output();
     match status {
-        Ok(result) if result.status.success() => {
-            Check::new("webview2_runtime", Status::Pass, "WebView2 registry entry detected")
-        }
+        Ok(result) if result.status.success() => Check::new(
+            "webview2_runtime",
+            Status::Pass,
+            "WebView2 registry entry detected",
+        ),
         Ok(_) => Check::new(
             "webview2_runtime",
             Status::Warn,
@@ -182,7 +213,11 @@ fn inspect_pravda_process() -> Check {
                 .lines()
                 .any(|line| line.trim_start().starts_with("\"pravda-app.exe\""));
             if found {
-                Check::new("application_process", Status::Pass, "Pravda-Bot process observed")
+                Check::new(
+                    "application_process",
+                    Status::Pass,
+                    "Pravda-Bot process observed",
+                )
             } else {
                 Check::new(
                     "application_process",
@@ -211,13 +246,11 @@ fn inspect_local_port() -> Check {
             Status::Warn,
             "Legacy diagnostic port 8765 has a listener; ownership unknown",
         ),
-        Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => {
-            Check::new(
-                "legacy_local_http_port",
-                Status::Pass,
-                "No listener on checked legacy port 8765",
-            )
-        }
+        Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => Check::new(
+            "legacy_local_http_port",
+            Status::Pass,
+            "No listener on checked legacy port 8765",
+        ),
         Err(_) => Check::new(
             "legacy_local_http_port",
             Status::Skip,
@@ -233,14 +266,14 @@ fn checks() -> Vec<Check> {
         Status::Pass,
         "Windows native diagnostic executable running",
     )];
-    checks.push(Check::new(
-        "doctor_version",
-        Status::Pass,
-        DOCTOR_VERSION,
-    ));
+    checks.push(Check::new("doctor_version", Status::Pass, DOCTOR_VERSION));
     checks.push(Check::new(
         "process_architecture",
-        if cfg!(target_arch = "x86_64") { Status::Pass } else { Status::Warn },
+        if cfg!(target_arch = "x86_64") {
+            Status::Pass
+        } else {
+            Status::Warn
+        },
         if cfg!(target_arch = "x86_64") {
             "Native 64-bit x86 application"
         } else {
@@ -248,9 +281,17 @@ fn checks() -> Vec<Check> {
         },
     ));
     checks.push(if std::env::temp_dir().is_dir() {
-        Check::new("temporary_directory", Status::Pass, "Temporary report directory exists")
+        Check::new(
+            "temporary_directory",
+            Status::Pass,
+            "Temporary report directory exists",
+        )
     } else {
-        Check::new("temporary_directory", Status::Fail, "Temporary report directory unavailable")
+        Check::new(
+            "temporary_directory",
+            Status::Fail,
+            "Temporary report directory unavailable",
+        )
     });
     checks.push(inspect_windows_webview2());
     checks.push(inspect_pravda_process());
@@ -266,7 +307,6 @@ fn checks() -> Vec<Check> {
         "Live trading intentionally not tested or activated",
     ));
 
-
     let root = std::env::var_os("LOCALAPPDATA")
         .filter(|value| !value.is_empty())
         .map(std::path::PathBuf::from)
@@ -275,9 +315,18 @@ fn checks() -> Vec<Check> {
         Some(ref root) => {
             let auth = inspect_file(&root.join("pravda_auth.json"), "local_auth_file");
             checks.push(auth);
-            checks.push(inspect_readonly_file(&root.join("pravda_auth.json"), "auth_readability"));
-            checks.push(inspect_optional_file(&root.join("pravda.db-wal"), "sqlite_wal_sidecar"));
-            checks.push(inspect_optional_file(&root.join("pravda.db-shm"), "sqlite_shm_sidecar"));
+            checks.push(inspect_readonly_file(
+                &root.join("pravda_auth.json"),
+                "auth_readability",
+            ));
+            checks.push(inspect_optional_file(
+                &root.join("pravda.db-wal"),
+                "sqlite_wal_sidecar",
+            ));
+            checks.push(inspect_optional_file(
+                &root.join("pravda.db-shm"),
+                "sqlite_shm_sidecar",
+            ));
 
             let db_path = root.join("pravda.db");
             use pravda_store::doctor::{inspect_database, DatabaseHealth};
@@ -286,9 +335,10 @@ fn checks() -> Vec<Check> {
                 DatabaseHealth::Healthy => (Status::Pass, "SQLite integrity and ticks schema OK"),
                 DatabaseHealth::Missing => (Status::Warn, "SQLite missing; start Pravda-Bot once"),
                 DatabaseHealth::NotAFile => (Status::Fail, "SQLite path is not a regular file"),
-                DatabaseHealth::Unavailable => {
-                    (Status::Warn, "SQLite inaccessible; inspect file permissions or lock")
-                }
+                DatabaseHealth::Unavailable => (
+                    Status::Warn,
+                    "SQLite inaccessible; inspect file permissions or lock",
+                ),
                 DatabaseHealth::Corrupt => (Status::Fail, "SQLite integrity check failed"),
                 DatabaseHealth::SchemaMissing => {
                     (Status::Fail, "SQLite expected ticks schema not found")
@@ -320,7 +370,11 @@ fn checks() -> Vec<Check> {
     }
     for key in ["ProgramFiles", "ProgramFiles(x86)"] {
         if let Some(folder) = std::env::var_os(key) {
-            candidates.push(std::path::PathBuf::from(folder).join("Pravda-Bot").join("pravda-app.exe"));
+            candidates.push(
+                std::path::PathBuf::from(folder)
+                    .join("Pravda-Bot")
+                    .join("pravda-app.exe"),
+            );
         }
     }
     let application = candidates
@@ -429,7 +483,11 @@ mod tests {
     fn safe_report_contains_only_allowlisted_fields() {
         let report = report_lines(&[
             Check::new("local_auth_file", Status::Pass, "File present"),
-            Check::new("sqlite_health", Status::Fail, "SQLite integrity check failed"),
+            Check::new(
+                "sqlite_health",
+                Status::Fail,
+                "SQLite integrity check failed",
+            ),
         ]);
         assert!(report.contains("PASS | local_auth_file"));
         assert!(report.contains("FAIL | sqlite_health"));
