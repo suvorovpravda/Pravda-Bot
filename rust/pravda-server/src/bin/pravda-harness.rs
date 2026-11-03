@@ -152,7 +152,11 @@ fn check_manifest(manifest: &Manifest, bin_dir: &Path) -> Result<Vec<PathBuf>, &
 
     let base = fs::canonicalize(bin_dir).map_err(|_| "binary_directory_unavailable")?;
     let mut paths = Vec::with_capacity(manifest.cases.len());
+    let mut identifiers = std::collections::HashSet::new();
     for case in &manifest.cases {
+        if !identifiers.insert(case.id.as_str()) {
+            return Err("duplicate_case_identifier");
+        }
         if !valid_identifier(&case.id)
             || case.repetitions == 0
             || case.timeout_ms < 100
@@ -543,7 +547,12 @@ async fn smoke() -> Result<(), &'static str> {
         schema_version: SCHEMA_VERSION,
         concurrency: 3,
         gates: GateLimits::default(),
-        cases: ["--fixture-ok", "--fixture-bad-risk", "--fixture-timeout"]
+        cases: [
+            "--fixture-ok",
+            "--fixture-bad-risk",
+            "--fixture-timeout",
+            "--fixture-crash",
+        ]
             .iter()
             .enumerate()
             .map(|(n, arg)| TestCase {
@@ -569,6 +578,7 @@ async fn smoke() -> Result<(), &'static str> {
     if summary.aggregate.pass == 1
         && summary.aggregate.rejected == 1
         && summary.aggregate.timeout == 1
+        && summary.aggregate.crash == 1
         && !summary.build_accepted
     {
         Ok(())
