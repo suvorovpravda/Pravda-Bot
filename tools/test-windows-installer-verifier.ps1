@@ -24,6 +24,22 @@ try {
     $manifest | Set-Content -LiteralPath $manifestPath -Encoding ascii
     & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root
 
+    # SEC: Missing certificate must never permit signed Enterprise artifacts.
+    $signedRejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireSigned
+    } catch {
+        $signedRejected = $true
+    }
+    if (-not $signedRejected) { throw 'Unsigned artifacts were accepted as Enterprise' }
+    # SEC: An arbitrary thumbprint does not certify unsigned binaries.
+    $signedRejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireSigned -ExpectedThumbprint ('A' * 40)
+    } catch {
+        $signedRejected = $true
+    }
+    if (-not $signedRejected) { throw 'Untrusted certificate thumbprint was accepted' }
     # Corruption must be rejected even when names/counts remain unchanged.
     [IO.File]::AppendAllText((Join-Path $root $targets[1].Path), 'tampered')
     $rejected = $false
