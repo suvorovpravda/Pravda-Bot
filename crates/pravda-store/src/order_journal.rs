@@ -105,7 +105,10 @@ impl OrderJournal {
                exchange_order_id TEXT,
                base_units TEXT NOT NULL,
                filled_units TEXT NOT NULL
-             );",
+             );
+             CREATE UNIQUE INDEX IF NOT EXISTS ux_order_journal_venue_identity
+               ON order_journal(exchange_order_id)
+               WHERE exchange_order_id IS NOT NULL;",
         )?;
         // Fail-closed across process restarts. A reopened database is stopped
         // until an explicit, separately authorized future activation procedure.
@@ -117,7 +120,49 @@ impl OrderJournal {
              UPDATE order_journal SET state='unknown' WHERE state='submitting';
              COMMIT;",
         )?;
+        // SEC: A malformed pre-existing journal must never be trusted, even
+        // when SQLite itself is structurally sound.
+        Self::verify_existing_rows(&connection)?;
         Ok(Self { connection })
+    }
+
+    fn verify_existing_rows(connection: &Connection) -> Result<(), JournalError> {
+        let integrity: String = connection.query_row("PRAGMA quick_check", [], |row| row.get(0))?;
+        if integrity != "ok" {
+            return Err(JournalError::Inconsistent);
+        }
+        let mut query = connection.prepare(
+            "SELECT state,exchange_order_id,base_units,filled_units FROM order_journal",
+        )?;
+        let records = query.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        for record in records {
+            let (raw_state, venue, raw_base, raw_filled) = record?;
+            let state = State::parse(&raw_state)?;
+            let base: u128 = raw_base.parse().map_err(|_| JournalError::Inconsistent)?;
+            let filled: u128 = raw_filled.parse().map_err(|_| JournalError::Inconsistent)?;
+            if base == 0
+                || filled > base
+                || venue.as_deref().is_some_and(str::is_empty)
+                || (matches!(state, State::Reserved | State::Submitting) && venue.is_some())
+                || (matches!(state, State::Open | State::PartiallyFilled | State::Filled | State::Cancelled | State::Rejected)
+                    && venue.is_none())
+                || (state == State::Reserved && filled != 0)
+                || (state == State::Open && filled != 0)
+                || (state == State::PartiallyFilled && (filled == 0 || filled == base))
+                || (state == State::Filled && filled != base)
+                || (state == State::Rejected && filled != 0)
+            {
+                return Err(JournalError::Inconsistent);
+            }
+        }
+        Ok(())
     }
 
     pub fn stopped(&self) -> Result<bool, JournalError> {
@@ -304,6 +349,76 @@ impl OrderJournal {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn corrupted_order_quantities_refuse_startup_even_with_valid_sqlite() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("orders.db");
+        {
+            let mut journal = OrderJournal::open(&file).unwrap();
+            journal.test_allow_offline_reservation().unwrap();
+            journal.reserve("safe-id", 100).unwrap();
+        }
+        {
+            let connection = Connection::open(&file).unwrap();
+            connection.execute(
+                "UPDATE order_journal SET filled_units='101' WHERE client_order_id='safe-id'",
+                [],
+            ).unwrap();
+        }
+        assert!(matches!(
+            OrderJournal::open(&file),
+            Err(JournalError::Inconsistent)
+        ));
+        let conn = Connection::open(&file).unwrap();
+        let stopped: bool = conn.query_row(
+            "SELECT stopped FROM order_journal_control WHERE id=1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(stopped);
+    }
+
+    #[test]
+    fn one_venue_order_can_never_be_bound_to_two_clients() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("orders.db");
+        let mut journal = OrderJournal::open(&file).unwrap();
+        journal.test_allow_offline_reservation().unwrap();
+        for id in ["client-a", "client-b"] {
+            journal.reserve(id, 100).unwrap();
+            journal.connection.execute(
+                "UPDATE order_journal SET state='unknown' WHERE client_order_id=?1",
+                [id],
+            ).unwrap();
+        }
+        journal.reconcile("client-a", "venue-123", State::Open, 0).unwrap();
+        assert!(journal.reconcile("client-b", "venue-123", State::Open, 0).is_err());
+        assert!(journal.get("client-b").unwrap().unwrap().exchange_id.is_none());
+    }
+
+    #[test]
+    fn old_schema_with_duplicate_venue_ids_fails_migration_closed() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("orders.db");
+        {
+            let connection = Connection::open(&file).unwrap();
+            connection.execute_batch(
+                "CREATE TABLE order_journal_control(id INTEGER PRIMARY KEY, stopped INTEGER NOT NULL);
+                 INSERT INTO order_journal_control VALUES(1,0);
+                 CREATE TABLE order_journal(
+                   client_order_id TEXT PRIMARY KEY,
+                   state TEXT NOT NULL,
+                   exchange_order_id TEXT,
+                   base_units TEXT NOT NULL,
+                   filled_units TEXT NOT NULL
+                 );
+                 INSERT INTO order_journal VALUES('client-a','open','same-id','100','0');
+                 INSERT INTO order_journal VALUES('client-b','open','same-id','100','0');",
+            ).unwrap();
+        }
+        assert!(OrderJournal::open(&file).is_err());
+    }
 
     #[test]
     fn crash_during_submission_becomes_unknown_before_any_new_request() {
