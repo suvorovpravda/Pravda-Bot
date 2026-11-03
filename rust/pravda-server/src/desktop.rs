@@ -18,6 +18,8 @@ pub struct DesktopPayload(pub Value);
 pub struct DesktopRuntime {
     runtime: Arc<PravdaRuntime>,
     stale_after: std::time::Duration,
+    // One client per runtime preserves the shared 1 req/s public-feed throttle.
+    revolut_public: Option<pravda_fetchers::revolut_x::RevolutXPublicClient>,
 }
 
 impl DesktopRuntime {
@@ -59,6 +61,7 @@ impl DesktopRuntime {
         Ok(Self {
             runtime,
             stale_after: config.stale_after,
+            revolut_public: pravda_fetchers::revolut_x::RevolutXPublicClient::new().ok(),
         })
     }
 
@@ -85,9 +88,8 @@ impl DesktopRuntime {
             "energy" => pravda_fetchers::public_feeds::energy_flows().await,
             "news" => pravda_fetchers::public_feeds::geopolitical_news().await,
             "revolut" => {
-                use pravda_fetchers::revolut_x::RevolutXPublicClient;
-                match RevolutXPublicClient::new() {
-                    Ok(client) => match client.order_book("BTC-USD").await {
+                match self.revolut_public.as_ref() {
+                    Some(client) => match client.order_book("BTC-USD").await {
                         Ok(book) => json!({"status":"delayed","source":"Revolut X public",
                             "symbol":"BTC-USD","book":book,"notice":"Carnet public, aucun solde ni ordre réel."}),
                         Err(_) => json!({"status":"unavailable","source":"Revolut X public",

@@ -491,7 +491,7 @@ const translations = {
     }
 
     function renderAlerts(alerts) {
-        const list = $("price-alerts");
+        const list = $("paper-alerts");
         list.replaceChildren();
         if (!alerts.length) {
             list.textContent = t("noAlerts");
@@ -527,8 +527,14 @@ const translations = {
     }
 
     async function refreshAlerts() {
-        // Simulator events (read-only) remain separate from editable local thresholds.
-        // Local thresholds never reach an exchange and cannot create orders.
+        // Simulator events are read-only Rust snapshots. Editable thresholds
+        // remain in a separate local-only list and never create orders.
+        try {
+            const payload = await fetchJson("/api/alerts");
+            renderAlerts(Array.isArray(payload.alerts) ? payload.alerts : []);
+        } catch {
+            $("paper-alerts").textContent = t("unavailableFeed");
+        }
         showLocalAlerts();
     }
 
@@ -784,7 +790,7 @@ const translations = {
         const list = $("news-list");
         try {
             const payload = await fetchJson("/api/geopolitics");
-            if(payload.status==="unavailable"||!payload.articles?.length)
+            if(payload.status==="unavailable" || !Array.isArray(payload.articles))
                 throw new Error(payload.notice || "NEWS_UNAVAILABLE");
             const sourceName = payload.source?.startsWith("BBC") ? "BBC World" : "GDELT";
             setStatus($("news-status"), "live", `${sourceName} · ${payload.articles.length}`);

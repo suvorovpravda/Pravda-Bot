@@ -13,11 +13,38 @@ pub fn resident_memory_mb() -> Option<f64> {
     Some(value as f64 / 1024.0)
 }
 
+// /proc/self/schedstat accounts only for the calling thread. Linux
+// /proc/self/stat fields 14 and 15 aggregate user + system CPU for the
+// entire process, including Tokio worker threads.
+#[cfg(target_os = "linux")]
+fn linux_process_cpu_ticks(stat: &str) -> Option<u64> {
+    // comm (field 2) may contain spaces or parentheses; split after its
+    // final closing parenthesis, not at whitespace inside the process name.
+    let (_, fields) = stat.rsplit_once(") ")?;
+    let mut fields = fields.split_whitespace();
+    // After comm, index 0 is state (field 3), so utime is index 11.
+    let user = fields.nth(11)?.parse::<u64>().ok()?;
+    let system = fields.next()?.parse::<u64>().ok()?;
+    user.checked_add(system)
+}
+
 #[cfg(target_os = "linux")]
 pub fn process_cpu_seconds() -> Option<f64> {
-    let text = std::fs::read_to_string("/proc/self/schedstat").ok()?;
-    let ns = text.split_whitespace().next()?.parse::<u64>().ok()?;
-    Some(ns as f64 / 1_000_000_000.0)
+    use std::ffi::{c_int, c_long};
+    unsafe extern "C" {
+        fn sysconf(name: c_int) -> c_long;
+    }
+    // Linux _SC_CLK_TCK is 2 (glibc and musl). Query the real clock
+    // tick rate instead of assuming 100 Hz on every Linux system.
+    const SC_CLK_TCK: c_int = 2;
+    // SAFETY: sysconf is called with a valid constant and no pointers.
+    let ticks_per_second = unsafe { sysconf(SC_CLK_TCK) };
+    if ticks_per_second <= 0 {
+        return None;
+    }
+    let stat = std::fs::read_to_string("/proc/self/stat").ok()?;
+    let ticks = linux_process_cpu_ticks(&stat)?;
+    Some(ticks as f64 / ticks_per_second as f64)
 }
 
 #[cfg(target_os = "windows")]
@@ -96,6 +123,14 @@ pub fn process_cpu_seconds() -> Option<f64> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn parses_process_wide_ticks_with_spaced_comm() {
+        let stat = format!("42 (my worker thread) S {}500 250 0 0", "0 ".repeat(10));
+        assert_eq!(super::linux_process_cpu_ticks(&stat), Some(750));
+        assert_eq!(super::linux_process_cpu_ticks("invalid stat"), None);
+    }
+
     #[test]
     fn process_gauges_are_finite_or_unavailable() {
         if let Some(memory) = super::resident_memory_mb() {

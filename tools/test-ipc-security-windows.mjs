@@ -259,6 +259,20 @@ async function checkHostileHttpsOrigin() {
   }
   const location=String(current||"");
   if (location.startsWith("https://example.com/")) {
+    // A browser error document can retain the requested URL. It is NOT
+    // evidence that the hostile HTTPS page loaded successfully.
+    verdict("hostile HTTPS navigation completed without driver error",
+      navigationError===null, "driver error="+Boolean(navigationError));
+    const documentProof=await wd("POST","/execute/sync",{
+      script:"return {origin:document.location.origin,url:document.URL,ready:document.readyState,hasBody:!!document.body};",
+      args:[]
+    });
+    verdict("hostile HTTPS document origin verified by WebView2",
+      documentProof?.origin==="https://example.com" &&
+        documentProof?.url?.startsWith("https://example.com/") &&
+        documentProof?.ready==="complete" && documentProof?.hasBody===true,
+      "document origin="+String(documentProof?.origin).slice(0,100)+
+        " ready="+String(documentProof?.ready));
     const denied=await invoke("ipc_market_snapshot");
     verdict("untrusted HTTPS origin cannot invoke market IPC",
       denied.state==="no-bridge" ||

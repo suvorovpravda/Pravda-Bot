@@ -31,6 +31,11 @@ assert.match(css,/\.ipc-auth-screen\[hidden\]/);
 assert.match(auth,/if \(loginVisible\) return;/);
 assert.match(css,/\.ipc-auth-card label\[hidden\]/);
 assert.doesNotMatch(js,/\bfetch\s*\(|\bnew\s+WebSocket\s*\(|location\.assign\s*\(/);
+assert.match(html,/id="paper-alerts"/,"Paper-simulation events need a separate renderer");
+assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
+  "Simulator alerts must be rendered from the Rust IPC snapshot");
+assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.articles\)/,
+  "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
 assert.equal(new Set(handlers).size,14);
