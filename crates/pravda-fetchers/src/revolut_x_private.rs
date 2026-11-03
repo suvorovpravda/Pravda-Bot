@@ -5,11 +5,15 @@
 //! API keys and PKCS#8 material are supplied by Rust callers and never logged.
 //! See https://developer.revolut.com/docs/api/revolut-x-crypto-exchange
 use base64::{engine::general_purpose::STANDARD, Engine as _};
-use reqwest::{header::HeaderValue, Client, StatusCode};
+use reqwest::{
+    header::{HeaderMap, HeaderValue},
+    Client, Response, StatusCode,
+};
 use ring::signature::Ed25519KeyPair;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use thiserror::Error;
+use zeroize::Zeroizing;
 
 const BALANCES_URL: &str = "https://revx.revolut.com/api/1.0/balances";
 const BALANCES_PATH: &str = "/api/1.0/balances";
@@ -91,13 +95,13 @@ fn validate_balances(balances: &[Balance]) -> Result<(), PrivateReadError> {
 
 /// Revolut's official OpenSSL guidance yields a PEM PKCS#8 v1 Ed25519 key.
 /// This parser never logs or persists the decoded plaintext key.
-fn parse_ed25519_pem(secret: &[u8]) -> Result<Vec<u8>, PrivateReadError> {
+fn parse_ed25519_pem(secret: &[u8]) -> Result<Zeroizing<Vec<u8>>, PrivateReadError> {
     let text = std::str::from_utf8(secret).map_err(|_| PrivateReadError::Credentials)?;
     let mut lines = text.trim().lines();
     if lines.next() != Some(PEM_START) {
         return Err(PrivateReadError::Credentials);
     }
-    let mut payload = String::new();
+    let mut payload = Zeroizing::new(String::with_capacity(2048));
     let mut closed = false;
     for line in &mut lines {
         if line == PEM_END {
@@ -112,16 +116,17 @@ fn parse_ed25519_pem(secret: &[u8]) -> Result<Vec<u8>, PrivateReadError> {
         {
             return Err(PrivateReadError::Credentials);
         }
-        payload.push_str(part);
-        if payload.len() > 2048 {
+        if part.len() > 2048_usize.saturating_sub(payload.len()) {
             return Err(PrivateReadError::Credentials);
         }
+        payload.push_str(part);
     }
     if !closed || lines.next().is_some() {
         return Err(PrivateReadError::Credentials);
     }
     STANDARD
-        .decode(payload)
+        .decode(payload.as_bytes())
+        .map(Zeroizing::new)
         .map_err(|_| PrivateReadError::Credentials)
 }
 
@@ -131,15 +136,10 @@ fn sign_balances(timestamp: &str, key_pem: &[u8]) -> Result<String, PrivateReadE
     if timestamp.is_empty() || !timestamp.bytes().all(|b| b.is_ascii_digit()) {
         return Err(PrivateReadError::Clock);
     }
-    let mut der = parse_ed25519_pem(key_pem)?;
-    let pair =
-        Ed25519KeyPair::from_pkcs8_maybe_unchecked(&der).map_err(|_| PrivateReadError::Signing);
-    for b in &mut der {
-        // Best-effort wipe of temporary DER; upstream key internals remain
-        // subject to OS process-memory threats documented in SECURITY.md.
-        unsafe { std::ptr::write_volatile(b, 0) };
-    }
-    let pair = pair?;
+    let pair = {
+        let der = parse_ed25519_pem(key_pem)?;
+        Ed25519KeyPair::from_pkcs8_maybe_unchecked(&der).map_err(|_| PrivateReadError::Signing)?
+    };
     let msg = format!("{timestamp}GET{BALANCES_PATH}");
     Ok(STANDARD.encode(pair.sign(msg.as_bytes()).as_ref()))
 }
@@ -152,6 +152,7 @@ pub struct RevolutXPrivateReadClient {
 impl RevolutXPrivateReadClient {
     pub fn new() -> Result<Self, PrivateReadError> {
         let client = Client::builder()
+            .https_only(true)
             .timeout(Duration::from_secs(8))
             .redirect(reqwest::redirect::Policy::none())
             .build()
@@ -168,63 +169,124 @@ impl RevolutXPrivateReadClient {
         api_key: &[u8],
         private_pkcs8_pem: &[u8],
     ) -> Result<Vec<Balance>, PrivateReadError> {
-        if api_key.len() != 64 || !api_key.iter().all(u8::is_ascii_alphanumeric) {
-            return Err(PrivateReadError::Credentials);
-        }
-        let key_header =
-            HeaderValue::from_bytes(api_key).map_err(|_| PrivateReadError::Credentials)?;
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_err(|_| PrivateReadError::Clock)?
             .as_millis()
             .to_string();
-        let signature = sign_balances(&timestamp, private_pkcs8_pem)?;
+        let headers = signed_balance_headers(&timestamp, api_key, private_pkcs8_pem)?;
         let response = self
             .client
             .get(BALANCES_URL)
-            .header("X-Revx-API-Key", key_header)
-            .header("X-Revx-Timestamp", timestamp)
-            .header("X-Revx-Signature", signature)
+            .headers(headers)
             .send()
             .await
             .map_err(|_| PrivateReadError::Network)?;
-        match response.status() {
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
-                return Err(PrivateReadError::Unauthorized);
-            }
-            StatusCode::TOO_MANY_REQUESTS => return Err(PrivateReadError::RateLimited),
-            status if !status.is_success() => return Err(PrivateReadError::HttpStatus),
-            _ => {}
+        decode_balances_response(response).await
+    }
+}
+
+fn signed_balance_headers(
+    timestamp: &str,
+    api_key: &[u8],
+    key_pem: &[u8],
+) -> Result<HeaderMap, PrivateReadError> {
+    if api_key.len() != 64 || !api_key.iter().all(u8::is_ascii_alphanumeric) {
+        return Err(PrivateReadError::Credentials);
+    }
+    let mut key_header =
+        HeaderValue::from_bytes(api_key).map_err(|_| PrivateReadError::Credentials)?;
+    key_header.set_sensitive(true);
+    let signed = Zeroizing::new(sign_balances(timestamp, key_pem)?);
+    let mut signature = HeaderValue::from_str(&signed).map_err(|_| PrivateReadError::Signing)?;
+    signature.set_sensitive(true);
+    let timestamp = HeaderValue::from_str(timestamp).map_err(|_| PrivateReadError::Clock)?;
+    let mut headers = HeaderMap::new();
+    headers.insert("X-Revx-API-Key", key_header);
+    headers.insert("X-Revx-Timestamp", timestamp);
+    headers.insert("X-Revx-Signature", signature);
+    Ok(headers)
+}
+
+/// Validate credential formats and local signing without contacting Revolut X.
+/// This does not establish that the API key belongs to the signing key.
+pub fn validate_credentials(api_key: &[u8], key_pem: &[u8]) -> Result<(), PrivateReadError> {
+    signed_balance_headers("1", api_key, key_pem).map(|_| ())
+}
+
+async fn decode_balances_response(response: Response) -> Result<Vec<Balance>, PrivateReadError> {
+    match response.status() {
+        StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+            return Err(PrivateReadError::Unauthorized);
         }
-        if response
-            .content_length()
-            .is_some_and(|n| n > MAX_BODY_BYTES as u64)
-        {
+        StatusCode::TOO_MANY_REQUESTS => return Err(PrivateReadError::RateLimited),
+        status if !status.is_success() => return Err(PrivateReadError::HttpStatus),
+        _ => {}
+    }
+    if response
+        .content_length()
+        .is_some_and(|n| n > MAX_BODY_BYTES as u64)
+    {
+        return Err(PrivateReadError::InvalidResponse);
+    }
+    let mut response = response;
+    let mut bytes = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|_| PrivateReadError::Network)?
+    {
+        if bytes.len().saturating_add(chunk.len()) > MAX_BODY_BYTES {
             return Err(PrivateReadError::InvalidResponse);
         }
-        let mut response = response;
-        let mut bytes = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|_| PrivateReadError::Network)?
-        {
-            if bytes.len().saturating_add(chunk.len()) > MAX_BODY_BYTES {
-                return Err(PrivateReadError::InvalidResponse);
-            }
-            bytes.extend_from_slice(&chunk);
-        }
-        let balances: Vec<Balance> =
-            serde_json::from_slice(&bytes).map_err(|_| PrivateReadError::InvalidResponse)?;
-        validate_balances(&balances)?;
-        Ok(balances)
+        bytes.extend_from_slice(&chunk);
     }
+    let balances: Vec<Balance> =
+        serde_json::from_slice(&bytes).map_err(|_| PrivateReadError::InvalidResponse)?;
+    validate_balances(&balances)?;
+    Ok(balances)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use ring::signature::{KeyPair, UnparsedPublicKey, ED25519};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::TcpListener;
+
+    fn temporary_pem() -> String {
+        let rng = ring::rand::SystemRandom::new();
+        let der = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        format!("{PEM_START}\n{}\n{PEM_END}", STANDARD.encode(der.as_ref()))
+    }
+
+    async fn local_response(status: &str, body: &[u8], declared_length: Option<usize>) -> Response {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let header = match declared_length {
+            Some(length) => format!(
+                "HTTP/1.1 {status}\r\nContent-Length: {length}\r\nConnection: close\r\n\r\n"
+            ),
+            None => format!("HTTP/1.1 {status}\r\nConnection: close\r\n\r\n"),
+        };
+        let body = body.to_vec();
+        tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request = [0_u8; 1024];
+            let _ = socket.read(&mut request).await;
+            let _ = socket.write_all(header.as_bytes()).await;
+            let _ = socket.write_all(&body).await;
+        });
+        Client::builder()
+            .no_proxy()
+            .timeout(Duration::from_secs(3))
+            .build()
+            .unwrap()
+            .get(format!("http://{address}/balances"))
+            .send()
+            .await
+            .unwrap()
+    }
 
     #[test]
     fn authenticates_only_the_documented_fixed_balances_path() {
@@ -248,6 +310,71 @@ mod tests {
             assert!(sign_balances("1785313433816", invalid).is_err());
         }
         assert_eq!(sign_balances("wrong", b""), Err(PrivateReadError::Clock));
+    }
+
+    #[test]
+    fn sensitive_headers_are_redacted_in_debug_output() {
+        let api_key = "A".repeat(64);
+        let headers = signed_balance_headers(
+            "1785313433816",
+            api_key.as_bytes(),
+            temporary_pem().as_bytes(),
+        )
+        .unwrap();
+        let key = headers.get("X-Revx-API-Key").unwrap();
+        let signature = headers.get("X-Revx-Signature").unwrap();
+        assert!(key.is_sensitive());
+        assert!(signature.is_sensitive());
+        let debug = format!("{headers:?}");
+        assert!(!debug.contains(&api_key));
+        assert!(!debug.contains(signature.to_str().unwrap()));
+        assert_eq!(headers.get("X-Revx-Timestamp").unwrap(), "1785313433816");
+        assert!(matches!(
+            signed_balance_headers("1785313433816", b"bad", temporary_pem().as_bytes()),
+            Err(PrivateReadError::Credentials)
+        ));
+    }
+
+    #[tokio::test]
+    async fn response_decoder_accepts_official_balances_and_rejects_http_errors() {
+        let body = br#"[{"currency":"BTC","available":"1.25000000","reserved":"0.10000000","total":"1.35000000"},{"currency":"ETH","available":"10.00000000","reserved":"0.00000000","staked":"32.00000000","total":"42.00000000"}]"#;
+        let response = local_response("200 OK", body, Some(body.len())).await;
+        let balances = decode_balances_response(response).await.unwrap();
+        assert_eq!(balances.len(), 2);
+        assert_eq!(balances[1].staked.as_deref(), Some("32.00000000"));
+        for (status, expected) in [
+            ("401 Unauthorized", PrivateReadError::Unauthorized),
+            ("403 Forbidden", PrivateReadError::Unauthorized),
+            ("429 Too Many Requests", PrivateReadError::RateLimited),
+            ("500 Internal Server Error", PrivateReadError::HttpStatus),
+        ] {
+            let response = local_response(status, b"", Some(0)).await;
+            assert_eq!(
+                decode_balances_response(response).await.unwrap_err(),
+                expected
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn response_decoder_rejects_invalid_or_oversized_bodies() {
+        let invalid = br#"[{"currency":"BTC","available":"-1","reserved":"0","total":"0"}]"#;
+        let response = local_response("200 OK", invalid, Some(invalid.len())).await;
+        assert_eq!(
+            decode_balances_response(response).await.unwrap_err(),
+            PrivateReadError::InvalidResponse
+        );
+        let response = local_response("200 OK", b"{}", Some(MAX_BODY_BYTES + 1)).await;
+        assert_eq!(
+            decode_balances_response(response).await.unwrap_err(),
+            PrivateReadError::InvalidResponse
+        );
+        let body = vec![b'x'; MAX_BODY_BYTES + 1];
+        let response = local_response("200 OK", &body, None).await;
+        assert_eq!(
+            decode_balances_response(response).await.unwrap_err(),
+            PrivateReadError::InvalidResponse
+        );
     }
 
     #[test]

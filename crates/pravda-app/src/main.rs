@@ -106,6 +106,14 @@ async fn main() {
         eprintln!("Pravda-Bot cannot start: authentication path is empty");
         std::process::exit(1);
     }
+    let arguments: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    if let Some(result) = pravda_server::revolut_cli::run(&arguments).await {
+        if let Err(message) = result {
+            eprintln!("{message}");
+            std::process::exit(1);
+        }
+        return;
+    }
     let shared_auth = match pravda_server::Auth::load(
         std::path::PathBuf::from(auth_path),
         pravda_server::PBKDF2_ITERATIONS,

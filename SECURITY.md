@@ -24,7 +24,7 @@
 
 La sécurité déjà intégrée dans `main` comprend les capabilities Tauri limitées, le jeton de session conservé dans Rust, les **22 assertions WebView2** de la PR #67, la séparation de l'ancien Python (#72) et le **coffre Rust/Win32 isolé** (#75). Le coffre ne donne **aucun accès aux clés privées depuis la WebView** et ne permet aucun ordre réel.
 
-La **[PR unique #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88)** regroupe les tests Windows de fenêtres **simultanées** et d'origine hostile, les contrôles CSP/IPC, les tests de rotation et suppression du coffre, un audit de secrets dans l'historique Git, les migrations PBKDF2/SHA2 et les validations de l'EXE release. Les six PR initiales ont été fermées **sans fusion** au profit de #88. Le dernier commit testé [`a7f822e`](https://github.com/suvorovpravda/Pravda-Bot/commit/a7f822ee56773e7c4870a1765d72881ecf268fd4) a obtenu **10 contrôles réussis** ; tout commit documentaire ultérieur exige sa propre validation.
+La **[PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) a été fusionnée** dans `main` au commit [`b2a6fc3`](https://github.com/suvorovpravda/Pravda-Bot/commit/b2a6fc399213e07504f8949ec4664bf0d3c5840d). Elle regroupe notamment les tests Windows de fenêtres simultanées et d'origine hostile, les contrôles CSP/IPC, les tests du coffre, l'audit de secrets et la compilation de l'EXE release. La [CI Rust de `main`](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41557110751) a réussi sur ce commit ; chaque changement ultérieur nécessite ses propres vérifications.
 
 Le ruleset `main` actif, consulté le 2 novembre 2026, impose une branche à jour, des discussions résolues et **CodeQL**, **Rust check (windows-latest)** ainsi que **Windows desktop build and startup** ; **aucune approbation d'un second développeur** n'est imposée. Ces garanties de gouvernance ne sont pas un audit indépendant. Aucun MSI signé, attestation de provenance ou protection contre un malware sous le même compte Windows n'est revendiqué.
 
@@ -64,7 +64,9 @@ Le présent document couvre **le code Rust actuellement maintenu** :
 
 **Ce que le logiciel ne fait pas :** trading réel ou transmission d'ordres aux exchanges ; le nouveau client Revolut X ne contient qu'un **GET fixe de soldes signé Ed25519**, sans permission IPC ni route HTTP privée. Le workflow d'installateurs peut exiger Authenticode si un certificat du mainteneur est configuré, mais **aucune distribution signée n'est revendiquée**. Aucun scénario de sécurité ne doit supposer qu'une simulation papier équivaut à un ordre réel.
 
-**Intégration publique Revolut X :** le module de carnet [#73](https://github.com/suvorovpravda/Pravda-Bot/pull/73) est fusionné, mais sa lecture n'est pas activée dans le runtime desktop. Il ne contient aucune authentification privée ni méthode d'exécution d'ordre. Le coffre Windows [fusionné en PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) reste **isolé des commandes Tauri/HTTP** ; ses tests avancés sont regroupés dans #88.
+**Intégration Revolut X :** le carnet public est accessible depuis le desktop. Le client de soldes utilise une signature Ed25519 et une commande de console locale distincte ; il ne propose pas d'ordre. Le coffre Windows reste **isolé des commandes Tauri/HTTP**. La connexion à un compte réel reste à vérifier.
+
+La configuration en console exige le mot de passe local et une saisie masquée de la clé API. Les commandes lisent le profil Windows local par défaut et ignorent les chemins d'authentification fournis par l'environnement. La commande de solde affiche des données financières à l'écran. Le fichier PEM source doit être protégé par l'utilisateur. Les protections mémoire réduisent l'exposition sans garantir l'effacement de toutes les copies. Le délai anti-tentatives de l'authentification est en mémoire et ne s'applique pas entre deux processus CLI distincts ; Credential Manager ne protège pas contre un programme malveillant exécuté sous le même compte Windows.
 
 ### 🔭 Frontières de confiance
 
@@ -130,7 +132,7 @@ flowchart TB
 - Commandes d'historique avec filtres typés et réponses bornées. Le CSV provient de lignes validées et non d'un chemin de fichier arbitraire.
 - Le desktop **ne démarre pas de serveur HTTP ni de WebSocket local pour l'UI**. Démarrage Windows et absence de socket `Listen` sur son PID testés manuellement ; le smoke CI le contrôle aussi.
 
-**Preuve historique :** #67 a validé les refus IPC depuis une WebView non privilégiée dans des sessions successives. Le test complémentaire de fenêtres simultanées et d'origine hostile de #88 a réussi sur le commit `a7f822e` ; son intégration et les tests sur le nouveau commit doivent encore être vérifiés. Une protection écrite dans le code ne suffit jamais à prouver l'absence de vulnérabilités.
+**Preuve historique :** #67 a validé les refus IPC dans des sessions successives. Les scénarios complémentaires de fenêtres simultanées et d'origine hostile de #88 ont été validés sur `main` à `b2a6fc3`. Les commits ultérieurs requièrent leurs propres tests ; une protection écrite dans le code ne prouve pas l'absence de vulnérabilités.
 
 </details>
 
@@ -179,7 +181,7 @@ flowchart TB
 | Menace | Actif | Défense intégrée | Vérification / risque restant |
 |:--|:--|:--|:--|
 | XSS / script externe | WebView2 | JS/CSS locaux, CSP `'self'` | Tests d'injection et revue du frontend à compléter |
-| Appel IPC non autorisé | Données métier | ACL `main` + autorisation Rust | **PR #67 fusionnée :** refus sans session/après logout et sonde non privilégiée. **PR #88 :** tests Windows de fenêtres simultanées, CSP et origine hostile réussis sur le SHA `a7f822e` ; vérifier les prochains commits et `main` post-fusion |
+| Appel IPC non autorisé | Données métier | ACL `main` + autorisation Rust | Tests #67 et #88 fusionnés et validés sur `main` `b2a6fc3` ; vérifier les prochains commits |
 | Vol local de session | Session | Jeton côté Rust ; révocation logout | Malware même utilisateur hors garantie |
 | Brute force mot de passe | Auth | PBKDF2 + verrouillage progressif | Tester sur redémarrage/attaques répétées |
 | SQL injection / export arbitraire | SQLite | Requêtes paramétrées, enums, CSV borné | Revue du format et test CSV malveillant |
@@ -192,7 +194,7 @@ flowchart TB
 
 ### 🔗 Revolut X privé et signature Windows : garde-fous obligatoires
 
-**Lecture privée seulement (PR #88) :** la [spécification officielle Revolut X](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange) exige `X-Revx-API-Key`, `X-Revx-Timestamp` (millisecondes) et `X-Revx-Signature` (Ed25519). Le client Rust effectue exclusivement `GET https://revx.revolut.com/api/1.0/balances`, avec URL figée, sans redirection, réponses bornées, validation des décimaux sous forme de chaînes et erreurs expurgées. Les secrets sont récupérables uniquement via l'abstraction `SecretStore` (`revolut_x:api_key` et `revolut_x:ed25519_pkcs8_pem`), **sans commande WebView de provisionnement**. Les tests sont hors ligne ; aucun compte réel n'a été connecté ici.
+**Lecture privée seulement :** la [spécification officielle Revolut X](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange) exige `X-Revx-API-Key`, `X-Revx-Timestamp` (millisecondes) et `X-Revx-Signature` (Ed25519). Le client Rust effectue exclusivement `GET https://revx.revolut.com/api/1.0/balances`, avec URL figée, sans redirection, réponses bornées et erreurs expurgées. Les secrets sont conservés dans un enregistrement `SecretStore` avec compatibilité des anciennes entrées, **sans commande WebView de provisionnement**. Les tests utilisent des données fictives ; aucun compte réel n'a été connecté ici.
 
 **Ordres réels : NON activés.** Le futur passage à l'exécution nécessite une demande explicite de l'utilisateur, une validation des permissions de la clé par le fournisseur, des limites de pertes/montants, une prévisualisation des frais/slippage, des identifiants d'ordres idempotents, une vérification de fraîcheur et un mécanisme d'arrêt d'urgence. La simulation papier ne doit jamais déclencher un ordre automatiquement.
 
@@ -200,7 +202,7 @@ flowchart TB
 
 ### 🔐 Coffre Windows — inventaire, menaces et réversibilité (#74)
 
-**État prouvé :** la [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) a fusionné une abstraction Rust `SecretStore` et `WindowsCredentialStore` utilisant les API Win32 `CredWriteW/CredReadW/CredDeleteW`; les 8 contrôles CI de cette PR sont verts. Le composant est **non branché aux commandes Tauri/HTTP** et ne permet aucun ordre réel. Les tests supplémentaires préparés en #77 (mock, rotation, suppression, historique Git) ont été transférés en [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) ; ils ne sont **pas livrés sur `main`** tant que #88 n'est pas fusionnée.
+**État prouvé :** la [PR #75](https://github.com/suvorovpravda/Pravda-Bot/pull/75) a fusionné une abstraction Rust `SecretStore` et `WindowsCredentialStore` utilisant les API Win32 `CredWriteW/CredReadW/CredDeleteW`. Le composant est **non branché aux commandes Tauri/HTTP** et ne permet aucun ordre réel. Les tests supplémentaires issus de #77 ont été fusionnés par la [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88).
 
 | Actif / surface | Menace | Contrôle et limite |
 |:--|:--|:--|
@@ -221,7 +223,7 @@ flowchart TB
 > [!CAUTION]
 > **Ce qui n'est PAS garanti :** protection complète contre un malware local, absence de vulnérabilité, confidentialité face à l'administrateur du poste, résultats financiers réels, qualité intrinsèque des sources de marché ou intégrité d'un exécutable non signé téléchargé ailleurs.
 
-1. **IPC :** [preuves natives WebView2 de la PR #67](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/job/125359902577) : refus Rust avant/après session, refus ACL d'une WebView `security-probe` distincte et refus `fs`/`shell`. **Hors de la preuve historique #67 :** deux fenêtres simultanées et navigation depuis une origine distante sont désormais testées dans #88 (réussite sur `a7f822e`, validation post-fusion requise). Couverture exhaustive des XSS et audit indépendant restent absents.
+1. **IPC :** [preuves natives WebView2 de la PR #67](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41469749796/job/125359902577) et scénarios de fenêtres simultanées et d'origine hostile de #88 validés sur `main` `b2a6fc3`. Couverture exhaustive des XSS et audit indépendant restent absents.
 2. **Distribution :** dans #88, `bundle.active=true` et les cibles NSIS/MSI sont activées avec un workflow manuel d'artefacts non signés. **Aucun MSI signé Authenticode/RFC 3161 ni parcours d'installation certifié n'est encore attesté** ; un binaire non signé n'est pas une release Enterprise.
 3. **Charge / déni de service :** pas de garantie de quota global sur toutes les connexions, sessions, flux, requêtes et la taille de la base. Les limites d'une **réponse** ne sont pas une limite de volume du disque.
 4. **Disponibilité :** #88 propose BCE/Frankfurter, GDELT et ENTSOG via HTTPS public borné, plus CPU/RAM locaux. Les réponses invalides ou indisponibles doivent rester marquées `unavailable`. AIS live et TTF prix live nécessitent une source autorisée. Aucun flux ou prix n'est fabriqué.
@@ -321,7 +323,7 @@ Write-Host "OK : aucun listener TCP pour pravda-app.exe."
 
 **Persistence.** SQLite WAL, parameterized and bounded history reads, read-only source for transactional Python legacy migration, and per-user Windows AppData defaults. Back up the database **including its WAL consistency** and the password verifier before migrating.
 
-**Verified and outstanding.** Additional native same-process and hostile-origin checks passed in [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) on commit `a7f822e`, pending later commits and post-merge verification. Merged [PR #67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) passed eight CI checks, including **22 real Windows WebView2 IPC assertions** (unauthenticated and logged-out denials, unprivileged probe, denied file/shell commands). These are **two successive native sessions**, not concurrent windows in one authenticated process; remote-origin behavior also remains untested. The solo maintainer removed the requirement for a second human reviewer. Branch no-bypass was shown checked in a maintainer screenshot, but the integration cannot query saved settings (**403**). A signed MSI/Authenticode, SBOM, load limits and some feeds are pending. CI is **not** a security certification.
+**Verified and outstanding.** [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88), including native same-process and hostile-origin checks, is merged and CI passed on `main` commit `b2a6fc3`. New commits need fresh checks. A signed MSI, SBOM and independent review are pending. CI is **not** a security certification.
 
 **Responsible disclosure.** Use [GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security) → **Report a vulnerability** if private reporting is enabled. Otherwise ask the maintainer for a **private contact route without posting exploit details publicly**. Share reproducible non-sensitive evidence privately. No guaranteed response SLA is published.
 
@@ -335,6 +337,6 @@ Write-Host "OK : aucun listener TCP pour pravda-app.exe."
 
 **Пароль:** минимум 15 символов, случайная соль, PBKDF2-HMAC-SHA256 (600 000 итераций), задержки после ошибок, отзыв сессии при выходе. Данные сохраняются в SQLite/WAL и файле проверки пароля в пользовательском каталоге Windows. При миграции нужны согласованные резервные копии.
 
-**Проверено и ограничения:** В [едином PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) дополнительные тесты WebView2 и Windows Vault прошли на коммите `a7f822e`; после новых изменений потребуется повторная проверка. [PR #67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) объединён, **8 проверок CI и 22 IPC-теста на настоящем Windows/WebView2 прошли успешно**: отказы без сессии, после выхода, для окна `security-probe` и запрещённых команд shell/fs. Тесты выполнены в двух **последовательных процессах**; одновременные окна одного процесса и удалённое происхождение не проверены. Единственный сопровождающий отменил обязательное одобрение второго разработчика; настройка no-bypass показана на скриншоте, но API интеграции возвращает 403. Подписанный MSI, SBOM и ограничения нагрузки остаются задачами.
+**Проверено и ограничения:** [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88), включая дополнительные проверки WebView2 и Windows Vault, объединён с `main`; CI коммита `b2a6fc3` прошла. Новые коммиты требуют повторных проверок. Подписанный MSI, SBOM и независимый аудит остаются задачами.
 
 **Уязвимости:** используйте [закрытую отправку через GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security), если она включена, либо запросите у сопровождающего приватный способ связи. Не публикуйте пароли, данные пользователей или подробности эксплуатации в открытых issues.
