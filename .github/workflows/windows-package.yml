@@ -23,6 +23,437 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+      - name: Enterprise signing preflight and protected ref policy
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        env:
+          PRAVDA_SIGNING_CERT_PRESENT: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 != '' }}
+          PRAVDA_SIGNING_PASSWORD_PRESENT: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD != '' }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # SEC: A signed release must never silently fall back to unsigned.
+          if ($env:PRAVDA_SIGNING_CERT_PRESENT -ne 'true' -or
+              $env:PRAVDA_SIGNING_PASSWORD_PRESENT -ne 'true') {
+            throw 'Enterprise signing requires both protected signing secrets'
+          }
+          if ($env:RELEASE_REF -ne 'refs/heads/main' -and
+              $env:RELEASE_REF -notmatch '^refs/tags/v[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo metadata --locked --format-version 1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Root Cargo.lock is stale' }
+          cargo metadata --locked --manifest-path crates/pravda-app/Cargo.toml --format-version 1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop Cargo.lock is stale' }
+      - name: Install Tauri 2 CLI
+        shell: pwsh
+        run: |
+          cargo install tauri-cli --version '^2' --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI install failed' }
+      - name: Import code-signing certificate (explicit manual opt-in)
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw 'Code-signing secrets missing from windows-signing environment'
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'pravda-temporary-code-sign.pfx'
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+            $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+            if (-not $cert -or -not $cert.HasPrivateKey -or $cert.NotAfter -le (Get-Date)) {
+              throw 'Valid non-expired code signing certificate with private key required'
+            }
+            $eku = @($cert.EnhancedKeyUsageList | ForEach-Object { $_.ObjectId.Value })
+            if ($eku -notcontains '1.3.6.1.5.5.7.3.3') {
+              throw 'Certificate does not allow code signing'
+            }
+            "PRAVDA_SIGNING_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } finally {
+            Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:WINDOWS_CERTIFICATE_BASE64 -ErrorAction SilentlyContinue
+            Remove-Item Env:WINDOWS_CERTIFICATE_PASSWORD -ErrorAction SilentlyContinue
+          }
+      - name: Configure Tauri code signing before building EXE and installers
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        working-directory: crates/pravda-app
+        run: |
+          $ErrorActionPreference='Stop'
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw 'Signing certificate thumbprint was not validated'
+          }
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+                digestAlgorithm = 'sha256'
+                timestampUrl = 'http://timestamp.digicert.com'
+              }
+            }
+          }
+          $config | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'tauri.signing.ci.json' -Encoding utf8
+      - name: Build NSIS and MSI with locked Cargo dependencies
+        shell: pwsh
+        working-directory: crates/pravda-app
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if ($env:PRAVDA_SIGNED -eq 'true') {
+            cargo tauri build --ci --config tauri.signing.ci.json --bundles nsis,msi -- --locked
+          } else {
+            cargo tauri build --ci --bundles nsis,msi -- --locked
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Tauri Windows package build failed' }
+      - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
+        shell: pwsh
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='crates/pravda-app/target/release/bundle'
+          $msi=@(Get-ChildItem "$dir/msi" -Filter '*.msi' -File -ErrorAction SilentlyContinue)
+          $nsis=@(Get-ChildItem "$dir/nsis" -Filter '*-setup.exe' -File -ErrorAction SilentlyContinue)
+          $exe=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          if ($msi.Count -lt 1 -or $nsis.Count -lt 1) { throw 'MSI or NSIS installer missing' }
+          foreach ($file in @($exe)+@($msi)+@($nsis)) {
+            $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "$($file.Name) SHA256=$hash"
+            $sig=Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($env:PRAVDA_SIGNED -eq 'true') {
+              if ($sig.Status -ne 'Valid' -or
+                  $sig.SignerCertificate.Thumbprint -ne $env:PRAVDA_SIGNING_THUMBPRINT -or
+                  -not $sig.TimeStamperCertificate) {
+                throw "Signature, certificate or timestamp missing/invalid for $($file.Name)"
+              }
+            } elseif ($sig.Status -ne 'Valid') {
+              Write-Warning "UNSIGNED TEST PACKAGE ONLY: $($file.Name). Not an Enterprise release."
+            }
+          }
+      - name: Generate SHA-256 release candidate manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = 'crates/pravda-app/target/release/bundle'
+          $exe = Get-Item 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
+          $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
+          if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
+          $files = @($exe) + $msi + $nsis
+          $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
+          $manifest = foreach ($file in ($files | Sort-Object FullName)) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            # Artifact upload strips the common release/ prefix. Hash paths must
+            # therefore be relative to that directory, not the repository root.
+            $relative = [IO.Path]::GetRelativePath($releaseRoot, $file.FullName).Replace([char]92, '/')
+            "$hash  $relative"
+          }
+          $manifest | Set-Content -LiteralPath "$bundle/SHA256SUMS.txt" -Encoding ascii
+          if ((Get-Content "$bundle/SHA256SUMS.txt").Count -ne $files.Count) {
+            throw 'Incomplete release candidate manifest'
+          }
+      - name: Verify portable manifest and Authenticode before upload
+        shell: pwsh
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $verifyArgs = @{
+            ReleaseRoot = 'crates/pravda-app/target/release'
+          }
+          if ($env:PRAVDA_SIGNED -eq 'true') {
+            $verifyArgs.RequireSigned = $true
+            $verifyArgs.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          }
+          & ./tools/Verify-Pravda-Installer.ps1 @verifyArgs
+      - name: Publish auditable SHA-256 and signing evidence for exact commit
+        shell: pwsh
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path 'crates/pravda-app/target/release').Path
+          $manifest = Join-Path $root 'bundle/SHA256SUMS.txt'
+          $files = @(Get-Content -LiteralPath $manifest -Encoding ascii)
+          if ($files.Count -lt 3) { throw 'Missing release verification evidence' }
+          $verified = @()
+          foreach ($line in $files) {
+            if ($line -cnotmatch '^([0-9a-f]{64})  (.+)        if: ${{ always() && inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Remove only the signing identity imported for this job.
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw 'Signing certificate thumbprint unavailable for cleanup'
+          }
+          $path = "Cert:\CurrentUser\My\$($env:PRAVDA_SIGNING_THUMBPRINT)"
+          if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+          }
+          if (Test-Path -LiteralPath $path) {
+            throw 'Imported code-signing certificate still present after cleanup'
+          }
+      - name: Clean up temporary signing config
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item 'crates/pravda-app/tauri.signing.ci.json' -Force -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
+          path: |
+            crates/pravda-app/target/release/bundle/msi/*.msi
+            crates/pravda-app/target/release/bundle/nsis/*-setup.exe
+            crates/pravda-app/target/release/bundle/SHA256SUMS.txt
+            crates/pravda-app/target/release/bundle/release-evidence.json
+            crates/pravda-app/target/release/pravda-app.exe
+          if-no-files-found: error
+          retention-days: 3
+) {
+            throw 'Enterprise signed artifacts require main or versioned release tag'
+          }
+      - name: Verify root and Tauri locks
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo metadata --locked --format-version 1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Root Cargo.lock is stale' }
+          cargo metadata --locked --manifest-path crates/pravda-app/Cargo.toml --format-version 1 | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Desktop Cargo.lock is stale' }
+      - name: Install Tauri 2 CLI
+        shell: pwsh
+        run: |
+          cargo install tauri-cli --version '^2' --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI install failed' }
+      - name: Import code-signing certificate (explicit manual opt-in)
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if ([string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_BASE64) -or
+              [string]::IsNullOrWhiteSpace($env:WINDOWS_CERTIFICATE_PASSWORD)) {
+            throw 'Code-signing secrets missing from windows-signing environment'
+          }
+          $pfx = Join-Path $env:RUNNER_TEMP 'pravda-temporary-code-sign.pfx'
+          try {
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
+            $password = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+            $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $password
+            if (-not $cert -or -not $cert.HasPrivateKey -or $cert.NotAfter -le (Get-Date)) {
+              throw 'Valid non-expired code signing certificate with private key required'
+            }
+            $eku = @($cert.EnhancedKeyUsageList | ForEach-Object { $_.ObjectId.Value })
+            if ($eku -notcontains '1.3.6.1.5.5.7.3.3') {
+              throw 'Certificate does not allow code signing'
+            }
+            "PRAVDA_SIGNING_THUMBPRINT=$($cert.Thumbprint)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } finally {
+            Remove-Item -LiteralPath $pfx -Force -ErrorAction SilentlyContinue
+            Remove-Item Env:WINDOWS_CERTIFICATE_BASE64 -ErrorAction SilentlyContinue
+            Remove-Item Env:WINDOWS_CERTIFICATE_PASSWORD -ErrorAction SilentlyContinue
+          }
+      - name: Configure Tauri code signing before building EXE and installers
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        working-directory: crates/pravda-app
+        run: |
+          $ErrorActionPreference='Stop'
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw 'Signing certificate thumbprint was not validated'
+          }
+          $config = @{
+            bundle = @{
+              windows = @{
+                certificateThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+                digestAlgorithm = 'sha256'
+                timestampUrl = 'http://timestamp.digicert.com'
+              }
+            }
+          }
+          $config | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'tauri.signing.ci.json' -Encoding utf8
+      - name: Build NSIS and MSI with locked Cargo dependencies
+        shell: pwsh
+        working-directory: crates/pravda-app
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference='Stop'
+          if ($env:PRAVDA_SIGNED -eq 'true') {
+            cargo tauri build --ci --config tauri.signing.ci.json --bundles nsis,msi -- --locked
+          } else {
+            cargo tauri build --ci --bundles nsis,msi -- --locked
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Tauri Windows package build failed' }
+      - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
+        shell: pwsh
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='crates/pravda-app/target/release/bundle'
+          $msi=@(Get-ChildItem "$dir/msi" -Filter '*.msi' -File -ErrorAction SilentlyContinue)
+          $nsis=@(Get-ChildItem "$dir/nsis" -Filter '*-setup.exe' -File -ErrorAction SilentlyContinue)
+          $exe=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          if ($msi.Count -lt 1 -or $nsis.Count -lt 1) { throw 'MSI or NSIS installer missing' }
+          foreach ($file in @($exe)+@($msi)+@($nsis)) {
+            $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            Write-Host "$($file.Name) SHA256=$hash"
+            $sig=Get-AuthenticodeSignature -FilePath $file.FullName
+            if ($env:PRAVDA_SIGNED -eq 'true') {
+              if ($sig.Status -ne 'Valid' -or
+                  $sig.SignerCertificate.Thumbprint -ne $env:PRAVDA_SIGNING_THUMBPRINT -or
+                  -not $sig.TimeStamperCertificate) {
+                throw "Signature, certificate or timestamp missing/invalid for $($file.Name)"
+              }
+            } elseif ($sig.Status -ne 'Valid') {
+              Write-Warning "UNSIGNED TEST PACKAGE ONLY: $($file.Name). Not an Enterprise release."
+            }
+          }
+      - name: Generate SHA-256 release candidate manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = 'crates/pravda-app/target/release/bundle'
+          $exe = Get-Item 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
+          $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
+          if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
+          $files = @($exe) + $msi + $nsis
+          $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
+          $manifest = foreach ($file in ($files | Sort-Object FullName)) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            # Artifact upload strips the common release/ prefix. Hash paths must
+            # therefore be relative to that directory, not the repository root.
+            $relative = [IO.Path]::GetRelativePath($releaseRoot, $file.FullName).Replace([char]92, '/')
+            "$hash  $relative"
+          }
+          $manifest | Set-Content -LiteralPath "$bundle/SHA256SUMS.txt" -Encoding ascii
+          if ((Get-Content "$bundle/SHA256SUMS.txt").Count -ne $files.Count) {
+            throw 'Incomplete release candidate manifest'
+          }
+      - name: Verify portable manifest and Authenticode before upload
+        shell: pwsh
+        env:
+          PRAVDA_SIGNED: ${{ inputs.signed }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $verifyArgs = @{
+            ReleaseRoot = 'crates/pravda-app/target/release'
+          }
+          if ($env:PRAVDA_SIGNED -eq 'true') {
+            $verifyArgs.RequireSigned = $true
+            $verifyArgs.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          }
+          & ./tools/Verify-Pravda-Installer.ps1 @verifyArgs
+      - name: Remove imported code-signing certificate from runner
+        if: ${{ always() && inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Remove only the signing identity imported for this job.
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw 'Signing certificate thumbprint unavailable for cleanup'
+          }
+          $path = "Cert:\CurrentUser\My\$($env:PRAVDA_SIGNING_THUMBPRINT)"
+          if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+          }
+          if (Test-Path -LiteralPath $path) {
+            throw 'Imported code-signing certificate still present after cleanup'
+          }
+      - name: Clean up temporary signing config
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item 'crates/pravda-app/tauri.signing.ci.json' -Force -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
+          path: |
+            crates/pravda-app/target/release/bundle/msi/*.msi
+            crates/pravda-app/target/release/bundle/nsis/*-setup.exe
+            crates/pravda-app/target/release/bundle/SHA256SUMS.txt
+            crates/pravda-app/target/release/pravda-app.exe
+          if-no-files-found: error
+          retention-days: 3
+) {
+              throw 'Invalid release manifest format'
+            }
+            $hash = $Matches[1]
+            $relative = $Matches[2]
+            $file = Get-Item -LiteralPath (Join-Path $root $relative) -ErrorAction Stop
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            $isValid = $signature.Status -eq 'Valid' -and
+              $null -ne $signature.SignerCertificate -and
+              $null -ne $signature.TimeStamperCertificate
+            if ($env:PRAVDA_SIGNED -eq 'true' -and
+                (-not $isValid -or $signature.SignerCertificate.Thumbprint -ne $env:PRAVDA_SIGNING_THUMBPRINT)) {
+              throw "Refusing unsigned or invalid Enterprise artifact $relative"
+            }
+            $verified += [ordered]@{
+              file = $relative
+              sha256 = $hash
+              authenticode_valid = [bool]$isValid
+              certificate_thumbprint = if ($isValid) { $signature.SignerCertificate.Thumbprint } else { $null }
+              timestamped = [bool]($null -ne $signature.TimeStamperCertificate)
+            }
+          }
+          $evidence = [ordered]@{
+            schema_version = 1
+            commit_sha = $env:RELEASE_COMMIT
+            ref = $env:RELEASE_REF
+            signed_release = ($env:PRAVDA_SIGNED -eq 'true')
+            generated_utc = (Get-Date).ToUniversalTime().ToString('o')
+            artifacts = $verified
+          }
+          $evidence | ConvertTo-Json -Depth 5 |
+            Set-Content -LiteralPath (Join-Path $root 'bundle/release-evidence.json') -Encoding utf8
+      - name: Remove imported code-signing certificate from runner
+        if: ${{ always() && inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Remove only the signing identity imported for this job.
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw 'Signing certificate thumbprint unavailable for cleanup'
+          }
+          $path = "Cert:\CurrentUser\My\$($env:PRAVDA_SIGNING_THUMBPRINT)"
+          if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+          }
+          if (Test-Path -LiteralPath $path) {
+            throw 'Imported code-signing certificate still present after cleanup'
+          }
+      - name: Clean up temporary signing config
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item 'crates/pravda-app/tauri.signing.ci.json' -Force -ErrorAction SilentlyContinue
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
+          path: |
+            crates/pravda-app/target/release/bundle/msi/*.msi
+            crates/pravda-app/target/release/bundle/nsis/*-setup.exe
+            crates/pravda-app/target/release/bundle/SHA256SUMS.txt
+            crates/pravda-app/target/release/pravda-app.exe
+          if-no-files-found: error
+          retention-days: 3
+) {
+            throw 'Enterprise signed artifacts require main or versioned release tag'
+          }
       - name: Verify root and Tauri locks
         shell: pwsh
         run: |
