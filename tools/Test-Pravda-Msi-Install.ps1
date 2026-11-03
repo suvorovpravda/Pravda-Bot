@@ -38,6 +38,14 @@ if (@(Get-PravdaInstall).Count -ne 0) {
 
 $installedCode = $null
 $testSucceeded = $false
+$canaries = @(
+    (Join-Path $env:APPDATA 'com.pravda.bot/ci-retention-canary.txt'),
+    (Join-Path $env:LOCALAPPDATA 'Pravda-Bot/ci-retention-canary.txt')
+)
+$canaryContents = 'Pravda MSI retention canary - do not remove user data on uninstall'
+foreach ($canary in $canaries) {
+    if (Test-Path -LiteralPath $canary) { throw "Cannot overwrite pre-existing test canary: $canary" }
+}
 try {
     $process = Start-Process -FilePath $msiexec -ArgumentList @(
         '/i', ('"' + $msi + '"'), '/qn', '/norestart',
@@ -73,6 +81,13 @@ try {
     if (-not $found) {
         throw 'MSI registration exists but its application executable was not found'
     }
+    # This sentinel represents an existing per-user file; the installer must not
+    # delete the Tauri app data directory on uninstall. It does not replace a
+    # full GUI/database persistence acceptance test.
+    foreach ($canary in $canaries) {
+        New-Item -Path (Split-Path -Parent $canary) -ItemType Directory -Force | Out-Null
+        Set-Content -LiteralPath $canary -Value $canaryContents -Encoding utf8
+    }
     Write-Host 'PASS: silent MSI install, registered product and Windows application binary'
     $testSucceeded = $true
 }
@@ -92,6 +107,20 @@ finally {
             throw 'MSI product remains registered after uninstall'
         }
         Write-Host 'PASS: clean MSI uninstall and registry removal'
+        if ($testSucceeded) {
+            foreach ($canary in $canaries) {
+                if (-not (Test-Path -LiteralPath $canary -PathType Leaf) -or
+                    (Get-Content -LiteralPath $canary -Raw).TrimEnd() -cne $canaryContents) {
+                    throw "MSI uninstall removed or altered existing per-user app data: $canary"
+                }
+            }
+            Write-Host 'PASS: existing per-user app data survives MSI uninstall'
+        }
+    }
+    foreach ($canary in $canaries) {
+        if (Test-Path -LiteralPath $canary -PathType Leaf) {
+            Remove-Item -LiteralPath $canary -Force -ErrorAction SilentlyContinue
+        }
     }
     # Retain verbose MSI log on ANY smoke failure for the CI failure artifact.
     # The Windows hosted runner has no broker or code-signing secrets.
