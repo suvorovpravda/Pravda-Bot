@@ -14,7 +14,10 @@ pub enum VenueState {
 }
 impl VenueState {
     pub fn is_terminal(self) -> bool {
-        matches!(self, Self::Filled | Self::Cancelled | Self::Rejected | Self::Expired)
+        matches!(
+            self,
+            Self::Filled | Self::Cancelled | Self::Rejected | Self::Expired
+        )
     }
 }
 
@@ -40,9 +43,10 @@ pub enum ReconciliationError {
 
 /// Only accepts monotonic, identity-preserving observations. On uncertain delivery,
 /// the caller MUST reconcile by venue ID before attempting any new order.
-pub fn reconcile(previous: &VenueOrderSnapshot, next: &VenueOrderSnapshot)
-    -> Result<(), ReconciliationError>
-{
+pub fn reconcile(
+    previous: &VenueOrderSnapshot,
+    next: &VenueOrderSnapshot,
+) -> Result<(), ReconciliationError> {
     if previous.client_order_id != next.client_order_id
         || previous.venue_order_id != next.venue_order_id
         || previous.client_order_id.is_empty()
@@ -89,22 +93,57 @@ mod tests {
         VenueOrderSnapshot {
             client_order_id: "client-uuid".into(),
             venue_order_id: "venue-uuid".into(),
-            state, filled_steps: filled, observed_at_ms: time,
+            state,
+            filled_steps: filled,
+            observed_at_ms: time,
         }
     }
     #[test]
     fn accepts_partial_then_full_fill() {
-        assert_eq!(reconcile(&snapshot(VenueState::New, 0, 1), &snapshot(VenueState::PartiallyFilled, 4, 2)), Ok(()));
-        assert_eq!(reconcile(&snapshot(VenueState::PartiallyFilled, 4, 2), &snapshot(VenueState::Filled, 10, 3)), Ok(()));
+        assert_eq!(
+            reconcile(
+                &snapshot(VenueState::New, 0, 1),
+                &snapshot(VenueState::PartiallyFilled, 4, 2)
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            reconcile(
+                &snapshot(VenueState::PartiallyFilled, 4, 2),
+                &snapshot(VenueState::Filled, 10, 3)
+            ),
+            Ok(())
+        );
     }
     #[test]
     fn rejects_stale_regression_and_identity_switch() {
-        assert_eq!(reconcile(&snapshot(VenueState::New, 0, 2), &snapshot(VenueState::New, 0, 2)), Err(ReconciliationError::StaleSnapshot));
-        assert_eq!(reconcile(&snapshot(VenueState::PartiallyFilled, 5, 2), &snapshot(VenueState::Filled, 4, 3)), Err(ReconciliationError::FillRegression));
+        assert_eq!(
+            reconcile(
+                &snapshot(VenueState::New, 0, 2),
+                &snapshot(VenueState::New, 0, 2)
+            ),
+            Err(ReconciliationError::StaleSnapshot)
+        );
+        assert_eq!(
+            reconcile(
+                &snapshot(VenueState::PartiallyFilled, 5, 2),
+                &snapshot(VenueState::Filled, 4, 3)
+            ),
+            Err(ReconciliationError::FillRegression)
+        );
         let mut changed = snapshot(VenueState::Filled, 5, 3);
         changed.venue_order_id = "different".into();
-        assert_eq!(reconcile(&snapshot(VenueState::New, 0, 2), &changed), Err(ReconciliationError::IdentityMismatch));
-        assert_eq!(reconcile(&snapshot(VenueState::Filled, 5, 2), &snapshot(VenueState::New, 5, 3)), Err(ReconciliationError::InvalidTransition));
+        assert_eq!(
+            reconcile(&snapshot(VenueState::New, 0, 2), &changed),
+            Err(ReconciliationError::IdentityMismatch)
+        );
+        assert_eq!(
+            reconcile(
+                &snapshot(VenueState::Filled, 5, 2),
+                &snapshot(VenueState::New, 5, 3)
+            ),
+            Err(ReconciliationError::InvalidTransition)
+        );
     }
     #[test]
     fn uncertain_transport_never_retries_as_new_order() {
