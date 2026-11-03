@@ -59,6 +59,10 @@ jobs:
         run: node tools/test-dashboard.mjs
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
+      - name: Windows installer verifier synthetic tampering tests
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: ./tools/test-windows-installer-verifier.ps1
 
       - name: Enforce Rust-only production boundary
         run: node tools/test-rust-production-boundary.mjs

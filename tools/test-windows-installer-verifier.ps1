@@ -1,0 +1,53 @@
+#Requires -Version 7.0
+# Synthetic Windows-only contract test: no signing certificate or real
+# installer is required; production Authenticode checks remain independent.
+$ErrorActionPreference = 'Stop'
+$root = Join-Path $env:RUNNER_TEMP ("pravda-installer-test-" + [guid]::NewGuid().ToString('N'))
+$bundle = Join-Path $root 'bundle'
+$msiDir = Join-Path $bundle 'msi'
+$nsisDir = Join-Path $bundle 'nsis'
+New-Item -ItemType Directory -Force -Path $msiDir, $nsisDir | Out-Null
+
+$targets = @(
+    @{ Path = 'pravda-app.exe'; Data = 'synthetic executable' },
+    @{ Path = 'bundle/msi/pravda-test.msi'; Data = 'synthetic MSI' },
+    @{ Path = 'bundle/nsis/pravda-test-setup.exe'; Data = 'synthetic NSIS' }
+)
+try {
+    $manifest = foreach ($target in $targets) {
+        $file = Join-Path $root $target.Path
+        [IO.File]::WriteAllText($file, $target.Data)
+        $hash = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        "$hash  $($target.Path)"
+    }
+    $manifestPath = Join-Path $bundle 'SHA256SUMS.txt'
+    $manifest | Set-Content -LiteralPath $manifestPath -Encoding ascii
+    & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root
+
+    # Corruption must be rejected even when names/counts remain unchanged.
+    [IO.File]::AppendAllText((Join-Path $root $targets[1].Path), 'tampered')
+    $rejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root
+    } catch {
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'Tampered MSI passed checksum validation' }
+
+    # Restore a valid manifest, then reject traversal in a manifest path.
+    $targets[1].Data = 'synthetic MSI'
+    [IO.File]::WriteAllText((Join-Path $root $targets[1].Path), $targets[1].Data)
+    $badManifest = @($manifest)
+    $badManifest[1] = $badManifest[1].Replace('bundle/msi/pravda-test.msi', '../outside.msi')
+    $badManifest | Set-Content -LiteralPath $manifestPath -Encoding ascii
+    $rejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root
+    } catch {
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'Unsafe manifest path was accepted' }
+    Write-Host 'Installer manifest validation and tampering tests passed.'
+} finally {
+    Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+}
