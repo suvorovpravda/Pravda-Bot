@@ -133,7 +133,7 @@ fn inspect_windows_webview2() -> Check {
     let status = Command::new("reg.exe")
         .args([
             "query",
-            r"HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\EdgeUpdate\\Clients\\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
+            r"HKLM\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}",
             "/v",
             "pv",
         ])
@@ -294,18 +294,42 @@ fn checks() -> Vec<Check> {
         }
     }
 
-    let application = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(|dir| dir.join("pravda-app.exe")));
+    // Check a small fixed set of supported install layouts. Never report
+    // the actual installation path, user folder or full executable name.
+    let mut candidates = Vec::new();
+    if let Ok(executable) = std::env::current_exe() {
+        if let Some(dir) = executable.parent() {
+            candidates.push(dir.join("pravda-app.exe"));
+        }
+    }
+    for key in ["ProgramFiles", "ProgramFiles(x86)"] {
+        if let Some(folder) = std::env::var_os(key) {
+            candidates.push(std::path::PathBuf::from(folder).join("Pravda-Bot").join("pravda-app.exe"));
+        }
+    }
+    let application = candidates
+        .iter()
+        .find(|candidate| candidate.is_file())
+        .or_else(|| candidates.first());
     checks.push(match application {
-        Some(path) => inspect_pe_header(&path),
+        Some(path) => inspect_pe_header(path),
         None => Check::new(
             "adjacent_app_binary",
             Status::Warn,
-            "Cannot inspect companion application",
+            "Cannot locate application in known installation layouts",
         ),
     });
 
+    checks.push(Check::new(
+        "market_feed_reachability",
+        Status::Skip,
+        "Passive offline diagnosis cannot establish public market feed health",
+    ));
+    checks.push(Check::new(
+        "runtime_auth",
+        Status::Skip,
+        "Password and session verification require interactive authenticated test",
+    ));
     checks.push(Check::new(
         "revolut_exchange",
         Status::Skip,
