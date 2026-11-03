@@ -118,6 +118,9 @@ impl OrderJournal {
             "UPDATE order_journal_control SET stopped=1 WHERE id=1",
             [],
         )?;
+        // SEC: Validate original historical lifecycle records before any
+        // normalization; malformed 'submitting' rows must never be hidden.
+        Self::verify_existing_rows(&connection)?;
         connection.execute_batch(
             "BEGIN IMMEDIATE;
              UPDATE order_journal SET state='unknown' WHERE state='submitting';
@@ -126,8 +129,7 @@ impl OrderJournal {
                WHERE exchange_order_id IS NOT NULL;
              COMMIT;",
         )?;
-        // SEC: A malformed pre-existing journal must never be trusted, even
-        // when SQLite itself is structurally sound.
+        // SEC: Revalidate the migrated state and venue uniqueness.
         Self::verify_existing_rows(&connection)?;
         Ok(Self { connection })
     }
@@ -422,6 +424,44 @@ mod tests {
             .unwrap()
             .exchange_id
             .is_none());
+    }
+
+    #[test]
+    fn malformed_submitting_record_is_rejected_before_normalization() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("orders.db");
+        {
+            let mut journal = OrderJournal::open(&file).unwrap();
+            journal.test_allow_offline_reservation().unwrap();
+            journal.reserve("pending-legacy", 100).unwrap();
+        }
+        {
+            let connection = Connection::open(&file).unwrap();
+            connection
+                .execute(
+                    "UPDATE order_journal SET state='submitting', exchange_order_id='venue-tampered' WHERE client_order_id='pending-legacy'",
+                    [],
+                )
+                .unwrap();
+        }
+        assert!(matches!(OrderJournal::open(&file), Err(JournalError::Inconsistent)));
+        let connection = Connection::open(&file).unwrap();
+        let state: String = connection
+            .query_row(
+                "SELECT state FROM order_journal WHERE client_order_id='pending-legacy'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(state, "submitting");
+        let stopped: bool = connection
+            .query_row(
+                "SELECT stopped FROM order_journal_control WHERE id=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(stopped);
     }
 
     #[test]
