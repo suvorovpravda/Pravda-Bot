@@ -6,11 +6,7 @@
 //! environment variables, SQLite contents, machine names or process lists.
 
 #[cfg(windows)]
-use std::{
-    fs,
-    path::Path,
-    process::Command,
-};
+use std::{fs, path::Path, process::Command};
 use std::{
     fs::OpenOptions,
     io::{self, Write},
