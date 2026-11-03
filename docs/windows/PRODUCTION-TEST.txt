@@ -1,0 +1,14 @@
+PRAVDA-BOT — APPLICATION DE TEST PREPRODUCTION (WINDOWS)
+
+Programme : pravda-harness.exe (Rust natif, distinct du lanceur MSI).
+Mode : tests hors ligne et simulations uniquement. Aucun ordre de trading reel.
+
+Utilisation dans Terminal Windows (PowerShell) :
+  .\pravda-harness.exe --smoke
+
+Resultat : le smoke test valide les cas succes, refus, crash et timeout.
+Pour une campagne, consulter docs/PRAVDA-GUIDE.md (section Simulation massive).
+Le test --smoke est synthetique et NE CERTIFIE PAS une strategie en production.
+NE PAS charger de cles de courtage et couper le reseau au niveau VM/OS pour les campagnes.
+Verifier SHA256SUMS.txt et release-evidence.json avec le commit de la release.
+Sans signature Authenticode valide : build de test uniquement.
