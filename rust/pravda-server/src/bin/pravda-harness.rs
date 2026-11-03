@@ -692,6 +692,40 @@ async fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    struct LocalTestDir(PathBuf);
+
+    impl LocalTestDir {
+        fn new() -> Self {
+            let root = env::temp_dir();
+            for _ in 0..16 {
+                let sequence = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+                let candidate = root.join(format!(
+                    "pravda-harness-test-{}-{sequence}",
+                    std::process::id()
+                ));
+                match fs::create_dir(&candidate) {
+                    Ok(()) => return Self(candidate),
+                    Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                    Err(e) => panic!("cannot create isolated test directory: {e}"),
+                }
+            }
+            panic!("could not allocate isolated test directory");
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for LocalTestDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     fn example_manifest(binary: &str, hash: String) -> Manifest {
         Manifest {
@@ -711,7 +745,7 @@ mod tests {
 
     #[test]
     fn rejects_tampering_and_cannot_weaken_financial_gates() {
-        let dir = tempfile::tempdir().unwrap();
+        let dir = LocalTestDir::new();
         let binary = if cfg!(windows) {
             "replay.exe"
         } else {
@@ -760,7 +794,7 @@ mod tests {
         assert!(serde_json::from_value::<Manifest>(payload).is_err());
         let mut manifest = example_manifest("replay.exe", "a".repeat(64));
         manifest.cases[0].repetitions = MAX_TOTAL_RUNS + 1;
-        let dir = tempfile::tempdir().unwrap();
+        let dir = LocalTestDir::new();
         assert_eq!(
             check_manifest(&manifest, dir.path()),
             Err("invalid_run_count")
