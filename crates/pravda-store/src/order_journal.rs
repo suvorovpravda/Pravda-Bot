@@ -109,7 +109,14 @@ impl OrderJournal {
         )?;
         // Fail-closed across process restarts. A reopened database is stopped
         // until an explicit, separately authorized future activation procedure.
-        connection.execute("UPDATE order_journal_control SET stopped=1 WHERE id=1", [])?;
+        // SEC: after an unacknowledged request, a restart must never mistake
+        // an in-flight submission for permission to retry.
+        connection.execute_batch(
+            "BEGIN IMMEDIATE;
+             UPDATE order_journal_control SET stopped=1 WHERE id=1;
+             UPDATE order_journal SET state='unknown' WHERE state='submitting';
+             COMMIT;",
+        )?;
         Ok(Self { connection })
     }
 
@@ -297,6 +304,39 @@ impl OrderJournal {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn crash_during_submission_becomes_unknown_before_any_new_request() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("orders.db");
+        {
+            let mut journal = OrderJournal::open(&file).unwrap();
+            journal.test_allow_offline_reservation().unwrap();
+            journal.reserve("crashed-send", 100).unwrap();
+            journal
+                .connection
+                .execute(
+                    "UPDATE order_journal SET state='submitting' WHERE client_order_id=?1",
+                    ["crashed-send"],
+                )
+                .unwrap();
+        }
+        let mut recovered = OrderJournal::open(&file).unwrap();
+        assert!(recovered.stopped().unwrap());
+        assert_eq!(
+            recovered.get("crashed-send").unwrap().unwrap().state,
+            State::Unknown
+        );
+        assert!(matches!(
+            recovered.mark_submitting("crashed-send"),
+            Err(JournalError::Stopped)
+        ));
+        recovered.test_allow_offline_reservation().unwrap();
+        assert!(matches!(
+            recovered.reserve("crashed-send", 100),
+            Err(JournalError::Duplicate)
+        ));
+    }
 
     #[test]
     fn restart_is_stopped_and_never_erases_existing_history() {

@@ -2,7 +2,7 @@
 //! No order, cancellation, Tauri IPC or HTTP route is provided here.
 use crate::secret_store::{SecretStore, SecretStoreError, SecretValue};
 use pravda_fetchers::revolut_x_private::{
-    validate_credentials, Balance, PrivateReadError, RevolutXPrivateReadClient,
+    validate_credentials, Balance, OrderDetails, PrivateReadError, RevolutXPrivateReadClient,
 };
 use thiserror::Error;
 
@@ -112,6 +112,18 @@ impl<S: SecretStore> RevolutXVaultAccount<S> {
             .balances_with_key(credentials.api_key(), credentials.private_pem())
             .await?)
     }
+    /// Authenticated reconciliation uses only an allowlisted GET path.
+    /// Credential bytes never leave the backend except signed HTTPS headers.
+    pub async fn order_details(
+        &self,
+        venue_id: &str,
+    ) -> Result<OrderDetails, AccountConnectionError> {
+        let credentials = self.load_credentials()?;
+        Ok(self
+            .client
+            .order_details_with_key(venue_id, credentials.api_key(), credentials.private_pem())
+            .await?)
+    }
 }
 
 #[cfg(test)]
@@ -157,6 +169,20 @@ mod tests {
             STANDARD.encode(key.as_ref()),
             "PRIVATE KEY"
         )
+    }
+
+    #[tokio::test]
+    async fn order_details_unprovisioned_fails_before_any_request() {
+        let account = RevolutXVaultAccount::new(MemoryStore::default()).unwrap();
+        let result = account
+            .order_details("7a52e92e-8639-4fe1-abaa-68d3a2d5234b")
+            .await;
+        assert!(matches!(
+            result,
+            Err(AccountConnectionError::Credentials(
+                SecretStoreError::NotFound
+            ))
+        ));
     }
 
     #[tokio::test]
