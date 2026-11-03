@@ -6,7 +6,7 @@ import {spawn, execFileSync} from "node:child_process";
 import {existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync} from "node:fs";
 import {resolve, join} from "node:path";
 import {tmpdir} from "node:os";
-import {randomBytes} from "node:crypto";
+import {randomBytes, createHash} from "node:crypto";
 
 const exe = resolve("crates/pravda-app/target/debug/pravda-app.exe");
 const basePort = Number(process.env.PRAVDA_E2E_DRIVER_PORT || "4444");
@@ -63,7 +63,7 @@ const js=[
   "const call=window.__TAURI__?.core?.invoke;",
   "if(typeof call!=='function'){done({state:'no-bridge'});return;}",
   "Promise.resolve().then(()=>call(arguments[0],arguments[1]))",
-  " .then(()=>done({state:'resolved'}))",
+  " .then(value=>done({state:'resolved',value}))",
   " .catch(error=>done({state:'rejected',error:String(error).slice(0,250)}));"
 ].join("\n");
 
@@ -342,6 +342,36 @@ try {
 
   const login=await invoke("ipc_auth_login",{password});
   verdict("main: authenticated again for hostile HTTPS test",login.state==="resolved",login.state);
+  // Native process restart: persisted credentials and SQLite survive, but
+  // Rust-only session tokens must not carry over into the new process.
+  const authFile=join(directory,"auth.json");
+  const dbFile=join(directory,"data.db");
+  verdict("restart: password verifier and SQLite initialized",
+    existsSync(authFile)&&existsSync(dbFile), "Both private storage files exist");
+  const authHash=createHash("sha256").update(readFileSync(authFile)).digest("hex");
+  const sqliteHeader=readFileSync(dbFile).subarray(0,16).toString("ascii");
+  verdict("restart: SQLite file header",sqliteHeader==="SQLite format 3\\0",
+    "SQLite format header present");
+  await startSession("main",basePort);
+  await ensureWebviewTitle("Pravda | Terminal marchés & énergie");
+  const authStatus=await invoke("ipc_auth_status");
+  verdict("restart: password setup persisted across native process",
+    authStatus.state==="resolved"&&authStatus.value===true,
+    "Existing password verifier was loaded");
+  rustDenied("restart: old session revoked after native process exit",
+    await invoke("ipc_market_snapshot"));
+  verdict("restart: password verifier unchanged",
+    createHash("sha256").update(readFileSync(authFile)).digest("hex")===authHash,
+    "Password verifier bytes unchanged");
+  const loginAfterRestart=await invoke("ipc_auth_login",{password});
+  verdict("restart: existing password logs in",
+    loginAfterRestart.state==="resolved",loginAfterRestart.state);
+  const marketAfterRestart=await invoke("ipc_market_snapshot");
+  verdict("restart: market IPC authorized only after login",
+    marketAfterRestart.state==="resolved",marketAfterRestart.state);
+  verdict("restart: SQLite remains accessible",
+    existsSync(dbFile)&&readFileSync(dbFile).subarray(0,16).toString("ascii")==="SQLite format 3\\0",
+    "Same database path and valid SQLite header");
   await checkHostileHttpsOrigin();
 
   // tauri-driver / EdgeDriver on Windows may enumerate only its primary
