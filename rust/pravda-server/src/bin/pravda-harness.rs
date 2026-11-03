@@ -230,11 +230,11 @@ fn current_rss_bytes(pid: u32) -> Option<u64> {
 fn current_rss_bytes(pid: u32) -> Option<u64> {
     use std::mem;
     use windows_sys::Win32::{
+        Foundation::CloseHandle,
         System::{
             ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
             Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
         },
-        Foundation::CloseHandle,
     };
     unsafe {
         let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
