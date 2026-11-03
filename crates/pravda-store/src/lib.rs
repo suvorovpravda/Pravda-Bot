@@ -1,3 +1,4 @@
+pub mod doctor;
 mod migration;
 pub use migration::{MigrationError, MigrationReport};
 

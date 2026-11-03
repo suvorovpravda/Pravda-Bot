@@ -91,8 +91,8 @@ jobs:
       - name: Build backend in release mode
         run: cargo build --locked --release --workspace
 
-  offline_harness_windows:
-    name: Build and smoke-test native Rust quantitative harness
+  doctor_windows:
+    name: Build and verify one-click Pravda Doctor
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -102,38 +102,36 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-      - name: Compile pure Rust harness and self-test
+      - name: Check Doctor formatting and tests
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          cargo test --locked -p pravda-server --bin pravda-harness
-          if ($LASTEXITCODE -ne 0) { throw 'Harness unit tests failed' }
-          cargo build --locked --release -p pravda-server --bin pravda-harness
-          if ($LASTEXITCODE -ne 0) { throw 'Harness release build failed' }
-          $binary = 'target/release/pravda-harness.exe'
-          $file = Get-Item -LiteralPath $binary -ErrorAction Stop
-          if ($file.Length -lt 100000) { throw 'Unexpectedly small Windows harness binary' }
-          $stream = [IO.File]::OpenRead($file.FullName)
-          try {
-            $header = New-Object byte[] 2
-            if ($stream.Read($header, 0, 2) -ne 2 -or $header[0] -ne 0x4d -or $header[1] -ne 0x5a) {
-              throw 'The harness must be a native Windows PE executable'
-            }
-          } finally { $stream.Dispose() }
-          $report = & $binary --smoke
-          if ($LASTEXITCODE -ne 0) { throw 'Offline fixture smoke failed' }
-          $summary = $report | ConvertFrom-Json
-          if ($summary.aggregate.pass -ne 1 -or
-              $summary.aggregate.rejected -ne 1 -or
-              $summary.aggregate.timeout -ne 1 -or
-              $summary.aggregate.crash -ne 1 -or
-              $summary.build_accepted -ne $false) {
-            throw 'Harness fail-closed smoke output invalid'
+          cargo fmt --all -- --check
+          if ($LASTEXITCODE -ne 0) { throw 'Formatting failed' }
+          cargo test --locked -p pravda-server --bin pravda-doctor
+          if ($LASTEXITCODE -ne 0) { throw 'Doctor tests failed' }
+      - name: Build independent Windows diagnostic EXE
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          cargo build --locked --release -p pravda-server --bin pravda-doctor
+          if ($LASTEXITCODE -ne 0) { throw 'Doctor release compilation failed' }
+          $exe = 'target/release/pravda-doctor.exe'
+          $file = Get-Item -LiteralPath $exe -ErrorAction Stop
+          if ($file.Length -lt 100000) { throw 'Doctor executable is unexpectedly small' }
+          $bytes = [IO.File]::ReadAllBytes($file.FullName)
+          if ($bytes[0] -ne 0x4d -or $bytes[1] -ne 0x5a) { throw 'Doctor is not a Windows PE executable' }
+          $output = @(& $exe --no-open)
+          if ($LASTEXITCODE -ne 0) { throw 'Doctor failed at startup' }
+          if (($output -join "`n") -notmatch 'PRAVDA-DOCTOR REPORT v2' -or
+              ($output -join "`n") -notmatch 'SUMMARY') {
+            throw 'Doctor diagnostic output is missing'
           }
+          Write-Host 'Doctor release executable generated and startup report verified.'
       - uses: actions/upload-artifact@v7
         with:
-          name: pravda-harness-win64-unsigned-test
-          path: target/release/pravda-harness.exe
+          name: pravda-doctor-windows-unsigned-test
+          path: target/release/pravda-doctor.exe
           if-no-files-found: error
           retention-days: 7
 
