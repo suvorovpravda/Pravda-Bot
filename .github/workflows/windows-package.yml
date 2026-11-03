@@ -5,6 +5,7 @@ on:
       - '.github/workflows/windows-package.yml'
       - 'tools/Verify-Pravda-Installer.ps1'
       - 'tools/test-windows-installer-verifier.ps1'
+      - 'tools/Test-Pravda-Msi-Install.ps1'
   workflow_dispatch:
     inputs:
       signed:
@@ -350,3 +351,19 @@ jobs:
           }
           & ./tools/Verify-Pravda-Installer.ps1 @args
           Write-Host "Verified independently downloaded Windows release from commit $env:EXPECTED_COMMIT"
+      - name: Smoke-test MSI installation and uninstall on pristine Windows
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem -LiteralPath 'downloaded-release/bundle/msi' -Filter '*.msi' -File -ErrorAction Stop)
+          if ($files.Count -ne 1) { throw 'Exactly one MSI release candidate is required' }
+          & ./tools/Test-Pravda-Msi-Install.ps1 -MsiPath $files[0].FullName
+      - name: Retain MSI installation failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-msi-smoke-failure-log
+          path: ${{ runner.temp }}/pravda-msi-install.log
+          if-no-files-found: ignore
+          retention-days: 7
