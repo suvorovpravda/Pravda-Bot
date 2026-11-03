@@ -47,7 +47,34 @@ try {
         $rejected = $true
     }
     if (-not $rejected) { throw 'Unsafe manifest path was accepted' }
-    Write-Host 'Installer manifest validation and tampering tests passed.'
+    # Companion contract: a complete release must also authenticate Doctor
+    # and Harness, but historic 3-artifact test candidates remain compatible.
+    foreach ($item in @(
+        @{ Path = 'pravda-doctor.exe'; Data = 'synthetic doctor' },
+        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' }
+    )) {
+        $file = Join-Path $root $item.Path
+        [IO.File]::WriteAllText($file, $item.Data)
+    }
+    $fullManifest = @($manifest)
+    foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
+        $file = Join-Path $root $name
+        $sum = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
+        $fullManifest += "$sum  $name"
+    }
+    $fullManifest | Set-Content -LiteralPath $manifestPath -Encoding ascii
+    & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireCompanions
+
+    # Missing companion must fail closed rather than publishing partial release.
+    Remove-Item -LiteralPath (Join-Path $root 'pravda-harness.exe') -Force
+    $rejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireCompanions
+    } catch {
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'Missing Harness passed companion verification' }
+    Write-Host 'Installer manifest, companions and tampering tests passed.'
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
 }
