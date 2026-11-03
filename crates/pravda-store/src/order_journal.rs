@@ -106,9 +106,7 @@ impl OrderJournal {
                base_units TEXT NOT NULL,
                filled_units TEXT NOT NULL
              );
-             CREATE UNIQUE INDEX IF NOT EXISTS ux_order_journal_venue_identity
-               ON order_journal(exchange_order_id)
-               WHERE exchange_order_id IS NOT NULL;",
+             UPDATE order_journal_control SET stopped=1 WHERE id=1;",
         )?;
         // Fail-closed across process restarts. A reopened database is stopped
         // until an explicit, separately authorized future activation procedure.
@@ -118,6 +116,9 @@ impl OrderJournal {
             "BEGIN IMMEDIATE;
              UPDATE order_journal_control SET stopped=1 WHERE id=1;
              UPDATE order_journal SET state='unknown' WHERE state='submitting';
+             CREATE UNIQUE INDEX IF NOT EXISTS ux_order_journal_venue_identity
+               ON order_journal(exchange_order_id)
+               WHERE exchange_order_id IS NOT NULL;
              COMMIT;",
         )?;
         // SEC: A malformed pre-existing journal must never be trusted, even
@@ -416,6 +417,32 @@ mod tests {
             .unwrap()
             .exchange_id
             .is_none());
+    }
+
+    #[test]
+    fn index_migration_failure_preserves_emergency_stop() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("orders.db");
+        {
+            let connection = Connection::open(&file).unwrap();
+            connection.execute_batch(
+                "CREATE TABLE order_journal_control(id INTEGER PRIMARY KEY, stopped INTEGER NOT NULL);
+                 INSERT INTO order_journal_control VALUES(1,0);
+                 CREATE TABLE order_journal(
+                   client_order_id TEXT PRIMARY KEY,
+                   state TEXT NOT NULL,
+                   exchange_order_id TEXT,
+                   base_units TEXT NOT NULL,
+                   filled_units TEXT NOT NULL
+                 );
+                 INSERT INTO order_journal VALUES('client-a','open','collision','100','0');
+                 INSERT INTO order_journal VALUES('client-b','open','collision','100','0');",
+            ).unwrap();
+        }
+        assert!(OrderJournal::open(&file).is_err());
+        // Test does not assume the failed transaction committed. A corrupt
+        // legacy database cannot be used by the production OrderJournal API.
+        assert!(OrderJournal::open(&file).is_err());
     }
 
     #[test]
