@@ -287,13 +287,23 @@ impl PravdaRuntime {
 
                         if activated {
                             let mut alerts = runtime.alerts.write().await;
+                            // Acquiring the alert lock may take longer than the
+                            // freshness window. Never publish an expired signal.
+                            if guard_spread(&kraken_tick, &binance_tick, Instant::now(), &policy)
+                                .is_none()
+                            {
+                                if let Some(id) = gate.activation_id(&tick.symbol.to_string()) {
+                                    gate.cancel_activation(&tick.symbol.to_string(), id);
+                                }
+                                continue;
+                            }
                             alerts.push(AlertEvent {
                                 symbol: tick.symbol.to_string(),
                                 message: format!(
                                     "⚡ Alerte rentable {} spread {:.4}%",
                                     tick.symbol, gross_spread
                                 ),
-                                timestamp: now,
+                                timestamp: Utc::now(),
                                 spread_percent: gross_spread,
                             });
                             if alerts.len() > 200 {
@@ -312,6 +322,7 @@ impl PravdaRuntime {
                         {
                             continue;
                         }
+                        let now = Utc::now();
                         if let Some(action) = sim.update(
                             &tick.symbol.to_string(),
                             kraken_tick.price,
@@ -388,6 +399,24 @@ mod tests {
             observed_at,
         }
     }
+    async fn wait_for_alert_lock_waiter(runtime: &PravdaRuntime) {
+        tokio::time::timeout(Duration::from_secs(8), async {
+            loop {
+                let both_quotes = runtime
+                    .prices
+                    .read()
+                    .await
+                    .get(&Symbol::BTCUSDT)
+                    .is_some_and(|prices| prices.len() == 2);
+                if both_quotes && runtime.alert_gates.try_read().is_err() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("worker did not reach the blocked alert write");
+    }
     #[test]
     fn guard_preserves_stale_invalid_spread_and_fee_invariants() {
         let now = Instant::now();
@@ -406,6 +435,92 @@ mod tests {
         assert!(guard_spread(&kraken, &binance, now, &policy).is_none());
         policy.max_spread_percent = 5.0;
         assert!(guard_spread(&kraken, &binance, now + Duration::from_secs(5), &policy).is_none());
+    }
+    #[tokio::test]
+    async fn stale_quotes_cannot_create_alert_after_waiting_for_alert_lock() {
+        let store = PravdaStore::open(":memory:").unwrap();
+        let (tx, _) = broadcast::channel(16);
+        let runtime = Arc::new(PravdaRuntime::new(store, tx.clone()));
+        let policy = RuntimePolicy {
+            stale_after: Duration::from_secs(2),
+            ..test_policy()
+        };
+        runtime.start_market_streams(policy).await;
+        runtime
+            .alert_gates
+            .write()
+            .await
+            .insert(Symbol::BTCUSDT, AlertGate::new(0.0));
+        let alert_lock = runtime.alerts.write().await;
+        let now = Instant::now();
+        tx.send(quote(Exchange::Kraken, 101.0, now)).unwrap();
+        tx.send(quote(Exchange::Binance, 100.0, now)).unwrap();
+
+        // The worker holds the gate while it waits for our alert lock. This
+        // proves it reached the post-confirmation wait before quotes expire.
+        wait_for_alert_lock_waiter(&runtime).await;
+        tokio::time::sleep(Duration::from_millis(2100)).await;
+        drop(alert_lock);
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if runtime.alert_gates.try_read().is_ok() {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("worker did not finish the blocked alert write");
+
+        assert!(
+            runtime.alerts.read().await.is_empty(),
+            "stale prices must not create an alert"
+        );
+        assert!(!runtime.alert_gates.read().await[&Symbol::BTCUSDT].is_active("BTC/USDT"));
+        assert!(runtime.paper_sim.read().await.positions.is_empty());
+    }
+    #[tokio::test]
+    async fn fresh_quotes_still_create_alert_and_paper_position_after_lock() {
+        let store = PravdaStore::open(":memory:").unwrap();
+        let (tx, _) = broadcast::channel(16);
+        let runtime = Arc::new(PravdaRuntime::new(store, tx.clone()));
+        let policy = RuntimePolicy {
+            stale_after: Duration::from_secs(10),
+            ..test_policy()
+        };
+        runtime.start_market_streams(policy).await;
+        runtime
+            .alert_gates
+            .write()
+            .await
+            .insert(Symbol::BTCUSDT, AlertGate::new(0.0));
+        let alert_lock = runtime.alerts.write().await;
+        let now = Instant::now();
+        tx.send(quote(Exchange::Kraken, 101.0, now)).unwrap();
+        tx.send(quote(Exchange::Binance, 100.0, now)).unwrap();
+        wait_for_alert_lock_waiter(&runtime).await;
+        drop(alert_lock);
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if runtime
+                    .paper_sim
+                    .read()
+                    .await
+                    .positions
+                    .contains_key("BTC/USDT")
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
+            }
+        })
+        .await
+        .expect("fresh data did not open a paper position");
+        let alerts = runtime.alerts.read().await;
+        assert!(alerts
+            .iter()
+            .any(|alert| alert.message.contains("Alerte rentable")));
+        assert!(runtime.alert_gates.read().await[&Symbol::BTCUSDT].is_active("BTC/USDT"));
     }
     #[tokio::test]
     async fn snapshot_and_sqlite_stay_usable_without_http_or_tauri() {
