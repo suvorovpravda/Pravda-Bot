@@ -1,5 +1,6 @@
 pub mod doctor;
 mod migration;
+pub mod order_journal;
 pub use migration::{MigrationError, MigrationReport};
 
 use chrono::{DateTime, Utc};
