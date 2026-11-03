@@ -109,10 +109,7 @@ impl OrderJournal {
         )?;
         // Fail-closed across process restarts. A reopened database is stopped
         // until an explicit, separately authorized future activation procedure.
-        connection.execute(
-            "UPDATE order_journal_control SET stopped=1 WHERE id=1",
-            [],
-        )?;
+        connection.execute("UPDATE order_journal_control SET stopped=1 WHERE id=1", [])?;
         Ok(Self { connection })
     }
 
@@ -130,10 +127,7 @@ impl OrderJournal {
         let tx = self
             .connection
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
-        tx.execute(
-            "UPDATE order_journal_control SET stopped=1 WHERE id=1",
-            [],
-        )?;
+        tx.execute("UPDATE order_journal_control SET stopped=1 WHERE id=1", [])?;
         tx.commit()?;
         Ok(())
     }
@@ -142,10 +136,8 @@ impl OrderJournal {
     /// compiled in production; trading and submission remain unavailable.
     #[cfg(test)]
     fn test_allow_offline_reservation(&mut self) -> Result<(), JournalError> {
-        self.connection.execute(
-            "UPDATE order_journal_control SET stopped=0 WHERE id=1",
-            [],
-        )?;
+        self.connection
+            .execute("UPDATE order_journal_control SET stopped=0 WHERE id=1", [])?;
         Ok(())
     }
 
@@ -268,7 +260,9 @@ impl OrderJournal {
             .map_err(|_| JournalError::Inconsistent)?;
         if matches!(previous, State::Filled | State::Rejected | State::Cancelled)
             || matches!(state, State::Reserved | State::Submitting | State::Unknown)
-            || existing_id.as_deref().is_some_and(|known| known != exchange_id)
+            || existing_id
+                .as_deref()
+                .is_some_and(|known| known != exchange_id)
             || cumulative_filled < previous_filled
             || cumulative_filled > base
             || (state == State::Filled && cumulative_filled != base)
@@ -287,7 +281,12 @@ impl OrderJournal {
         tx.execute(
             "UPDATE order_journal SET state=?2,exchange_order_id=?3,filled_units=?4
              WHERE client_order_id=?1",
-            params![id, state.as_str(), exchange_id, cumulative_filled.to_string()],
+            params![
+                id,
+                state.as_str(),
+                exchange_id,
+                cumulative_filled.to_string()
+            ],
         )?;
         tx.commit()?;
         Ok(())
@@ -356,10 +355,13 @@ mod tests {
             journal.reserve("fixed-id-2", 100).unwrap();
             // This SQL transition models an exchange send in a test fixture.
             // No network sender is compiled or enabled in the production API.
-            journal.connection.execute(
-                "UPDATE order_journal SET state='submitting' WHERE client_order_id=?1",
-                ["fixed-id-2"],
-            ).unwrap();
+            journal
+                .connection
+                .execute(
+                    "UPDATE order_journal SET state='submitting' WHERE client_order_id=?1",
+                    ["fixed-id-2"],
+                )
+                .unwrap();
             journal.mark_unknown("fixed-id-2").unwrap();
         }
         let mut journal = OrderJournal::open(&file).unwrap();
@@ -370,7 +372,9 @@ mod tests {
             journal.mark_submitting("fixed-id-2"),
             Err(JournalError::Stopped)
         ));
-        journal.reconcile("fixed-id-2", "exchange-a", State::PartiallyFilled, 40).unwrap();
+        journal
+            .reconcile("fixed-id-2", "exchange-a", State::PartiallyFilled, 40)
+            .unwrap();
         assert!(matches!(
             journal.reconcile("fixed-id-2", "exchange-b", State::Filled, 100),
             Err(JournalError::Inconsistent)
@@ -379,8 +383,13 @@ mod tests {
             journal.reconcile("fixed-id-2", "exchange-a", State::PartiallyFilled, 30),
             Err(JournalError::Inconsistent)
         ));
-        journal.reconcile("fixed-id-2", "exchange-a", State::Filled, 100).unwrap();
-        assert_eq!(journal.get("fixed-id-2").unwrap().unwrap().filled_units, 100);
+        journal
+            .reconcile("fixed-id-2", "exchange-a", State::Filled, 100)
+            .unwrap();
+        assert_eq!(
+            journal.get("fixed-id-2").unwrap().unwrap().filled_units,
+            100
+        );
     }
 
     #[test]
