@@ -91,6 +91,8 @@ impl OrderJournal {
         connection.busy_timeout(Duration::from_secs(5))?;
         connection.execute_batch(
             "PRAGMA journal_mode=WAL;
+             PRAGMA synchronous=FULL;
+             PRAGMA foreign_keys=ON;
              CREATE TABLE IF NOT EXISTS order_journal_control(
                id INTEGER PRIMARY KEY CHECK(id = 1),
                stopped INTEGER NOT NULL CHECK(stopped IN (0,1))
@@ -125,8 +127,23 @@ impl OrderJournal {
     }
 
     pub fn emergency_stop(&mut self) -> Result<(), JournalError> {
-        self.connection.execute(
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        tx.execute(
             "UPDATE order_journal_control SET stopped=1 WHERE id=1",
+            [],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Enable reservations only for offline unit tests. This method is not
+    /// compiled in production; trading and submission remain unavailable.
+    #[cfg(test)]
+    fn test_allow_offline_reservation(&mut self) -> Result<(), JournalError> {
+        self.connection.execute(
+            "UPDATE order_journal_control SET stopped=0 WHERE id=1",
             [],
         )?;
         Ok(())
@@ -134,11 +151,7 @@ impl OrderJournal {
 
     /// Deliberately no public enable method: readiness, authorization and
     /// broker risk checks must be independently designed and reviewed.
-    pub fn reserve(
-        &mut self,
-        id: &str,
-        base_units: u128,
-    ) -> Result<(), JournalError> {
+    pub fn reserve(&mut self, id: &str, base_units: u128) -> Result<(), JournalError> {
         if id.is_empty()
             || id.len() > 64
             || !id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
@@ -261,7 +274,8 @@ impl OrderJournal {
             || (state == State::Filled && cumulative_filled != base)
             || (state == State::Rejected && cumulative_filled != 0)
             || (state == State::Open && cumulative_filled != 0)
-            || (state == State::PartiallyFilled && (cumulative_filled == 0 || cumulative_filled == base))
+            || (state == State::PartiallyFilled
+                && (cumulative_filled == 0 || cumulative_filled == base))
         {
             return Err(JournalError::Inconsistent);
         }
@@ -301,6 +315,72 @@ mod tests {
         let reopened = OrderJournal::open(&file).unwrap();
         assert!(reopened.stopped().unwrap());
         assert!(reopened.get("client-1").unwrap().is_none());
+    }
+
+    #[test]
+    fn duplicate_reservations_survive_process_restart() {
+        let d = tempdir().unwrap();
+        let path = d.path().join("orders.db");
+        {
+            let mut journal = OrderJournal::open(&path).unwrap();
+            journal.test_allow_offline_reservation().unwrap();
+            journal.reserve("fixed-id-1", 100_000_000).unwrap();
+            assert!(matches!(
+                journal.reserve("fixed-id-1", 100_000_000),
+                Err(JournalError::Duplicate)
+            ));
+        }
+        let mut after_restart = OrderJournal::open(&path).unwrap();
+        assert!(after_restart.stopped().unwrap());
+        let record = after_restart.get("fixed-id-1").unwrap().unwrap();
+        assert_eq!(record.state, State::Reserved);
+        assert_eq!(record.base_units, 100_000_000);
+        assert!(matches!(
+            after_restart.reserve("fixed-id-1", 100_000_000),
+            Err(JournalError::Stopped)
+        ));
+        after_restart.test_allow_offline_reservation().unwrap();
+        assert!(matches!(
+            after_restart.reserve("fixed-id-1", 100_000_000),
+            Err(JournalError::Duplicate)
+        ));
+    }
+
+    #[test]
+    fn uncertainty_is_persistent_and_cannot_be_resubmitted() {
+        let d = tempdir().unwrap();
+        let file = d.path().join("orders.db");
+        {
+            let mut journal = OrderJournal::open(&file).unwrap();
+            journal.test_allow_offline_reservation().unwrap();
+            journal.reserve("fixed-id-2", 100).unwrap();
+            // This SQL transition models an exchange send in a test fixture.
+            // No network sender is compiled or enabled in the production API.
+            journal.connection.execute(
+                "UPDATE order_journal SET state='submitting' WHERE client_order_id=?1",
+                ["fixed-id-2"],
+            ).unwrap();
+            journal.mark_unknown("fixed-id-2").unwrap();
+        }
+        let mut journal = OrderJournal::open(&file).unwrap();
+        let record = journal.get("fixed-id-2").unwrap().unwrap();
+        assert_eq!(record.state, State::Unknown);
+        assert!(journal.stopped().unwrap());
+        assert!(matches!(
+            journal.mark_submitting("fixed-id-2"),
+            Err(JournalError::Stopped)
+        ));
+        journal.reconcile("fixed-id-2", "exchange-a", State::PartiallyFilled, 40).unwrap();
+        assert!(matches!(
+            journal.reconcile("fixed-id-2", "exchange-b", State::Filled, 100),
+            Err(JournalError::Inconsistent)
+        ));
+        assert!(matches!(
+            journal.reconcile("fixed-id-2", "exchange-a", State::PartiallyFilled, 30),
+            Err(JournalError::Inconsistent)
+        ));
+        journal.reconcile("fixed-id-2", "exchange-a", State::Filled, 100).unwrap();
+        assert_eq!(journal.get("fixed-id-2").unwrap().unwrap().filled_units, 100);
     }
 
     #[test]
