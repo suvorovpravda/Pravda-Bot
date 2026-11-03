@@ -159,6 +159,22 @@ jobs:
             $verifyArgs.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
           }
           & ./tools/Verify-Pravda-Installer.ps1 @verifyArgs
+      - name: Remove imported code-signing certificate from runner
+        if: ${{ always() && inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Remove only the signing identity imported for this job.
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
+            throw 'Signing certificate thumbprint unavailable for cleanup'
+          }
+          $path = "Cert:\CurrentUser\My\$($env:PRAVDA_SIGNING_THUMBPRINT)"
+          if (Test-Path -LiteralPath $path) {
+            Remove-Item -LiteralPath $path -Force -ErrorAction Stop
+          }
+          if (Test-Path -LiteralPath $path) {
+            throw 'Imported code-signing certificate still present after cleanup'
+          }
       - name: Clean up temporary signing config
         if: always()
         shell: pwsh
