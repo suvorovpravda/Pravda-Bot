@@ -274,6 +274,8 @@ mod tests {
         assert_eq!(validate_build(&bad), Err(BuildError::InvalidMetrics));
         bad = m;
         bad.trades = 10;
+        bad.wins = 6;
+        bad.losses = 4;
         assert_eq!(validate_build(&bad), Err(BuildError::InsufficientSamples));
     }
 }
