@@ -139,7 +139,7 @@ jobs:
           if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
           foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
             $file = Join-Path 'crates/pravda-app/target/release' $name
-            & $tools[0].FullName sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+            & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
             if ($LASTEXITCODE -ne 0) { throw 'Companion signing failed' }
           }
       - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
