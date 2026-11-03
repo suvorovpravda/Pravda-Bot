@@ -135,7 +135,7 @@ jobs:
           $files = @($exe) + $msi + $nsis
           $manifest = foreach ($file in ($files | Sort-Object FullName)) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-            $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $file.FullName).Replace('\\', '/')
+            $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $file.FullName).Replace([char]92, '/')
             "$hash  $relative"
           }
           $manifest | Set-Content -LiteralPath "$bundle/SHA256SUMS.txt" -Encoding ascii
@@ -154,5 +154,6 @@ jobs:
             crates/pravda-app/target/release/bundle/msi/*.msi
             crates/pravda-app/target/release/bundle/nsis/*-setup.exe
             crates/pravda-app/target/release/bundle/SHA256SUMS.txt
+            crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 3
