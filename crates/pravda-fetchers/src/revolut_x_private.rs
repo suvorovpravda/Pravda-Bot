@@ -216,7 +216,7 @@ fn decode_order_details_bytes(body: &[u8], expected_id: &str) -> Result<OrderDet
     let field = |key: &str| -> Result<String, PrivateReadError> {
         let value = data.get(key).and_then(serde_json::Value::as_str)
             .ok_or(PrivateReadError::InvalidResponse)?;
-        if value.is_empty() || value.len() > 128 || value.contains(['\\r', '\\n']) {
+        if value.is_empty() || value.len() > 128 || value.bytes().any(|byte| byte == 13 || byte == 10) {
             return Err(PrivateReadError::InvalidResponse);
         }
         Ok(value.to_owned())
@@ -460,7 +460,7 @@ mod tests {
         let rng = ring::rand::SystemRandom::new();
         let der = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
         let pair = Ed25519KeyPair::from_pkcs8(der.as_ref()).unwrap();
-        let pem = format!("{PEM_START}\\n{}\\n{PEM_END}", STANDARD.encode(der.as_ref()));
+        let pem = format!("{PEM_START}\n{}\n{PEM_END}", STANDARD.encode(der.as_ref()));
         let id = "7a52e92e-8639-4fe1-abaa-68d3a2d5234b";
         let signed = sign_fixed_request(
             "1785313433816", pem.as_bytes(),
