@@ -193,6 +193,7 @@ pub struct Aggregate {
     pub rejected: u32,
     pub timeout: u32,
     pub crash: u32,
+    pub memory_exceeded: u32,
     pub invalid: u32,
     pub gross_pnl_cents_total: i128,
     pub net_pnl_cents_total: i128,
