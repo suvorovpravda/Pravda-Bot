@@ -1,6 +1,6 @@
 //! One-click, no-secrets diagnostic companion for Pravda-Bot.
 //!
-//! This executable has no exchange SDK, no credentials, no trading transport,
+//! This executable has no trading API, no credentials, no order transport,
 //! no HTTP listener and no automatic repair. Run it directly from Explorer.
 //! The report is intentionally allowlisted: never print raw OS errors, paths,
 //! environment variables, SQLite contents, machine names or process lists.
@@ -8,7 +8,7 @@
 #[cfg(windows)]
 use std::{
     fs,
-    net::{SocketAddr, TcpStream},
+    net::{SocketAddr, TcpStream, ToSocketAddrs},
     path::Path,
     process::Command,
     time::Duration,
@@ -77,7 +77,8 @@ fn report_lines(checks: &[Check]) -> String {
     let mut result = String::from(
         "PRAVDA-DOCTOR REPORT v2\n\
          Copy only this report into your support conversation.\n\
-         SAFE MODE: no repairs, exchange connections, orders or credentials.\n\
+         SAFE MODE: no repairs, authenticated exchange calls, orders or credentials.\n\
+         Public reachability uses DNS/TCP only; no private payloads.\n\
          No filesystem paths, account IDs, log text or secrets collected.\n\n",
     );
     for check in checks {
@@ -259,6 +260,30 @@ fn inspect_local_port() -> Check {
     }
 }
 
+/// Public reachability only: DNS + TCP/443. No HTTP body, API key,
+/// authenticated request, trading instruction, or response content.
+#[cfg(windows)]
+fn inspect_public_tcp(host: &'static str, code: &'static str) -> Check {
+    let addresses = match (host, 443).to_socket_addrs() {
+        Ok(addresses) => addresses,
+        Err(_) => return Check::new(code, Status::Warn, "Public endpoint DNS lookup failed"),
+    };
+    for address in addresses.take(4) {
+        if TcpStream::connect_timeout(&address, Duration::from_millis(400)).is_ok() {
+            return Check::new(
+                code,
+                Status::Pass,
+                "Public TCP/443 reachable; API authentication and market data NOT tested",
+            );
+        }
+    }
+    Check::new(
+        code,
+        Status::Warn,
+        "Public TCP/443 unreachable or timed out; DNS/firewall/network may block",
+    )
+}
+
 #[cfg(windows)]
 fn checks() -> Vec<Check> {
     let mut checks = vec![Check::new(
@@ -296,6 +321,9 @@ fn checks() -> Vec<Check> {
     checks.push(inspect_windows_webview2());
     checks.push(inspect_pravda_process());
     checks.push(inspect_local_port());
+    checks.push(inspect_public_tcp("api.kraken.com", "public_kraken_tcp443"));
+    checks.push(inspect_public_tcp("api.binance.com", "public_binance_tcp443"));
+    checks.push(inspect_public_tcp("revx.revolut.com", "public_revolutx_tcp443"));
     checks.push(Check::new(
         "application_gui",
         Status::Skip,
