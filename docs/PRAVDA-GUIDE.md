@@ -373,6 +373,111 @@ L'ancien audit STRIDE v0.2 décrivait des risques et dépendances **de son commi
 
 Les anciens rapports « GPT vs Gemini », kits de publication Python, promesses « release prête » et instructions de `git push` direct dans `main` décrivent **une autre génération du projet**. Ils ne sont pas des guides de déploiement en vigueur. Ne pas exécuter leur ancien packaging sans contexte.
 
+## Guide d'exploitation Windows et troubleshooting — 03/11/2026
+
+Cette section est la procédure opérationnelle centrale. Elle complète le [README](../README.md) (installation) et [SECURITY](../SECURITY.md) (menaces, politiques et prérequis de publication). Les preuves sont toujours attachées à **un SHA de commit et un exécutable identifiés**. Une PR ouverte ou une CI verte sur un autre SHA ne vaut pas recette.
+
+### 1. Préparer un poste Windows propre
+
+**Configuration :** Windows 10/11 x64 maintenu à jour, WebView2 Runtime présent, compte Windows standard, espace disque disponible, antivirus et SmartScreen actifs. Pour compiler : Rust stable compatible avec les `rust-version` des manifests, cible `x86_64-pc-windows-msvc`, Visual Studio Build Tools avec **Desktop development with C++** (MSVC et Windows SDK). Pour utiliser l'application, ces outils de compilation ne sont pas nécessaires si un EXE signé et vérifié est fourni.
+
+Ouvrir PowerShell dans un répertoire sans caractères atypiques ni chemin trop long, puis vérifier :
+
+```powershell
+git status --short
+git pull --ff-only origin main
+rustc --version
+cargo --version
+where.exe link
+cargo metadata --locked --format-version 1 > $null
+cargo metadata --locked --manifest-path crates/pravda-app/Cargo.toml --format-version 1 > $null
+```
+
+Ne pas supprimer les changements locaux si `git pull --ff-only` échoue. Sauvegarder ou committer séparément les modifications avant de synchroniser. Si `where.exe link` échoue, ouvrir **Developer PowerShell for VS**; ne pas utiliser un ancien binaire présent dans `target` comme preuve d'un nouveau build.
+
+### 2. Compiler et démarrer le desktop natif
+
+```powershell
+cargo build --release --locked --manifest-path crates/pravda-app/Cargo.toml
+if ($LASTEXITCODE -ne 0) { throw 'Build desktop échoué' }
+& .\crates\pravda-app\target\release\pravda-app.exe
+```
+
+Attendre `Finished release profile` et confirmer la présence d'une **fenêtre native WebView2**. Lors de la première ouverture, créer un mot de passe local d'au moins **15 caractères**; ne jamais le communiquer par messagerie, ticket GitHub ou diagnostic. L'application stocke par défaut ses données dans `%LOCALAPPDATA%\Pravda-Bot`, dont la base SQLite et le fichier de vérification d'authentification. La fenêtre Tauri ne doit pas dépendre de `127.0.0.1:8080`. Le serveur Axum séparé peut être démarré explicitement pour diagnostic de compatibilité; il ne constitue pas le backend UI du desktop.
+
+Pour un test de marché hors ligne (pas un air-gap de sécurité), configurer `$env:PRAVDA_MARKET_FEEDS_ENABLED='false'` **avant** de lancer l'EXE. Cela désactive les flux connus de l'application, mais **ne remplace pas** une interdiction réseau imposée par Windows Firewall ou par une VM isolée.
+
+### 3. Diagnostic natif : pravda-doctor.exe
+
+Après une compilation/release qui inclut la [PR #98](https://github.com/suvorovpravda/Pravda-Bot/pull/98), exécuter `pravda-doctor.exe` depuis son emplacement de distribution, idéalement à côté de `pravda-app.exe`. Le diagnostic doit rester **strictement hors réseau** : aucune requête HTTP, DNS, clé privée ou tentative de connexion au compte. Il vérifie passivement les chemins Windows, l'authentification locale, SQLite et les fichiers attendus.
+
+Copier **le bloc `PRAVDA-DOCTOR REPORT` complet** dans le ticket, après une relecture de confidentialité. Codes : `PASS` = vérifié; `WARN` = anomalie non nécessairement bloquante; `FAIL` = contrôle en échec; `SKIP` = contrôle non effectué (**jamais un succès**). `adjacent_app_binary` manquant signifie que le diagnostic ne voit pas l'EXE à proximité : comparer les répertoires avant de conclure à un incident de sécurité. Ne pas fournir `pravda_auth.json`, les bases SQLite brutes, des identifiants Revolut X, cookies, mots de passe ou captures d'écran avec informations privées.
+
+### 4. Simulation Rust/Tokio — harnais quantitatif
+
+Après intégration de la [PR #99](https://github.com/suvorovpravda/Pravda-Bot/pull/99), récupérer le binaire `pravda-harness.exe` **du workflow Windows réussi sur le HEAD exact**. Le harnais est une application Rust/Tokio autonome; son exécution ne nécessite **aucun interpréteur Python, Node, script ni runtime externe**. Les scénarios synthétiques déterministes ne prédisent pas le résultat financier réel.
+
+**Air-gap obligatoire pour la recette :** VM dédiée sans adaptateur réseau ou règles OS de refus de toutes les connexions sortantes, y compris DNS, pour le harnais **et ses éventuels descendants**. Contrôler les tentatives de connexion avec l'outillage Windows de la VM; ne pas considérer un simple flag `offline` ou un code source sans `reqwest` comme une preuve d'absence de réseau. Ne jamais installer de clés Revolut X ou de données privées dans cette VM.
+
+Conserver le SHA du binaire, la graine/fixture, le nombre de runs, les versions de schéma et les KPI **financiers et techniques** produits : PnL synthétique, drawdown, frais, ordres rejetés, taux d'échec, mémoire/RSS, durée, succès/échec des seuils. Rejeter les résultats avec NaN, métriques absentes, schema incompatible, erreur de parsing ou run incomplet. Les tests massifs sont bornés en durée et en mémoire par l'OS; une campagne qui dépasse ses ressources doit échouer proprement et ne jamais masquer un `FAIL`.
+
+### 5. Revolut X — lecture seule et ordres hors ligne
+
+Le client privé utilise des requêtes signées Ed25519 côté Rust. **Le GET des soldes n'autorise aucun ordre.** L'aperçu d'ordres et la réconciliation hors ligne sont des modèles; le journal SQLite transactionnel, s'il est présent, est **STOPPED** au démarrage et ne contient pas de fonction publique d'activation du live. Le fait qu'un ordre ait été `Prepared`, `Submitted` dans un test ou qu'un exchange ID ait été simulé n'implique **aucune transaction réelle**.
+
+Pour la future activation du trading réel, les critères [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) imposent un contrat officiel d'API revérifié, des opérations typées à chemin fixe, des permissions sans retrait, une confirmation opérateur séparée, un contrôle de risque indépendant, l'idempotence persistée avant réseau, le kill switch durable, et une réconciliation des états UNKNOWN **avant toute tentative de nouvel envoi**. Les erreurs 401/403, 429, timeout, déconnexion, fill partiel et crash/reboot doivent avoir des tests mock négatifs. Aucun essai réel n'est autorisé par cette documentation.
+
+### 6. MSI/NSIS et signature Authenticode
+
+Le workflow [Windows installer packaging](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml) est **manuel**. Pour un candidat de test non signé, utiliser `signed=false` et conserver explicitement le statut **UNSIGNED TEST PACKAGE ONLY**. Pour une release Enterprise, utiliser `signed=true` **uniquement** après provisioning hors dépôt du certificat et du mot de passe dans l'environnement protégé `windows-signing`. Les clés ne doivent jamais figurer dans une issue, un commit, un commentaire ou un log. Préférer un service de signature HSM/non exportable et des reviewers de l'environnement de déploiement.
+
+Sur une machine Windows propre, vérifier chaque `pravda-app.exe`, `.msi` et NSIS `*-setup.exe` **indépendamment** :
+
+```powershell
+Get-AuthenticodeSignature -FilePath .\pravda-app.exe | Format-List Status,SignerCertificate,TimeStamperCertificate
+Get-FileHash -Algorithm SHA256 -LiteralPath .\pravda-app.exe
+```
+
+Appliquer ces commandes à chaque installateur et comparer les SHA-256 au `SHA256SUMS.txt` livré. Exiger `Status = Valid`, un thumbprint attendu, une chaîne de confiance valide et un timestamp; vérifier installation, désinstallation, premier démarrage, mise à niveau et absence de port UI sur Windows propre. **Un certificat absent, expiré, révoqué ou une signature manquante bloque la publication**; ne pas contourner SmartScreen. La signature du commit GitHub ne signe pas l'EXE.
+
+### 7. Tableau de dépannage
+
+| Symptôme | Cause probable | Contrôle et correction sûrs |
+| --- | --- | --- |
+| `link.exe not found` | MSVC/Windows SDK manquant ou shell incorrect | Installer la charge C++ puis rouvrir Developer PowerShell; reconstruire, ne pas réutiliser l'ancien EXE |
+| `cargo build` échoue sur lockfile | Manifest/lock désynchronisés | Vérifier les deux `Cargo.lock`; ne pas utiliser `--offline` si les crates ne sont pas en cache; ne pas contourner `--locked` dans la recette |
+| `ERR_CONNECTION_REFUSED` sur localhost | Ancienne procédure HTTP ou serveur séparé non lancé | Ouvrir **l'EXE Tauri**; ne pas ajouter un listener HTTP pour faire fonctionner le desktop |
+| `request origin not allowed` | Ancienne page navigateur / origine rejetée | Ne pas assouplir Host/Origin; tester depuis WebView2 embarqué et examiner le rapport E2E |
+| Fenêtre blanche ou se ferme | WebView2 absent, ressource embarquée/IPC défaillant, runtime ou antivirus | Vérifier WebView2, Observateur d'événements, build exact et rapport Doctor; ne pas désactiver les protections OS |
+| Mot de passe rejeté après redémarrage | Chemin `PRAVDA_AUTH_PATH` modifié, profil Windows différent ou données corrompues | Comparer les chemins et le profil, restaurer sauvegarde cohérente; ne pas supprimer `pravda_auth.json` pour contourner l'authentification |
+| SQLite `database is locked` | Plusieurs processus ou WAL occupé | Fermer les processus, patienter selon busy timeout, sauvegarder via API SQLite; ne pas effacer les sidecars à chaud |
+| Aucun cours / état « Indisponible » | Feeds désactivés, déconnexion ou prix périmé | Contrôler `PRAVDA_MARKET_FEEDS_ENABLED`, réseau du **mode normal**, timestamps et erreurs; ne pas convertir une absence en prix zéro |
+| `WARN adjacent_app_binary` | Doctor lancé hors du dossier de l'application | Rassembler les exécutables de la même build et recommencer; ne pas conclure à un défaut d'authentification |
+| Harnais sans KPI ou seuils échoués | Run incomplet, schéma incompatible, échec technique ou financier | Conserver fixture, SHA, logs expurgés et exit code; corriger le défaut avant une nouvelle campagne |
+| Signature `NotSigned` ou `UnknownError` | Candidat non signé, certificat/horodatage non vérifié | Bloquer release Enterprise; provisionner via environnement protégé et refaire une recette complète |
+| CI verte mais fusion bloquée | Signature commit, statut requis ou protection de branche | Inspecter la règle exacte et le HEAD; signer les commits et attendre **tous** les checks sans bypass |
+| Ordre UNKNOWN ou déconnexion exchange | Résultat de requête ambigu | Ne pas retransmettre; garder STOPPED et rapprocher avec l'exchange via lecture seule avant toute action |
+
+### 8. Sauvegarde, restauration, incident
+
+Arrêter le desktop et les processus utilisant la base; sauvegarder **de façon cohérente** via l'API de backup SQLite ou un checkpoint contrôlé. Copier ensemble les données et métadonnées nécessaires, avec ACL utilisateur Windows restrictives, sans placer les secrets dans Git ou dans le support. Vérifier une restauration sur VM isolée, puis démarrer **sans accès au trading live**; un état d'ordre UNKNOWN doit être réconcilié avant toute opération future.
+
+En cas de soupçon de compromission : stopper les nouveaux ordres, révoquer les clés dans l'interface officielle de l'exchange, identifier le SHA de l'EXE et la signature, conserver les journaux expurgés, puis déclarer l'incident via [GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security). Les ordres déjà acceptés peuvent encore être exécutés malgré un kill switch local.
+
+### 9. Critères de réception et suivi des tickets
+
+| Livrable | Preuve exigée | Statut de principe |
+| --- | --- | --- |
+| Desktop | Build Windows du HEAD exact, lancement WebView2, tests IPC négatifs, aucun HTTP UI | Vérifier les artefacts et rapport E2E |
+| Doctor | EXE natif, test hors réseau et rapport expurgé `PASS/WARN/FAIL/SKIP` | PR #98 intégrée, validation sur poste propre restante |
+| Harnais | EXE Rust/Tokio, campagnes déterministes massives, KPI gates, preuve réseau bloqué au niveau OS/VM | PR #99 intégrée, preuve de campagne à conserver |
+| Revolut X | Tests mock lifecycle, journal durable, garde de risque, consentement explicite et recette indépendante | Issue #89 **ouverte**; trading live interdit |
+| Enterprise | Authenticode EXE + MSI + NSIS, SHA-256, horodatage, installation Windows propre | Issue #90 **ouverte**; certificat réel et preuve requis |
+
+Ne fermer un ticket que lorsque ses critères sont vérifiés et liés à un SHA/artefact précis. Une cible de fin novembre n'autorise ni réduction des tests ni déclaration anticipée de conformité.
+
+---
+
 ## 🔁 Politique de mise à jour de la documentation
 
 Pour **chaque PR de migration ou de sécurité** :
