@@ -8,10 +8,8 @@
 #[cfg(windows)]
 use std::{
     fs,
-    net::{SocketAddr, TcpStream, ToSocketAddrs},
     path::Path,
     process::Command,
-    time::Duration,
 };
 use std::{
     fs::OpenOptions,
@@ -78,7 +76,7 @@ fn report_lines(checks: &[Check]) -> String {
         "PRAVDA-DOCTOR REPORT v2\n\
          Copy only this report into your support conversation.\n\
          SAFE MODE: no repairs, authenticated exchange calls, orders or credentials.\n\
-         Public reachability uses DNS/TCP only; no private payloads.\n\
+         OFFLINE: no DNS, TCP, HTTP, remote diagnostics or trading.\n\
          No filesystem paths, account IDs, log text or secrets collected.\n\n",
     );
     for check in checks {
@@ -313,55 +311,6 @@ fn inspect_pravda_process() -> Check {
     }
 }
 
-/// The desktop should use native IPC and need not bind a local HTTP port.
-/// This check observes ONLY a preselected diagnostic port; it does not scan
-/// user ports and cannot prove that no listener exists on any other port.
-#[cfg(windows)]
-fn inspect_local_port() -> Check {
-    let addr = SocketAddr::from(([127, 0, 0, 1], 8765));
-    match TcpStream::connect_timeout(&addr, Duration::from_millis(200)) {
-        Ok(_) => Check::new(
-            "legacy_local_http_port",
-            Status::Warn,
-            "Legacy diagnostic port 8765 has a listener; ownership unknown",
-        ),
-        Err(error) if error.kind() == io::ErrorKind::ConnectionRefused => Check::new(
-            "legacy_local_http_port",
-            Status::Pass,
-            "No listener on checked legacy port 8765",
-        ),
-        Err(_) => Check::new(
-            "legacy_local_http_port",
-            Status::Skip,
-            "Local port availability could not be determined",
-        ),
-    }
-}
-
-/// Public reachability only: DNS + TCP/443. No HTTP body, API key,
-/// authenticated request, trading instruction, or response content.
-#[cfg(windows)]
-fn inspect_public_tcp(host: &'static str, code: &'static str) -> Check {
-    let addresses = match (host, 443).to_socket_addrs() {
-        Ok(addresses) => addresses,
-        Err(_) => return Check::new(code, Status::Warn, "Public endpoint DNS lookup failed"),
-    };
-    for address in addresses.take(4) {
-        if TcpStream::connect_timeout(&address, Duration::from_millis(400)).is_ok() {
-            return Check::new(
-                code,
-                Status::Pass,
-                "Public TCP/443 reachable; API authentication and market data NOT tested",
-            );
-        }
-    }
-    Check::new(
-        code,
-        Status::Warn,
-        "Public TCP/443 unreachable or timed out; DNS/firewall/network may block",
-    )
-}
-
 #[cfg(windows)]
 fn checks() -> Vec<Check> {
     let mut checks = vec![Check::new(
@@ -398,15 +347,12 @@ fn checks() -> Vec<Check> {
     });
     checks.push(inspect_windows_webview2());
     checks.push(inspect_pravda_process());
-    checks.push(inspect_local_port());
-    checks.push(inspect_public_tcp("api.kraken.com", "public_kraken_tcp443"));
-    checks.push(inspect_public_tcp(
-        "api.binance.com",
-        "public_binance_tcp443",
-    ));
-    checks.push(inspect_public_tcp(
-        "revx.revolut.com",
-        "public_revolutx_tcp443",
+    // The diagnostic must be safe to run on an air-gapped production host.
+    // No socket is opened, even to localhost.
+    checks.push(Check::new(
+        "network_probe",
+        Status::Skip,
+        "Air-gapped mode: all outbound and loopback connection tests disabled",
     ));
     checks.push(Check::new(
         "application_gui",
