@@ -5,22 +5,23 @@
 //! The report is intentionally allowlisted: never print raw OS errors, paths,
 //! environment variables, SQLite contents, machine names or process lists.
 
-#[cfg(windows)]
-use std::process::Command;
-#[cfg(windows)]
-use std::net::{SocketAddr, TcpStream};
-#[cfg(windows)]
-use std::time::Duration;
-
-const DOCTOR_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-
 use std::{
-    fs::{self, OpenOptions},
+    fs::OpenOptions,
     io::{self, Write},
+};
+#[cfg(windows)]
+use std::{
+    fs,
+    net::{SocketAddr, TcpStream},
     path::Path,
+    process::Command,
+    time::Duration,
 };
 
+#[cfg(windows)]
+const DOCTOR_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg_attr(not(windows), allow(dead_code))]
 #[derive(Clone, Copy)]
 enum Status {
     Pass,
@@ -56,6 +57,7 @@ impl Check {
     }
 }
 
+#[cfg(windows)]
 fn inspect_file(path: &Path, label: &'static str) -> Check {
     match fs::symlink_metadata(path) {
         Ok(data) if data.is_file() && !data.file_type().is_symlink() => {
@@ -93,6 +95,20 @@ fn report_lines(checks: &[Check]) -> String {
 
 /// Check only that a local file can be opened. Never print contents,
 /// metadata containing identities, file names or raw OS errors.
+#[cfg(windows)]
+fn inspect_optional_file(path: &Path, label: &'static str) -> Check {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.is_file() && !meta.file_type().is_symlink() => {
+            Check::new(label, Status::Pass, "Optional SQLite sidecar detected")
+        }
+        Ok(_) => Check::new(label, Status::Warn, "Optional SQLite sidecar has invalid type"),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            Check::new(label, Status::Skip, "SQLite sidecar absent; normal when database is idle")
+        }
+        Err(_) => Check::new(label, Status::Warn, "SQLite sidecar metadata unreadable"),
+    }
+}
+
 #[cfg(windows)]
 fn inspect_readonly_file(path: &Path, label: &'static str) -> Check {
     match fs::File::open(path) {
@@ -260,8 +276,8 @@ fn checks() -> Vec<Check> {
             let auth = inspect_file(&root.join("pravda_auth.json"), "local_auth_file");
             checks.push(auth);
             checks.push(inspect_readonly_file(&root.join("pravda_auth.json"), "auth_readability"));
-            checks.push(inspect_file(&root.join("pravda.db-wal"), "sqlite_wal_sidecar"));
-            checks.push(inspect_file(&root.join("pravda.db-shm"), "sqlite_shm_sidecar"));
+            checks.push(inspect_optional_file(&root.join("pravda.db-wal"), "sqlite_wal_sidecar"));
+            checks.push(inspect_optional_file(&root.join("pravda.db-shm"), "sqlite_shm_sidecar"));
 
             let db_path = root.join("pravda.db");
             use pravda_store::doctor::{inspect_database, DatabaseHealth};
