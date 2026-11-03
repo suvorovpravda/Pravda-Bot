@@ -37,6 +37,7 @@ if (@(Get-PravdaInstall).Count -ne 0) {
 }
 
 $installedCode = $null
+$testSucceeded = $false
 try {
     $process = Start-Process -FilePath $msiexec -ArgumentList @(
         '/i', ('"' + $msi + '"'), '/qn', '/norestart',
@@ -73,6 +74,7 @@ try {
         throw 'MSI registration exists but its application executable was not found'
     }
     Write-Host 'PASS: silent MSI install, registered product and Windows application binary'
+    $testSucceeded = $true
 }
 finally {
     if (-not $installedCode) {
@@ -91,5 +93,11 @@ finally {
         }
         Write-Host 'PASS: clean MSI uninstall and registry removal'
     }
-    Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+    # Retain verbose MSI log on ANY smoke failure for the CI failure artifact.
+    # The Windows hosted runner has no broker or code-signing secrets.
+    if ($testSucceeded) {
+        Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+    } else {
+        Write-Warning 'MSI smoke failed; retaining verbose log for protected CI artifact'
+    }
 }
