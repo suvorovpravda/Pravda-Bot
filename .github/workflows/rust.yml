@@ -403,7 +403,12 @@ jobs:
             'concurrent: plugin:fs|write_text_file denied with main authenticated',
             'concurrent: plugin:shell|execute denied with main authenticated',
             'main: native WebView2 CSP blocks injected inline script',
-            'main: authenticated again for hostile HTTPS test'
+            'main: authenticated again for hostile HTTPS test',
+            'restart: password setup persisted across native process',
+            'restart: old session revoked after native process exit',
+            'restart: existing password logs in',
+            'restart: market IPC authorized only after login',
+            'restart: SQLite remains accessible'
           )
           foreach ($name in $required) {
             if (@($tests | Where-Object { $_.name -eq $name -and $_.passed -eq $true }).Count -ne 1) {
