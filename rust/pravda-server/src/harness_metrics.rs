@@ -130,16 +130,20 @@ pub fn validate_with_limits(m: &Metrics, limits: &GateLimits) -> Result<(), Buil
         || m.slippage_bps < 0.0
         || m.latency_p50_us > m.latency_p99_us
         || m.wins.checked_add(m.losses).is_none_or(|x| x > m.trades)
-        || i128::from(m.gross_pnl_cents) - i128::from(m.fees_cents)
-            != i128::from(m.net_pnl_cents)
+        || i128::from(m.gross_pnl_cents) - i128::from(m.fees_cents) != i128::from(m.net_pnl_cents)
         || m.max_drawdown_bps > 10_000
         || m.var_99_bps > 10_000
     {
         return Err(BuildError::InvalidMetrics);
     }
-    if ![limits.min_sharpe, limits.min_sortino, limits.min_calmar, limits.max_slippage_bps]
-        .iter()
-        .all(|n| n.is_finite())
+    if ![
+        limits.min_sharpe,
+        limits.min_sortino,
+        limits.min_calmar,
+        limits.max_slippage_bps,
+    ]
+    .iter()
+    .all(|n| n.is_finite())
         || limits.max_slippage_bps < 0.0
         || limits.min_trades == 0
         || limits.max_latency_p99_us == 0
