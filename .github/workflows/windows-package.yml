@@ -151,15 +151,14 @@ jobs:
           PRAVDA_SIGNED: ${{ inputs.signed }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $args = @{
+          $verifyArgs = @{
             ReleaseRoot = 'crates/pravda-app/target/release'
           }
           if ($env:PRAVDA_SIGNED -eq 'true') {
-            $args.RequireSigned = $true
-            $args.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+            $verifyArgs.RequireSigned = $true
+            $verifyArgs.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
           }
-          & ./tools/Verify-Pravda-Installer.ps1 @args
-          if ($LASTEXITCODE -ne 0) { throw 'Independent installer evidence verification failed' }
+          & ./tools/Verify-Pravda-Installer.ps1 @verifyArgs
       - name: Clean up temporary signing config
         if: always()
         shell: pwsh
