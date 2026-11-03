@@ -195,6 +195,21 @@ pub fn prepare_limit_order(
     })
 }
 
+/// Sign an already validated offline preview for cryptographic verification.
+/// No exchange connection is created. Keep signatures and private key material
+/// inside the trusted Rust boundary, never in the webview or diagnostic logs.
+pub fn sign_order_preview(
+    prepared: &PreparedLimitOrder,
+    timestamp: &str,
+    private_pkcs8_pem: &[u8],
+) -> Result<String, super::revolut_x_private::PrivateReadError> {
+    super::revolut_x_private::sign_prepared_limit_order(
+        timestamp,
+        private_pkcs8_pem,
+        &prepared.body,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
