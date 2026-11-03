@@ -17,6 +17,58 @@
 
 ---
 
+## Exigence nouvelle — architecture fintech renforcée (mise à jour 03/11/2026)
+
+**Statut : conception et durcissement en cours.** « Niveau Revolut » est une exigence qualitative de robustesse, **pas** un standard public mesurable, une attestation de conformité Revolut, une certification ISO 27001, SOC 2 ou PCI DSS, ni une homologation réglementaire. L'objectif est une architecture de type opérateur financier : contrôles indépendants, moindre privilège, isolation de données, contrôles pré- et post-trade, et preuves vérifiables. Aucun composant actuel ne doit être présenté comme « sécurisé niveau banque » avant audit externe documenté.
+
+### Frontières de confiance obligatoires
+
+| Frontière | Politique cible | Mise en œuvre actuelle / écart |
+| --- | --- | --- |
+| **Replay/test offline** | VM/OS avec egress **physiquement ou par règle système bloqué**; aucun réseau, clé, ordre ou runtime externe | Harnais Tokio/Serde en PR [#99](https://github.com/suvorovpravda/Pravda-Bot/pull/99), à valider sur le dernier commit; les flags `PRAVDA_OFFLINE_TEST` seuls ne forment pas un air-gap |
+| **Desktop WebView2** | Assets embarqués, CSP ferme, IPC typé autorisé uniquement à `main`, aucune action financière à partir d'un état JS non authentifié | Tauri 2 IPC en place, tests fenêtres concurrentes et origine hostile; revoir chaque nouvelle capability |
+| **Public market data** | Client réseau sortant isolé; inventaire explicite des destinations; validation TLS, quotas, freshness | Collecte publique possible en mode normal; **interdite** dans le replay; déconnexion distincte de cotation périmée |
+| **Read-only account** | Vault natif Windows, secrets inaccessibles au navigateur, authentification signée sans journaliser les signatures | Client privé GET balances existant; validation end-to-end avec l'API actuelle à documenter |
+| **Trading live** | Service Rust distinct, **désactivé à la compilation/configuration par défaut** et à l'exécution; permission d'ordre distincte; confirmation opérateur, contrôle de risque indépendant | **Non livré**. Pas d'endpoint POST/DELETE d'ordre à ce stade; issue [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) ouverte |
+| **Persistance ordre** | SQLite journal transactionnel avec idempotency key, transition monotone, fsync/durabilité, lease de writer, état UNKNOWN après ambiguïté, réconciliation authentifiée | Modélisation hors ligne et journal de garde-fou proposés; état de production encore non prouvé |
+| **Distribution** | Builds reproductibles, SBOM/provenance, contrôles SAST/SCA, MSI/NSIS/PE Authenticode, horodatage et rotation du certificat | Hashes et workflow de contrôle présents; certificat et signature réels **non attestés**, issue [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) |
+| **Observabilité** | Diagnostic à liste blanche, incident IDs non sensibles, journaux bornés et expurgés, rétention documentée | `pravda-doctor.exe` hors réseau et rapport local; ne valide ni connexion live ni authentification interactive |
+
+### Threat model — risques et exigences bloquantes
+
+**Actifs :** clés Ed25519 d'exchange, mots de passe/verifiers, sessions locales, soldes, intentions d'ordres, journal des exécutions, données de marché, installateurs, certificats et pipeline GitHub. **Adversaires :** malware local sous même compte Windows, extension/processus navigateur, composant de dépendance compromis, fournisseur de marché hostile, proxy MITM, compromission CI ou mainteneur, opérateur inattentif, restauration SQLite partielle.
+
+1. **Vol de clés et confusion de privilège.** Un accès à une page ou un IPC WebView ne doit jamais autoriser un ordre. Les clés sont confinées au vault Windows, idéalement TPM/HSM avec clés non exportables et identités séparées. Ne jamais les inclure dans les exports, rapports, erreurs, arguments de processus ou `stdout`. Prévoir rotation, révocation et rupture d'accès. Credential Manager protège le stockage mais n'isole pas contre tout malware du même utilisateur.
+2. **Ordres dupliqués / expositions inattendues.** Réservation persistée **avant** envoi, identifiant unique par ordre, pas de nouvel envoi sur timeout ambigu, statut UNKNOWN, réconciliation lecture seule auprès du broker. L'arrêt d'urgence est durable, testable après crash/reboot et bloque les **nouveaux ordres**; les fills déjà en route restent possibles et doivent être comptabilisés. Contrôles d'exposition, notional, prix, précision, solde, marché périmé et limite journalière dans le service Rust, **jamais seulement dans l'UI**.
+3. **Race conditions/TOCTOU.** Un prix validé au moment de la préparation ne garantit pas un prix identique au placement. Revalider fraîcheur, limites, disponibilité et autorisation au dernier point de décision, sous transaction/verrou. Horodatages monotones pour durée locale, UTC authentifiable pour audit; refus en cas de dérive horloge excessive.
+4. **Contamination des données de simulation.** Aucune connexion ou identifiant live en mode replay. Fixtures locales, provenance/empreintes SHA-256, métriques au schéma Serde strict, bornes et refus des NaN/overflow. Une métrique produite par un exécutable malveillant n'est **pas** prouvée par `deny_unknown_fields` : revue du binaire, signature et isolation OS requises.
+5. **Compromission de distribution.** Sur Windows, appliquer Authenticode **à l'EXE, au MSI et au NSIS** et vérifier signature, thumbprint, chaîne de confiance, timestamp et SHA-256. Un commit GitHub vérifié est distinct d'une signature Authenticode du produit. SmartScreen peut avertir même sur un binaire correctement signé tant que sa réputation n'est pas acquise. Ne jamais désactiver SmartScreen pour réussir une recette.
+6. **Restauration incorrecte et perte de preuve.** Protéger le journal d'ordres et le magasin d'authentification par ACL OS. Sauvegarde SQLite cohérente incluant le WAL via API de backup ou checkpoint contrôlé **après arrêt**. Tester régulièrement un restore sur VM isolée; ne jamais copier uniquement `.db` depuis une base active. Toute restauration des intentions d'ordre exige un état UNKNOWN/STOPPED et une réconciliation préalable.
+7. **Surveillance/abuse.** Durées et volumes bornés pour chaque test; aucune entrée libre n'est utilisée comme commande shell. Les sorties des enfants sont limitées, non exposées par défaut; les erreurs publiques sont des codes invariants. La détection RSS échantillonnée ne remplace pas les limites mémoire kernel / Windows Job Objects pour toute arborescence.
+
+### Plan institutionnel par niveaux de preuve
+
+- **P0 avant installation de préproduction :** CI verte au SHA exact; signature des commits; protection de branche; secrets hors Git; vérification de l'EXE/driver/artefacts; séparation réseau replay et application; tests d'authentification IPC négatifs; aucun ordre réel. Bloquer la livraison sur échec, pas de dérogation silencieuse.
+- **P1 avant l'activation d'un compte réel :** revue indépendante threat model et code; audit ciblé Windows/Tauri/Win32; analyse SCA/SBOM; contrôle de compétence des rôles, approbation distincte, limites de risque approuvées, kill switch et sauvegarde testés; mock broker exhaustif; plan de réponse incident; signature validée sur PC propre. **Nécessite les autorités/permissions et certificats du propriétaire; non réalisable automatiquement depuis un agent GitHub seul.**
+- **P2 pour une exploitation financière réglementée :** gouvernance sécurité (ISO 27001/SOC 2 comme référentiels potentiels, **sans prétendre être certifié**), cartographie données et obligations légales applicables (ex. DORA uniquement si l'entité relève de son champ), gestion fournisseurs, test d'intrusion indépendant, séparation des tâches, revue périodique des accès, résilience et RTO/RPO démontrés, suivi des vulnérabilités et exercices de crise.
+
+### Autorisation de trading et sécurité par défaut
+
+Aucune fonctionnalité privée n'est éligible au trading réel sans un **opt-in opérateur distinct**, consigné sur un backend de confiance, et une confirmation du mode live au moment de l'action. Les rôles *observateur*, *opérateur*, *risk approver* et *release signer* doivent être séparés si déployés en équipe. Le logiciel actuel n'implémente pas cette chaîne de privilèges complète. En cas de configuration absente, panne de vault, horloge incohérente, feed périmé, quota dépassé, ambiguïté d'ordres, token expiré ou divergence de soldes : **FAIL CLOSED**.
+
+Aucun mode dégradé ne doit réactiver un ordre réel, remettre le kill switch à zéro, baisser automatiquement les seuils de risque ou forcer une requête de placement après un timeout. Les opérateurs devront disposer d'une procédure manuelle de consultation des statuts broker avant toute relance.
+
+### Incidents et confidentialité
+
+1. **Contenir :** interrompre immédiatement les nouveaux envois via le kill switch local et désactiver les autorisations exchange par son interface officielle; les ordres déjà ouverts doivent être vérifiés via le broker.
+2. **Préserver :** identifier le SHA-256 du binaire et du manifeste de release, la version du schéma du journal, l'heure UTC, le nombre d'ordres en attente, les codes d'erreur expurgés; pas de clé, mot de passe, token, cookie, adresse personnelle ni export de base brute dans un ticket public.
+3. **Restaurer :** démarrer hors réseau, vérifier SQLite et Authenticode, restaurer une sauvegarde cohérente si nécessaire, ne réactiver aucune fonctionnalité live avant rapprochement intégral des ordres et approbation responsable.
+4. **Reporter :** utiliser de préférence [GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security) pour un signalement privé; joindre uniquement le `PRAVDA-DOCTOR REPORT` expurgé et la synthèse du harnais Rust (jamais de secrets ni de dump de journal).
+
+**Critère de fermeture des tickets :** [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) exige un véritable contrôle d'ordres sécurisé avec preuve d'opt-in; [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) exige un workflow signé, vérifié et conservé en preuve. Aucun CI vert, aucune PR fusionnée et aucune ligne README ne remplacent ces preuves.
+
+---
+
 > [!WARNING]
 > **Ne pas interpréter « CI verte » ou « desktop sans port HTTP » comme une certification.** Les pourcentages ci-dessous représentent des jalons vérifiables et non un niveau général de sécurité garanti. Les [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) ont été fusionnées le **2 novembre 2026**. La PR #67 a passé **8/8 checks**, dont une batterie IPC WebView2 sur Windows réel (**22 assertions** avec rapport JSON). Le test utilise **deux sessions natives successives** : il ne prouve ni deux fenêtres simultanées dans le même processus, ni une origine distante hostile. Le propriétaire maintient le projet seul et a **retiré l'exigence d'une review par un second développeur** ; la PR, les checks et la protection sans bypass restent la politique souhaitée. Une capture du paramétrage a été fournie, mais l'API d'administration reste inaccessible à l'intégration (**403**) ; ne pas présenter une vérification API comme acquise. **Aucun MSI Enterprise signé n'est attesté.**
 
