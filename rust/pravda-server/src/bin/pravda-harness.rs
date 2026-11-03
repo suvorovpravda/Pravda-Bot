@@ -683,6 +683,73 @@ async fn main() {
 mod tests {
     use super::*;
 
+    fn example_manifest(binary: &str, hash: String) -> Manifest {
+        Manifest {
+            schema_version: SCHEMA_VERSION,
+            concurrency: 2,
+            gates: GateLimits::default(),
+            cases: vec![TestCase {
+                id: "case_1".into(),
+                binary: binary.into(),
+                expected_sha256: hash,
+                repetitions: 2,
+                timeout_ms: 3_000,
+                args: vec!["--fixture-ok".into()],
+            }],
+        }
+    }
+
+    #[test]
+    fn rejects_tampering_and_cannot_weaken_financial_gates() {
+        let dir = tempfile::tempdir().unwrap();
+        let binary = if cfg!(windows) { "replay.exe" } else { "replay" };
+        let path = dir.path().join(binary);
+        fs::write(&path, b"known offline binary").unwrap();
+        let hash = hash_file(&path).unwrap();
+        let mut manifest = example_manifest(binary, hash);
+        assert!(check_manifest(&manifest, dir.path()).is_ok());
+        fs::write(&path, b"tampered offline binary").unwrap();
+        assert_eq!(
+            check_manifest(&manifest, dir.path()),
+            Err("binary_sha256_mismatch")
+        );
+        fs::write(&path, b"known offline binary").unwrap();
+        manifest.gates.max_drawdown_bps = GateLimits::default().max_drawdown_bps + 1;
+        assert_eq!(
+            check_manifest(&manifest, dir.path()),
+            Err("invalid_gate_profile")
+        );
+        manifest.gates = GateLimits::default();
+        manifest.cases[0].binary = "../malicious.exe".into();
+        assert_eq!(
+            check_manifest(&manifest, dir.path()),
+            Err("unsafe_binary_name")
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_manifest_fields_and_unbounded_repetitions() {
+        let mut payload = serde_json::json!({
+            "schema_version": 1,
+            "concurrency": 2,
+            "gates": GateLimits::default(),
+            "cases": [{
+                "id": "safe",
+                "binary": "replay.exe",
+                "expected_sha256": "0".repeat(64),
+                "repetitions": 1,
+                "timeout_ms": 1000,
+                "args": []
+            }]
+        });
+        payload["untrusted_command"] = serde_json::json!("ignored?");
+        assert!(serde_json::from_value::<Manifest>(payload).is_err());
+        let mut manifest = example_manifest("replay.exe", "a".repeat(64));
+        manifest.cases[0].repetitions = MAX_TOTAL_RUNS + 1;
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(check_manifest(&manifest, dir.path()), Err("invalid_run_count"));
+    }
+
     #[test]
     fn aggregates_all_types_without_exposing_raw_stderr() {
         let m = sample_metric();
