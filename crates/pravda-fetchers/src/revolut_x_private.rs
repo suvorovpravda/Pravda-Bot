@@ -1,7 +1,7 @@
-//! Authenticated Revolut X **read-only** balances API.
+//! Authenticated Revolut X read-only balances and offline signed order previews.
 //!
-//! The private API uses Ed25519 signatures. This module deliberately has NO
-//! order creation/cancellation functions or arbitrary HTTP method/path input.
+//! Ed25519 signing is local. There is no order creation/cancellation HTTP
+//! transport or arbitrary HTTP method/path input.
 //! API keys and PKCS#8 material are supplied by Rust callers and never logged.
 //! See https://developer.revolut.com/docs/api/revolut-x-crypto-exchange
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -130,9 +130,40 @@ fn parse_ed25519_pem(secret: &[u8]) -> Result<Zeroizing<Vec<u8>>, PrivateReadErr
         .map_err(|_| PrivateReadError::Credentials)
 }
 
-/// The fixed request preimage is timestamp + "GET" + full API path.
-/// Revolut X does not add separators or a body for this request.
+/// Revolut X signing preimage: timestamp + method + fixed path + minified JSON.
+/// No separators and no network transport for order preview signing.
 fn sign_balances(timestamp: &str, key_pem: &[u8]) -> Result<String, PrivateReadError> {
+    sign_fixed_request(timestamp, key_pem, FixedOperation::Balances, "")
+}
+
+enum FixedOperation {
+    Balances,
+    LimitOrder,
+}
+
+/// Sign only a trusted offline order preview; this does not send any order.
+pub(crate) fn sign_prepared_limit_order(
+    timestamp: &str,
+    key_pem: &[u8],
+    validated_json_body: &str,
+) -> Result<String, PrivateReadError> {
+    if validated_json_body.is_empty() || validated_json_body.len() > 4096 {
+        return Err(PrivateReadError::InvalidResponse);
+    }
+    sign_fixed_request(
+        timestamp,
+        key_pem,
+        FixedOperation::LimitOrder,
+        validated_json_body,
+    )
+}
+
+fn sign_fixed_request(
+    timestamp: &str,
+    key_pem: &[u8],
+    operation: FixedOperation,
+    json_body: &str,
+) -> Result<String, PrivateReadError> {
     if timestamp.is_empty() || !timestamp.bytes().all(|b| b.is_ascii_digit()) {
         return Err(PrivateReadError::Clock);
     }
@@ -140,7 +171,10 @@ fn sign_balances(timestamp: &str, key_pem: &[u8]) -> Result<String, PrivateReadE
         let der = parse_ed25519_pem(key_pem)?;
         Ed25519KeyPair::from_pkcs8_maybe_unchecked(&der).map_err(|_| PrivateReadError::Signing)?
     };
-    let msg = format!("{timestamp}GET{BALANCES_PATH}");
+    let msg = match operation {
+        FixedOperation::Balances => format!("{timestamp}GET{BALANCES_PATH}"),
+        FixedOperation::LimitOrder => format!("{timestamp}POST/api/1.0/orders{json_body}"),
+    };
     Ok(STANDARD.encode(pair.sign(msg.as_bytes()).as_ref()))
 }
 
@@ -301,6 +335,24 @@ mod tests {
             .unwrap();
         assert!(UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
             .verify(b"1785313433816POST/api/1.0/orders", &signature)
+            .is_err());
+    }
+
+    #[test]
+    fn signs_offline_limit_order_exact_body_without_sending() {
+        let rng = ring::rand::SystemRandom::new();
+        let der = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        let pair = Ed25519KeyPair::from_pkcs8(der.as_ref()).unwrap();
+        let pem = format!("{PEM_START}\n{}\n{PEM_END}", STANDARD.encode(der.as_ref()));
+        let body = r#"{"client_order_id":"3b364427-1f4f-4f66-9935-86b6fb115d26","symbol":"BTC-USD","side":"BUY","order_configuration":{"limit":{"base_size":"0.01","price":"90000"}}}"#;
+        let sig = sign_prepared_limit_order("1785313433816", pem.as_bytes(), body).unwrap();
+        let sig = STANDARD.decode(sig).unwrap();
+        let msg = format!("1785313433816POST/api/1.0/orders{body}");
+        UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
+            .verify(msg.as_bytes(), &sig)
+            .unwrap();
+        assert!(UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
+            .verify(b"1785313433816GET/api/1.0/balances", &sig)
             .is_err());
     }
 
