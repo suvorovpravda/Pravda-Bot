@@ -154,7 +154,7 @@ fn inspect_pe_header(path: &Path) -> Check {
     }
     let mut header = [0_u8; 2];
     match fs::File::open(path).and_then(|mut file| file.read_exact(&mut header)) {
-        Ok(()) if header == [b'M', b'Z'] => Check::new(
+        Ok(()) if header == *b"MZ" => Check::new(
             "adjacent_app_binary",
             Status::Pass,
             "Windows executable header detected",
