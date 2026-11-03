@@ -584,6 +584,7 @@ fn prepare_manifest(
     binary: &str,
     repetitions: u32,
     output: &Path,
+    child_args: &[String],
 ) -> Result<(), &'static str> {
     let root = fs::canonicalize(bin_dir).map_err(|_| "binary_directory_unavailable")?;
     let name = Path::new(binary);
@@ -606,7 +607,7 @@ fn prepare_manifest(
             expected_sha256: hash,
             repetitions,
             timeout_ms: 30_000,
-            args: Vec::new(),
+            args: child_args.to_vec(),
         }],
     };
     let _ = check_manifest(&manifest, &root)?;
@@ -630,7 +631,7 @@ async fn main() {
     }
     let result = if args.len() == 1 && args[0] == "--smoke" {
         smoke().await
-    } else if args.len() == 5 && args[0] == "prepare" {
+    } else if args.len() >= 5 && args[0] == "prepare" {
         match args[3].parse::<u32>() {
             Ok(repetitions) => {
                 let created = prepare_manifest(
@@ -638,6 +639,7 @@ async fn main() {
                     &args[2],
                     repetitions,
                     Path::new(&args[4]),
+                    &args[5..],
                 );
                 if created.is_ok() {
                     println!("MANIFEST_READY");
@@ -669,7 +671,7 @@ async fn main() {
             Err(e) => Err(e),
         }
     } else {
-        Err("usage: pravda-harness prepare <bin_dir> <exe> <N> <manifest.json> | run <manifest.json> <bin_dir> | --smoke")
+        Err("usage: pravda-harness prepare <bin_dir> <exe> <N> <manifest.json> [child_args...] | run <manifest.json> <bin_dir> | --smoke")
     };
     if let Err(reason) = result {
         eprintln!("HARNESS_ERROR:{reason}");
