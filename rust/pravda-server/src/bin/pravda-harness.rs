@@ -8,7 +8,8 @@
 mod harness_metrics;
 
 use harness_metrics::{
-    validate_with_limits, Aggregate, GateLimits, Metrics, ReasonCount, Summary, SCHEMA_VERSION,
+    validate_build, validate_with_limits, Aggregate, GateLimits, Metrics, ReasonCount, Summary,
+    SCHEMA_VERSION,
 };
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -51,6 +52,7 @@ struct Manifest {
     cases: Vec<TestCase>,
 }
 
+#[derive(Clone, Copy)]
 enum ResultKind {
     Pass,
     Rejected,
@@ -118,9 +120,28 @@ fn check_manifest(manifest: &Manifest, bin_dir: &Path) -> Result<Vec<PathBuf>, &
     if total.is_none_or(|n| n == 0 || n > MAX_TOTAL_RUNS) {
         return Err("invalid_run_count");
     }
-    if manifest.gates.min_trades == 0
+    // Hard-coded desk envelope is a safety FLOOR. A manifest may tighten
+    // requirements but cannot dilute the mandatory production gate.
+    let hard = GateLimits::default();
+    if manifest.gates.min_trades < hard.min_trades
+        || manifest.gates.min_net_pnl_cents < hard.min_net_pnl_cents
+        || manifest.gates.min_sharpe < hard.min_sharpe
+        || manifest.gates.min_sortino < hard.min_sortino
+        || manifest.gates.min_calmar < hard.min_calmar
+        || manifest.gates.max_drawdown_bps > hard.max_drawdown_bps
+        || manifest.gates.max_var_99_bps > hard.max_var_99_bps
+        || manifest.gates.max_slippage_bps > hard.max_slippage_bps
+        || manifest.gates.max_latency_p99_us > hard.max_latency_p99_us
+        || ![
+            manifest.gates.min_sharpe,
+            manifest.gates.min_sortino,
+            manifest.gates.min_calmar,
+            manifest.gates.max_slippage_bps,
+        ]
+        .iter()
+        .all(|n| n.is_finite())
+        || manifest.gates.min_trades == 0
         || manifest.gates.max_latency_p99_us == 0
-        || !manifest.gates.max_slippage_bps.is_finite()
         || manifest.gates.max_slippage_bps < 0.0
     {
         return Err("invalid_gate_profile");
@@ -222,11 +243,19 @@ fn run_one(case: &TestCase, path: &Path, index: u32, limits: GateLimits) -> Resu
     };
     let stdout = match child.stdout.take() {
         Some(out) => drain_pipe(out, MAX_STDOUT_BYTES + 1),
-        None => return ResultRow::invalid("stdout_unavailable"),
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return ResultRow::invalid("stdout_unavailable");
+        }
     };
     let stderr = match child.stderr.take() {
         Some(err) => drain_pipe(err, MAX_STDERR_BYTES + 1),
-        None => return ResultRow::invalid("stderr_unavailable"),
+        None => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return ResultRow::invalid("stderr_unavailable");
+        }
     };
 
     let started = Instant::now();
@@ -274,7 +303,7 @@ fn run_one(case: &TestCase, path: &Path, index: u32, limits: GateLimits) -> Resu
             if metric.run_id != run_id {
                 return ResultRow::invalid("metric_run_identity_mismatch");
             }
-            match validate_with_limits(&metric, &limits) {
+            match validate_build(&metric).and_then(|()| validate_with_limits(&metric, &limits)) {
                 Ok(()) => ResultRow {
                     kind: ResultKind::Pass,
                     reason: "accepted",
