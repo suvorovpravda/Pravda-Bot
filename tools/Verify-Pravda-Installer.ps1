@@ -32,7 +32,7 @@ if ($lines.Count -lt 3) {
 }
 $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $kinds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-$pattern = '^([0-9a-f]{64})  (pravda-app\.exe|pravda-doctor\.exe|pravda-harness\.exe|bundle/msi/[^/\\]+\.msi|bundle/nsis/[^/\\]+-setup\.exe)
+$pattern = '^([0-9a-f]{64})  (pravda-app\.exe|pravda-doctor\.exe|pravda-harness\.exe|bundle/msi/[^/\\]+\.msi|bundle/nsis/[^/\\]+-setup\.exe)$'
 foreach ($line in $lines) {
     if ($line -cnotmatch $pattern) {
         throw 'Malformed or unsafe checksum manifest entry'
