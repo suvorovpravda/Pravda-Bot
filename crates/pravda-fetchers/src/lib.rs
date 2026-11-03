@@ -3,6 +3,7 @@ pub mod energy;
 pub mod kraken;
 pub mod public_feeds;
 pub mod revolut_x;
+pub mod revolut_x_orders;
 pub mod revolut_x_private;
 pub mod types;
 
