@@ -24,24 +24,24 @@
 ## Français
 
 > [!IMPORTANT]
-> **État après les fusions des [PR #72](https://github.com/suvorovpravda/Pravda-Bot/pull/72) et [#75](https://github.com/suvorovpravda/Pravda-Bot/pull/75), ainsi que des [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) et [#67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) (2 novembre 2026).** Desktop Windows Tauri 2 avec assets embarqués et **IPC natif sans serveur HTTP pour son UI**, plus serveur Axum de diagnostic séparé. La PR #67 a confirmé **8/8 checks verts et 22 assertions de sécurité IPC sous Windows WebView2 réel**. Ces vérifications portent sur **deux sessions natives successives**, pas sur deux fenêtres simultanées du même processus ni sur une origine distante. **Aucun MSI Enterprise signé n'est livré.**
+> La [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) a été **fusionnée dans `main`** au commit [`b2a6fc3`](https://github.com/suvorovpravda/Pravda-Bot/commit/b2a6fc399213e07504f8949ec4664bf0d3c5840d). La [CI Rust de ce commit](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41557110751) a réussi, notamment les contrôles Windows et WebView2 ; ces résultats ne valent que pour ce commit. Aucun MSI signé ni ordre réel n'est livré.
 
-### 🔄 Intégration en cours — PR unique #88
+### 🔄 Intégration — PR #88 fusionnée
 
 Le code **déjà fusionné sur `main`** est en Rust + Tauri 2 pour le desktop Windows, avec fichiers de frontend embarqués, IPC natif à permissions limitées, authentification locale et historique SQLite. Le serveur Axum reste un **mode diagnostic distinct**, et la simulation n'émet **aucun ordre de trading réel**. La migration de frontière Python/Rust (#72), l'abstraction de coffre Windows (#75) et la mise à niveau des GitHub Actions (#83) sont intégrées.
 
-Les évolutions des six anciennes PR **#71, #77, #82, #84, #85 et #86** sont maintenant regroupées dans **[la seule PR ouverte #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88)**. Les PR sources ont été **fermées sans fusion**, pas perdues. Cette PR contient :
+Les évolutions des six anciennes PR **#71, #77, #82, #84, #85 et #86** ont été regroupées dans **[la PR #88 fusionnée](https://github.com/suvorovpravda/Pravda-Bot/pull/88)**. Les PR sources ont été fermées sans fusion directe. La PR #88 contient :
 
 - **Sécurité WebView2 :** vérifications natives de fenêtres concurrentes, refus IPC pour une fenêtre non privilégiée, politique CSP et navigation depuis une origine HTTPS hostile.
 - **Coffre de secrets :** tests Rust/Win32 de rotation et suppression, refus d'accès depuis l'UI et audit par signatures de l'historique Git complet. Un scan de signatures ne prouve pas qu'aucun secret ne puisse exister.
 - **Migrations Rust :** PBKDF2 0.13 + SHA2 0.11 avec vecteur de compatibilité des mots de passe précédents, `getrandom` 0.4, `rusqlite` 0.41, `thiserror` 2 et les **deux fichiers `Cargo.lock`**.
 - **CI Windows :** tests natifs WebView2, analyse CodeQL, audit des secrets, exécutable `pravda-app.exe` compilé en release avec `--locked`, vérification PE/SHA-256 et démarrage isolé sans serveur HTTP, et annulation des anciens runs d'une même PR.
 
-**Preuve datée :** au commit [`a7f822e`](https://github.com/suvorovpravda/Pravda-Bot/commit/a7f822ee56773e7c4870a1765d72881ecf268fd4), **10 contrôles de #88 étaient réussis**. Les ajouts de documentation modifient le SHA : leur [nouvelle validation](https://github.com/suvorovpravda/Pravda-Bot/pull/88/checks) et les contrôles sur `main` après fusion doivent être vérifiés indépendamment. **Aucun MSI signé ni certification de sécurité** ne résulte de ces tests.
+**Preuve datée :** les contrôles de #88 et la CI Rust de `main` à `b2a6fc3` ont réussi. Les commits ultérieurs nécessitent leur propre validation. **Aucun MSI signé ni certification de sécurité** ne résulte de ces tests.
 
 ### 📈 Avancement par priorité
 
-**Référence des jalons : `main` au 2 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées ; les travaux de #88 ne sont pas comptés comme livrés par la seule réussite de CI. La séparation Python/Rust est **fusionnée** et son contrôle de frontière a réussi sur `main` (`6b1b916`) ; cela ne prouve pas la parité de toutes les anciennes fonctions. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
+**Référence des jalons : `main` au 3 novembre 2026.** Les pourcentages indiquent la **part des jalons identifiés**, pas des lignes de code migrées ; ils restent prudents en attendant une réévaluation des critères. La séparation Python/Rust est fusionnée ; cela ne prouve pas la parité de toutes les anciennes fonctions. Les critères et preuves sont expliqués dans le **[guide central unique](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)**.
 
 | Priorité | Chantier | Jalons validés ou préparés | Avancement |
 |---|---|---:|---:|
@@ -66,8 +66,8 @@ Les évolutions des six anciennes PR **#71, #77, #82, #84, #85 et #86** sont mai
 
 Pravda-Bot observe des cours **publics** Kraken/Binance, évalue leur fraîcheur et des écarts avec garde-fous, conserve un historique local et permet d'explorer une **simulation papier**.
 
-- **Aucun ordre réel**, retrait, transaction bancaire, gestion de compte exchange ou connexion à un portefeuille.
-- **Revolut X** : adaptateur public issu de [#73](https://github.com/suvorovpravda/Pravda-Bot/pull/73) branché à une **page de lecture seule dans #88**, sans clé, solde privé ni ordre réel.
+- **Aucun ordre réel**, retrait ou transaction bancaire.
+- **Revolut X** : carnet public dans l'interface ; consultation privée du solde proposée séparément en console Windows, sans accès aux clés depuis la WebView ni ordre réel. L'accès à un vrai compte reste à vérifier par son propriétaire.
 - La simulation papier est **en mémoire** : ses résultats ne sont pas un portefeuille réellement exécuté, ni une garantie de profit.
 - Les cotations live nécessitent Internet et dépendent de la disponibilité des sources. Désactiver les flux n'invente pas des prix.
 - Les anciens composants Python sont conservés à titre de **référence** sous `archive/python-legacy/` ; le chemin de production Rust ne les exécute pas.
@@ -115,13 +115,13 @@ flowchart LR
   AXUM["Axum diagnostic séparé<br/>127.0.0.1:8080"]:::net -.-> ENGINE
 ```
 
-**Ce qui est proposé dans [#88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) :** pages modernes, connecteurs publics sans clés, carnet Revolut X public, **client privé de consultation des soldes signé Ed25519 en Rust uniquement**, mesures CPU/RAM et génération de candidats MSI/NSIS avec **signature Authenticode manuelle optionnelle**. La disponibilité effective des sources reste conditionnée à leurs réponses et à la réussite des tests de la branche. Les blocs AIS et TTF prix ne sont **pas** des flux actifs ; le coffre Windows n'autorise aucun ordre réel.
+**Ce qui est intégré par [#88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) :** pages, connecteurs publics, carnet Revolut X public, **client privé de consultation des soldes signé Ed25519 en Rust**, et configuration d'un workflow MSI/NSIS avec **signature Authenticode manuelle optionnelle**. Les blocs AIS et TTF prix ne sont **pas** des flux actifs ; le coffre Windows n'autorise aucun ordre réel.
 
 [Architecture et contrats](docs/PRAVDA-GUIDE.md) · [Modèle de menace](SECURITY.md).
 
 ### 🪟 Démarrage rapide — Windows
 
-**Prérequis :** Windows x64 et WebView2, [Rust/Cargo](https://rustup.rs/) (outillage Windows MSVC), prérequis C++ requis par Tauri 2 et accès aux dépendances Cargo. L'application se **compile depuis les sources** ; `bundle.active=true` et cibles NSIS/MSI sont proposés dans #88, mais aucun installateur signé ni installation propre validée n'est encore livré.
+**Prérequis :** Windows x64 et WebView2, [Rust/Cargo](https://rustup.rs/) (outillage Windows MSVC), prérequis C++ requis par Tauri 2 et accès aux dépendances Cargo. L'application se **compile depuis les sources** ; les cibles NSIS/MSI sont configurées, mais aucun installateur signé ni installation propre validée n'est encore attesté.
 
 ```powershell
 git clone https://github.com/suvorovpravda/Pravda-Bot.git
@@ -135,6 +135,8 @@ cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml
 ```
 
 **Premier lancement :** création d'un mot de passe local d'au moins **15 caractères** → dashboard. Les lancements suivants demandent le mot de passe existant. Déconnexion et reconnexion restent dans la fenêtre native.
+
+**Revolut X en lecture seule (Windows, console) :** une fois le mot de passe de l'application créé, lancer `pravda-app.exe --revolut-x-setup` suivi du chemin du fichier PEM Ed25519 privé. Le mot de passe local puis la clé API sont demandés sans écho à l'écran ; ne les transmettez pas dans une commande, une capture ou un message. La paire est conservée dans le Gestionnaire d'identifiants Windows ; le fichier PEM d'origine reste sur votre disque et doit être protégé. `pravda-app.exe --revolut-x-balances` demande le mot de passe local et affiche les soldes dans la console. Pour éviter qu'un appelant sélectionne un autre fichier d'authentification, ces commandes utilisent uniquement le profil Windows local par défaut, pas `PRAVDA_AUTH_PATH`. Elles ne créent pas d'ordre. Elles nécessitent une clé Revolut X autorisée en lecture et n'ont pas été validées sur un compte réel. Les sorties de console peuvent contenir des données financières privées.
 
 **Données Windows par défaut :**
 
@@ -194,7 +196,7 @@ Puis ouvrir [http://127.0.0.1:8080](http://127.0.0.1:8080). Arrêt par `Ctrl+C`.
 | Alertes d'événements du simulateur papier | ✅ | Consultation ; pas de création/suppression d'alertes personnalisées |
 | Métriques runtime | 🔧 | Dans #88 : CPU échantillonné, RAM résidente Windows/Linux, uptime et PID ; absence de mesures signalée explicitement |
 | Forex, énergie, géopolitique, actualités, AIS | 🔧 | Dans #88 : BCE/Frankfurter, GDELT et ENTSOG en HTTPS sans clé ; AIS non branché (droit fournisseur requis), TTF prix live non disponible |
-| Revolut X public / solde privé / ordres réels | 🟡 | Carnet public disponible en #88 ; **client Rust signé Ed25519 de consultation des soldes** et pont vers le coffre Windows préparés dans #88. Aucune exposition des secrets à la WebView ; pas de parcours de provisionnement utilisateur final ni de méthode d'envoi d'ordre : **trading réel désactivé** jusqu'à recette et confirmation explicite. |
+| Revolut X public / solde privé / ordres réels | 🟡 | Carnet public disponible ; consultation privée des soldes en console Windows avec identifiants dans le coffre, à valider sur un compte réel. Aucune exposition des secrets à la WebView ; aucune méthode d'envoi d'ordre : **trading réel désactivé**. |
 | Installateurs NSIS/MSI et signature Authenticode | 🟡 | Bundle Tauri 2 et workflow manuel de candidats NSIS/MSI dans #88 ; **mode signature Authenticode activable** avec certificat Windows du mainteneur, horodatage et vérification bloquante de l'EXE/MSI/NSIS. Aucun certificat fourni, aucune release signée publiée, validation installateur/rollback encore requise. |
 
 > [!NOTE]
@@ -261,7 +263,7 @@ node tools/test-desktop-ipc.mjs
 
 **CI GitHub :** Rust Linux/Windows, MSRV 1.95, smoke Windows desktop sans listener, serveur navigateur et CodeQL. **La PR #88 ajoute** audit complet d'historique Git, tests WebView2 multi-fenêtres et origine hostile, compilation Windows release et contrôle des deux workspaces avec `--locked`. Le badge est dynamique : un commit fusionné demande une **nouvelle vérification des jobs de `main`**, pas seulement des checks verts sur la PR.
 
-**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis, dont refus `UNAUTHORIZED` sans session/après logout, refus des IPC depuis `security-probe` et blocage shell/fs avec absence d'écriture. **Limites de la preuve historique #67 :** origine distante et deux fenêtres simultanées ; des tests complémentaires ont réussi sur le commit `a7f822e` de #88, mais doivent encore être réexécutés après modification et vérifiés sur `main` après fusion. Export CSV réel, reprise historique complexe et distribution signée restent hors preuve.
+**Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis. Les tests complémentaires de fenêtres simultanées et d'origine hostile de #88 ont été validés sur `main` au commit `b2a6fc3` ; tout changement ultérieur doit être testé à son tour. Export CSV réel, reprise historique complexe et distribution signée restent hors preuve.
 
 ### 🚀 Réduction du délai de livraison : objectif client –50 %
 
@@ -301,7 +303,7 @@ Le **[guide technique central](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)*
 
 **Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. При первом запуске требуется пароль от 15 символов; данные по умолчанию находятся в `%LOCALAPPDATA%\Pravda-Bot`. Для отключения биржевых потоков установите `PRAVDA_MARKET_FEEDS_ENABLED=false`. Firefox/Chrome не нужны для Tauri, но WebView2 необходим.
 
-**Интеграция:** [единый PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) объединяет тесты безопасности Windows, миграцию зависимостей Rust и release-CI. Перед выпуском требуется проверка нового коммита и слияния в `main`. **Ограничения:** FX, энергетика, новости и AIS реализованы не полностью. Готового подписанного Enterprise MSI нет; зелёная CI не подтверждает безопасность выпуска. Полные инструкции и проценты выполнения находятся в [едином руководстве](docs/PRAVDA-GUIDE.md), а политика безопасности — в [SECURITY.md](SECURITY.md).
+**Интеграция:** [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) объединён с `main`; CI коммита `b2a6fc3` прошла. Проверки следующих изменений выполняются отдельно. **Ограничения:** реальных ордеров и подписанного MSI нет; зелёная CI не является сертификатом безопасности. См. [руководство](docs/PRAVDA-GUIDE.md) и [SECURITY.md](SECURITY.md).
 
 ## English
 
@@ -309,4 +311,4 @@ Le **[guide technique central](docs/PRAVDA-GUIDE.md#-tableau-de-bord-priorisé)*
 
 **Build/run on Windows:** `cargo run --release --locked --manifest-path .\crates\pravda-app\Cargo.toml`. Create a local password of at least 15 characters on first run. Default data storage: `%LOCALAPPDATA%\Pravda-Bot`. To disable feeds for testing, set `PRAVDA_MARKET_FEEDS_ENABLED=false`.
 
-**Integration in progress:** [single PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) combines extended Windows security checks, coordinated Rust dependency upgrades and Windows release CI; each new commit needs fresh checks before merging into `main`. **Current work in PR #88:** keyless public ECB/Frankfurter FX, GDELT news, ENTSOG sampling, process CPU/RAM, local alerts, public Revolut X order book and unsigned Windows installers. AIS live and signed account orders still require authorized providers and credentials. **Other limitations:** live TTF market prices and remote alerts are not implemented. No signed Enterprise MSI has been delivered. CI and manual Windows acceptance are meaningful evidence, **not a security certification**. See the [single technical guide with progress percentages](docs/PRAVDA-GUIDE.md), [SECURITY.md](SECURITY.md) and the [roadmap](#-feuille-de-route).
+**Integration:** [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) is merged into `main`, and CI passed on `b2a6fc3`. Subsequent commits require their own checks. Public Revolut X data and a private read-only balance client are present; a live account connection has not been verified. No real orders or signed Enterprise MSI have been delivered. CI is **not a security certification**. See the [technical guide](docs/PRAVDA-GUIDE.md) and [SECURITY.md](SECURITY.md).

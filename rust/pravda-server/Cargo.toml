@@ -24,3 +24,12 @@ sha2 = "0.11"
 getrandom = "0.4"
 subtle = "2"
 thiserror = "2"
+
+[target.'cfg(windows)'.dependencies]
+rpassword = "7"
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Com", "Win32_UI_Shell"] }
+zeroize = "1.9"
+
+[dev-dependencies]
+base64 = "0.22"
+ring = "0.17"
