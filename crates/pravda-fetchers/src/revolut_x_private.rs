@@ -128,6 +128,33 @@ fn parse_ed25519_pem(secret: &[u8]) -> Result<Vec<u8>, PrivateReadError> {
 /// The fixed request preimage is timestamp + "GET" + full API path.
 /// Revolut X does not add separators or a body for this request.
 fn sign_balances(timestamp: &str, key_pem: &[u8]) -> Result<String, PrivateReadError> {
+    sign_fixed_request(timestamp, key_pem, FixedOperation::Balances, "")
+}
+
+/// The only authenticated operations eligible for cryptographic signing.
+/// Merely signing a request does not send it or enable trading.
+enum FixedOperation {
+    Balances,
+    LimitOrder,
+}
+
+pub(crate) fn sign_prepared_limit_order(
+    timestamp: &str,
+    key_pem: &[u8],
+    validated_json_body: &str,
+) -> Result<String, PrivateReadError> {
+    if validated_json_body.is_empty() || validated_json_body.len() > 4096 {
+        return Err(PrivateReadError::InvalidResponse);
+    }
+    sign_fixed_request(timestamp, key_pem, FixedOperation::LimitOrder, validated_json_body)
+}
+
+fn sign_fixed_request(
+    timestamp: &str,
+    key_pem: &[u8],
+    operation: FixedOperation,
+    json_body: &str,
+) -> Result<String, PrivateReadError> {
     if timestamp.is_empty() || !timestamp.bytes().all(|b| b.is_ascii_digit()) {
         return Err(PrivateReadError::Clock);
     }
@@ -140,7 +167,10 @@ fn sign_balances(timestamp: &str, key_pem: &[u8]) -> Result<String, PrivateReadE
         unsafe { std::ptr::write_volatile(b, 0) };
     }
     let pair = pair?;
-    let msg = format!("{timestamp}GET{BALANCES_PATH}");
+    let msg = match operation {
+        FixedOperation::Balances => format!("{timestamp}GET{BALANCES_PATH}"),
+        FixedOperation::LimitOrder => format!("{timestamp}POST/api/1.0/orders{json_body}"),
+    };
     Ok(STANDARD.encode(pair.sign(msg.as_bytes()).as_ref()))
 }
 
@@ -239,6 +269,24 @@ mod tests {
             .unwrap();
         assert!(UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
             .verify(b"1785313433816POST/api/1.0/orders", &signature)
+            .is_err());
+    }
+
+    #[test]
+    fn signs_offline_limit_order_exact_body_without_sending() {
+        let rng = ring::rand::SystemRandom::new();
+        let der = Ed25519KeyPair::generate_pkcs8(&rng).unwrap();
+        let pair = Ed25519KeyPair::from_pkcs8(der.as_ref()).unwrap();
+        let pem = format!("{PEM_START}\n{}\n{PEM_END}", STANDARD.encode(der.as_ref()));
+        let body = r#"{"client_order_id":"3b364427-1f4f-4f66-9935-86b6fb115d26","symbol":"BTC-USD","side":"BUY","order_configuration":{"limit":{"base_size":"0.01","price":"90000"}}}"#;
+        let sig = sign_prepared_limit_order("1785313433816", pem.as_bytes(), body).unwrap();
+        let sig = STANDARD.decode(sig).unwrap();
+        let msg = format!("1785313433816POST/api/1.0/orders{body}");
+        UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
+            .verify(msg.as_bytes(), &sig)
+            .unwrap();
+        assert!(UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
+            .verify(b"1785313433816GET/api/1.0/balances", &sig)
             .is_err());
     }
 
