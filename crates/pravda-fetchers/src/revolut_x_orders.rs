@@ -63,7 +63,10 @@ pub enum OrderIntentError {
 /// Floating-point numbers, exponent notation, signs and leading/trailing dots
 /// are rejected so notional computations remain deterministic.
 fn positive_units(value: &str) -> Option<u128> {
-    if value.is_empty() || value.len() > MAX_DECIMAL_CHARS || !value.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
+    if value.is_empty()
+        || value.len() > MAX_DECIMAL_CHARS
+        || !value.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+    {
         return None;
     }
     let mut parts = value.split('.');
@@ -124,8 +127,7 @@ pub fn validate_limit_order(
     }
     let size = positive_units(&intent.base_size).ok_or(OrderIntentError::InvalidDecimal)?;
     let price = positive_units(&intent.price).ok_or(OrderIntentError::InvalidDecimal)?;
-    let reference =
-        positive_units(limits.reference_price).ok_or(OrderIntentError::RiskLimit)?;
+    let reference = positive_units(limits.reference_price).ok_or(OrderIntentError::RiskLimit)?;
     if limits.max_price_deviation_bps == 0 || limits.max_price_deviation_bps > 10_000 {
         return Err(OrderIntentError::RiskLimit);
     }
@@ -170,8 +172,7 @@ pub fn prepare_limit_order(
     now_ms: u64,
     live_trading_enabled: bool,
 ) -> Result<PreparedLimitOrder, OrderIntentError> {
-    let quote_notional_units =
-        validate_limit_order(intent, limits, now_ms, live_trading_enabled)?;
+    let quote_notional_units = validate_limit_order(intent, limits, now_ms, live_trading_enabled)?;
     let side = match intent.side {
         Side::Buy => "BUY",
         Side::Sell => "SELL",
@@ -218,13 +219,30 @@ mod tests {
     }
     #[test]
     fn disabled_by_default_even_for_valid_orders() {
-        assert_eq!(validate_limit_order(&order(), limits(), 1_000_000, false), Err(OrderIntentError::TradingDisabled));
+        assert_eq!(
+            validate_limit_order(&order(), limits(), 1_000_000, false),
+            Err(OrderIntentError::TradingDisabled)
+        );
     }
     #[test]
     fn validates_fixed_point_notional_without_float_rounding() {
-        assert_eq!(validate_limit_order(&order(), limits(), 1_000_000, true), Ok(900 * SCALE));
+        assert_eq!(
+            validate_limit_order(&order(), limits(), 1_000_000, true),
+            Ok(900 * SCALE)
+        );
         assert_eq!(positive_units("0.00000001"), Some(1));
-        for s in ["-1", "1e10", "NaN", ".1", "1.", "1.2.3", "0", "0.000000001", "1,5", ""] {
+        for s in [
+            "-1",
+            "1e10",
+            "NaN",
+            ".1",
+            "1.",
+            "1.2.3",
+            "0",
+            "0.000000001",
+            "1,5",
+            "",
+        ] {
             assert_eq!(positive_units(s), None, "{s}");
         }
         assert_eq!(positive_units("99999999999999999999999999999999"), None);
@@ -233,31 +251,61 @@ mod tests {
     fn rejects_bad_ids_symbols_age_and_risk_limits() {
         let mut o = order();
         o.client_order_id = "not-an-id".into();
-        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Err(OrderIntentError::InvalidOrderId));
+        assert_eq!(
+            validate_limit_order(&o, limits(), 1_000_000, true),
+            Err(OrderIntentError::InvalidOrderId)
+        );
         o = order();
         o.symbol = "BTC-EUR".into();
-        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Err(OrderIntentError::InstrumentNotAllowed));
-        assert_eq!(validate_limit_order(&order(), limits(), 1_002_000, true), Err(OrderIntentError::StaleMarket));
-        assert_eq!(validate_limit_order(&order(), limits(), 998_999, true), Err(OrderIntentError::StaleMarket));
+        assert_eq!(
+            validate_limit_order(&o, limits(), 1_000_000, true),
+            Err(OrderIntentError::InstrumentNotAllowed)
+        );
+        assert_eq!(
+            validate_limit_order(&order(), limits(), 1_002_000, true),
+            Err(OrderIntentError::StaleMarket)
+        );
+        assert_eq!(
+            validate_limit_order(&order(), limits(), 998_999, true),
+            Err(OrderIntentError::StaleMarket)
+        );
         let mut l = limits();
         l.max_order_quote_units = 899 * SCALE;
-        assert_eq!(validate_limit_order(&order(), l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        assert_eq!(
+            validate_limit_order(&order(), l, 1_000_000, true),
+            Err(OrderIntentError::RiskLimit)
+        );
         l = limits();
         l.remaining_daily_quote_units = 899 * SCALE;
-        assert_eq!(validate_limit_order(&order(), l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        assert_eq!(
+            validate_limit_order(&order(), l, 1_000_000, true),
+            Err(OrderIntentError::RiskLimit)
+        );
     }
     #[test]
     fn price_collar_rejects_large_deviation_on_both_sides() {
         let mut o = order();
         o.price = "91800".into();
-        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        assert_eq!(
+            validate_limit_order(&o, limits(), 1_000_000, true),
+            Err(OrderIntentError::RiskLimit)
+        );
         o.price = "88200".into();
-        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        assert_eq!(
+            validate_limit_order(&o, limits(), 1_000_000, true),
+            Err(OrderIntentError::RiskLimit)
+        );
         o.price = "90001".into();
-        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Ok(900_01000000));
+        assert_eq!(
+            validate_limit_order(&o, limits(), 1_000_000, true),
+            Ok(900_01000000)
+        );
         let mut l = limits();
         l.max_price_deviation_bps = 0;
-        assert_eq!(validate_limit_order(&order(), l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        assert_eq!(
+            validate_limit_order(&order(), l, 1_000_000, true),
+            Err(OrderIntentError::RiskLimit)
+        );
     }
 
     #[test]
@@ -284,8 +332,14 @@ mod tests {
         let mut l = limits();
         l.max_order_quote_units = 1;
         l.reference_price = "0.00000001";
-        assert_eq!(validate_limit_order(&o, l, 1_000_000, true), Ok(1));
+        assert_eq!(
+            validate_limit_order(&o, l, 1_000_000, true),
+            Ok(1)
+        );
         l.max_order_quote_units = 0;
-        assert_eq!(validate_limit_order(&o, l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        assert_eq!(
+            validate_limit_order(&o, l, 1_000_000, true),
+            Err(OrderIntentError::RiskLimit)
+        );
     }
 }
