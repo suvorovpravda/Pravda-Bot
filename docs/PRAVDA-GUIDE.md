@@ -16,7 +16,15 @@
 ---
 
 > [!IMPORTANT]
-> **Document de référence consolidé au 2 novembre 2026**, fondé sur le dépôt `main@93f2775311ecf26bda0857ffc3523fb7f6318154` et la branche de préparation `migration/rust-production-boundary-20261102`. **Cette page n'est pas une attestation de release**. Les travaux non fusionnés sont signalés comme tels. Les anciens guides éliminés de l'arborescence restent consultables via l'[historique Git antérieur à la consolidation](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154).
+> **Document de référence consolidé au 2 novembre 2026**, actualisé après la fusion de #72 et #75 sur `main@6b1b91693916529f317436c2e9e060e06b3d35a2` (contrôle Rust-only réussi sur `main`). **Cette page n'est pas une attestation de release**. Les travaux non fusionnés sont signalés comme tels. Les anciens guides éliminés de l'arborescence restent consultables via l'[historique Git antérieur à la consolidation](https://github.com/suvorovpravda/Pravda-Bot/tree/93f2775311ecf26bda0857ffc3523fb7f6318154).
+
+## 🔄 État consolidé : une seule PR de livraison
+
+Le [regroupement #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) réunit les anciens travaux #71, #77, #82, #84, #85 et #86, tous fermés **sans fusion directe**. Il regroupe les tests réels de deux WebViews concurrentes et d'une origine HTTPS hostile, l'audit Win32 du coffre, le scan de l'historique Git complet, les migrations PBKDF2 0.13/SHA2 0.11/getrandom 0.4/rusqlite 0.41/thiserror 2, les deux `Cargo.lock`, la CI `concurrency` et le build Windows release PE/SHA-256 avec démarrage isolé.
+
+**Preuve traçable :** au [commit `a7f822e`](https://github.com/suvorovpravda/Pravda-Bot/commit/a7f822ee56773e7c4870a1765d72881ecf268fd4), **10 contrôles GitHub étaient réussis** (CodeQL, Rust Linux/Windows, MSRV, audit des secrets, WebView2, persistance, desktop et release). La modification de ces documents crée un **nouveau SHA** et impose une CI sur ce nouveau commit ; seule une fusion validée suivie d'une CI sur `main` autorise à décrire l'ensemble comme livré. Le coffre reste privé à Rust, l'UI n'exécute **aucun ordre réel**, et **aucun MSI Enterprise signé** n'est fourni.
+
+Le [ruleset `main`](https://github.com/suvorovpravda/Pravda-Bot/rules/26400957), consulté le 2 novembre 2026, impose une branche à jour, la résolution des fils de revue, **CodeQL**, **Rust check (windows-latest)** et **Windows desktop build and startup**, avec zéro approbation extérieure obligatoire. Ce contrôle de gouvernance ne constitue pas une certification de sécurité.
 
 ## 🎯 Doctrine : une production Rust, une archive Python
 
@@ -41,7 +49,7 @@ Pravda-Bot est une **application locale Windows** de surveillance de cotations p
 | `docs/PRAVDA-GUIDE.md` | **Guide unique** | Architecture, contrats, migration, versions et avancement |
 | `README.md` / `SECURITY.md` | Pages essentielles | Accueil utilisateur et politique de sécurité |
 
-Les anciens `pyproject.toml`, `requirements*.txt/.in`, `MANIFEST.in`, métadonnées `egg-info` et le `rust/market-core/pyproject.toml` ont été **déplacés dans l'archive**, dans la branche de nettoyage, pour éviter de présenter un package Python à la racine comme méthode de lancement actuelle. **Ils ne sont pas supprimés de l'historique Git.** L'exclusion `linguist-vendored` permet à GitHub d'ignorer cette archive dans ses statistiques **après fusion et recalcul**. Cela ne convertit pas magiquement les fonctionnalités Python historiques en Rust.
+Les anciens `pyproject.toml`, `requirements*.txt/.in`, `MANIFEST.in`, métadonnées `egg-info` et le `rust/market-core/pyproject.toml` ont été **déplacés dans l'archive**, par la PR #72 fusionnée, pour éviter de présenter un package Python à la racine comme méthode de lancement actuelle. **Ils ne sont pas supprimés de l'historique Git.** L'exclusion `linguist-vendored` permet à GitHub d'ignorer cette archive dans ses statistiques **après fusion et recalcul GitHub**. Cela ne convertit pas magiquement les fonctionnalités Python historiques en Rust.
 
 ## 📊 Tableau de bord priorisé
 
@@ -49,10 +57,10 @@ Les pourcentages sont des **indicateurs de jalons techniques**, **pas** des mesu
 
 | Priorité | Chantier | Progression des jalons | Livré / vérifié | Prochaine condition pour 100 % |
 |:--|:--|--:|:--|:--|
-| **P0** | **Séparation Python → Rust** | **3/6 · 50 % (branche PR)** | Python source archivé ; packaging racine déplacé sur branche ; Linguist configuré sur branche | CI de frontière validée, fusion, preuve que \`main\` ne dépend d'aucune entrée Python |
-| **P0** | **Sécurité IPC Windows** | **2/4 · 50 %** | 22 assertions natives WebView2 validées ; test E2E permanent intégré via #69 | Deux fenêtres simultanées / même session, puis origine distante hostile (#70) |
+| **P0** | **Séparation Python → Rust** | **6/6 · 100 % (`main`)** | PR #72 fusionnée : archive Python, packaging racine retiré, Linguist, CI de frontière et contrôle réussi sur `main` `6b1b916` | Ne pas confondre séparation du code de production et parité fonctionnelle Rust (chantier distinct) |
+| **P0** | **Sécurité IPC Windows** | **2/4 · 50 %** | 22 assertions natives WebView2 validées ; test E2E permanent intégré via #69 | Issue #70 clôturée ; tests de fenêtres simultanées et d'origine hostile dans #88, validation sur `main` après fusion requise |
 | **P0** | **Parité des fonctions Rust** | **3/8 · 38 %** | Cours publics, auth/IPC, historique SQLite | FX, énergie, news/AIS, alertes configurables, intégrations optionnelles avec provenance prouvée |
-| **P0** | **Vérifications CI et gouvernance** | **3/5 · 60 %** | Rust multi-OS, CodeQL, E2E WebView2 permanent | Contrôle CI « Python hors production » et check sur la tête de PR ; confirmation règles administratives enregistrées |
+| **P0** | **Vérifications CI et gouvernance** | **3/5 · 60 %** | Rust multi-OS, CodeQL, E2E WebView2 permanent ; contrôle Python hors production vert | Ruleset `main` vérifié (3 checks et zéro approbation) ; CI du dernier HEAD et post-fusion à vérifier |
 | **P1** | **Historique / migration SQLite** | **3/4 · 75 %** | Source legacy lecture seule, import transactionnel, tests de non-régression | Restauration réelle / interruption avec WAL sur Windows, preuve d'export CSV |
 | **P1** | **Interface et robustesse desktop** | **2/4 · 50 %** | Fenêtre Tauri IPC et authentification persistante | Gestion complète des sources indisponibles et recette ergonomique multi-scénarios |
 | **P1** | **Packaging Windows Enterprise** | **0/4 · 0 %** | Le binaire est compilable, **pas de paquet signé** | MSI/EXE signé, horodatage, SBOM/provenance, installation/rollback sur Windows propre |
@@ -60,7 +68,7 @@ Les pourcentages sont des **indicateurs de jalons techniques**, **pas** des mesu
 | **P2** | **Notifications / LLM / sources facultatives** | **0/4 · 0 %** | Archives de référence uniquement, pas de parité attestée | Contrats, adaptateurs réels, permissions/secrets, tests d'intégration reproductibles |
 
 > [!WARNING]
-> **Un 50 % n'est pas « moitié du produit fini ».** La progression reflète le nombre de jalons listés ; la complexité et l'effort restant peuvent être très différents. Pour la séparation Rust, **50 % désigne la branche de travail, pas `main`**. En cas de changement des critères, actualiser aussi le dénominateur.
+> **Un 50 % n'est pas « moitié du produit fini ».** La progression reflète le nombre de jalons listés ; la complexité et l'effort restant peuvent être très différents. La séparation Python/Rust atteint **6/6 jalons techniques sur `main`** ; la parité métier Rust reste distincte et incomplète. En cas de changement des critères, actualiser aussi le dénominateur.
 
 ### Vue d'ensemble des étapes
 
@@ -71,13 +79,13 @@ flowchart LR
     classDef pending fill:#ffedd5,stroke:#ea580c,color:#7c2d12,stroke-width:2px
     A["PR #64 · Tauri IPC Rust"]:::done --> B["PR #67 · Preuves Windows IPC"]:::done
     B --> C["PR #69 · E2E Windows permanent"]:::done
-    C --> D["P0 · Nettoyage Python + CI frontière"]:::active
-    D --> E["Issue #70 · Multi-WebView & origine"]:::active
+    C --> D["PR #72 · Frontière Python/Rust"]:::done
+    D --> E["PR #88 · Multi-WebView, coffre et Rust"]:::active
     E --> F["Parité Rust des modules restants"]:::pending
     F --> G["Distribution Windows signée"]:::pending
 ```
 
-**Règle d'ordonnancement :** traiter les **P0 en premier** ; les P1 ne servent pas de prétexte pour assouplir les ACL ou publier une release non signée. L'issue [#70](https://github.com/suvorovpravda/Pravda-Bot/issues/70) peut être préparée en parallèle du nettoyage Rust, sans fusion automatique.
+**Règle d'ordonnancement :** traiter les **P0 en premier** ; les P1 ne servent pas de prétexte pour assouplir les ACL ou publier une release non signée. L'issue [#70](https://github.com/suvorovpravda/Pravda-Bot/issues/70) est clôturée ; ses preuves complémentaires et celles du coffre sont regroupées dans la PR #88. Sa fusion reste soumise à la CI du dernier SHA et aux règles de `main`.
 
 ## 🏗️ Architecture et composants Rust
 
@@ -117,10 +125,10 @@ flowchart TB
 | Historique | `ipc_history_recent`, `ipc_history_query` | Lecture filtrée JSON | Réponses bornées (10 000 lignes max) |
 | Export | `ipc_history_export_csv` | Endpoint CSV | Contrôle téléchargement WebView à compléter |
 | Alertes papier | `ipc_paper_alerts_snapshot` | Endpoints simulation | Pas de création d'alertes personnalisées prouvée |
-| Métriques | `ipc_runtime_metrics` | Métriques serveur | CPU/RSS non fournis de façon fiable |
+| Métriques | `ipc_runtime_metrics` | Mesures du processus Rust | Dans #88 : CPU échantillonné et RAM résidente Windows/Linux ; première mesure ou OS non pris en charge : résultat partiel |
 | FX | `ipc_fx_status` | Référence/route partielle | Retour « indisponible » si absence de fournisseur |
 
-**Modules non encore portés avec preuve de parité :** alertes configurables, données énergétiques ENTSOG/TTF, GDELT/actualités, AIS/cartes, modules OSINT, moteur LLM local, notifications et analyses avancées des carnets d'ordres. Leurs anciens fichiers existent **uniquement à titre de référence** dans l'archive. Ne pas faire passer des stubs « unavailable » pour une intégration réelle.
+**Fonctionnalités ajoutées dans #88, encore à valider sur `main` :** pages interactives, alertes locales côté frontend, BCE/Frankfurter (références Forex), GDELT (articles), ENTSOG (flux publics), carnet Revolut X lecture seule et télémétrie CPU/RAM. Une réponse externe invalide doit apparaître indisponible, jamais comme succès vide. **Restent hors preuve de parité complète :** AIS live et prix TTF sous licence, accès privé/ordres Revolut X (Ed25519), modules OSINT, LLM et notifications distantes.
 
 ## 🪟 Windows — installation, essais et sauvegardes
 
@@ -186,8 +194,8 @@ La référence normative en matière de vulnérabilités et de divulgation respo
 | [PR #64](https://github.com/suvorovpravda/Pravda-Bot/pull/64) — IPC desktop | Fusionnée, contrat IPC intégré |
 | [PR #67](https://github.com/suvorovpravda/Pravda-Bot/pull/67) — WebView2 natif | 8 checks CI verts, 22 assertions de sécurité PASS |
 | [PR #69](https://github.com/suvorovpravda/Pravda-Bot/pull/69) — E2E permanent | Fusionnée ; test sur PR et commits `main` pertinents |
-| [Issue #70](https://github.com/suvorovpravda/Pravda-Bot/issues/70) | Multi-fenêtres dans **un même processus** et navigation origine distante **non attestées** |
-| Protection de `main` | Capture montrant no-bypass coché ; lecture API des paramètres sauvegardés : **403**, non attestée par l'intégration |
+| [Issue #70](https://github.com/suvorovpravda/Pravda-Bot/issues/70) | Clôturée ; tests complémentaires de fenêtres simultanées et d'origine hostile dans #88, réussis sur `a7f822e`, validation post-fusion requise |
+| Protection de `main` | Ruleset 26400957 actif, aucun acteur de bypass, branche à jour, trois checks obligatoires ; paramètres du ruleset consultés via l'API |
 | Revue externe obligatoire | **Supprimée par le propriétaire** (dépôt maintenu seul) ; cela n'est pas une revue externe effectuée |
 | MSI signé / SBOM | **Non livrés / non attestés** |
 
@@ -201,7 +209,7 @@ Lancer la variante Debug opt-in `security-e2e` seulement pour les tests de sécu
 - Refus des commandes de plugins `fs` et `shell`, sans écriture d'un fichier témoin.
 - Rapport JSON avec `passed=true`, 22 assertions, SHA exact du checkout, absence de secret.
 
-**Limite essentielle :** deux WebViews ont été testées **dans deux processus natifs successifs**. Ce résultat **ne prouve pas** la coexistence dans la même session Rust ; le test des origines distantes reste ouvert. La sonde est **Debug-only**, sans nouvelle permission Tauri.
+**Limite de la preuve historique #67 :** ses deux WebViews étaient testées dans des sessions natives successives. La PR #88 ajoute le scénario natif de deux fenêtres **simultanées** dans un processus authentifié et le contrôle d'une origine hostile ; cette nouvelle preuve a réussi sur `a7f822e`, sous réserve de la CI des modifications suivantes et de la validation après fusion. La sonde demeure **Debug-only**, sans permission Tauri de release supplémentaire.
 
 ## 🧪 Preuves CI et critères de publication
 
@@ -212,11 +220,30 @@ cargo test --locked --workspace
 cargo test --locked --manifest-path .\crates\pravda-app\Cargo.toml
 node tools/test-desktop-ipc.mjs
 node tools/test-dashboard.mjs
-# Garde de frontière Rust / Python (sur branche de migration) :
+# Garde de frontière Rust / Python (intégrée à main via #72) :
 node tools/test-rust-production-boundary.mjs
 ```
 
-Les workflows testent Rust Ubuntu/Windows, MSRV, desktop Windows, mode navigateur, CodeQL et **E2E WebView2 permanent**. Un statut « vert » n'est significatif que si le job a **vraiment été exécuté** (et non `skipped`), sur le SHA approprié, avec un rapport de preuve exploitable.
+Les workflows testent Rust Ubuntu/Windows, MSRV, desktop Windows, mode navigateur, CodeQL et **E2E WebView2 permanent**. Dans #88 s'ajoutent le **scan de l'historique Git complet**, les scénarios natifs multi-fenêtres, la vérification de l'exécutable Windows release et l'annulation des anciens runs d'une même PR. Un statut « vert » n'est significatif que si le job a **vraiment été exécuté** (et non `skipped`), sur le SHA approprié, avec un rapport de preuve exploitable.
+
+### Livraison accélérée — objectif commercial de −50 % de délai
+
+L'objectif annoncé est de **réduire de moitié le délai initial**, sous réserve de disposer d'une durée de référence vérifiable et d'une validation client. Les travaux suivants avancent **en parallèle**, sans diminuer les contrôles :
+
+| Voie | Livrable et limites | Validation de sortie |
+|:--|:--|:--|
+| **Application fonctionnelle** | UI moderne multi-pages, alertes locales, liens officiels dans le navigateur Windows, sources publiques BCE/Frankfurter, GDELT, ENTSOG et Revolut X carnet public | CI de #88 sur dernier SHA, tests Windows interactifs réels, erreurs et indisponibilités gérées |
+| **Packaging Windows** | Tauri 2 NSIS et MSI ; workflow manuel pour candidats non signés, SHA-256 et vérification de signature | Certificat d'éditeur et horodatage, tests installation/mise à jour/désinstallation, puis release signée |
+| **Comptes et ordres privés Revolut X** | API officielle Ed25519 ; coffre Windows, soldes et contrôles d'exécution | Clé API de l'utilisateur, approbations fournisseur et tests négatifs ; **aucun ordre réel activé à ce stade** |
+| **Données sous licence** | AIS live et prix TTF | Clé fournisseur et droits d'utilisation compatibles, sans proxy public non autorisé |
+
+L'interface et l'installateur **de démonstration** ne doivent pas être bloqués par les flux privés sous licence. Une publication **Enterprise** reste bloquée sans signature et recette Windows. **Aucune date finale ou réduction de délai n'est garantie sans mesurer le planning initial.**
+
+### Signature Authenticode préparée (PR #88)
+
+Le workflow manuel `.github/workflows/windows-package.yml` peut compiler les installateurs **NSIS + MSI**. Par défaut, il produit des candidats **non signés**. Pour réclamer la signature du binaire de release et des deux formats, activer explicitement `signed=true` et configurer, dans l'environnement GitHub `windows-signing`, les secrets `WINDOWS_CERTIFICATE_BASE64` et `WINDOWS_CERTIFICATE_PASSWORD` d'un certificat de **signature de code**. Le certificat est importé sur le runner éphémère et la configuration Tauri est générée uniquement durant le workflow. La vérification est bloquante sur le statut Authenticode, l'empreinte et l'horodatage ; les empreintes SHA-256 sont journalisées sans divulguer les secrets.
+
+**Ce workflow n'a pas encore été testé avec un véritable certificat dans ce dépôt.** La publication Enterprise, la réputation SmartScreen, l'installation propre, la mise à jour, la désinstallation et la reprise après échec nécessitent des essais complémentaires. Ne pas confondre candidat MSI, binaire signé et produit prêt à distribuer.
 
 ### Barrières avant une distribution Windows Enterprise
 
@@ -259,9 +286,9 @@ flowchart TB
 
 | Ordre | Chantier technique | Jalons préparés / total | Avancement | Critère suivant |
 |:--|:--|--:|--:|:--|
-| 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 3/6 | **50 % (branche #72)** | CI complète verte, fusion validée, nouveaux tests Windows |
-| 2 · P0 | Sécurité du poste et modèle de secrets | 0/5 | **0 %** | Inventaire secrets, coffre OS, effacement mémoire, rotation/backup, tests d'accès négatifs |
-| 3 · P1 | Contrats exchange et Revolut X public | 2/4 | **50 %** | Adaptateur public fusionné et CI 8/8 sur #73 ; validation de réponses live et branchement explicite encore à faire |
+| 1 · P0 | CI, séparation Rust/Python et preuves native Windows | 6/6 | **100 % (frontière #72)** | Contrôle Rust-only fusionné et vert sur `main` ; tests multi-WebView regroupés dans #88, non assimilés à la frontière Rust/Python |
+| 2 · P0 | Sécurité du poste et modèle de secrets | 1/5 | **20 %** | Inventaire et menaces documentés ; #75 coffre Windows fusionné ; tests mock/rotation/négatifs transférés dans #88, validation post-fusion encore requise |
+| 3 · P1 | Contrats exchange et Revolut X public | 2/4 | **50 %** | Adaptateur public fusionné ; branchement dans l'interface de #88 en validation, API privée distincte |
 | 4 · P1 | Résilience et outbox durable | 0/4 | **0 %** | Idempotence, journal local, reprise après crash, scénarios de rejouement |
 | 5 · P1 | Backtesting/paper trading | 1/5 | **20 %** | Simulateur papier existant ; moteur reproductible, coûts, données historiques, tests de biais |
 | 6 · P2 | Observabilité locale | 1/4 | **25 %** | Uptime existant ; métriques CPU/RSS, tracing expurgé, alertes pertinentes |
@@ -287,11 +314,17 @@ Le coffre **n'est pas une API à appeler depuis la WebView**. Le seul contrat de
 4. **Sauvegarde/restauration :** ne jamais exporter les octets en clair dans JSON, SQLite/WAL, CSV, log, dump ni sauvegarde. Conserver uniquement les données métier et les références non sensibles. Sur un nouveau poste/profil, réapprovisionner une **nouvelle** clé, la précédente étant révoquée ; aucune restauration portable du Credential Manager n'est prévue.
 5. **Incident :** bloquer les connexions privées, révoquer les clés exposées chez le fournisseur, renouveler les sessions, analyser l'historique Git, journaux et artefacts, et documenter une alerte sans révéler les octets. Un historique Git contenant une clé reste sensible même si la ligne est supprimée ultérieurement.
 
-**Contrôles d'acceptation :** #75 fusionnée et 8/8 vérifications ; #77 en cours pour le mock, le test natif rotation/suppression, l'absence de fuite par signatures et l'historique Git *y compris commits de fusion*. Ces contrôles ne garantissent ni absence de secret sous un format inconnu ni résistance à un malware utilisant le même compte Windows. Pas d'ordre réel, pas d'API privée activée.
+**Contrôles d'acceptation :** #75 fusionnée et 8/8 vérifications ; inventaire documenté (1/5 jalon #74). #77 fermée sans fusion et reprise par #88 pour le mock, le test natif rotation/suppression, les détections par signatures et l'historique Git *y compris commits de fusion* ; validations de #88 et de `main` après fusion requises. Ces contrôles ne garantissent ni absence de secret sous un format inconnu ni résistance à un malware utilisant le même compte Windows. Pas d'ordre réel, pas d'API privée activée.
+
+### Objectif client : raccourcir de 50 % le chemin critique, sans raccourcir les contrôles
+
+**Cible demandée : D/2**, avec `D` = durée de livraison initiale à confirmer contractuellement ; ce n'est **ni une nouvelle date ferme ni un engagement de délai non vérifié**. L'accélération vient de l'exécution **en parallèle** des chantiers Revolut X (données publiques puis compte privé en lecture seule), installateurs Windows, sécurité/CI et recette utilisateur. Les jeux de tests isolés et les contrôles obligatoires restent intacts.
+
+**Deux jalons contractuels à distinguer :** candidat de démonstration *lecture seule + MSI/NSIS de test* ; puis production *ordres réels + installateurs signés* uniquement après certificat, validations d'API, limites d'exposition, tests réels autorisés et acceptation écrite. Une fonctionnalité demandée n'est pas livrée parce qu'une case de tableau change de statut.
 
 ### Revolut X : schéma réel et barrières de sécurité
 
-**Référence officielle :** [Revolut X Crypto Exchange API](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange).
+**Référence officielle :** [Revolut X Crypto Exchange API](https://developer.revolut.com/docs/api/revolut-x-crypto-exchange). **En PR #88**, un client Rust privé a été préparé pour `GET /api/1.0/balances`, signé Ed25519 avec clés de `SecretStore`, sans connexion de compte réel ni ordre, sans accès direct du JavaScript. Les secrets doivent être provisionnés dans le coffre Windows par un parcours local à auditer ; aucun identifiant n'est inclus dans le dépôt.
 
 | Fonction | API officielle identifiée | Mode Pravda |
 |---|---|---|
@@ -302,7 +335,7 @@ Le coffre **n'est pas une API à appeler depuis la WebView**. Le seul contrat de
 
 La proposition HMAC / `X-Revolut-Api-*` / `https://api-sandbox.revolut.com` **ne correspond pas au contrat Revolut X vérifié** ; ne pas intégrer ce code. Les prix, tailles, et paires sont des données **en chaînes décimales**, et les chemins de paire utilisent le tiret (`BTC-USD`) — ne pas comparer silencieusement ces marchés avec `BTC/USDT`.
 
-La **PR #73 a été fusionnée** avec le contrat `PublicMarketDataAdapter`, un client public limité au carnet et des tests de parsing. Les huit checks CI de la PR ont réussi. **Le module n'est pas branché au runtime/dashboard**, et aucune validation de cotations live n'est attestée. Il n'y a ni clé privée, ni accès à un compte, ni ordre réel.
+La **PR #73 a été fusionnée** avec le contrat `PublicMarketDataAdapter`, un client public limité au carnet et des tests de parsing. Les huit checks CI de la PR ont réussi. **La PR #88 raccorde ce module public à une page Tauri**, sans accès privé. Aucun test live de disponibilité externe ni exécution réelle n'est encore attesté. Il n'y a ni clé privée, ni accès à un compte, ni ordre réel.
 
 ### Évolution de l'infrastructure : déclencheurs plutôt qu'empilement
 
@@ -358,13 +391,13 @@ Pour **chaque PR de migration ou de sécurité** :
 <details>
 <summary><strong>English — short project guide</strong></summary>
 
-The Rust production backend and Tauri 2 Windows desktop use bundled HTML/CSS/JS and typed IPC, while Axum is a separate loopback diagnostic application. All historical Python sources and packaging belong under `archive/python-legacy/`, excluded from language statistics after the migration branch merges. The priority table measures **completed milestones rather than engineering effort**. #67 validated 22 real Windows IPC assertions, #69 made the job permanent, and #70 still needs same-process multi-window and hostile-origin evidence. No signed MSI or real trading is delivered. See [README](../README.md) and [SECURITY](../SECURITY.md).
+The Rust production backend and Tauri 2 Windows desktop use bundled HTML/CSS/JS and typed IPC, while Axum is a separate loopback diagnostic application. All historical Python sources and packaging belong under `archive/python-legacy/`, excluded from language statistics after the migration branch merges. The priority table measures **completed milestones rather than engineering effort**. #67 validated 22 real Windows IPC assertions and #69 made the job permanent. The closed #70 issue's same-process multi-window and hostile-origin checks are included in [PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88), with green results on commit `a7f822e` pending fresh verification. No signed MSI or real trading is delivered. See [README](../README.md) and [SECURITY](../SECURITY.md).
 
 </details>
 
 <details>
 <summary><strong>Русский — краткое руководство</strong></summary>
 
-Рабочий backend написан на Rust, приложение Windows использует Tauri 2 и встроенные HTML/CSS/JS с IPC. Отдельный Axum-сервер работает только для локальной диагностики. Старый Python находится в `archive/python-legacy/` и не запускается рабочим приложением. Проценты отражают **выполненные контрольные этапы**, а не общий объём завершённого продукта. #67 подтвердил 22 IPC-теста на Windows, #69 сделал проверку постоянной; тесты окон в одном процессе и удалённых источников (#70) остаются открытыми. Подписанного MSI и реальной торговли нет.
+Рабочий backend написан на Rust, приложение Windows использует Tauri 2 и встроенные HTML/CSS/JS с IPC. Отдельный Axum-сервер работает только для локальной диагностики. Старый Python находится в `archive/python-legacy/` и не запускается рабочим приложением. Проценты отражают **выполненные контрольные этапы**, а не общий объём завершённого продукта. #67 подтвердил 22 IPC-теста на Windows, #69 сделал проверку постоянной; дополнительные тесты окон в одном процессе и удалённых источников перенесены в [единый PR #88](https://github.com/suvorovpravda/Pravda-Bot/pull/88) и требуют проверки после слияния. Подписанного MSI и реальной торговли нет.
 
 </details>

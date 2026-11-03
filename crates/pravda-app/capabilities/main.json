@@ -16,6 +16,8 @@
     "allow-ipc-history-export-csv",
     "allow-ipc-paper-alerts-snapshot",
     "allow-ipc-runtime-metrics",
-    "allow-ipc-fx-status"
+    "allow-ipc-fx-status",
+    "allow-ipc-public-feed",
+    "allow-ipc-open-source"
   ]
 }

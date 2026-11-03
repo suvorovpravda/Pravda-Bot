@@ -29,6 +29,11 @@
         </div>
     </header>
 
+    <div class="workspace-ribbon" role="status">
+        <span><i class="live-dot"></i> PRAVDA / DESKTOP WORKSPACE</span>
+        <span class="workspace-flag">IPC privé · données sourcées · simulation seulement</span>
+        <span id="source-link-notice" aria-live="polite">Liens officiels ouverts dans le navigateur Windows</span>
+    </div>
     <section class="intro">
         <div><p class="eyebrow" data-i18n="eyebrow">Terminal de marché · données sourcées</p><h1 data-i18n="pageTitle">Marchés, énergie &amp; risques</h1></div>
         <p data-i18n="intro">Prix affichés en EUR et CHF. Les cadences, sources et limites sont indiquées pour distinguer les cotations live des références quotidiennes.</p>
@@ -40,8 +45,74 @@
         <button class="tab-btn" data-tab="energy" data-i18n="tabEnergy">Énergie</button>
         <button class="tab-btn" data-tab="risks" data-i18n="tabRisks">Veille</button>
         <button class="tab-btn" data-tab="ais" data-i18n="tabAIS">AIS</button>
+        <button class="tab-btn" data-tab="revolut" type="button">Revolut X</button>
+        <button class="tab-btn" data-tab="sources" type="button">Sources</button>
+        <button class="tab-btn" data-tab="system" type="button">Système</button>
     </nav>
 
+
+    <section class="feature-grid" aria-label="Accès rapides et connexions">
+        <article class="feature-tile">
+            <span class="feature-kicker">01 / PUBLIC MARKET DATA</span>
+            <h2>Revolut X</h2>
+            <p>Carnet public BTC/USD, sans clé. Connexion au compte et ordres réels volontairement séparés.</p>
+            <div class="feature-actions"><button id="revolut-refresh" class="button button-primary" type="button">Lire le carnet</button>
+                <a class="button" href="https://exchange.revolut.com/" data-source-link="revolutx" target="_blank" rel="noopener noreferrer">Ouvrir Revolut X ↗</a></div>
+        </article>
+        <article class="feature-tile">
+            <span class="feature-kicker">02 / OPEN DATA</span>
+            <h2>Sources publiques</h2>
+            <p>BCE / Frankfurter, GDELT, ENTSOG : données attribuées, datées et indisponibles si la source échoue.</p>
+            <div class="feature-actions"><button class="button button-primary" data-go-tab="sources" type="button">Explorer les sources</button>
+                <a class="button" href="https://www.gdeltproject.org/" data-source-link="gdelt" target="_blank" rel="noopener noreferrer">GDELT ↗</a></div>
+        </article>
+        <article class="feature-tile">
+            <span class="feature-kicker">03 / NATIVE WINDOWS</span>
+            <h2>Diagnostic système</h2>
+            <p>CPU et mémoire du processus, uptime, sources et erreurs d’exécution. Aucun agent externe nécessaire.</p>
+            <div class="feature-actions"><button class="button button-primary" data-go-tab="system" type="button">Ouvrir les métriques</button>
+                <a class="button" href="https://github.com/suvorovpravda/Pravda-Bot" data-source-link="github" target="_blank" rel="noopener noreferrer">Dépôt ↗</a></div>
+        </article>
+    </section>
+
+    <section class="grid terminal-extras" aria-label="Modules connectés">
+        <article class="card secondary-card" data-category="revolut">
+            <div class="card-head"><div><h2>Revolut X · carnet public</h2><p>BTC-USD · aucune clé privée nécessaire</p></div>
+                <span class="status pending" id="revolut-status">En attente</span></div>
+            <div class="card-body">
+                <div class="connector-grid" id="revolut-orderbook"><div class="empty">Sélectionner « Lire le carnet » pour récupérer une donnée publique.</div></div>
+                <p class="fine-print">Les prix du carnet ne garantissent aucune exécution. Les soldes et ordres privés nécessitent une clé Ed25519 enregistrée en sécurité, sans exposition à l'UI.</p>
+                <a class="source-action" href="https://exchange.revolut.com/" data-source-link="revolutx" target="_blank" rel="noopener noreferrer">Accéder à Revolut X dans le navigateur ↗</a>
+            </div>
+        </article>
+        <article class="card secondary-card" data-category="sources">
+            <div class="card-head"><div><h2>Catalogue des données · fournisseurs officiels</h2><p>API publiques et portails autorisés ; aucun proxy secret</p></div>
+                <span class="status live">HTTPS uniquement</span></div>
+            <div class="card-body">
+                <div class="provider-grid">
+                    <a class="provider-link" href="https://data.ecb.europa.eu/data/datasets/EXR" data-source-link="ecb" target="_blank" rel="noopener noreferrer"><b>BCE</b><span>Taux officiels · référence quotidienne</span><span>↗</span></a>
+                    <a class="provider-link" href="https://frankfurter.dev/" data-source-link="frankfurter" target="_blank" rel="noopener noreferrer"><b>Frankfurter</b><span>Open source · Forex sans clé</span><span>↗</span></a>
+                    <a class="provider-link" href="https://transparency.entsog.eu/" data-source-link="entsog" target="_blank" rel="noopener noreferrer"><b>ENTSOG</b><span>Transparence des flux énergétiques</span><span>↗</span></a>
+                    <a class="provider-link" href="https://www.gdeltproject.org/" data-source-link="gdelt" target="_blank" rel="noopener noreferrer"><b>GDELT</b><span>Articles et veille géopolitique</span><span>↗</span></a>
+                    <a class="provider-link" href="https://aisstream.io/" data-source-link="aisstream" target="_blank" rel="noopener noreferrer"><b>AIS Stream</b><span>Clé fournisseur et droits d’usage requis</span><span>↗</span></a>
+                    <a class="provider-link" href="https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures" data-source-link="ice" target="_blank" rel="noopener noreferrer"><b>ICE / TTF</b><span>Spécification du contrat, pas un prix live</span><span>↗</span></a>
+                </div>
+            </div>
+        </article>
+        <article class="card secondary-card" data-category="system">
+            <div class="card-head"><div><h2>Runtime · observabilité locale</h2><p>Mesures du processus Pravda uniquement · rafraîchissement 10 s</p></div>
+                <span class="status pending" id="runtime-status">Lecture…</span></div>
+            <div class="card-body">
+                <div class="runtime-tiles">
+                    <div><span>CPU</span><strong id="runtime-cpu">—</strong><small>% du processus</small></div>
+                    <div><span>RAM</span><strong id="runtime-ram">—</strong><small>MiB résident</small></div>
+                    <div><span>Uptime</span><strong id="runtime-uptime">—</strong><small>depuis lancement</small></div>
+                    <div><span>PID</span><strong id="runtime-pid">—</strong><small>Windows local</small></div>
+                </div>
+                <p class="fine-print" id="runtime-info">La première lecture CPU constitue un échantillon initial ; la deuxième permet de calculer une charge moyenne.</p>
+            </div>
+        </article>
+    </section>
 
     <section class="grid" aria-label="Marchés en direct" data-i18n-aria="marketsAria">
         <article class="card crypto-live-card" data-category="markets">
@@ -75,6 +146,8 @@
                             <button class="button" type="submit" data-i18n="addAlert">Ajouter l’alerte</button>
                         </form>
                         <div class="alert-list" id="price-alerts"><div class="empty" data-i18n="noAlerts">Aucune alerte configurée.</div></div>
+                        <h3>Événements de simulation papier (lecture seule)</h3>
+                        <div class="alert-list" id="paper-alerts"><div class="empty">Chargement des événements simulés…</div></div>
                         <p class="fine-print" id="alert-notice" data-i18n="alertNeedsPage">Les alertes sont évaluées avec les cotations récentes lorsque le dashboard est ouvert.</p>
                     </div>
                     <div class="table-wrap">
@@ -151,9 +224,9 @@
         </article>
 
         <article class="card secondary-card" data-category="ais">
-            <div class="card-head"><div><h2 data-i18n="aisTitle">Suivi maritime AIS</h2><p data-i18n="aisSubtitle">Proxy non-commercial · couverture terrestre uniquement</p></div><span class="status pending" id="ais-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
+            <div class="card-head"><div><h2 data-i18n="aisTitle">Suivi maritime AIS</h2><p data-i18n="aisSubtitle">Source AIS non connectée · activation sous licence</p></div><span class="status pending" id="ais-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
             <div class="card-body">
-                <p class="fine-print" data-i18n="aisDisclaimer">Données AIS via aisstream.io proxy non-commercial. Pas de redistribution, pas de données satellite, quota API. Marqué <strong>non-commercial proxy</strong> et non vérifié.</p>
+                <p class="fine-print" data-i18n="aisDisclaimer">Aucune observation AIS n’est inventée. La connexion à un fournisseur externe exige une clé serveur et le respect de ses conditions, notamment commerciales.</p>
                 <div class="map-wrap desktop-style-4">
   <svg id="ais-map" viewBox="0 0 800 430" class="desktop-style-5"></svg>
   <div class="map-legend desktop-style-6"><span class="legend-key"><i></i><span>Vessel</span></span></div>

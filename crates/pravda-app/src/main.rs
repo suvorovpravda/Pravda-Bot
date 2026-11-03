@@ -144,7 +144,9 @@ async fn main() {
             ipc::ipc_history_export_csv,
             ipc::ipc_paper_alerts_snapshot,
             ipc::ipc_runtime_metrics,
-            ipc::ipc_fx_status
+            ipc::ipc_fx_status,
+            ipc::ipc_public_feed,
+            ipc::ipc_open_source
         ])
         .setup(|app| {
             // WebDriver's Windows Edge adapter may only enumerate the primary
@@ -165,6 +167,46 @@ async fn main() {
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
                 .build()?;
+
+            // Native Windows E2E only: simultaneously run an unprivileged
+            // WebView inside this SAME authenticated Rust/Tauri process.
+            // The capability manifest is never modified and this code is
+            // absent from Release builds even when the feature is enabled.
+            #[cfg(all(windows, debug_assertions, feature = "security-e2e"))]
+            if std::env::var("PRAVDA_E2E_CONCURRENT").as_deref() == Ok("true") {
+                let report_path = std::path::PathBuf::from(
+                    std::env::var_os("PRAVDA_E2E_CONCURRENT_REPORT")
+                        .expect("E2E concurrent probe requires a test-only report path"),
+                );
+                let url = WebviewUrl::App("security-probe-concurrent.html".into());
+                WebviewWindowBuilder::new(app, "security-probe", url)
+                    .title("Pravda security probe (concurrent, NO IPC)")
+                    .on_document_title_changed(move |_window, title| {
+                        // This is a DEBUG-ONLY evidence side channel, NOT a
+                        // Tauri command, permission, listener or production API.
+                        // A trusted local probe script emits bounded base64.
+                        if let Some(payload) = title.strip_prefix("PRAVDA_E2E_PROBE:") {
+                            if payload.len() > 3_000 {
+                                return;
+                            }
+                            let millis = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_millis();
+                            if let Ok(mut report) = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(&report_path)
+                            {
+                                use std::io::Write;
+                                let _ =
+                                    writeln!(report, "{millis}|{}|{payload}", std::process::id());
+                            }
+                        }
+                    })
+                    .inner_size(680.0, 450.0)
+                    .build()?;
+            }
             Ok(())
         })
         .run(tauri::generate_context!())

@@ -22,7 +22,7 @@ impl Drop for ServerProcess {
 // The integration test never embeds a reusable administrator password.
 fn test_password() -> String {
     let mut bytes = [0_u8; 20];
-    getrandom::getrandom(&mut bytes).expect("test entropy must be available");
+    getrandom::fill(&mut bytes).expect("test entropy must be available");
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 

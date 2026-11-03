@@ -5,7 +5,7 @@
 //! Public limit: 1 request/second; callers must not treat snapshots as live fills.
 
 use reqwest::{Client, StatusCode, Url};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use thiserror::Error;
@@ -39,26 +39,26 @@ pub enum PublicMarketError {
     Json(#[from] serde_json::Error),
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct OrderLevel {
     pub price: String,
     pub quantity: String,
     pub count: u64,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct OrderBookData {
     pub asks: Vec<OrderLevel>,
     pub bids: Vec<OrderLevel>,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct OrderBookMetadata {
     pub timestamp: i64,
     pub region: String,
 }
 
-#[derive(Debug, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
 pub struct PublicOrderBook {
     pub data: OrderBookData,
     pub metadata: OrderBookMetadata,

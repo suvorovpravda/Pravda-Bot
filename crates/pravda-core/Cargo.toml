@@ -5,7 +5,7 @@ edition = "2021"
 rust-version.workspace = true
 
 [dependencies]
-thiserror = "1.0"
+thiserror = "2.0"
 pravda-market-core = { path = "../../rust/market-core" }
 pravda-fetchers = { path = "../pravda-fetchers" }
 pravda-engine = { path = "../pravda-engine" }

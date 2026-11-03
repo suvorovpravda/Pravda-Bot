@@ -267,6 +267,80 @@ impl SecretStore for WindowsCredentialStore {
 mod tests {
     use super::*;
 
+    /// Mock service-side only: no filesystem fallback and no frontend exposure.
+    /// Stores SecretValue containers to scrub copied bytes on destruction.
+    #[derive(Default)]
+    struct MockSecretStore(std::sync::Mutex<std::collections::HashMap<String, SecretValue>>);
+
+    impl SecretStore for MockSecretStore {
+        fn put(&self, identifier: &str, secret: &SecretValue) -> Result<(), SecretStoreError> {
+            let target = scoped_target(identifier)?;
+            check_secret_size(secret.expose())?;
+            self.0
+                .lock()
+                .unwrap()
+                .insert(target, SecretValue::new(secret.expose().to_vec()));
+            Ok(())
+        }
+
+        fn get(&self, identifier: &str) -> Result<SecretValue, SecretStoreError> {
+            let target = scoped_target(identifier)?;
+            self.0
+                .lock()
+                .unwrap()
+                .get(&target)
+                .map(|value| SecretValue::new(value.expose().to_vec()))
+                .ok_or(SecretStoreError::NotFound)
+        }
+
+        fn remove(&self, identifier: &str) -> Result<(), SecretStoreError> {
+            let target = scoped_target(identifier)?;
+            self.0
+                .lock()
+                .unwrap()
+                .remove(&target)
+                .map(|_| ())
+                .ok_or(SecretStoreError::NotFound)
+        }
+    }
+
+    #[test]
+    fn mock_storage_rotation_is_scoped_and_deletion_is_permanent() {
+        let store = MockSecretStore::default();
+        let old = SecretValue::new(b"fictional-credential-ONE".to_vec());
+        let replacement = SecretValue::new(b"fictional-credential-TWO".to_vec());
+        store.put("revolut_x:market", &old).unwrap();
+        assert_eq!(
+            store.get("revolut_x:market").unwrap().expose(),
+            old.expose()
+        );
+        store.put("revolut_x:market", &replacement).unwrap();
+        assert_eq!(
+            store.get("revolut_x:market").unwrap().expose(),
+            replacement.expose()
+        );
+        assert!(matches!(
+            store.put("../system", &replacement),
+            Err(SecretStoreError::InvalidName)
+        ));
+        assert!(matches!(
+            store.get("other"),
+            Err(SecretStoreError::NotFound)
+        ));
+        store.remove("revolut_x:market").unwrap();
+        assert!(matches!(
+            store.get("revolut_x:market"),
+            Err(SecretStoreError::NotFound)
+        ));
+        // Recovery means re-entering a newly provisioned key, never exporting
+        // secrets to a plaintext backup or attempting to recover a deleted key.
+        store.put("revolut_x:market", &replacement).unwrap();
+        assert_eq!(
+            store.get("revolut_x:market").unwrap().expose(),
+            replacement.expose()
+        );
+    }
+
     #[test]
     fn names_cannot_escape_the_application_scope() {
         for bad in [
@@ -333,6 +407,19 @@ mod tests {
         let loaded = store.get(&unique).expect("Credential Manager read");
         assert_eq!(loaded.expose(), original.expose());
         drop(loaded);
+        // Rotation uses the same user-scoped OS record. The old value must
+        // never be returned after a successful atomic CredWriteW replacement.
+        let replacement = SecretValue::new(b"test-only-rotated-456".to_vec());
+        store
+            .put(&unique, &replacement)
+            .expect("Credential Manager rotate");
+        assert_eq!(
+            store
+                .get(&unique)
+                .expect("Credential Manager rotated read")
+                .expose(),
+            replacement.expose()
+        );
         store.remove(&unique).expect("Credential Manager delete");
         assert!(matches!(
             store.get(&unique),

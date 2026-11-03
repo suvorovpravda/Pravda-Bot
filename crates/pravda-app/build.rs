@@ -14,6 +14,8 @@ fn main() {
         "ipc_paper_alerts_snapshot",
         "ipc_runtime_metrics",
         "ipc_fx_status",
+        "ipc_public_feed",
+        "ipc_open_source",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()
