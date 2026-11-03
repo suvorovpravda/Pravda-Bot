@@ -28,7 +28,7 @@ pub struct LimitOrderIntent {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct OrderRiskLimits {
+pub struct OrderRiskLimits<'a> {
     /// Maximum total value of one order, in quote currency * 10^8.
     pub max_order_quote_units: u128,
     /// Remaining daily quote-currency budget, in quote currency * 10^8.
@@ -38,7 +38,7 @@ pub struct OrderRiskLimits {
     /// Maximum permitted age of the last validated market observation.
     pub max_market_age_ms: u64,
     /// Last validated exchange reference price in quote currency.
-    pub reference_price: &'static str,
+    pub reference_price: &'a str,
     /// Absolute maximum price deviation from the reference, in basis points.
     pub max_price_deviation_bps: u16,
 }
@@ -106,7 +106,7 @@ fn is_uuid(value: &str) -> bool {
 /// persistent duplicate-ID prevention and exchange-side reconciliation.
 pub fn validate_limit_order(
     intent: &LimitOrderIntent,
-    limits: OrderRiskLimits,
+    limits: OrderRiskLimits<'_>,
     now_ms: u64,
     live_trading_enabled: bool,
 ) -> Result<u128, OrderIntentError> {
@@ -168,7 +168,7 @@ pub struct PreparedLimitOrder {
 /// those sent to the exchange when the execution layer is implemented.
 pub fn prepare_limit_order(
     intent: &LimitOrderIntent,
-    limits: OrderRiskLimits,
+    limits: OrderRiskLimits<'_>,
     now_ms: u64,
     live_trading_enabled: bool,
 ) -> Result<PreparedLimitOrder, OrderIntentError> {
@@ -222,7 +222,7 @@ mod tests {
             price: "90000".into(),
         }
     }
-    fn limits() -> OrderRiskLimits {
+    fn limits() -> OrderRiskLimits<'static> {
         OrderRiskLimits {
             max_order_quote_units: 1000 * SCALE,
             remaining_daily_quote_units: 2000 * SCALE,
