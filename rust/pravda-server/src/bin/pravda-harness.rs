@@ -31,6 +31,7 @@ const MAX_STDERR_BYTES: usize = 16_384;
 const MAX_TOTAL_RUNS: u32 = 5_000;
 const MAX_CONCURRENCY: usize = 64;
 const READER_FINISH_MS: u64 = 300;
+const MAX_CHILD_RSS_BYTES: u64 = 512 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -58,6 +59,7 @@ enum ResultKind {
     Rejected,
     Timeout,
     Crash,
+    MemoryExceeded,
     Invalid,
 }
 
@@ -211,6 +213,54 @@ fn drain_pipe<R: Read + Send + 'static>(mut source: R, max: usize) -> mpsc::Rece
     rx
 }
 
+#[cfg(target_os = "linux")]
+fn current_rss_bytes(pid: u32) -> Option<u64> {
+    let status = fs::read_to_string(format!("/proc/{pid}/status")).ok()?;
+    let kb = status.lines().find_map(|line| {
+        line.strip_prefix("VmRSS:")?
+            .split_whitespace()
+            .next()?
+            .parse::<u64>()
+            .ok()
+    })?;
+    kb.checked_mul(1024)
+}
+
+#[cfg(windows)]
+fn current_rss_bytes(pid: u32) -> Option<u64> {
+    use std::mem;
+    use windows_sys::Win32::{
+        System::{
+            ProcessStatus::{GetProcessMemoryInfo, PROCESS_MEMORY_COUNTERS},
+            Threading::{OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION},
+        },
+        Foundation::CloseHandle,
+    };
+    unsafe {
+        let handle = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, pid);
+        if handle.is_null() {
+            return None;
+        }
+        let mut counters: PROCESS_MEMORY_COUNTERS = mem::zeroed();
+        let ok = GetProcessMemoryInfo(
+            handle,
+            &mut counters as *mut PROCESS_MEMORY_COUNTERS,
+            mem::size_of::<PROCESS_MEMORY_COUNTERS>() as u32,
+        );
+        CloseHandle(handle);
+        if ok == 0 {
+            None
+        } else {
+            Some(counters.WorkingSetSize as u64)
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "linux", windows)))]
+fn current_rss_bytes(_pid: u32) -> Option<u64> {
+    None
+}
+
 fn run_one(case: &TestCase, path: &Path, index: u32, limits: GateLimits) -> ResultRow {
     let run_id = format!("{}_{}", case.id, index);
     let mut cmd = Command::new(path);
@@ -257,7 +307,14 @@ fn run_one(case: &TestCase, path: &Path, index: u32, limits: GateLimits) -> Resu
 
     let started = Instant::now();
     let deadline = Duration::from_millis(case.timeout_ms);
+    let mut memory_exceeded = false;
     let outcome = loop {
+        if current_rss_bytes(child.id()).is_some_and(|rss| rss > MAX_CHILD_RSS_BYTES) {
+            memory_exceeded = true;
+            let _ = child.kill();
+            let _ = child.wait();
+            break None;
+        }
         match child.try_wait() {
             Ok(Some(status)) => break Some(status.success()),
             Ok(None) if started.elapsed() < deadline => {
@@ -277,6 +334,13 @@ fn run_one(case: &TestCase, path: &Path, index: u32, limits: GateLimits) -> Resu
     };
     let output = stdout.recv_timeout(Duration::from_millis(READER_FINISH_MS));
     let _ = stderr.recv_timeout(Duration::from_millis(READER_FINISH_MS));
+    if memory_exceeded {
+        return ResultRow {
+            kind: ResultKind::MemoryExceeded,
+            reason: "child_memory_cap_exceeded",
+            metric: None,
+        };
+    }
     match outcome {
         None => ResultRow {
             kind: ResultKind::Timeout,
@@ -324,6 +388,7 @@ fn aggregate(rows: Vec<ResultRow>) -> Summary {
         rejected: 0,
         timeout: 0,
         crash: 0,
+        memory_exceeded: 0,
         invalid: 0,
         gross_pnl_cents_total: 0,
         net_pnl_cents_total: 0,
@@ -344,6 +409,7 @@ fn aggregate(rows: Vec<ResultRow>) -> Summary {
             ResultKind::Rejected => a.rejected += 1,
             ResultKind::Timeout => a.timeout += 1,
             ResultKind::Crash => a.crash += 1,
+            ResultKind::MemoryExceeded => a.memory_exceeded += 1,
             ResultKind::Invalid => a.invalid += 1,
         }
         if !matches!(row.kind, ResultKind::Pass) {
