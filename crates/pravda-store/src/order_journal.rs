@@ -131,9 +131,8 @@ impl OrderJournal {
         if integrity != "ok" {
             return Err(JournalError::Inconsistent);
         }
-        let mut query = connection.prepare(
-            "SELECT state,exchange_order_id,base_units,filled_units FROM order_journal",
-        )?;
+        let mut query = connection
+            .prepare("SELECT state,exchange_order_id,base_units,filled_units FROM order_journal")?;
         let records = query.query_map([], |row| {
             Ok((
                 row.get::<_, String>(0)?,
@@ -151,8 +150,14 @@ impl OrderJournal {
                 || filled > base
                 || venue.as_deref().is_some_and(str::is_empty)
                 || (matches!(state, State::Reserved | State::Submitting) && venue.is_some())
-                || (matches!(state, State::Open | State::PartiallyFilled | State::Filled | State::Cancelled | State::Rejected)
-                    && venue.is_none())
+                || (matches!(
+                    state,
+                    State::Open
+                        | State::PartiallyFilled
+                        | State::Filled
+                        | State::Cancelled
+                        | State::Rejected
+                ) && venue.is_none())
                 || (state == State::Reserved && filled != 0)
                 || (state == State::Open && filled != 0)
                 || (state == State::PartiallyFilled && (filled == 0 || filled == base))
@@ -361,21 +366,25 @@ mod tests {
         }
         {
             let connection = Connection::open(&file).unwrap();
-            connection.execute(
-                "UPDATE order_journal SET filled_units='101' WHERE client_order_id='safe-id'",
-                [],
-            ).unwrap();
+            connection
+                .execute(
+                    "UPDATE order_journal SET filled_units='101' WHERE client_order_id='safe-id'",
+                    [],
+                )
+                .unwrap();
         }
         assert!(matches!(
             OrderJournal::open(&file),
             Err(JournalError::Inconsistent)
         ));
         let conn = Connection::open(&file).unwrap();
-        let stopped: bool = conn.query_row(
-            "SELECT stopped FROM order_journal_control WHERE id=1",
-            [],
-            |row| row.get(0),
-        ).unwrap();
+        let stopped: bool = conn
+            .query_row(
+                "SELECT stopped FROM order_journal_control WHERE id=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert!(stopped);
     }
 
@@ -387,14 +396,26 @@ mod tests {
         journal.test_allow_offline_reservation().unwrap();
         for id in ["client-a", "client-b"] {
             journal.reserve(id, 100).unwrap();
-            journal.connection.execute(
-                "UPDATE order_journal SET state='unknown' WHERE client_order_id=?1",
-                [id],
-            ).unwrap();
+            journal
+                .connection
+                .execute(
+                    "UPDATE order_journal SET state='unknown' WHERE client_order_id=?1",
+                    [id],
+                )
+                .unwrap();
         }
-        journal.reconcile("client-a", "venue-123", State::Open, 0).unwrap();
-        assert!(journal.reconcile("client-b", "venue-123", State::Open, 0).is_err());
-        assert!(journal.get("client-b").unwrap().unwrap().exchange_id.is_none());
+        journal
+            .reconcile("client-a", "venue-123", State::Open, 0)
+            .unwrap();
+        assert!(journal
+            .reconcile("client-b", "venue-123", State::Open, 0)
+            .is_err());
+        assert!(journal
+            .get("client-b")
+            .unwrap()
+            .unwrap()
+            .exchange_id
+            .is_none());
     }
 
     #[test]
