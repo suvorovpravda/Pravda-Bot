@@ -11,7 +11,7 @@ use harness_metrics::{
     validate_build, validate_with_limits, Aggregate, GateLimits, Metrics, ReasonCount, Summary,
     SCHEMA_VERSION,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -32,7 +32,7 @@ const MAX_TOTAL_RUNS: u32 = 5_000;
 const MAX_CONCURRENCY: usize = 64;
 const READER_FINISH_MS: u64 = 300;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct TestCase {
     id: String,
@@ -43,7 +43,7 @@ struct TestCase {
     args: Vec<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Manifest {
     schema_version: u16,
@@ -511,14 +511,75 @@ async fn smoke() -> Result<(), &'static str> {
     }
 }
 
+/// Generate the fixture manifest with an exact SHA-256 allowlist.
+/// No shell, network, or external runtime; never overwrite an existing file.
+fn prepare_manifest(
+    bin_dir: &Path,
+    binary: &str,
+    repetitions: u32,
+    output: &Path,
+) -> Result<(), &'static str> {
+    let root = fs::canonicalize(bin_dir).map_err(|_| "binary_directory_unavailable")?;
+    let name = Path::new(binary);
+    if name.components().count() != 1 || name.file_name().is_none() {
+        return Err("unsafe_binary_name");
+    }
+    let candidate = fs::canonicalize(root.join(name)).map_err(|_| "test_binary_unavailable")?;
+    if candidate.parent() != Some(root.as_path()) || !candidate.is_file() {
+        return Err("binary_outside_allowlist");
+    }
+    let hash = hash_file(&candidate).map_err(|_| "hash_failure")?;
+    let concurrency = thread::available_parallelism().map_or(4, |n| n.get().clamp(1, 16));
+    let manifest = Manifest {
+        schema_version: SCHEMA_VERSION,
+        concurrency,
+        gates: GateLimits::default(),
+        cases: vec![TestCase {
+            id: "replay".into(),
+            binary: binary.into(),
+            expected_sha256: hash,
+            repetitions,
+            timeout_ms: 30_000,
+            args: Vec::new(),
+        }],
+    };
+    let _ = check_manifest(&manifest, &root)?;
+    let data = serde_json::to_vec_pretty(&manifest).map_err(|_| "serialization_failed")?;
+    use std::io::Write;
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(output)
+        .map_err(|_| "manifest_output_unavailable")?;
+    file.write_all(&data).map_err(|_| "manifest_write_failed")?;
+    file.flush().map_err(|_| "manifest_write_failed")?;
+    Ok(())
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() == 1 && args[0].starts_with("--fixture-") {
         fixture(&args[0]);
     }
-    let result = if args.as_slice() == ["--smoke"] {
+    let result = if args.len() == 1 && args[0] == "--smoke" {
         smoke().await
+    } else if args.len() == 5 && args[0] == "prepare" {
+        match args[3].parse::<u32>() {
+            Ok(repetitions) => {
+                let created = prepare_manifest(
+                    Path::new(&args[1]),
+                    &args[2],
+                    repetitions,
+                    Path::new(&args[4]),
+                );
+                if created.is_ok() {
+                    println!("MANIFEST_READY");
+                }
+                created
+            }
+            Err(_) => Err("invalid_run_count"),
+        }
     } else if args.len() == 3 && args[0] == "run" {
         let parsed = load_manifest(Path::new(&args[1]));
         match parsed {
@@ -542,7 +603,7 @@ async fn main() {
             Err(e) => Err(e),
         }
     } else {
-        Err("usage: pravda-harness run <manifest.json> <binary_dir> | --smoke")
+        Err("usage: pravda-harness prepare <bin_dir> <exe> <N> <manifest.json> | run <manifest.json> <bin_dir> | --smoke")
     };
     if let Err(reason) = result {
         eprintln!("HARNESS_ERROR:{reason}");
