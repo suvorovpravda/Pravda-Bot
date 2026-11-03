@@ -184,13 +184,14 @@ fn sign_fixed_request(
 
 /// Exchange UUIDs must not introduce path/query segments into signed requests.
 fn valid_exchange_uuid(id: &str) -> bool {
-    id.len() == 36 && id.bytes().enumerate().all(|(index, b)| {
-        if matches!(index, 8 | 13 | 18 | 23) {
-            b == b'-'
-        } else {
-            b.is_ascii_hexdigit()
-        }
-    })
+    id.len() == 36
+        && id.bytes().enumerate().all(|(index, b)| {
+            if matches!(index, 8 | 13 | 18 | 23) {
+                b == b'-'
+            } else {
+                b.is_ascii_hexdigit()
+            }
+        })
 }
 
 /// Minimal, validated read-only snapshot used to reconcile ambiguous orders.
@@ -205,18 +206,28 @@ pub struct OrderDetails {
     pub filled_quantity: String,
 }
 
-fn decode_order_details_bytes(body: &[u8], expected_id: &str) -> Result<OrderDetails, PrivateReadError> {
+fn decode_order_details_bytes(
+    body: &[u8],
+    expected_id: &str,
+) -> Result<OrderDetails, PrivateReadError> {
     if body.len() > MAX_BODY_BYTES {
         return Err(PrivateReadError::InvalidResponse);
     }
     let json: serde_json::Value =
         serde_json::from_slice(body).map_err(|_| PrivateReadError::InvalidResponse)?;
-    let data = json.get("data").and_then(serde_json::Value::as_object)
+    let data = json
+        .get("data")
+        .and_then(serde_json::Value::as_object)
         .ok_or(PrivateReadError::InvalidResponse)?;
     let field = |key: &str| -> Result<String, PrivateReadError> {
-        let value = data.get(key).and_then(serde_json::Value::as_str)
+        let value = data
+            .get(key)
+            .and_then(serde_json::Value::as_str)
             .ok_or(PrivateReadError::InvalidResponse)?;
-        if value.is_empty() || value.len() > 128 || value.bytes().any(|byte| byte == 13 || byte == 10) {
+        if value.is_empty()
+            || value.len() > 128
+            || value.bytes().any(|byte| byte == 13 || byte == 10)
+        {
             return Err(PrivateReadError::InvalidResponse);
         }
         Ok(value.to_owned())
@@ -231,7 +242,9 @@ fn decode_order_details_bytes(body: &[u8], expected_id: &str) -> Result<OrderDet
         || !valid_exchange_uuid(&venue_order_id)
         || !valid_exchange_uuid(&client_order_id)
         || symbol.len() > 24
-        || !symbol.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'/'))
+        || !symbol
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'/'))
         || !status.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
         || !valid_decimal(&quantity)
         || !valid_decimal(&filled_quantity)
@@ -239,7 +252,12 @@ fn decode_order_details_bytes(body: &[u8], expected_id: &str) -> Result<OrderDet
         return Err(PrivateReadError::InvalidResponse);
     }
     Ok(OrderDetails {
-        venue_order_id, client_order_id, symbol, status, quantity, filled_quantity,
+        venue_order_id,
+        client_order_id,
+        symbol,
+        status,
+        quantity,
+        filled_quantity,
     })
 }
 
@@ -249,13 +267,17 @@ fn signed_order_details_headers(
     key_pem: &[u8],
     venue_id: &str,
 ) -> Result<HeaderMap, PrivateReadError> {
-    if !valid_exchange_uuid(venue_id) || api_key.len() != 64
+    if !valid_exchange_uuid(venue_id)
+        || api_key.len() != 64
         || !api_key.iter().all(u8::is_ascii_alphanumeric)
     {
         return Err(PrivateReadError::Credentials);
     }
     let signature = Zeroizing::new(sign_fixed_request(
-        timestamp, key_pem, FixedOperation::OrderDetails(venue_id.to_owned()), "",
+        timestamp,
+        key_pem,
+        FixedOperation::OrderDetails(venue_id.to_owned()),
+        "",
     )?);
     let mut key = HeaderValue::from_bytes(api_key).map_err(|_| PrivateReadError::Credentials)?;
     key.set_sensitive(true);
@@ -263,7 +285,10 @@ fn signed_order_details_headers(
     signed.set_sensitive(true);
     let mut headers = HeaderMap::new();
     headers.insert("X-Revx-API-Key", key);
-    headers.insert("X-Revx-Timestamp", HeaderValue::from_str(timestamp).map_err(|_| PrivateReadError::Clock)?);
+    headers.insert(
+        "X-Revx-Timestamp",
+        HeaderValue::from_str(timestamp).map_err(|_| PrivateReadError::Clock)?,
+    );
     headers.insert("X-Revx-Signature", signed);
     Ok(headers)
 }
@@ -300,25 +325,38 @@ impl RevolutXPrivateReadClient {
             .map_err(|_| PrivateReadError::Clock)?
             .as_millis()
             .to_string();
-        let headers = signed_order_details_headers(
-            &timestamp, api_key, private_pkcs8_pem, venue_id,
-        )?;
-        let response = self.client
-            .get(format!("https://revx.revolut.com/api/1.0/orders/{venue_id}"))
+        let headers =
+            signed_order_details_headers(&timestamp, api_key, private_pkcs8_pem, venue_id)?;
+        let response = self
+            .client
+            .get(format!(
+                "https://revx.revolut.com/api/1.0/orders/{venue_id}"
+            ))
             .headers(headers)
-            .send().await.map_err(|_| PrivateReadError::Network)?;
+            .send()
+            .await
+            .map_err(|_| PrivateReadError::Network)?;
         match response.status() {
-            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => return Err(PrivateReadError::Unauthorized),
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => {
+                return Err(PrivateReadError::Unauthorized)
+            }
             StatusCode::TOO_MANY_REQUESTS => return Err(PrivateReadError::RateLimited),
             status if !status.is_success() => return Err(PrivateReadError::HttpStatus),
             _ => {}
         }
-        if response.content_length().is_some_and(|n| n > MAX_BODY_BYTES as u64) {
+        if response
+            .content_length()
+            .is_some_and(|n| n > MAX_BODY_BYTES as u64)
+        {
             return Err(PrivateReadError::InvalidResponse);
         }
         let mut response = response;
         let mut body = Vec::new();
-        while let Some(chunk) = response.chunk().await.map_err(|_| PrivateReadError::Network)? {
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|_| PrivateReadError::Network)?
+        {
             if body.len().saturating_add(chunk.len()) > MAX_BODY_BYTES {
                 return Err(PrivateReadError::InvalidResponse);
             }
@@ -463,13 +501,17 @@ mod tests {
         let pem = format!("{PEM_START}\n{}\n{PEM_END}", STANDARD.encode(der.as_ref()));
         let id = "7a52e92e-8639-4fe1-abaa-68d3a2d5234b";
         let signed = sign_fixed_request(
-            "1785313433816", pem.as_bytes(),
-            FixedOperation::OrderDetails(id.to_owned()), "",
-        ).unwrap();
+            "1785313433816",
+            pem.as_bytes(),
+            FixedOperation::OrderDetails(id.to_owned()),
+            "",
+        )
+        .unwrap();
         let decoded = STANDARD.decode(signed).unwrap();
         let expected = format!("1785313433816GET/api/1.0/orders/{id}");
         UnparsedPublicKey::new(&ED25519, pair.public_key().as_ref())
-            .verify(expected.as_bytes(), &decoded).unwrap();
+            .verify(expected.as_bytes(), &decoded)
+            .unwrap();
         assert!(!valid_exchange_uuid("../balances?x=1"));
         assert!(!valid_exchange_uuid("abc"));
     }
@@ -482,7 +524,11 @@ mod tests {
         );
         let result = decode_order_details_bytes(body.as_bytes(), id).unwrap();
         assert_eq!(result.quantity, "0.002");
-        assert!(decode_order_details_bytes(body.as_bytes(), "123e4567-e89b-12d3-a456-426614174000").is_err());
+        assert!(decode_order_details_bytes(
+            body.as_bytes(),
+            "123e4567-e89b-12d3-a456-426614174000"
+        )
+        .is_err());
         assert!(decode_order_details_bytes(b"{}", id).is_err());
         assert!(decode_order_details_bytes(&vec![b'x'; MAX_BODY_BYTES + 1], id).is_err());
         assert!(decode_order_details_bytes(body.replace("0.002", "NaN").as_bytes(), id).is_err());
