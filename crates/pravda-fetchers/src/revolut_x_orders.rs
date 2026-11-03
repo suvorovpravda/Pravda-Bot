@@ -37,6 +37,10 @@ pub struct OrderRiskLimits {
     pub last_market_timestamp_ms: u64,
     /// Maximum permitted age of the last validated market observation.
     pub max_market_age_ms: u64,
+    /// Last validated exchange reference price in quote currency.
+    pub reference_price: &'static str,
+    /// Absolute maximum price deviation from the reference, in basis points.
+    pub max_price_deviation_bps: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Error)]
@@ -120,6 +124,21 @@ pub fn validate_limit_order(
     }
     let size = positive_units(&intent.base_size).ok_or(OrderIntentError::InvalidDecimal)?;
     let price = positive_units(&intent.price).ok_or(OrderIntentError::InvalidDecimal)?;
+    let reference =
+        positive_units(limits.reference_price).ok_or(OrderIntentError::RiskLimit)?;
+    if limits.max_price_deviation_bps == 0 || limits.max_price_deviation_bps > 10_000 {
+        return Err(OrderIntentError::RiskLimit);
+    }
+    let deviation = price.abs_diff(reference);
+    let actual = deviation
+        .checked_mul(10_000)
+        .ok_or(OrderIntentError::RiskLimit)?;
+    let permitted = reference
+        .checked_mul(u128::from(limits.max_price_deviation_bps))
+        .ok_or(OrderIntentError::RiskLimit)?;
+    if actual > permitted {
+        return Err(OrderIntentError::RiskLimit);
+    }
     // Round the quote notional UP, ensuring limits cannot be bypassed by
     // fractional remainders. Multiplication overflow fails closed.
     let product = size.checked_mul(price).ok_or(OrderIntentError::RiskLimit)?;
@@ -193,6 +212,8 @@ mod tests {
             remaining_daily_quote_units: 2000 * SCALE,
             last_market_timestamp_ms: 999_000,
             max_market_age_ms: 2_000,
+            reference_price: "90000",
+            max_price_deviation_bps: 100,
         }
     }
     #[test]
@@ -225,6 +246,20 @@ mod tests {
         l.remaining_daily_quote_units = 899 * SCALE;
         assert_eq!(validate_limit_order(&order(), l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
     }
+    #[test]
+    fn price_collar_rejects_large_deviation_on_both_sides() {
+        let mut o = order();
+        o.price = "91800".into();
+        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        o.price = "88200".into();
+        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Err(OrderIntentError::RiskLimit));
+        o.price = "90001".into();
+        assert_eq!(validate_limit_order(&o, limits(), 1_000_000, true), Ok(900_01000000));
+        let mut l = limits();
+        l.max_price_deviation_bps = 0;
+        assert_eq!(validate_limit_order(&order(), l, 1_000_000, true), Err(OrderIntentError::RiskLimit));
+    }
+
     #[test]
     fn preparing_order_is_local_and_requires_explicit_activation() {
         assert_eq!(
