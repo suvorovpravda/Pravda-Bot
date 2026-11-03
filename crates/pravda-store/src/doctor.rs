@@ -53,14 +53,16 @@ pub fn inspect_database(path: &Path) -> DatabaseHealth {
         Ok(connection) => connection,
         Err(_) => return DatabaseHealth::Unavailable,
     };
-    if conn.busy_timeout(std::time::Duration::from_millis(750)).is_err() {
+    if conn
+        .busy_timeout(std::time::Duration::from_millis(750))
+        .is_err()
+    {
         return DatabaseHealth::Unavailable;
     }
-    let integrity: String =
-        match conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0)) {
-            Ok(result) => result,
-            Err(_) => return DatabaseHealth::Corrupt,
-        };
+    let integrity: String = match conn.query_row("PRAGMA quick_check(1)", [], |row| row.get(0)) {
+        Ok(result) => result,
+        Err(_) => return DatabaseHealth::Corrupt,
+    };
     if integrity != "ok" {
         return DatabaseHealth::Corrupt;
     }
