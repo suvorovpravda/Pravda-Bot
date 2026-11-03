@@ -264,7 +264,6 @@ impl PravdaRuntime {
                         let gross_spread = spread.gross_percent();
                         let net_spread = spread.net_percent();
                         let profitable = net_spread > 0.0;
-                        let now = Utc::now();
 
                         // AlertGate
                         let mut gates = runtime.alert_gates.write().await;
@@ -283,7 +282,7 @@ impl PravdaRuntime {
                             profitable,
                             gross_spread,
                             REARM_THRESHOLD,
-                            now,
+                            Instant::now(),
                         );
 
                         if activated {

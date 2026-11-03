@@ -3,11 +3,12 @@ pub use backtest::{replay, ReplayConfig, ReplayError, ReplayResult, ReplayTick};
 
 use chrono::{DateTime, Utc};
 use std::collections::{HashMap, HashSet};
+use std::time::Instant;
 
 #[derive(Debug, Clone)]
 pub struct AlertGate {
     confirmation_seconds: f64,
-    candidate_since: HashMap<String, DateTime<Utc>>,
+    candidate_since: HashMap<String, Instant>,
     active: HashSet<String>,
     activation_ids: HashMap<String, u64>,
     next_activation_id: u64,
@@ -60,7 +61,7 @@ impl AlertGate {
         profitable: bool,
         spread: f64,
         rearm_threshold: f64,
-        now: DateTime<Utc>,
+        now: Instant,
     ) -> bool {
         if !spread.is_finite()
             || spread < 0.0
@@ -89,11 +90,11 @@ impl AlertGate {
             .entry(symbol.to_string())
             .or_insert(now);
 
-        let elapsed = now
-            .signed_duration_since(*candidate_since)
-            .num_milliseconds() as f64
-            / 1000.0;
-        if elapsed + 1e-9 < self.confirmation_seconds {
+        let Some(elapsed) = now.checked_duration_since(*candidate_since) else {
+            *candidate_since = now;
+            return false;
+        };
+        if elapsed.as_secs_f64() + 1e-9 < self.confirmation_seconds {
             return false;
         }
 
@@ -300,11 +301,26 @@ mod tests {
     #[test]
     fn test_alert_gate_basic_flow() {
         let mut gate = AlertGate::new(3.0);
-        let now = Utc::now();
+        let now = Instant::now();
         assert!(!gate.update("BTC/USDT", true, 0.01, 0.005, now));
-        let later = now + Duration::seconds(4);
+        let later = now + std::time::Duration::from_secs(4);
         assert!(gate.update("BTC/USDT", true, 0.01, 0.005, later));
         assert!(gate.is_active("BTC/USDT"));
+    }
+
+    #[test]
+    fn confirmation_uses_monotonic_elapsed_time_and_resets_on_backward_input() {
+        let mut gate = AlertGate::new(3.0);
+        let start = Instant::now();
+        let seconds = std::time::Duration::from_secs;
+        assert!(!gate.update("BTC/USDT", true, 0.5, 0.005, start));
+        assert!(!gate.update("BTC/USDT", true, 0.5, 0.005, start + seconds(2)));
+        assert!(gate.update("BTC/USDT", true, 0.5, 0.005, start + seconds(3)));
+        let mut backwards = AlertGate::new(3.0);
+        assert!(!backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(10)));
+        assert!(!backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(9)));
+        assert!(!backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(11)));
+        assert!(backwards.update("BTC/USDT", true, 0.5, 0.005, start + seconds(12)));
     }
 
     #[test]
