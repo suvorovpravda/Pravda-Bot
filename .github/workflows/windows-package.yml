@@ -123,6 +123,25 @@ jobs:
               Write-Warning "UNSIGNED TEST PACKAGE ONLY: $($file.Name). Not an Enterprise release."
             }
           }
+      - name: Generate SHA-256 release candidate manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = 'crates/pravda-app/target/release/bundle'
+          $exe = Get-Item 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
+          $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
+          $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
+          if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
+          $files = @($exe) + $msi + $nsis
+          $manifest = foreach ($file in ($files | Sort-Object FullName)) {
+            $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            $relative = [IO.Path]::GetRelativePath((Get-Location).Path, $file.FullName).Replace([char]92, '/')
+            "$hash  $relative"
+          }
+          $manifest | Set-Content -LiteralPath "$bundle/SHA256SUMS.txt" -Encoding ascii
+          if ((Get-Content "$bundle/SHA256SUMS.txt").Count -ne $files.Count) {
+            throw 'Incomplete release candidate manifest'
+          }
       - name: Clean up temporary signing config
         if: always()
         shell: pwsh
@@ -134,5 +153,7 @@ jobs:
           path: |
             crates/pravda-app/target/release/bundle/msi/*.msi
             crates/pravda-app/target/release/bundle/nsis/*-setup.exe
+            crates/pravda-app/target/release/bundle/SHA256SUMS.txt
+            crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 3
