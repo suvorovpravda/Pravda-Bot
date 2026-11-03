@@ -1,7 +1,7 @@
-//! Authenticated Revolut X **read-only** balances API.
+//! Authenticated Revolut X read-only balances and offline signature primitives.
 //!
-//! The private API uses Ed25519 signatures. This module deliberately has NO
-//! order creation/cancellation functions or arbitrary HTTP method/path input.
+//! The private API uses Ed25519 signatures. This module has NO order
+//! creation/cancellation transport or arbitrary HTTP method/path input.
 //! API keys and PKCS#8 material are supplied by Rust callers and never logged.
 //! See https://developer.revolut.com/docs/api/revolut-x-crypto-exchange
 use base64::{engine::general_purpose::STANDARD, Engine as _};
