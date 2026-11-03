@@ -347,10 +347,7 @@ mod tests {
         let mut l = limits();
         l.max_order_quote_units = 1;
         l.reference_price = "0.00000001";
-        assert_eq!(
-            validate_limit_order(&o, l, 1_000_000, true),
-            Ok(1)
-        );
+        assert_eq!(validate_limit_order(&o, l, 1_000_000, true), Ok(1));
         l.max_order_quote_units = 0;
         assert_eq!(
             validate_limit_order(&o, l, 1_000_000, true),
