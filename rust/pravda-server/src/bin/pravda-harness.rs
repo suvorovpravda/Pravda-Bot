@@ -114,9 +114,10 @@ fn check_manifest(manifest: &Manifest, bin_dir: &Path) -> Result<Vec<PathBuf>, &
     {
         return Err("invalid_manifest");
     }
-    let total = manifest.cases.iter().try_fold(0_u32, |sum, case| {
-        sum.checked_add(case.repetitions)
-    });
+    let total = manifest
+        .cases
+        .iter()
+        .try_fold(0_u32, |sum, case| sum.checked_add(case.repetitions));
     if total.is_none_or(|n| n == 0 || n > MAX_TOTAL_RUNS) {
         return Err("invalid_run_count");
     }
@@ -160,10 +161,7 @@ fn check_manifest(manifest: &Manifest, bin_dir: &Path) -> Result<Vec<PathBuf>, &
                 .iter()
                 .any(|s| s.len() > 128 || s.chars().any(char::is_control))
             || case.expected_sha256.len() != 64
-            || !case
-                .expected_sha256
-                .bytes()
-                .all(|b| b.is_ascii_hexdigit())
+            || !case.expected_sha256.bytes().all(|b| b.is_ascii_hexdigit())
         {
             return Err("unsafe_case_configuration");
         }
@@ -175,8 +173,7 @@ fn check_manifest(manifest: &Manifest, bin_dir: &Path) -> Result<Vec<PathBuf>, &
         {
             return Err("unsafe_binary_name");
         }
-        let candidate = fs::canonicalize(base.join(name))
-            .map_err(|_| "test_binary_unavailable")?;
+        let candidate = fs::canonicalize(base.join(name)).map_err(|_| "test_binary_unavailable")?;
         if candidate.parent() != Some(base.as_path()) || !candidate.is_file() {
             return Err("binary_outside_allowlist");
         }
@@ -391,7 +388,11 @@ async fn orchestrate(manifest: Manifest, paths: Vec<PathBuf>) -> Summary {
     let mut tasks = JoinSet::new();
     for (case, path) in manifest.cases.into_iter().zip(paths) {
         for index in 0..case.repetitions {
-            let permit = permits.clone().acquire_owned().await.expect("semaphore open");
+            let permit = permits
+                .clone()
+                .acquire_owned()
+                .await
+                .expect("semaphore open");
             let one = case.clone();
             let binary = path.clone();
             let gates = manifest.gates;
@@ -453,7 +454,11 @@ fn fixture(mode: &str) -> ! {
 }
 
 fn load_manifest(path: &Path) -> Result<Manifest, &'static str> {
-    if fs::metadata(path).map_err(|_| "manifest_unavailable")?.len() > MAX_MANIFEST_BYTES {
+    if fs::metadata(path)
+        .map_err(|_| "manifest_unavailable")?
+        .len()
+        > MAX_MANIFEST_BYTES
+    {
         return Err("manifest_too_large");
     }
     let bytes = fs::read(path).map_err(|_| "manifest_unreadable")?;
@@ -463,7 +468,10 @@ fn load_manifest(path: &Path) -> Result<Manifest, &'static str> {
 async fn smoke() -> Result<(), &'static str> {
     let own = env::current_exe().map_err(|_| "harness_executable_missing")?;
     let parent = own.parent().ok_or("harness_executable_directory_missing")?;
-    let binary = own.file_name().and_then(|n| n.to_str()).ok_or("invalid_binary_name")?;
+    let binary = own
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("invalid_binary_name")?;
     let hash = hash_file(&own).map_err(|_| "hash_failure")?;
     let manifest = Manifest {
         schema_version: SCHEMA_VERSION,
@@ -477,14 +485,21 @@ async fn smoke() -> Result<(), &'static str> {
                 binary: binary.into(),
                 expected_sha256: hash.clone(),
                 repetitions: 1,
-                timeout_ms: if *arg == "--fixture-timeout" { 150 } else { 5_000 },
+                timeout_ms: if *arg == "--fixture-timeout" {
+                    150
+                } else {
+                    5_000
+                },
                 args: vec![(*arg).into()],
             })
             .collect(),
     };
     let binaries = check_manifest(&manifest, parent)?;
     let summary = orchestrate(manifest, binaries).await;
-    println!("{}", serde_json::to_string(&summary).map_err(|_| "serialization_failed")?);
+    println!(
+        "{}",
+        serde_json::to_string(&summary).map_err(|_| "serialization_failed")?
+    );
     if summary.aggregate.pass == 1
         && summary.aggregate.rejected == 1
         && summary.aggregate.timeout == 1
@@ -543,9 +558,21 @@ mod tests {
     fn aggregates_all_types_without_exposing_raw_stderr() {
         let m = sample_metric();
         let summary = aggregate(vec![
-            ResultRow { kind: ResultKind::Pass, reason: "accepted", metric: Some(m) },
-            ResultRow { kind: ResultKind::Crash, reason: "child_failed_or_panicked", metric: None },
-            ResultRow { kind: ResultKind::Timeout, reason: "deadline_exceeded", metric: None },
+            ResultRow {
+                kind: ResultKind::Pass,
+                reason: "accepted",
+                metric: Some(m),
+            },
+            ResultRow {
+                kind: ResultKind::Crash,
+                reason: "child_failed_or_panicked",
+                metric: None,
+            },
+            ResultRow {
+                kind: ResultKind::Timeout,
+                reason: "deadline_exceeded",
+                metric: None,
+            },
         ]);
         assert_eq!(summary.aggregate.runs, 3);
         assert_eq!(summary.aggregate.pass, 1);
