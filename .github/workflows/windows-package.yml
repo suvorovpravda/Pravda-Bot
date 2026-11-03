@@ -280,3 +280,73 @@ jobs:
             crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 30
+
+  verify-upload:
+    name: Verify downloaded release bundle on an independent Windows runner
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
+          path: downloaded-release
+      - name: Validate extracted EXE, MSI, NSIS, Doctor, Harness and provenance
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_SIGNED: ${{ inputs.signed || false }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path 'downloaded-release').Path
+          $evidencePath = Join-Path $root 'bundle/release-evidence.json'
+          $evidence = Get-Content -LiteralPath $evidencePath -Raw | ConvertFrom-Json
+          $expectedSigned = $env:EXPECTED_SIGNED -eq 'true'
+          if ($evidence.schema_version -ne 1 -or
+              $evidence.commit_sha -cne $env:EXPECTED_COMMIT -or
+              [bool]$evidence.signed_release -ne $expectedSigned) {
+            throw 'Downloaded artifact provenance, commit or signed mode mismatch'
+          }
+          $entries = @(Get-Content -LiteralPath (Join-Path $root 'bundle/SHA256SUMS.txt') -Encoding ascii)
+          if ($entries.Count -lt 5 -or @($evidence.artifacts).Count -ne $entries.Count) {
+            throw 'Missing or duplicate release evidence for an artifact'
+          }
+          $covered = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
+          $thumbprint = $null
+          foreach ($item in @($evidence.artifacts)) {
+            if (-not $covered.Add([string]$item.path)) {
+              throw 'Duplicate provenance entry'
+            }
+            $manifest = $entries | Where-Object { $_ -ceq "$($item.sha256)  $($item.path)" }
+            if (@($manifest).Count -ne 1) {
+              throw 'Evidence hash or path differs from downloaded manifest'
+            }
+            $file = Get-Item -LiteralPath (Join-Path $root ([string]$item.path)) -ErrorAction Stop
+            $digest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($digest -cne [string]$item.sha256) {
+              throw 'Downloaded artifact bytes differ from evidence'
+            }
+            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+            if ($expectedSigned) {
+              if ($signature.Status -ne 'Valid' -or -not $signature.SignerCertificate -or
+                  -not $signature.TimeStamperCertificate -or
+                  $signature.SignerCertificate.Thumbprint -cne $item.signer_thumbprint) {
+                throw 'Downloaded Enterprise artifact signature failed independent verification'
+              }
+              if ($null -eq $thumbprint) { $thumbprint = $signature.SignerCertificate.Thumbprint }
+              if ($thumbprint -cne $signature.SignerCertificate.Thumbprint) {
+                throw 'Enterprise artifacts were signed with inconsistent identities'
+              }
+            }
+          }
+          $args = @{ ReleaseRoot = $root; RequireCompanions = $true }
+          if ($expectedSigned) {
+            if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Enterprise certificate thumbprint missing' }
+            $args.RequireSigned = $true
+            $args.ExpectedThumbprint = $thumbprint
+          }
+          & ./tools/Verify-Pravda-Installer.ps1 @args
+          Write-Host "Verified independently downloaded Windows release from commit $env:EXPECTED_COMMIT"
