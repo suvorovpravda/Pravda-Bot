@@ -93,8 +93,12 @@ mod windows {
             rpassword::prompt_password("Local Pravda-Bot password: ")
                 .map_err(|_| "A Windows console is required")?,
         );
+        verify_password(&auth, &password)
+    }
+
+    fn verify_password(auth: &Auth, password: &str) -> Result<(), &'static str> {
         let token = Zeroizing::new(
-            auth.login(&password)
+            auth.login(password)
                 .map_err(|_| "Local authentication failed")?,
         );
         auth.logout(&token);
@@ -177,6 +181,24 @@ mod windows {
     #[cfg(test)]
     mod tests {
         use super::*;
+
+        #[test]
+        fn console_password_requires_existing_valid_local_password() {
+            let path = std::env::temp_dir().join(format!(
+                "pravda-revolut-auth-{}-{}.json",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+            let auth = Auth::load(&path, 1000).unwrap();
+            assert!(verify_password(&auth, "unconfigured-password").is_err());
+            auth.set_password("test-password-for-revolut-cli").unwrap();
+            assert!(verify_password(&auth, "wrong-password").is_err());
+            assert!(verify_password(&auth, "test-password-for-revolut-cli").is_ok());
+            std::fs::remove_file(path).unwrap();
+        }
 
         #[test]
         fn windows_setup_lock_excludes_other_handles_and_releases_on_drop() {
