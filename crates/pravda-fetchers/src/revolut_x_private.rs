@@ -206,6 +206,41 @@ pub struct OrderDetails {
     pub filled_quantity: String,
 }
 
+/// Compare validated non-negative decimal strings without floats, rounding,
+/// or integer overflow. The remote API can supply arbitrary decimal precision.
+fn decimal_leq(value: &str, ceiling: &str) -> bool {
+    if !valid_decimal(value) || !valid_decimal(ceiling) {
+        return false;
+    }
+    fn parts(raw: &str) -> (&str, &str) {
+        let (whole, fractional) = raw.split_once('.').unwrap_or((raw, ""));
+        let whole = whole.trim_start_matches('0');
+        (
+            if whole.is_empty() { "0" } else { whole },
+            fractional.trim_end_matches('0'),
+        )
+    }
+    let (left_whole, left_fraction) = parts(value);
+    let (right_whole, right_fraction) = parts(ceiling);
+    if left_whole.len() != right_whole.len() {
+        return left_whole.len() < right_whole.len();
+    }
+    if left_whole != right_whole {
+        return left_whole < right_whole;
+    }
+    for (left, right) in left_fraction
+        .bytes()
+        .chain(std::iter::repeat(b'0'))
+        .zip(right_fraction.bytes().chain(std::iter::repeat(b'0')))
+        .take(left_fraction.len().max(right_fraction.len()))
+    {
+        if left != right {
+            return left < right;
+        }
+    }
+    true
+}
+
 fn decode_order_details_bytes(
     body: &[u8],
     expected_id: &str,
@@ -245,9 +280,18 @@ fn decode_order_details_bytes(
         || !symbol
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'/'))
-        || !status.bytes().all(|b| b.is_ascii_lowercase() || b == b'_')
+        || !matches!(
+            status.as_str(),
+            "new" | "partially_filled" | "filled" | "cancelled" | "rejected" | "expired"
+        )
         || !valid_decimal(&quantity)
         || !valid_decimal(&filled_quantity)
+        || !decimal_leq(&filled_quantity, &quantity)
+        || decimal_leq(&quantity, "0")
+        || (status == "new" && !decimal_leq(&filled_quantity, "0"))
+        || (status == "partially_filled"
+            && (decimal_leq(&filled_quantity, "0") || decimal_leq(&quantity, &filled_quantity)))
+        || (status == "filled" && !decimal_leq(&quantity, &filled_quantity))
     {
         return Err(PrivateReadError::InvalidResponse);
     }
@@ -532,6 +576,50 @@ mod tests {
         assert!(decode_order_details_bytes(b"{}", id).is_err());
         assert!(decode_order_details_bytes(&vec![b'x'; MAX_BODY_BYTES + 1], id).is_err());
         assert!(decode_order_details_bytes(body.replace("0.002", "NaN").as_bytes(), id).is_err());
+    }
+
+    #[test]
+    fn arbitrary_precision_quantity_comparison_never_rounds_up_or_overflows() {
+        assert!(decimal_leq("0.000000000000000001", "0.000000000000000002"));
+        assert!(!decimal_leq("0.000000000000000002", "0.000000000000000001"));
+        assert!(decimal_leq("0000001.200000", "1.2"));
+        assert!(!decimal_leq(
+            "999999999999999999999999",
+            "888888888888888888888888"
+        ));
+        assert!(decimal_leq(
+            "999999999999999999999999",
+            "999999999999999999999999"
+        ));
+        assert!(!decimal_leq("1e9", "2000000000"));
+        assert!(!decimal_leq("-1", "0"));
+    }
+
+    #[test]
+    fn order_snapshots_reject_overfills_unknown_state_and_bad_partial_fill() {
+        let id = "7a52e92e-8639-4fe1-abaa-68d3a2d5234b";
+        let payload = |status: &str, filled: &str| {
+            format!(
+                r#"{{"data":{{"id":"{id}","client_order_id":"984a4d8a-2a9b-4950-822f-2a40037f02bd","symbol":"BTC/USD","status":"{status}","quantity":"0.002","filled_quantity":"{filled}"}}}}"#
+            )
+        };
+        for (status, fill) in [
+            ("new", "0.0000000000001"),
+            ("partially_filled", "0"),
+            ("partially_filled", "0.002"),
+            ("filled", "0.001"),
+            ("filled", "0.002000001"),
+            ("queued_unknown", "0"),
+        ] {
+            assert_eq!(
+                decode_order_details_bytes(payload(status, fill).as_bytes(), id),
+                Err(PrivateReadError::InvalidResponse),
+            );
+        }
+        assert!(
+            decode_order_details_bytes(payload("partially_filled", "0.001").as_bytes(), id).is_ok()
+        );
+        assert!(decode_order_details_bytes(payload("filled", "0.002").as_bytes(), id).is_ok());
     }
 
     #[test]
