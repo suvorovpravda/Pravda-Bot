@@ -112,9 +112,14 @@ impl OrderJournal {
         // until an explicit, separately authorized future activation procedure.
         // SEC: after an unacknowledged request, a restart must never mistake
         // an in-flight submission for permission to retry.
+        // SEC: Persist STOPPED before potentially fallible legacy migrations.
+        // A duplicate venue identity must never roll back the kill switch.
+        connection.execute(
+            "UPDATE order_journal_control SET stopped=1 WHERE id=1",
+            [],
+        )?;
         connection.execute_batch(
             "BEGIN IMMEDIATE;
-             UPDATE order_journal_control SET stopped=1 WHERE id=1;
              UPDATE order_journal SET state='unknown' WHERE state='submitting';
              CREATE UNIQUE INDEX IF NOT EXISTS ux_order_journal_venue_identity
                ON order_journal(exchange_order_id)
@@ -440,8 +445,18 @@ mod tests {
             ).unwrap();
         }
         assert!(OrderJournal::open(&file).is_err());
-        // Test does not assume the failed transaction committed. A corrupt
-        // legacy database cannot be used by the production OrderJournal API.
+        // SEC: Verify the kill switch is DURABLE even when index creation
+        // fails and the application refuses to open the corrupt journal.
+        let connection = Connection::open(&file).unwrap();
+        let stopped: bool = connection
+            .query_row(
+                "SELECT stopped FROM order_journal_control WHERE id=1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(stopped);
+        drop(connection);
         assert!(OrderJournal::open(&file).is_err());
     }
 
