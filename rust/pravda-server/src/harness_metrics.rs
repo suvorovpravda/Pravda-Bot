@@ -86,6 +86,25 @@ pub enum BuildError {
     Latency,
 }
 
+impl BuildError {
+    /// Fixed, content-free code for aggregation (never raw runtime errors).
+    pub const fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidSchema => "invalid_schema",
+            Self::InvalidRunId => "invalid_run_id",
+            Self::InvalidMetrics => "invalid_metrics",
+            Self::InvalidLimits => "invalid_gate_limits",
+            Self::InsufficientSamples => "insufficient_samples",
+            Self::NetPnl => "net_pnl",
+            Self::Drawdown => "max_drawdown",
+            Self::ValueAtRisk => "var_99",
+            Self::RiskAdjustedReturn => "risk_adjusted_return",
+            Self::Slippage => "slippage",
+            Self::Latency => "latency_p99",
+        }
+    }
+}
+
 /// Fixed institutional acceptance function requested by the client.
 pub fn validate_build(metrics: &Metrics) -> Result<(), BuildError> {
     validate_with_limits(metrics, &GateLimits::default())
@@ -129,6 +148,12 @@ pub fn validate_with_limits(m: &Metrics, limits: &GateLimits) -> Result<(), Buil
     {
         return Err(BuildError::InvalidLimits);
     }
+    if [m.sharpe, m.sortino, m.calmar, m.slippage_bps]
+        .iter()
+        .any(|n| n.abs() > 1_000_000.0)
+    {
+        return Err(BuildError::InvalidMetrics);
+    }
     if m.trades < limits.min_trades {
         return Err(BuildError::InsufficientSamples);
     }
@@ -165,8 +190,8 @@ pub struct Aggregate {
     pub timeout: u32,
     pub crash: u32,
     pub invalid: u32,
-    pub gross_pnl_cents_total: i64,
-    pub net_pnl_cents_total: i64,
+    pub gross_pnl_cents_total: i128,
+    pub net_pnl_cents_total: i128,
     pub worst_max_drawdown_bps: u32,
     pub worst_var_99_bps: u32,
     pub worst_latency_p99_us: u64,
