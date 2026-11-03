@@ -164,26 +164,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          # Only remove the certificate imported for this run, never other identities.
-          # A failed cleanup must fail the signed workflow, not silently retain the key.
-          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}        if: always()
-        shell: pwsh
-        run: |
-          Remove-Item 'crates/pravda-app/tauri.signing.ci.json' -Force -ErrorAction SilentlyContinue
-      - uses: actions/upload-artifact@v7
-        with:
-          name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
-          path: |
-            crates/pravda-app/target/release/bundle/msi/*.msi
-            crates/pravda-app/target/release/bundle/nsis/*-setup.exe
-            crates/pravda-app/target/release/bundle/SHA256SUMS.txt
-            crates/pravda-app/target/release/pravda-app.exe
-          if-no-files-found: error
-          retention-days: 3
-) {
+          # Remove only the signing identity imported for this job.
+          if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
             throw 'Signing certificate thumbprint unavailable for cleanup'
           }
-          $path = "Cert:\\CurrentUser\\My\\$($env:PRAVDA_SIGNING_THUMBPRINT)"
+          $path = "Cert:\CurrentUser\My\$($env:PRAVDA_SIGNING_THUMBPRINT)"
           if (Test-Path -LiteralPath $path) {
             Remove-Item -LiteralPath $path -Force -ErrorAction Stop
           }
