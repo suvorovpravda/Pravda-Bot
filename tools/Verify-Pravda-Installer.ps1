@@ -13,6 +13,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ReleaseRoot,
     [switch]$RequireSigned,
+    [switch]$RequireCompanions,
     [string]$ExpectedThumbprint = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -31,7 +32,70 @@ if ($lines.Count -lt 3) {
 }
 $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $kinds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-$pattern = '^([0-9a-f]{64})  (pravda-app\.exe|bundle/msi/[^/\\]+\.msi|bundle/nsis/[^/\\]+-setup\.exe)$'
+$pattern = '^([0-9a-f]{64})  (pravda-app\.exe|pravda-doctor\.exe|pravda-harness\.exe|bundle/msi/[^/\\]+\.msi|bundle/nsis/[^/\\]+-setup\.exe)
+foreach ($line in $lines) {
+    if ($line -cnotmatch $pattern) {
+        throw 'Malformed or unsafe checksum manifest entry'
+    }
+    $expectedHash = $Matches[1]
+    $relative = $Matches[2]
+    if (-not $paths.Add($relative)) {
+        throw 'Duplicate manifest entry'
+    }
+    $kind = if ($relative -eq 'pravda-app.exe') {
+        'exe'
+    } elseif ($relative -eq 'pravda-doctor.exe') {
+        'doctor'
+    } elseif ($relative -eq 'pravda-harness.exe') {
+        'harness'
+    } elseif ($relative.StartsWith('bundle/msi/')) {
+        'msi'
+    } else {
+        'nsis'
+    }
+    [void]$kinds.Add($kind)
+    $filepath = Join-Path $root ($relative.Replace('/', [IO.Path]::DirectorySeparatorChar))
+    $file = Get-Item -LiteralPath $filepath -ErrorAction Stop
+    if ($file.PSIsContainer -or ($file.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+        throw 'Manifest points to a directory or a reparse point'
+    }
+    $actualHash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($expectedHash -cne $actualHash) {
+        throw "SHA-256 mismatch for $relative"
+    }
+    if ($RequireSigned) {
+        $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
+        if ($signature.Status -ne 'Valid' -or
+            -not $signature.SignerCertificate -or
+            $signature.SignerCertificate.Thumbprint -ne $ExpectedThumbprint -or
+            -not $signature.TimeStamperCertificate) {
+            throw "Authenticode or timestamp verification failed for $relative"
+        }
+    }
+}
+$requiredKinds = @('exe', 'msi', 'nsis')
+if ($RequireCompanions) { $requiredKinds += @('doctor', 'harness') }
+foreach ($expectedKind in $requiredKinds) {
+    if (-not $kinds.Contains($expectedKind)) {
+        throw "Release manifest is missing the $expectedKind candidate"
+    }
+}
+$actualCandidates = @(
+    Get-Item -LiteralPath (Join-Path $root 'pravda-app.exe') -ErrorAction Stop
+    Get-ChildItem -LiteralPath $root -Filter 'pravda-doctor.exe' -File -ErrorAction Stop
+    Get-ChildItem -LiteralPath $root -Filter 'pravda-harness.exe' -File -ErrorAction Stop
+    Get-ChildItem -LiteralPath (Join-Path $root 'bundle/msi') -Filter '*.msi' -File -ErrorAction Stop
+    Get-ChildItem -LiteralPath (Join-Path $root 'bundle/nsis') -Filter '*-setup.exe' -File -ErrorAction Stop
+)
+if ($actualCandidates.Count -ne $paths.Count) {
+    throw 'Unlisted release candidate files exist or manifest is incomplete'
+}
+if ($RequireSigned) {
+    Write-Host 'Validated Enterprise candidate: SHA256 + Authenticode + timestamp.'
+} else {
+    Write-Warning 'Validated unsigned candidate hashes only; NOT an Enterprise release.'
+}
+
 foreach ($line in $lines) {
     if ($line -cnotmatch $pattern) {
         throw 'Malformed or unsafe checksum manifest entry'
