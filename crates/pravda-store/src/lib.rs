@@ -208,18 +208,27 @@ mod tests {
         for (symbol, price) in [("BTC/USDT", 12345.0), ("ETH/USDT", 2345.0)] {
             store.insert_tick(symbol, price, "Kraken", now).unwrap();
         }
-        let mode: String = store.conn.query_row("PRAGMA journal_mode;", [], |row| row.get(0)).unwrap();
+        let mode: String = store
+            .conn
+            .query_row("PRAGMA journal_mode;", [], |row| row.get(0))
+            .unwrap();
         assert_eq!(mode, "wal");
 
         // VACUUM INTO reads a consistent SQLite snapshot while WAL is active.
         // The output must be a NEW file; no overwrite of an existing backup.
-        store.conn.execute("VACUUM main INTO ?1", params![snapshot.to_str().unwrap()]).unwrap();
+        store
+            .conn
+            .execute("VACUUM main INTO ?1", params![snapshot.to_str().unwrap()])
+            .unwrap();
         let snapshot_check: String = Connection::open(&snapshot)
             .unwrap()
             .query_row("PRAGMA integrity_check", [], |row| row.get(0))
             .unwrap();
         assert_eq!(snapshot_check, "ok");
-        assert!(store.conn.execute("VACUUM main INTO ?1", params![snapshot.to_str().unwrap()]).is_err());
+        assert!(store
+            .conn
+            .execute("VACUUM main INTO ?1", params![snapshot.to_str().unwrap()])
+            .is_err());
 
         // A later tick must not retroactively appear in the saved snapshot.
         store.insert_tick("BTC/USDT", 99999.0, "Kraken", now).unwrap();
