@@ -752,6 +752,44 @@ const translations = {
             setStatus($("runtime-status"),"error","Diagnostic indisponible");
         }
     }
+    async function refreshSecurityEvents() {
+        const panel = $("security-events");
+        const labels = {
+            setup_accepted: "Premier mot de passe configuré",
+            setup_rejected: "Configuration du mot de passe refusée",
+            login_accepted: "Connexion locale réussie",
+            login_rejected: "Tentative de connexion refusée",
+            login_locked: "Authentification temporairement verrouillée",
+            session_ended: "Session fermée",
+            storage_failure: "Erreur d'authentification ou de stockage"
+        };
+        try {
+            const events = await window.pravdaInvoke("ipc_security_events");
+            if (!Array.isArray(events) || events.length > 64) throw new Error("INVALID_EVENTS");
+            const nodes = [];
+            for (const line of events) {
+                if (typeof line !== "string" || line.length > 70) throw new Error("INVALID_EVENT");
+                const parts = line.split("|");
+                if (parts.length !== 2 || !/^\d{1,11}$/.test(parts[0]) ||
+                    !Object.hasOwn(labels, parts[1])) throw new Error("INVALID_EVENT");
+                const unix = Number(parts[0]);
+                if (!Number.isSafeInteger(unix)) throw new Error("INVALID_TIME");
+                const item = document.createElement("div");
+                item.className = "security-check";
+                item.setAttribute("role", "listitem");
+                const heading = document.createElement("strong");
+                heading.textContent = labels[parts[1]];
+                const time = document.createElement("p");
+                time.textContent = new Date(unix * 1000).toLocaleString("fr-FR");
+                item.append(heading, time);
+                nodes.push(item);
+            }
+            if (nodes.length) panel.replaceChildren(...nodes);
+            else panel.textContent = "Aucun événement enregistré depuis le lancement.";
+        } catch {
+            panel.textContent = "Historique de sécurité non disponible. Réauthentification nécessaire.";
+        }
+    }
     async function refreshSecurity() {
         const panel = $("security-checks");
         try {
@@ -802,9 +840,13 @@ const translations = {
         }
     }
     $("security-refresh").addEventListener("click", refreshSecurity);
+    $("security-refresh").addEventListener("click", refreshSecurityEvents);
     window.refreshSecurity = refreshSecurity;
+    window.refreshSecurityEvents = refreshSecurityEvents;
     refreshSecurity();
+    refreshSecurityEvents();
     setInterval(refreshSecurity, 30000);
+    setInterval(refreshSecurityEvents, 30000);
     document.addEventListener("click",async event => {
         const tab=event.target.closest("[data-go-tab]");
         if(tab){document.querySelector('.tab-btn[data-tab="'+tab.dataset.goTab+'"]')?.click();return;}
