@@ -82,12 +82,26 @@ for(const cmd of handlers) {
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
   assert.ok(ipc.includes("fn "+cmd+"("),"Missing handler "+cmd);
 }
+const asyncSessionBound = new Set([
+  "ipc_market_snapshot","ipc_history_recent","ipc_history_query",
+  "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_fx_status",
+  "ipc_public_feed","ipc_security_report"
+]);
 for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query",
  "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics",
  "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
   const part=ipc.slice(i,next>i?next:ipc.length);
-  assert.match(part,/require_authenticated\(/,"Missing Rust auth guard "+cmd);
+  if (asyncSessionBound.has(cmd)) {
+    assert.match(part,/authorized_read_token\(&session, window\.label\(\)\)/,
+      "Async IPC must capture authenticated session "+cmd);
+    assert.match(part,/finish_authorized_read\(\s*&session,\s*&issued_to/,
+      "Async IPC must reject result after logout or replacement "+cmd);
+  } else {
+    assert.match(part,/require_authenticated\(/,"Missing Rust auth guard "+cmd);
+  }
 }
+assert.match(ipc,/current\.as_deref\(\) != Some\(issued_to\) \|\| !session\.authority\.session_valid\(issued_to\)/,
+  "Async response barrier must bind original token and verify it is still valid");
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
