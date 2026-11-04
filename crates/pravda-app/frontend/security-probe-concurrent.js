@@ -10,6 +10,8 @@ const guarded = [
   "ipc_history_export_csv",
   "ipc_paper_alerts_snapshot",
   "ipc_runtime_metrics",
+  "ipc_security_report",
+  "ipc_security_events",
   "ipc_fx_status",
   "plugin:fs|write_text_file",
   "plugin:shell|execute"

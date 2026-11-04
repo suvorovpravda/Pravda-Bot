@@ -752,6 +752,110 @@ const translations = {
             setStatus($("runtime-status"),"error","Diagnostic indisponible");
         }
     }
+    // Never request protected diagnostics in the background after logout.
+    // A SQLite quick_check is user-initiated or runs when Security is opened.
+    const securityShell = document.querySelector("main.shell");
+    const securityVisible = () => !document.hidden && securityShell && !securityShell.hidden;
+    let securityCheckInFlight = false;
+    async function refreshSecurityEvents() {
+        const panel = $("security-events");
+        const labels = {
+            setup_accepted: "Premier mot de passe configuré",
+            setup_rejected: "Configuration du mot de passe refusée",
+            login_accepted: "Connexion locale réussie",
+            login_rejected: "Tentative de connexion refusée",
+            login_locked: "Authentification temporairement verrouillée",
+            session_ended: "Session fermée",
+            storage_failure: "Erreur d'authentification ou de stockage"
+        };
+        try {
+            const events = await window.pravdaInvoke("ipc_security_events");
+            if (!Array.isArray(events) || events.length > 64) throw new Error("INVALID_EVENTS");
+            const nodes = [];
+            for (const line of events) {
+                if (typeof line !== "string" || line.length > 70) throw new Error("INVALID_EVENT");
+                const parts = line.split("|");
+                if (parts.length !== 2 || !/^\d{1,11}$/.test(parts[0]) ||
+                    !Object.hasOwn(labels, parts[1])) throw new Error("INVALID_EVENT");
+                const unix = Number(parts[0]);
+                if (!Number.isSafeInteger(unix)) throw new Error("INVALID_TIME");
+                const item = document.createElement("div");
+                item.className = "security-check";
+                item.setAttribute("role", "listitem");
+                const heading = document.createElement("strong");
+                heading.textContent = labels[parts[1]];
+                const time = document.createElement("p");
+                time.textContent = new Date(unix * 1000).toLocaleString("fr-FR");
+                item.append(heading, time);
+                nodes.push(item);
+            }
+            if (nodes.length) panel.replaceChildren(...nodes);
+            else panel.textContent = "Aucun événement enregistré depuis le lancement.";
+        } catch {
+            panel.textContent = "Historique de sécurité non disponible. Réauthentification nécessaire.";
+        }
+    }
+    async function refreshSecurity() {
+        if (!securityVisible() || securityCheckInFlight) return;
+        securityCheckInFlight = true;
+        const panel = $("security-checks");
+        try {
+            const rows = await window.pravdaInvoke("ipc_security_report");
+            if (!Array.isArray(rows) || rows.length !== 8) throw new Error("INVALID_REPORT");
+            const translated = {
+                verified: "Vérifié",
+                unknown: "Non vérifié",
+                warning: "Attention",
+                blocked: "Bloqué"
+            };
+            const checkNames = {
+                session: "Authentification Rust",
+                sqlite: "Intégrité SQLite",
+                authenticity: "Authenticité du binaire",
+                capabilities: "Permissions IPC et CSP",
+                market: "Données de marché",
+                orders: "Ordres et sécurité financière",
+                proton: "Proton VPN",
+                kill_switch: "Protection anti-fuite VPN"
+            };
+            const nodes = [];
+            let verified = 0;
+            let blocked = 0;
+            for (const row of rows) {
+                if (typeof row !== "string" || row.length > 300) throw new Error("INVALID_ROW");
+                const parts = row.split("|");
+                if (parts.length !== 3 || !translated[parts[1]] ||
+                    !Object.hasOwn(checkNames, parts[0])) throw new Error("INVALID_ROW");
+                if (parts[1] === "verified") verified++;
+                if (parts[1] === "blocked") blocked++;
+                const item = document.createElement("div");
+                item.className = "security-check";
+                item.setAttribute("role", "listitem");
+                const header = document.createElement("strong");
+                header.textContent = checkNames[parts[0]] + " · " + translated[parts[1]];
+                const detail = document.createElement("p");
+                detail.textContent = parts[2];
+                item.append(header, detail);
+                nodes.push(item);
+            }
+            panel.replaceChildren(...nodes);
+            setStatus($("security-status"), blocked ? "error" : "pending",
+                blocked ? blocked + " blocage(s) de sécurité" : verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet");
+        } catch {
+            panel.textContent = "État de sécurité non disponible. Vérifiez votre session locale.";
+            setStatus($("security-status"), "error", "Non vérifié");
+        } finally {
+            securityCheckInFlight = false;
+        }
+    }
+    $("security-refresh").addEventListener("click", refreshSecurity);
+    $("security-refresh").addEventListener("click", refreshSecurityEvents);
+    window.refreshSecurity = refreshSecurity;
+    window.refreshSecurityEvents = refreshSecurityEvents;
+    refreshSecurity();
+    refreshSecurityEvents();
+    // No unconditional security polling: SQLite diagnostics are only requested
+    // on login, an explicit refresh or when the Security tab is opened.
     document.addEventListener("click",async event => {
         const tab=event.target.closest("[data-go-tab]");
         if(tab){document.querySelector('.tab-btn[data-tab="'+tab.dataset.goTab+'"]')?.click();return;}
@@ -1066,6 +1170,10 @@ const translations = {
         }
         // Keep general cards visible
         document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
+        if (tab === "security") {
+            refreshSecurity();
+            refreshSecurityEvents();
+        }
     }
     const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
     const tabFromHash=()=>{const route=window.location.hash.slice(2);return knownTabs.has(route)?route:"all";};

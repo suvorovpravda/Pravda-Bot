@@ -139,6 +139,7 @@ async fn main() {
     // The only native WebView opens bundled local assets; no remote origin.
     tauri::Builder::default()
         .manage(ipc_auth)
+        .manage(ipc::SecurityEvents::default())
         .manage(desktop)
         .invoke_handler(tauri::generate_handler![
             ipc::ipc_auth_status,
@@ -152,6 +153,8 @@ async fn main() {
             ipc::ipc_history_export_csv,
             ipc::ipc_paper_alerts_snapshot,
             ipc::ipc_runtime_metrics,
+            ipc::ipc_security_report,
+            ipc::ipc_security_events,
             ipc::ipc_fx_status,
             ipc::ipc_public_feed,
             ipc::ipc_open_source

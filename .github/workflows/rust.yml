@@ -399,6 +399,8 @@ jobs:
             'concurrent: ipc_history_export_csv denied with main authenticated',
             'concurrent: ipc_paper_alerts_snapshot denied with main authenticated',
             'concurrent: ipc_runtime_metrics denied with main authenticated',
+            'concurrent: ipc_security_report denied with main authenticated',
+            'concurrent: ipc_security_events denied with main authenticated',
             'concurrent: ipc_fx_status denied with main authenticated',
             'concurrent: plugin:fs|write_text_file denied with main authenticated',
             'concurrent: plugin:shell|execute denied with main authenticated',
@@ -406,7 +408,12 @@ jobs:
             'main: authenticated again for hostile HTTPS test',
             'restart: password setup persisted across native process',
             'restart: old session revoked after native process exit',
+            'security: unauthenticated user cannot read security status',
+            'security: unauthenticated user cannot read security events',
+            'security: invalid login is denied with a safe fixed error',
             'restart: existing password logs in',
+            'security: authenticated status is bounded and VPN remains unverified',
+            'security: authenticated local events contain only coded auth outcomes',
             'restart: market IPC authorized only after login',
             'restart: SQLite remains accessible'
           )
