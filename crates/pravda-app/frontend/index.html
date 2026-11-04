@@ -48,6 +48,7 @@
         <button class="tab-btn" data-tab="revolut" type="button">Revolut X</button>
         <button class="tab-btn" data-tab="sources" type="button">Sources</button>
         <button class="tab-btn" data-tab="system" type="button">Système</button>
+        <button class="tab-btn" data-tab="security" type="button">Sécurité</button>
     </nav>
 
 
@@ -110,6 +111,27 @@
                     <div><span>PID</span><strong id="runtime-pid">—</strong><small>Windows local</small></div>
                 </div>
                 <p class="fine-print" id="runtime-info">La première lecture CPU constitue un échantillon initial ; la deuxième permet de calculer une charge moyenne.</p>
+            </div>
+        </article>
+        <article class="card secondary-card" data-category="security">
+            <div class="card-head">
+                <div><h2>Centre de sécurité · états vérifiables</h2>
+                    <p>Lecture locale après connexion, sans télémétrie ni récupération de secrets</p></div>
+                <span class="status pending" id="security-status" role="status" aria-live="polite">Non vérifié</span>
+            </div>
+            <div class="card-body">
+                <p class="fine-print">Un résultat non testé reste « Non vérifié ». Aucun indicateur vert global ni certification implicite.</p>
+                <div id="security-checks" class="security-checks" role="list" aria-live="polite">
+                    <p class="fine-print">Contrôles en attente de la session Rust.</p>
+                </div>
+                <div class="feature-actions">
+                    <button class="button button-primary" id="security-refresh" type="button">Recontrôler les états locaux</button>
+                </div>
+                <hr>
+                <h3>Proton VPN · option facultative</h3>
+                <p>Si vous avez un compte Proton VPN, ouvrez l’application officielle Windows et connectez-vous dedans. Pravda-Bot ne collecte pas vos identifiants, ne lance aucune commande VPN non documentée et ne prétend pas vérifier votre tunnel.</p>
+                <a class="button" href="https://protonvpn.com/support/protonvpn-windows-vpn-application" data-source-link="protonvpn" rel="noopener noreferrer" target="_blank">Procédure officielle Proton VPN</a>
+                <p class="fine-print">Le kill switch standard ou avancé doit être choisi dans Proton VPN. Le mode avancé peut bloquer votre accès Internet ; aucun changement automatique de pare-feu n’est effectué ici.</p>
             </div>
         </article>
     </section>
