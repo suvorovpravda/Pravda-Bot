@@ -16,6 +16,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/windows-package.yml'
+      - 'crates/**'
+      - 'rust/**'
       - 'crates/pravda-app/tauri.conf.json'
       - 'tools/Verify-Pravda-Installer.ps1'
       - 'tools/test-windows-installer-verifier.ps1'
