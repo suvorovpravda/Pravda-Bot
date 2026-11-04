@@ -213,6 +213,37 @@ pub fn ipc_runtime_metrics(
     Ok(desktop.metrics_snapshot())
 }
 
+// Privacy-preserving status lines. The IPC client sees only code-owned,
+// allowlisted summaries; never paths, OS identifiers, SQL rows, credentials,
+// raw errors or a guessed VPN/installation status.
+fn security_report_rows() -> Vec<String> {
+    const CHECKS: [(&str, &str, &str); 8] = [
+        ("session", "verified", "Session Rust active; fenetre principale authentifiee"),
+        ("sqlite", "unknown", "Integrite et restauration SQLite non testees par cette consultation; utiliser Doctor"),
+        ("authenticity", "unknown", "Signature Authenticode et provenance du binaire non verifiees ici"),
+        ("capabilities", "unknown", "Audit des permissions IPC et CSP non effectue pendant cette consultation"),
+        ("market", "unknown", "Fraicheur et confidentialite des flux non verifiees ici"),
+        ("orders", "unknown", "Etat financier et autorisation de trading non audites pendant cette consultation"),
+        ("proton", "unknown", "Connexion Proton VPN non verifiee; consulter l'application Proton officielle"),
+        ("kill_switch", "unknown", "Kill switch et protection DNS/IP du VPN non verifies"),
+    ];
+    CHECKS
+        .iter()
+        .map(|(id, status, details)| format!("{id}|{status}|{details}"))
+        .collect()
+}
+
+/// No internet probe, process enumeration, shell command or broker request.
+/// Must remain main-window-only and behind the Rust-owned live session.
+#[tauri::command]
+pub fn ipc_security_report(
+    window: Window,
+    session: State<'_, IpcAuth>,
+) -> Result<Vec<String>, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(security_report_rows())
+}
+
 #[tauri::command]
 pub async fn ipc_fx_status(
     window: Window,
@@ -287,6 +318,7 @@ pub fn ipc_open_source(
         "revolutx" => "https://exchange.revolut.com/".to_owned(),
         "ice" => "https://www.ice.com/products/27996665/Dutch-TTF-Natural-Gas-Futures".to_owned(),
         "github" => "https://github.com/suvorovpravda/Pravda-Bot".to_owned(),
+        "protonvpn" => "https://protonvpn.com/support/protonvpn-windows-vpn-application".to_owned(),
         "article" => {
             safe_article_link(link.as_deref().unwrap_or_default()).map_err(str::to_string)?
         }
@@ -347,6 +379,19 @@ mod tests {
         ));
         let authority = Arc::new(Auth::load(&path, 1_000).unwrap());
         (IpcAuth::new(authority), path)
+    }
+
+    #[test]
+    fn security_report_never_claims_vpn_or_integrity_without_verification() {
+        let rows = security_report_rows();
+        assert_eq!(rows.len(), 8);
+        assert_eq!(rows[0].split('|').nth(1), Some("verified"));
+        for row in &rows[1..] {
+            assert_eq!(row.split('|').nth(1), Some("unknown"));
+        }
+        assert!(rows.iter().all(|row| row.split('|').count() == 3));
+        assert!(!rows.join(" ").contains("CONNECTED"));
+        assert!(!rows.join(" ").contains("API_KEY"));
     }
 
     #[test]
