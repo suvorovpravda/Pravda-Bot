@@ -215,7 +215,7 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     Boolean(latest), latest?"native title callback received":"no verified native report");
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
-    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_fx_status",
+    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_fx_status",
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
