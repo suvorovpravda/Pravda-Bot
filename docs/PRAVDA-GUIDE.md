@@ -15,6 +15,32 @@
 
 ---
 
+## Recette Windows — preuve MSI/NSIS et prérequis embarqué (4 novembre 2026)
+
+### Configuration effectivement présente
+
+Le fichier `crates/pravda-app/tauri.conf.json` utilise depuis [#125](https://github.com/suvorovpravda/Pravda-Bot/pull/125) `bundle.windows.webviewInstallMode.type=offlineInstaller` et `silent=true`. L'installeur officiel WebView2 Evergreen est inclus dans les paquets MSI **et** NSIS. **Aucun script ou outil de compilation n'est à exécuter par l'utilisateur final.** Windows peut présenter le dialogue d'autorisation UAC normal. L'accès Internet reste nécessaire aux données de marché en direct ; le terme « offline » concerne uniquement les prérequis d'installation.
+
+### Preuves à lier au SHA exact
+
+Le [run Windows #41798857222](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41798857222), commit `aa759d3`, a réussi les contrôles suivants :
+
+1. Construction `pravda-app.exe`, MSI, NSIS, Doctor et Harness et production des trois artefacts GitHub Actions.
+2. Téléchargement indépendant et vérification des empreintes SHA-256 des composants contre le manifeste de l'archive principale.
+3. Installation et exécution du **MSI réellement produit**, SQLite/auth isolés, absence de serveur TCP UI, désinstallation et réinstallation avec conservation de fichiers témoins.
+4. Installation silencieuse du **NSIS réellement produit**, démarrage de l'exécutable installé, vérification d'absence de listener HTTP, puis désinstallation silencieuse sans altérer les fichiers témoins.
+5. Doctor/Harness séparés : vérification de l'empreinte, démarrage diagnostique et smoke synthétique.
+
+Les tests ont été réalisés sur runners jetables. **Ils ne démontrent pas** à eux seuls le cas « aucun WebView2 préinstallé et aucun Internet », ni les configurations Standard/Personnalisé et la signature Enterprise. Ne jamais réutiliser cette preuve pour un SHA ultérieur sans refaire la campagne.
+
+### Essai sur VM isolée requis avant GO
+
+Utiliser deux **VM Windows 10/11 x64 propres** dédiées aux essais, l'une sans runtime WebView2, l'autre avec runtime installé. Ne pas désinstaller WebView2 d'un ordinateur utilisé au quotidien. Préparer et vérifier sur une machine de confiance les fichiers MSI/NSIS et leurs empreintes SHA-256 ; les déposer sur VM via un média local, puis **désactiver l'accès réseau au niveau de l'hyperviseur avant l'essai**. Pour chaque format, installer avec l'interface habituelle, vérifier le retour d'installation et l'existence de la fenêtre Tauri, définir un mot de passe de test, fermer/réouvrir, tester la persistance SQLite et vérifier que le système ne propose aucune commande de compilation ni téléchargement de dépendances. Les fonctions de flux réseau peuvent rester indisponibles : elles ne doivent pas faire échouer l'application hors ligne.
+
+Répéter une désinstallation/réinstallation avec données anonymisées et vérifier leur conservation ; tester le traitement d'un installateur corrompu sur la VM jetable, sans jamais désactiver SmartScreen, UAC, TLS ou l'antivirus. Conserver uniquement la version du système, les codes d'erreur **expurgés**, les sorties Doctor autorisées, les empreintes de paquets et le SHA du commit. Échec d'un prérequis, d'une persistance ou d'une des deux variantes MSI/NSIS = **NO-GO pour la qualification hors réseau**. Ne pas présenter un runner Windows muni de WebView2 comme une preuve de ce scénario.
+
+**Autres critères distincts :** [#106](https://github.com/suvorovpravda/Pravda-Bot/issues/106) installation personnalisable encore à implémenter/qualifier ; [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) signature Enterprise non démontrée ; [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) trading réel OFF.
+
 ## Étude d'architecture événementielle et de risques
 
 **Décision d'architecture proposée :** renforcer le noyau Rust existant avec un contrat d'événements typés, une gestion du risque fail-closed et un replay déterministe, tout en conservant l'installateur Windows autonome et l'IPC Tauri authentifié. La description intelligence on-chain est traitée dans [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) ; l'évolution du moteur de risque dans [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123). Voir [ADR-001](#architecture-de-recherche-et-gestion-des-risques) pour le tableau des écarts, la licence LGPL-3.0, la matrice des risques et les lots P0/P1/P2.
@@ -67,7 +93,7 @@ L'utilisateur final n'est **pas** un développeur : télécharger le MSI/NSIS, l
 | Revolut X en lecture seule | Désactivé | Opt-in **seulement si homologué** | Consentement explicite et coffre natif, zéro ordre |
 | Trading live / retraits | **Absent** | **Non proposé** | Bloqué par [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) |
 
-**À implémenter et démontrer :** option list et dépendances versionnées ; étude WiX MSI vs NSIS pour une sélection vraiment installable ; prérequis WebView2 silencieux vérifié, modules authentifiés et signatures de provenance ; cohérence des capacités Tauri et accès réseau entre modules installés/désactivés ; persistance des options en upgrade ; absence de perte de profils/données ; scénarios d'échec et rollback sans désactiver SmartScreen/UAC. Si le découpage natif MSI/NSIS n'est pas réalisable avec les protections requises, utiliser des **installateurs distincts** ou une **activation post-installation sûre** documentée plutôt qu'une case qui ne fait rien. Aucun module tiers non signé. **La présence de `downloadBootstrapper` ne constitue pas une preuve d'installation offline.**
+**À implémenter et démontrer :** option list et dépendances versionnées ; étude WiX MSI vs NSIS pour une sélection vraiment installable ; prérequis WebView2 silencieux vérifié, modules authentifiés et signatures de provenance ; cohérence des capacités Tauri et accès réseau entre modules installés/désactivés ; persistance des options en upgrade ; absence de perte de profils/données ; scénarios d'échec et rollback sans désactiver SmartScreen/UAC. Si le découpage natif MSI/NSIS n'est pas réalisable avec les protections requises, utiliser des **installateurs distincts** ou une **activation post-installation sûre** documentée plutôt qu'une case qui ne fait rien. Aucun module tiers non signé. **Depuis #125, le mode `offlineInstaller` est configuré. Il ne suffit pas, à lui seul, à prouver l'installation réussie sur une VM sans WebView2 et sans réseau : voir la recette dédiée ci-dessus.**
 
 **Recette obligatoire :** Windows 10/11 propre, MSI et NSIS, runtime WebView2 absent/présent, connecté/déconnecté, Standard/Personnalisé, options individuellement et combinaisons, upgrade et désinstallation/réinstallation, refus des manifestes altérés, vérification effective des privilèges et ports. [Plan #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106). Ne pas déclarer « installation personnalisable » tant que ces cas ne sont pas démontrés sur un SHA exact.
 
