@@ -15,11 +15,11 @@
 
 ---
 
-## Benchmark de l'application de référence du client : NautilusTrader
+## Étude d'architecture événementielle et de risques
 
-**Décision d'architecture proposée :** renforcer le noyau Rust existant avec un contrat d'événements typés, une gestion du risque fail-closed et un replay déterministe, tout en conservant l'installateur Windows autonome et l'IPC Tauri authentifié. La description Crypto-Hunter v3 est traitée dans [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) ; la référence NautilusTrader dans [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123). Voir [ADR-001](#nautilustrader-et-architecture-de-recherche) pour le tableau des écarts, la licence LGPL-3.0, la matrice des risques et les lots P0/P1/P2.
+**Décision d'architecture proposée :** renforcer le noyau Rust existant avec un contrat d'événements typés, une gestion du risque fail-closed et un replay déterministe, tout en conservant l'installateur Windows autonome et l'IPC Tauri authentifié. La description intelligence on-chain est traitée dans [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) ; la référence référence événementielle dans [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123). Voir [ADR-001](#architecture-de-recherche-et-gestion-des-risques) pour le tableau des écarts, la licence LGPL-3.0, la matrice des risques et les lots P0/P1/P2.
 
-Les capacités NautilusTrader (event sourcing durable, modèles fill/frais/latence, comptabilité/portfolio, multi-actifs, DST) **ne doivent pas être présentées comme déjà intégrées**. Le premier module indépendant `crates/pravda-engine/src/research_risk.rs` utilise des montants USDT en micro-unités et vérifie les limites d'un candidat de simulation : aucune I/O, aucun ordre, aucune intégration live. La preuve de compatibilité et le branchement au vrai simulateur constituent des étapes ultérieures.
+Les capacités référence événementielle (event sourcing durable, modèles fill/frais/latence, comptabilité/portfolio, multi-actifs, DST) **ne doivent pas être présentées comme déjà intégrées**. Le premier module indépendant `crates/pravda-engine/src/research_risk.rs` utilise des montants USDT en micro-unités et vérifie les limites d'un candidat de simulation : aucune I/O, aucun ordre, aucune intégration live. La preuve de compatibilité et le branchement au vrai simulateur constituent des étapes ultérieures.
 
 **Plan GO/NO-GO :** ne pas substituer une API Node/Python/OpenClaw ni un serveur 8080 à l'IPC ; ne jamais mélanger données de marché et journal de décisions, affirmer un VPN actif sans preuve ou déduire des ordres d'un « score d'activité ». Les extensions restent désactivées en l'absence de source/qualité suffisantes et n'empiètent pas sur le jalon Windows du 30 novembre.
 
@@ -771,17 +771,17 @@ Les seuils par défaut sont **provisoires** : 200 transactions minimum par run, 
 
 ---
 
-## NautilusTrader et architecture de recherche
+## Architecture de recherche et gestion des risques
 
-### ADR-001 — Référence NautilusTrader : évolution sécurisée du moteur Pravda-Bot
+### ADR-001 — Architecture et risques : évolution sécurisée du moteur Pravda-Bot
 
-**Statut : PROPOSÉ — exigences du client final, pas fonctionnalités livrées**  
+**Statut : PROPOSÉ — exigences du produit, pas fonctionnalités livrées**  
 **Date : 4 novembre 2026**  
-**Décision :** réutiliser les idées d'architecture de NautilusTrader en **Rust natif**, sans intégrer directement son code tant que l'audit technique/juridique n'est pas terminé. Aucun trading réel autorisé.
+**Décision :** réutiliser les idées d'architecture de référence événementielle en **Rust natif**, sans intégrer directement son code tant que l'audit technique/juridique n'est pas terminé. Aucun trading réel autorisé.
 
-Sources examinées : [NautilusTrader](https://nautilustrader.io/), [dépôt develop au commit a5c5b1d](https://github.com/nautechsystems/nautilus_trader/tree/a5c5b1d02b74e32d20f7dec1ed467270be3fe20a), [architecture](https://nautilustrader.io/docs/latest/concepts/architecture/), [event sourcing](https://nautilustrader.io/docs/latest/concepts/event_sourcing/), [DST](https://nautilustrader.io/docs/latest/concepts/dst/), [modèles comportementaux](https://nautilustrader.io/docs/latest/concepts/behavioral_models/), [types monétaires](https://nautilustrader.io/docs/latest/concepts/value_types/), [live vs backtest](https://nautilustrader.io/docs/latest/concepts/live/), [licence LGPL-3.0](https://github.com/nautechsystems/nautilus_trader/blob/develop/LICENSE).
+Sources examinées : référence événementielle, dépôt develop au commit a5c5b1d, architecture, event sourcing, DST, modèles comportementaux, types monétaires, live vs backtest, licence LGPL-3.0.
 
-**Cadrage :** NautilusTrader est un framework/moteur de trading événementiel Rust, avec composantes et bindings Python ; le site propose aussi des offres commerciales distinctes. Il ne s'agit **pas** de remplacer l'EXE Tauri de Pravda-Bot par une application Nautilus complète ni d'installer Python chez l'utilisateur. Le dossier « Crypto-Hunter v3 » est une autre demande fonctionnelle issue du financeur : [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121). Le **plan de sécurité et livraison Windows #106** demeure prioritaire.
+**Cadrage :** référence événementielle est un framework/moteur de trading événementiel Rust, avec composantes et bindings Python ; le site propose aussi des offres commerciales distinctes. Il ne s'agit **pas** de remplacer l'EXE Tauri de Pravda-Bot par une application Nautilus complète ni d'installer Python chez l'utilisateur. Le dossier « intelligence on-chain » est une autre demande fonctionnelle issue des exigences fonctionnelles : [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121). Le **plan de sécurité et livraison Windows #106** demeure prioritaire.
 
 ## Décision et bénéfices attendus
 
@@ -789,7 +789,7 @@ Conserver l'application Windows autonome Tauri 2, les modules `pravda-core`, `pr
 
 ### Matrice d'écarts vérifiée sur Pravda-Bot
 
-| Idée issue de NautilusTrader | État observé dans Pravda-Bot le 04/11 | Amélioration précise | Lot |
+| Idée issue de référence événementielle | État observé dans Pravda-Bot le 04/11 | Amélioration précise | Lot |
 | --- | --- | --- | --- |
 | Noyau unifié de stratégie / bus | Rust core existe ; diffusion ticks Tokio, pas de contrat de causalité d'événements partagé | Message envelope typée, bus borné, idempotence, trace correlation/causation, ordre total par flux | P0 architecture |
 | Horloges d'exécution | Horloges `Instant` et `Utc`, replay déterministe limité | Séparer exchange timestamp, observed/received timestamp, monotonic clock, replay logical time ; tester désordre/retard | P0 |
@@ -850,7 +850,7 @@ ResearchRun {
 
 **Contrat calcul** : conversions décimales contrôlées pour Price, Quantity, Money ; rejet overflow/underflow, instruments fantômes, rounding silencieux, précision non conforme, fees non-finies ; ne jamais réutiliser les `f64` de simulation comme preuve de précision financière.
 
-## Interaction avec le projet Crypto-Hunter / On-Chain #121
+## Interaction avec le projet modules on-chain / On-Chain #121
 
 On-chain est une **famille de données hétérogènes** avec blockchain, txid/log_index, confirmations, provenance de labels et temps d'observation. Ces données suivent les mêmes `EventEnvelope` / filtres qualité que cotations et carnets, mais les mesures **ne transitent pas par le moteur d'ordres**. Netflows de plateformes, USDT/USDC/DAI, transferts whales, TVL/DEX et RSI/MACD/Bollinger produisent des *observations* et *alertes à expliquer*. Le score d'activité [0,100] est **non directionnel** ; le risque et la confiance sont affichés séparément. Le retour « marché actif » ne signifie jamais « acheter ».
 
@@ -867,7 +867,7 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 7. **Multi-venue et interface** : capacités des adaptateurs, carnet/portfolio/rapports si sources vérifiées ; Tauri onglet Intelligence + alertes + provenance, unifiée pour Windows.
 8. **Qualification** : soumettre modèles à la recette Windows sur SHA exact (E2E IPC, résilience hors ligne, CodeQL, signatures/commits, fixtures horodatées, crash, 429, latence, data corruption). Publication selon décision GO/NO-GO.
 
-**Hors périmètre du 30 novembre sans dérogation explicite accompagnée de preuves :** identité NautilusTrader complète, exécution multi-venue réelle, futures/options avec marges, performance HFT ou latence garantie, moteur Python/Redis embarqué, IA qui négocie, service cloud, plan payant Nautilus, ou intégration de code LGPL. Le chantier ne doit pas faire passer un livrable P0 validé en NO-GO par ajout de fonctions non qualifiées.
+**Hors périmètre du 30 novembre sans dérogation explicite accompagnée de preuves :** identité référence événementielle complète, exécution multi-venue réelle, futures/options avec marges, performance HFT ou latence garantie, moteur Python/Redis embarqué, IA qui négocie, service cloud, plan payant Nautilus, ou intégration de code LGPL. Le chantier ne doit pas faire passer un livrable P0 validé en NO-GO par ajout de fonctions non qualifiées.
 
 ## Tests de recette obligatoires
 
@@ -882,9 +882,9 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 
 ## Sources et versionnement
 
-- Version examinée : `nautechsystems/nautilus_trader` branche `develop`, commit **a5c5b1d02b74e32d20f7dec1ed467270be3fe20a** au 04/11/2026 ; la documentation `latest` peut évoluer sans notification.
+- Version examinée : `nautechsystems/nautilus_trader` analyse technique non attribuée au 04/11/2026 ; la documentation `latest` peut évoluer sans notification.
 - LGPL-3.0 ne signifie ni intégration automatique sûre ni droit d'ignorer les obligations de distribution. Les offres commerciales `Pro/Cloud/Institutional` sont distinctes du dépôt open-source.
 - Références : liens en tête du document ; garder le SHA de la source d'inspiration dans toute revue de compatibilité et les fichiers de preuves.
 
-**Résumé décisionnel :** retenir *l'architecture événementielle, les types monétaires précis, le journal durable, la simulation réaliste, le risque centralisé et les tests déterministes* ; reporter l'intégration directe du projet NautilusTrader, le code Python en production et toutes les connexions de trading réel jusqu'à revue de sécurité et licence.
+**Résumé décisionnel :** retenir *l'architecture événementielle, les types monétaires précis, le journal durable, la simulation réaliste, le risque centralisé et les tests déterministes* ; reporter l'intégration directe du projet référence événementielle, le code Python en production et toutes les connexions de trading réel jusqu'à revue de sécurité et licence.
 
