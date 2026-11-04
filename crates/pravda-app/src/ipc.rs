@@ -319,7 +319,10 @@ pub async fn ipc_history_export_csv(
     finish_authorized_read(
         &session,
         &issued_to,
-        desktop.history_export_csv(query).await.map_err(str::to_string),
+        desktop
+            .history_export_csv(query)
+            .await
+            .map_err(str::to_string),
     )
 }
 
