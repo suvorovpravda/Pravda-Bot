@@ -69,6 +69,7 @@ function activateDashboard() {
     shell.hidden = false;
     if (dashboardLoaded) {
         if (typeof window.refreshAll === "function") window.refreshAll();
+        if (typeof window.refreshSecurity === "function") window.refreshSecurity();
         return;
     }
     const script = document.createElement("script");
