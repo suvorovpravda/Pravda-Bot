@@ -197,22 +197,7 @@ finally {
                 $afterReinstall = @(Get-PravdaInstall)
                 if ($afterReinstall.Count -eq 1) {
                     $guid = [string]$afterReinstall[0].PSChildName
-                    if ($guid -notmatch '^\{[A-Fa-f0-9-]{36}\}        }
-    }
-    foreach ($canary in $canaries) {
-        if (Test-Path -LiteralPath $canary -PathType Leaf) {
-            Remove-Item -LiteralPath $canary -Force -ErrorAction SilentlyContinue
-        }
-    }
-    # Retain verbose MSI log on ANY smoke failure for the CI failure artifact.
-    # The Windows hosted runner has no broker or code-signing secrets.
-    if ($testSucceeded) {
-        Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
-    } else {
-        Write-Warning 'MSI smoke failed; retaining verbose log for protected CI artifact'
-    }
-}
- -or $guid -cne $installedCode) {
+                    if ($guid -notmatch '^[{][A-Fa-f0-9-]{36}[}]$' -or $guid -cne $installedCode) {
                         throw 'Unexpected product registration after reinstall; refusing unrelated uninstall'
                     }
                     $cleanup = Start-Process -FilePath $msiexec -ArgumentList @(
