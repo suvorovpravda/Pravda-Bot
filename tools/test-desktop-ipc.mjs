@@ -47,6 +47,10 @@ assert.match(html,/id="paper-alerts"/,"Paper-simulation events need a separate r
 assert.match(html,/data-tab="security"/,"Security status must be visible to an authenticated user");
 assert.match(js,/ipc_security_report/,"Security UI must retrieve an authenticated Rust-owned report");
 assert.match(js,/ipc_security_events/,"Security events must remain authenticated Tauri IPC only");
+assert.match(html,/id="revolut-consent"[^>]*disabled/,"Optional network module must default disabled");
+assert.match(js,/ipc_revolut_consent_get/,"UI must read native persisted consent");
+assert.match(js,/ipc_revolut_consent_set/,"UI must persist opt-in through Rust IPC");
+assert.match(ipc,/source == "revolut" && !consent\.enabled\(\)/,"Revolut feed must be gated in Rust");
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
 assert.match(js,/if \(!securityVisible\(\) \|\| securityCheckInFlight\) return;/,
@@ -62,7 +66,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,16);
+assert.equal(new Set(handlers).size,18);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -70,7 +74,7 @@ for(const cmd of handlers) {
 }
 for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query",
  "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics",
- "ipc_fx_status","ipc_public_feed","ipc_open_source","ipc_session_check","ipc_security_report","ipc_security_events","ipc_auth_logout"]) {
+ "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
   const part=ipc.slice(i,next>i?next:ipc.length);
