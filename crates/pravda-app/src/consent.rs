@@ -41,7 +41,8 @@ impl RevolutPublicConsent {
             .truncate(true)
             .open(&self.file)
             .map_err(|_| "CONSENT_STORAGE_FAILURE")?;
-        file.write_all(if enabled { ENABLED } else { DISABLED }.as_bytes())
+        let content = if enabled { ENABLED } else { DISABLED };
+        file.write_all(content.as_bytes())
             .and_then(|()| file.sync_all())
             .map_err(|_| "CONSENT_STORAGE_FAILURE")?;
         *current = enabled;
