@@ -15,6 +15,44 @@
 
 ---
 
+## État actuel de livraison et recette — 4 novembre 2026
+
+**Référentiel de production :** [issue #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), [workflow Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), dernier commit de [`main`](https://github.com/suvorovpravda/Pravda-Bot/commits/main). Ce chapitre est prioritaire sur les anciennes estimations de progression et versions reproduites plus bas. **Objectif : 30/11/2026, conditionné aux contrôles.**
+
+### Trois livrables distincts — comment les obtenir
+
+Sur la page [GitHub Actions du packaging Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), choisir un run **réussi de `main`**, vérifier son **SHA de commit**, puis télécharger depuis **le même run** :
+
+| Nom d'artefact GitHub | Contenu | Lancement |
+| --- | --- | --- |
+| `pravda-windows-unsigned-candidate-installers` | `bundle/msi/*.msi`, `bundle/nsis/*-setup.exe`, `pravda-app.exe`, `pravda-doctor.exe`, `pravda-harness.exe`, `bundle/SHA256SUMS.txt`, `bundle/release-evidence.json` | Installer le MSI/NSIS sur Windows propre ; n'ouvrir que l'application `pravda-app.exe` installée |
+| `pravda-windows-production-test` | `pravda-harness.exe`, `PRODUCTION-TEST.txt` | Extraire le ZIP puis `pravda-harness.exe --smoke` dans PowerShell ; exécuter les campagnes dans une VM **sans accès réseau** |
+| `pravda-windows-troubleshooting` | `pravda-doctor.exe`, `TROUBLESHOOTING.txt` | Extraire puis double-cliquer pour le rapport Bloc-notes ; `--no-open` pour le contrôle CI |
+
+Les ZIP compagnons sont des **applications distinctes**, mais **ne sont pas chacun un MSI**. Les deux compagnons sont comparés par la CI au manifeste SHA-256 de l'archive principale, correspondant au même commit. Leurs guides sont des fichiers `.txt`. Aucun certificat de signature Enterprise n'a été annoncé comme validé : **les artefacts `unsigned` restent des builds de test**, même lorsque les checks sont verts. Les artefacts Actions ont une durée de conservation limitée ; ce ne sont pas des Releases stables pérennes.
+
+### Matrice de recette fondée sur les PR
+
+| Critère | Source des tests | Interprétation |
+| --- | --- | --- |
+| Desktop natif, IPC et auth après redémarrage | [#111](https://github.com/suvorovpravda/Pravda-Bot/pull/111) | Seuls les cas testés en CI sont validés ; ne prouve pas un parcours complet d'utilisateur final |
+| Démarrage de l'EXE extrait du véritable MSI sur runner Windows propre | [#112](https://github.com/suvorovpravda/Pravda-Bot/pull/112) | Vérifie démarrage et SQLite isolé, **pas** un scénario de trading |
+| Trois téléchargements distincts, SHA des compagnons et tests Doctor/Harness | [#115](https://github.com/suvorovpravda/Pravda-Bot/pull/115) | Vérification de chaque binaire contre `bundle/SHA256SUMS.txt` du même run |
+| Désinstallation puis réinstallation sans écraser deux fichiers témoins `APPDATA`/`LOCALAPPDATA` | [#116](https://github.com/suvorovpravda/Pravda-Bot/pull/116) | Preuve des canaris, pas une vraie migration/restauration d'une base utilisateur |
+| Vérification précoce des scripts PowerShell | [#117](https://github.com/suvorovpravda/Pravda-Bot/pull/117) | Test syntaxique ; ne remplace pas l'installation réelle |
+| Snapshot d'une base SQLite WAL active + restauration de lignes artificielles | [#118](https://github.com/suvorovpravda/Pravda-Bot/pull/118) | PR **en validation** au 4 novembre ; ne pas la compter comme recette fusionnée |
+
+### Opérations et interdictions
+
+- **Pour vérifier l'intégrité :** dans l'archive principale extraite, consulter `bundle/release-evidence.json`, relever le SHA de commit, vérifier les empreintes `SHA256SUMS.txt` ; pour chaque compagnon, calculer `Get-FileHash -Algorithm SHA256 .\pravda-doctor.exe` ou `Get-FileHash -Algorithm SHA256 .\pravda-harness.exe` dans son propre répertoire et comparer au manifeste principal. **Ne pas récupérer les compagnons de runs différents.**
+- **Pour installer :** exécuter le MSI/NSIS correspondant au SHA validé, laisser SmartScreen actif, vérifier la présence de WebView2 ; la compilation MSVC n'est nécessaire qu'aux développeurs et à la CI, pas à l'utilisateur final d'un installateur.
+- **Pour diagnostiquer :** Doctor est passif, hors réseau, sans réparation automatique. Partager seulement les lignes d'état et `SUMMARY`; ne pas joindre `.db`, fichiers d'authentification ou secrets.
+- **Pour sauvegarder :** ne jamais copier à chaud les seuls fichiers `.db` d'une base WAL. Utiliser une copie transactionnelle (SQLite Online Backup / `VACUUM INTO` sur un nouveau fichier, sous procédure qualifiée) ou fermer proprement avant copie cohérente. Le test G3 en cours n'ajoute pas de commande de restauration pour utilisateurs.
+- **Pour la simulation :** `--smoke` est synthétique et retourne volontairement `build_accepted=false` lorsque les cas refus/crash/timeout sont correctement détectés ; ce n'est pas une qualification d'une stratégie rentable.
+- **Pour la sécurité financière :** aucun ordre de trading réel ni retrait n'est autorisé par la livraison Windows. [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) (trading live) et [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) (Authenticode Enterprise) exigent une acceptation indépendante.
+
+---
+
 ## Manuel d'exploitation — Windows, sécurité financière et dépannage (03/11/2026)
 
 > **Périmètre réel :** outil local d'observation/simulation; **pas** de service de trading live approuvé. Ce guide est la référence unique d'installation, d'utilisation, de diagnostic, de reprise et de validation. Le niveau de défense « fintech réglementée » est une cible à auditer, **pas** une certification obtenue. Le mode quantitatif air-gapped ne doit jamais contenir de clés d'exchange. Lire également [SECURITY.md](../SECURITY.md).
@@ -29,7 +67,7 @@
 | `pravda-server` | Adaptateur Axum de compatibilité / diagnostic ancien | Écoute `127.0.0.1` dans son mode explicite | **Ce n'est pas l'UI Tauri**. Ne pas l'utiliser comme solution de contournement d'IPC |
 | `v0.3.4` depuis Releases | Archive historique pré-PR récentes | Variable selon compilation | Le numéro du ZIP ne prouve ni la date du code ni sa signature |
 
-**Origine des binaires :** [Actions](https://github.com/suvorovpravda/Pravda-Bot/actions) → workflow Rust migration réussi, vérifier le SHA exact et la rubrique **Artifacts**; [Releases](https://github.com/suvorovpravda/Pravda-Bot/releases) est un espace différent. L'absence d'artefact à télécharger pour un workflow n'implique pas une compilation cassée : le job peut construire sans publier le fichier. **Ne jamais renommer une build de test non signée en « Enterprise ».**
+**Origine des binaires :** [Actions](https://github.com/suvorovpravda/Pravda-Bot/actions) → workflow Windows installer packaging réussi, vérifier le SHA exact et la rubrique **Artifacts**; [Releases](https://github.com/suvorovpravda/Pravda-Bot/releases) est un espace différent. L'absence d'artefact à télécharger pour un workflow n'implique pas une compilation cassée : le job peut construire sans publier le fichier. **Ne jamais renommer une build de test non signée en « Enterprise ».**
 
 ### 2. Installation, compilation et première ouverture
 
@@ -68,7 +106,7 @@ Au premier lancement, définir un mot de passe fort d'au moins 15 caractères vi
 
 ### 4. Diagnostic d'un problème : procédure « un clic »
 
-1. Décompresser l'artefact Windows `pravda-doctor-windows-unsigned-test` correspondant au commit souhaité, **sans exécuter directement le ZIP**.
+1. Décompresser l'artefact Windows `pravda-windows-troubleshooting` du **même run validé** que l'application et son manifeste SHA-256, **sans exécuter directement le ZIP**.
 2. Double-cliquer sur `pravda-doctor.exe`; un rapport local `PRAVDA-DOCTOR REPORT v2` s'ouvre dans le Bloc-notes.
 3. Copier **seulement** le rapport `PASS/WARN/FAIL/SKIP` et sa ligne `SUMMARY` dans le support. Ne jamais joindre la base `.db`, le mot de passe, des secrets, des captures de clé ou les répertoires personnels.
 4. Corréler `application_sha256` avec l'artefact/Release testé. Doctor qui ne retrouve pas `pravda-app.exe` émet `adjacent_app_binary | WARN`, **pas** un jugement sur la validité de l'application.
