@@ -12,7 +12,8 @@ const auth = resolve(process.env.PRAVDA_AUTH_PATH || "");
 const db = resolve(process.env.PRAVDA_DB_PATH || "");
 const kind = process.env.PRAVDA_INSTALL_KIND;
 const reportPath = process.env.PRAVDA_ONBOARDING_REPORT;
-const port = Number(process.env.PRAVDA_ONBOARDING_DRIVER_PORT || "4445");
+const port = Number(process.env.PRAVDA_ONBOARDING_DRIVER_PORT || "4444");
+const nativePort = Number(process.env.PRAVDA_ONBOARDING_NATIVE_DRIVER_PORT || "4445");
 const report = {
   version: 1, kind, sha: process.env.GITHUB_SHA || "",
   windows: process.env.PRAVDA_E2E_WINDOWS_VERSION || "",
@@ -86,7 +87,7 @@ async function start() {
   try { occupied = Boolean(await http("GET", "/status", undefined, 1000)); }
   catch { /* private driver port should be unused */ }
   check("Private WebDriver port available", !occupied);
-  child = spawn("tauri-driver", ["--port", String(port)], {
+  child = spawn("tauri-driver", ["--port", String(port), "--native-port", String(nativePort)], {
     windowsHide:true, stdio:["ignore","ignore","pipe"],
     env:{...process.env, PRAVDA_MARKET_FEEDS_ENABLED:"false"}
   });
@@ -158,6 +159,8 @@ try {
   assert.ok(report.windows, "Windows version required");
   assert.ok(Number.isInteger(port) && port >= 1024 && port <= 65535,
     "Valid private WebDriver port required");
+  assert.ok(Number.isInteger(nativePort) && nativePort >= 1024 && nativePort <= 65535 && nativePort !== port,
+    "Native WebDriver port must be valid and distinct from Tauri driver port");
   assert.ok(existsSync(exe) && existsSync(db) && !existsSync(auth),
     "Isolated installed app, SQLite and empty auth profile required");
   assert.equal(process.env.PRAVDA_MARKET_FEEDS_ENABLED, "false",
