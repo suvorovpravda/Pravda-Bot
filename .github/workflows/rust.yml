@@ -410,6 +410,7 @@ jobs:
             'restart: old session revoked after native process exit',
             'security: unauthenticated user cannot read security status',
             'security: unauthenticated user cannot read security events',
+            'security: invalid login is denied with a safe fixed error',
             'restart: existing password logs in',
             'security: authenticated status is bounded and VPN remains unverified',
             'security: authenticated local events contain only coded auth outcomes',
