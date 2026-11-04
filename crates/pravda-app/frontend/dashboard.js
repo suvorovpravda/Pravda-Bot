@@ -752,6 +752,11 @@ const translations = {
             setStatus($("runtime-status"),"error","Diagnostic indisponible");
         }
     }
+    // Never request protected diagnostics in the background after logout.
+    // A SQLite quick_check is user-initiated or runs when Security is opened.
+    const securityShell = document.querySelector("main.shell");
+    const securityVisible = () => !document.hidden && securityShell && !securityShell.hidden;
+    let securityCheckInFlight = false;
     async function refreshSecurityEvents() {
         const panel = $("security-events");
         const labels = {
@@ -791,6 +796,8 @@ const translations = {
         }
     }
     async function refreshSecurity() {
+        if (!securityVisible() || securityCheckInFlight) return;
+        securityCheckInFlight = true;
         const panel = $("security-checks");
         try {
             const rows = await window.pravdaInvoke("ipc_security_report");
@@ -837,6 +844,8 @@ const translations = {
         } catch {
             panel.textContent = "État de sécurité non disponible. Vérifiez votre session locale.";
             setStatus($("security-status"), "error", "Non vérifié");
+        } finally {
+            securityCheckInFlight = false;
         }
     }
     $("security-refresh").addEventListener("click", refreshSecurity);
@@ -845,8 +854,8 @@ const translations = {
     window.refreshSecurityEvents = refreshSecurityEvents;
     refreshSecurity();
     refreshSecurityEvents();
-    setInterval(refreshSecurity, 30000);
-    setInterval(refreshSecurityEvents, 30000);
+    // No unconditional security polling: SQLite diagnostics are only requested
+    // on login, an explicit refresh or when the Security tab is opened.
     document.addEventListener("click",async event => {
         const tab=event.target.closest("[data-go-tab]");
         if(tab){document.querySelector('.tab-btn[data-tab="'+tab.dataset.goTab+'"]')?.click();return;}
@@ -1161,6 +1170,10 @@ const translations = {
         }
         // Keep general cards visible
         document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
+        if (tab === "security") {
+            refreshSecurity();
+            refreshSecurityEvents();
+        }
     }
     const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
     const tabFromHash=()=>{const route=window.location.hash.slice(2);return knownTabs.has(route)?route:"all";};
