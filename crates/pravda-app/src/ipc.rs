@@ -203,7 +203,7 @@ pub async fn ipc_auth_login(
             Ok(())
         }
         Ok(Err(error)) => {
-            let code = if matches!(error, AuthError::Locked(_)) {
+            let code = if matches!(&error, AuthError::Locked(_)) {
                 SecurityEventCode::LoginLocked
             } else {
                 SecurityEventCode::LoginRejected
