@@ -1,6 +1,7 @@
 //! Phase 1: typed IPC authentication, shared with the existing HTTP adapter.
 //! The current External WebView is NOT granted remote Tauri IPC permissions.
 //! The frontend transport switch is a separate, reviewed PR.
+use crate::consent::RevolutPublicConsent;
 use pravda_server::{Auth, AuthError};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -414,13 +415,44 @@ pub async fn ipc_public_feed(
     window: Window,
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
+    consent: State<'_, RevolutPublicConsent>,
     source: String,
 ) -> Result<pravda_server::DesktopPayload, String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
     if !matches!(source.as_str(), "energy" | "news" | "revolut" | "sources") {
         return Err("INVALID_PUBLIC_SOURCE".to_owned());
     }
-    Ok(desktop.public_feed(&source).await)
+    if source == "revolut" && !consent.enabled() {
+        return Err("PUBLIC_FEED_OPT_IN_REQUIRED".to_owned());
+    }
+    let result = desktop.public_feed(&source).await;
+    // A revocation while the HTTPS request was in flight must not expose data.
+    if source == "revolut" && !consent.enabled() {
+        return Err("PUBLIC_FEED_OPT_IN_REQUIRED".to_owned());
+    }
+    Ok(result)
+}
+
+#[tauri::command]
+pub fn ipc_revolut_consent_get(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    consent: State<'_, RevolutPublicConsent>,
+) -> Result<bool, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(consent.enabled())
+}
+
+#[tauri::command]
+pub fn ipc_revolut_consent_set(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    consent: State<'_, RevolutPublicConsent>,
+    enabled: bool,
+) -> Result<bool, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    consent.set(enabled).map_err(str::to_string)?;
+    Ok(consent.enabled())
 }
 
 fn safe_article_link(raw: &str) -> Result<String, &'static str> {
