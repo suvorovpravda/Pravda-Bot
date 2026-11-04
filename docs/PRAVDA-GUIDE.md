@@ -19,6 +19,8 @@
 
 **Référentiel de production :** [issue #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), [workflow Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), dernier commit de [`main`](https://github.com/suvorovpravda/Pravda-Bot/commits/main). Ce chapitre est prioritaire sur les anciennes estimations de progression et versions reproduites plus bas. **Objectif : 30/11/2026, conditionné aux contrôles.**
 
+**Lecture de la page « Environments → unsigned-test » :** le statut GitHub `Deployed` concerne ici l'exécution du workflow `Windows installer packaging` et non l'installation effective sur un poste client, ni une mise en production financière. Seuls les artefacts du **run exact**, les contrôles de ses deux jobs et le SHA de commit constituent une preuve de packaging ; une Release stable n'en découle pas automatiquement. Une ligne `Failed to deploy` historique peut correspondre à une PR corrigée ensuite : ne pas extrapoler à `main` sans examiner ses contrôles actuels.
+
 ### Trois livrables distincts — comment les obtenir
 
 Sur la page [GitHub Actions du packaging Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), choisir un run **réussi de `main`**, vérifier son **SHA de commit**, puis télécharger depuis **le même run** :
