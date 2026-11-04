@@ -24,13 +24,19 @@ impl RevolutPublicConsent {
     }
 
     pub fn enabled(&self) -> bool {
-        *self.enabled.lock().unwrap_or_else(|poison| poison.into_inner())
+        *self
+            .enabled
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner())
     }
 
     /// Only the authenticated main WebView can call this method via IPC.
     /// The preference is never stored in JavaScript or passed to a broker.
     pub fn set(&self, enabled: bool) -> Result<(), &'static str> {
-        let mut current = self.enabled.lock().unwrap_or_else(|poison| poison.into_inner());
+        let mut current = self
+            .enabled
+            .lock()
+            .unwrap_or_else(|poison| poison.into_inner());
         if !enabled {
             // Fail closed in memory even if the write below encounters an error.
             *current = false;
