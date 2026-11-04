@@ -17,9 +17,9 @@
 
 ## Étude d'architecture événementielle et de risques
 
-**Décision d'architecture proposée :** renforcer le noyau Rust existant avec un contrat d'événements typés, une gestion du risque fail-closed et un replay déterministe, tout en conservant l'installateur Windows autonome et l'IPC Tauri authentifié. La description intelligence on-chain est traitée dans [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) ; la référence référence événementielle dans [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123). Voir [ADR-001](#architecture-de-recherche-et-gestion-des-risques) pour le tableau des écarts, la licence LGPL-3.0, la matrice des risques et les lots P0/P1/P2.
+**Décision d'architecture proposée :** renforcer le noyau Rust existant avec un contrat d'événements typés, une gestion du risque fail-closed et un replay déterministe, tout en conservant l'installateur Windows autonome et l'IPC Tauri authentifié. La description intelligence on-chain est traitée dans [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) ; l'évolution du moteur de risque dans [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123). Voir [ADR-001](#architecture-de-recherche-et-gestion-des-risques) pour le tableau des écarts, la licence LGPL-3.0, la matrice des risques et les lots P0/P1/P2.
 
-Les capacités référence événementielle (event sourcing durable, modèles fill/frais/latence, comptabilité/portfolio, multi-actifs, DST) **ne doivent pas être présentées comme déjà intégrées**. Le premier module indépendant `crates/pravda-engine/src/research_risk.rs` utilise des montants USDT en micro-unités et vérifie les limites d'un candidat de simulation : aucune I/O, aucun ordre, aucune intégration live. La preuve de compatibilité et le branchement au vrai simulateur constituent des étapes ultérieures.
+Les capacités avancées (event sourcing durable, modèles fill/frais/latence, comptabilité/portfolio, multi-actifs, DST) **ne doivent pas être présentées comme déjà intégrées**. Le premier module indépendant `crates/pravda-engine/src/research_risk.rs` utilise des montants USDT en micro-unités et vérifie les limites d'un candidat de simulation : aucune I/O, aucun ordre, aucune intégration live. La preuve de compatibilité et le branchement au vrai simulateur constituent des étapes ultérieures.
 
 **Plan GO/NO-GO :** ne pas substituer une API Node/Python/OpenClaw ni un serveur 8080 à l'IPC ; ne jamais mélanger données de marché et journal de décisions, affirmer un VPN actif sans preuve ou déduire des ordres d'un « score d'activité ». Les extensions restent désactivées en l'absence de source/qualité suffisantes et n'empiètent pas sur le jalon Windows du 30 novembre.
 
@@ -437,7 +437,7 @@ Les workflows testent Rust Ubuntu/Windows, MSRV, desktop Windows, mode navigateu
 
 ### Livraison accélérée — objectif commercial de −50 % de délai
 
-L'objectif annoncé est de **réduire de moitié le délai initial**, sous réserve de disposer d'une durée de référence vérifiable et d'une validation client. Les travaux suivants avancent **en parallèle**, sans diminuer les contrôles :
+L'objectif annoncé est de **réduire de moitié le délai initial**, sous réserve de disposer d'une durée de référence vérifiable et d'une validation de recette. Les travaux suivants avancent **en parallèle**, sans diminuer les contrôles :
 
 | Voie | Livrable et limites | Validation de sortie |
 |:--|:--|:--|
@@ -525,7 +525,7 @@ Le coffre **n'est pas une API à appeler depuis la WebView**. Le seul contrat de
 
 **Contrôles d'acceptation :** #75 fusionnée et 8/8 vérifications ; inventaire documenté (1/5 jalon #74). #77 fermée sans fusion et reprise par #88 pour le mock, le test natif rotation/suppression, les détections par signatures et l'historique Git *y compris commits de fusion* ; validations de #88 et de `main` après fusion requises. Ces contrôles ne garantissent ni absence de secret sous un format inconnu ni résistance à un malware utilisant le même compte Windows. Pas d'ordre réel, pas d'API privée activée.
 
-### Objectif client : raccourcir de 50 % le chemin critique, sans raccourcir les contrôles
+### Objectif de programme : raccourcir de 50 % le chemin critique, sans raccourcir les contrôles
 
 **Cible demandée : D/2**, avec `D` = durée de livraison initiale à confirmer contractuellement ; ce n'est **ni une nouvelle date ferme ni un engagement de délai non vérifié**. L'accélération vient de l'exécution **en parallèle** des chantiers Revolut X (données publiques puis compte privé en lecture seule), installateurs Windows, sécurité/CI et recette utilisateur. Les jeux de tests isolés et les contrôles obligatoires restent intacts.
 
@@ -775,13 +775,13 @@ Les seuils par défaut sont **provisoires** : 200 transactions minimum par run, 
 
 ### ADR-001 — Architecture et risques : évolution sécurisée du moteur Pravda-Bot
 
-**Statut : PROPOSÉ — exigences du produit, pas fonctionnalités livrées**  
+**Statut : PROPOSÉ — architecture à qualifier, aucune fonctionnalité annoncée comme livrée**  
 **Date : 4 novembre 2026**  
-**Décision :** réutiliser les idées d'architecture de référence événementielle en **Rust natif**, sans intégrer directement son code tant que l'audit technique/juridique n'est pas terminé. Aucun trading réel autorisé.
+**Décision :** définir une architecture de recherche Rust native indépendante, sans intégrer de code tiers non audité. Aucun trading réel autorisé.
 
-Sources examinées : référence événementielle, dépôt develop au commit a5c5b1d, architecture, event sourcing, DST, modèles comportementaux, types monétaires, live vs backtest, licence LGPL-3.0.
+Références de conception : gestion événementielle, rejeu déterministe, simulation de défaillance, typage monétaire et séparation recherche/exécution. Les études de provenance restent hors du dépôt public.
 
-**Cadrage :** référence événementielle est un framework/moteur de trading événementiel Rust, avec composantes et bindings Python ; le site propose aussi des offres commerciales distinctes. Il ne s'agit **pas** de remplacer l'EXE Tauri de Pravda-Bot par une application Nautilus complète ni d'installer Python chez l'utilisateur. Le dossier « intelligence on-chain » est une autre demande fonctionnelle issue des exigences fonctionnelles : [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121). Le **plan de sécurité et livraison Windows #106** demeure prioritaire.
+**Cadrage :** le projet évalue des principes architecturaux d'un moteur événementiel, sans imposer Python ou un logiciel tiers à l'installation Windows. Il ne s'agit **pas** de remplacer l'EXE Tauri de Pravda-Bot par une application Nautilus complète ni d'installer Python chez l'utilisateur. L'extension « intelligence on-chain » est suivie séparément : [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121). Le **plan de sécurité et livraison Windows #106** demeure prioritaire.
 
 ## Décision et bénéfices attendus
 
@@ -789,7 +789,7 @@ Conserver l'application Windows autonome Tauri 2, les modules `pravda-core`, `pr
 
 ### Matrice d'écarts vérifiée sur Pravda-Bot
 
-| Idée issue de référence événementielle | État observé dans Pravda-Bot le 04/11 | Amélioration précise | Lot |
+| Principe d'architecture cible | État observé dans Pravda-Bot le 04/11 | Amélioration précise | Lot |
 | --- | --- | --- | --- |
 | Noyau unifié de stratégie / bus | Rust core existe ; diffusion ticks Tokio, pas de contrat de causalité d'événements partagé | Message envelope typée, bus borné, idempotence, trace correlation/causation, ordre total par flux | P0 architecture |
 | Horloges d'exécution | Horloges `Instant` et `Utc`, replay déterministe limité | Séparer exchange timestamp, observed/received timestamp, monotonic clock, replay logical time ; tester désordre/retard | P0 |
@@ -867,7 +867,7 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 7. **Multi-venue et interface** : capacités des adaptateurs, carnet/portfolio/rapports si sources vérifiées ; Tauri onglet Intelligence + alertes + provenance, unifiée pour Windows.
 8. **Qualification** : soumettre modèles à la recette Windows sur SHA exact (E2E IPC, résilience hors ligne, CodeQL, signatures/commits, fixtures horodatées, crash, 429, latence, data corruption). Publication selon décision GO/NO-GO.
 
-**Hors périmètre du 30 novembre sans dérogation explicite accompagnée de preuves :** identité référence événementielle complète, exécution multi-venue réelle, futures/options avec marges, performance HFT ou latence garantie, moteur Python/Redis embarqué, IA qui négocie, service cloud, plan payant Nautilus, ou intégration de code LGPL. Le chantier ne doit pas faire passer un livrable P0 validé en NO-GO par ajout de fonctions non qualifiées.
+**Hors périmètre du 30 novembre sans dérogation explicite accompagnée de preuves :** parité complète avec un moteur externe, exécution multi-venue réelle, futures/options avec marges, performance HFT ou latence garantie, moteur Python/Redis embarqué, IA qui négocie, service cloud, plan payant Nautilus, ou intégration de code LGPL. Le chantier ne doit pas faire passer un livrable P0 validé en NO-GO par ajout de fonctions non qualifiées.
 
 ## Tests de recette obligatoires
 
@@ -886,5 +886,5 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 - LGPL-3.0 ne signifie ni intégration automatique sûre ni droit d'ignorer les obligations de distribution. Les offres commerciales `Pro/Cloud/Institutional` sont distinctes du dépôt open-source.
 - Références : liens en tête du document ; garder le SHA de la source d'inspiration dans toute revue de compatibilité et les fichiers de preuves.
 
-**Résumé décisionnel :** retenir *l'architecture événementielle, les types monétaires précis, le journal durable, la simulation réaliste, le risque centralisé et les tests déterministes* ; reporter l'intégration directe du projet référence événementielle, le code Python en production et toutes les connexions de trading réel jusqu'à revue de sécurité et licence.
+**Résumé décisionnel :** retenir *l'architecture événementielle, les types monétaires précis, le journal durable, la simulation réaliste, le risque centralisé et les tests déterministes* ; reporter l'intégration directe de logiciels tiers, le code Python en production et toutes les connexions de trading réel jusqu'à revue de sécurité et licence.
 
