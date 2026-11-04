@@ -15,6 +15,74 @@
 
 ---
 
+## État actuel de livraison et recette — 4 novembre 2026
+
+**Référentiel de production :** [issue #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), [workflow Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), dernier commit de [`main`](https://github.com/suvorovpravda/Pravda-Bot/commits/main). Ce chapitre est prioritaire sur les anciennes estimations de progression et versions reproduites plus bas. **Objectif : 30/11/2026, conditionné aux contrôles.**
+
+**Lecture de la page « Environments → unsigned-test » :** le statut GitHub `Deployed` concerne ici l'exécution du workflow `Windows installer packaging` et non l'installation effective sur un poste client, ni une mise en production financière. Seuls les artefacts du **run exact**, les contrôles de ses deux jobs et le SHA de commit constituent une preuve de packaging ; une Release stable n'en découle pas automatiquement. Une ligne `Failed to deploy` historique peut correspondre à une PR corrigée ensuite : ne pas extrapoler à `main` sans examiner ses contrôles actuels.
+
+### Trois livrables distincts — comment les obtenir
+
+Sur la page [GitHub Actions du packaging Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), choisir un run **réussi de `main`**, vérifier son **SHA de commit**, puis télécharger depuis **le même run** :
+
+| Nom d'artefact GitHub | Contenu | Lancement |
+| --- | --- | --- |
+| `pravda-windows-unsigned-candidate-installers` | `bundle/msi/*.msi`, `bundle/nsis/*-setup.exe`, `pravda-app.exe`, `pravda-doctor.exe`, `pravda-harness.exe`, `bundle/SHA256SUMS.txt`, `bundle/release-evidence.json` | Installer le MSI/NSIS sur Windows propre ; n'ouvrir que l'application `pravda-app.exe` installée |
+| `pravda-windows-production-test` | `pravda-harness.exe`, `PRODUCTION-TEST.txt` | Extraire le ZIP puis `pravda-harness.exe --smoke` dans PowerShell ; exécuter les campagnes dans une VM **sans accès réseau** |
+| `pravda-windows-troubleshooting` | `pravda-doctor.exe`, `TROUBLESHOOTING.txt` | Extraire puis double-cliquer pour le rapport Bloc-notes ; `--no-open` pour le contrôle CI |
+
+Les ZIP compagnons sont des **applications distinctes**, mais **ne sont pas chacun un MSI**. Les deux compagnons sont comparés par la CI au manifeste SHA-256 de l'archive principale, correspondant au même commit. Leurs guides sont des fichiers `.txt`. Aucun certificat de signature Enterprise n'a été annoncé comme validé : **les artefacts `unsigned` restent des builds de test**, même lorsque les checks sont verts. Les artefacts Actions ont une durée de conservation limitée ; ce ne sont pas des Releases stables pérennes.
+
+### Centre de sécurité et Proton VPN — contrat renforcé
+
+**Le modèle antérieur a été refusé pour absence de retour sécurité exploitable.** Ajouter un onglet « Sécurité » après authentification qui affiche des contrôles indépendants, une gravité, un timestamp et une action sûre. Les contrôles doivent être sourcés dans Rust ou l'OS : mot de passe/session, SQLite, activation des flux, trading réel OFF, signature Authenticode (si vérifiable), provenance, réseau, module VPN. Un champ non testé reste `NON VÉRIFIÉ` ; pas de pourcentage de « sécurité » fictif ni d'alerte qui divulgue mot de passe ou chemin.
+
+**Option Proton VPN :** l'utilisateur qui possède Proton VPN utilise son compte **dans l'application Proton officielle**, jamais dans Pravda-Bot. Prévoir un choix opt-in pour **ouvrir l'application/afficher la procédure officielle**, et un retour `CONNEXION NON VÉRIFIÉE` tant qu'une preuve système fiable n'existe pas. L'application Windows est documentée via son UI ; aucun `--connect` Windows non documenté ne doit être exécuté. Proton VPN dispose de modes kill switch standard et avancé : l'avancé peut empêcher tout accès Internet hors tunnel, y compris pendant certaines opérations Windows ; n'activer qu'après confirmation explicite dans Proton. Les abonnements payants donnent des options supplémentaires, mais le service dispose aussi d'un plan gratuit. Éviter tout contrôle de compte ou accès aux identifiants. Voir [documentation officielle Proton Windows](https://protonvpn.com/support/protonvpn-windows-vpn-application).
+
+**Tests et NO-GO :** fenêtre hostile refuse l'IPC de sécurité, session expirée refuse l'accès, erreur d'accès aux statuts reste `inconnu`, Proton absent/déconnecté ne devient jamais `connecté`, pas de commandes VPN privilégiées ni d'envoi de secrets. Le centre de sécurité doit être validé sur Windows x64 réel avant d'être annoncé « sécurisé ». [Issue #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106).
+
+### Installation autonome et personnalisée — contrat à réaliser (P0)
+
+L'utilisateur final n'est **pas** un développeur : télécharger le MSI/NSIS, lancer, choisir **Standard recommandé** ou **Personnalisé**, puis configurer son mot de passe applicatif dans la fenêtre native. Aucune commande PowerShell, installation manuelle Rust, Visual Studio, Python, Node ou WebView2. Windows peut légitimement demander l'autorisation UAC ; ne jamais la contourner.
+
+**Sélection cible (non encore disponible/validée dans les installateurs actuels) :**
+
+| Composant | Standard | Personnalisé | Restriction de sécurité |
+| --- | --- | --- | --- |
+| Noyau desktop Tauri/WebView2, auth, SQLite indispensable, intégrité et IPC sécurisé | Obligatoire | Non décochable | Aucun contournement de l'auth ni ajout de permission arbitraire |
+| Cours publics et feeds Kraken/Binance | Selon profil d'observation | Activable/désactivable | Aucun accès broker privé implicite |
+| Simulation papier | Activée si profil test | Activable/désactivable | Aucun ordre réel |
+| Doctor passif | Recommandé | Facultatif, archive séparée préservée | Aucune collecte/transmission de secrets |
+| Harness préproduction | Non installé par défaut | Facultatif, archive séparée préservée | Campagnes en VM/OS sans réseau, hors compte réel |
+| Revolut X en lecture seule | Désactivé | Opt-in **seulement si homologué** | Consentement explicite et coffre natif, zéro ordre |
+| Trading live / retraits | **Absent** | **Non proposé** | Bloqué par [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) |
+
+**À implémenter et démontrer :** option list et dépendances versionnées ; étude WiX MSI vs NSIS pour une sélection vraiment installable ; prérequis WebView2 silencieux vérifié, modules authentifiés et signatures de provenance ; cohérence des capacités Tauri et accès réseau entre modules installés/désactivés ; persistance des options en upgrade ; absence de perte de profils/données ; scénarios d'échec et rollback sans désactiver SmartScreen/UAC. Si le découpage natif MSI/NSIS n'est pas réalisable avec les protections requises, utiliser des **installateurs distincts** ou une **activation post-installation sûre** documentée plutôt qu'une case qui ne fait rien. Aucun module tiers non signé. **La présence de `downloadBootstrapper` ne constitue pas une preuve d'installation offline.**
+
+**Recette obligatoire :** Windows 10/11 propre, MSI et NSIS, runtime WebView2 absent/présent, connecté/déconnecté, Standard/Personnalisé, options individuellement et combinaisons, upgrade et désinstallation/réinstallation, refus des manifestes altérés, vérification effective des privilèges et ports. [Plan #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106). Ne pas déclarer « installation personnalisable » tant que ces cas ne sont pas démontrés sur un SHA exact.
+
+### Matrice de recette fondée sur les PR
+
+| Critère | Source des tests | Interprétation |
+| --- | --- | --- |
+| Desktop natif, IPC et auth après redémarrage | [#111](https://github.com/suvorovpravda/Pravda-Bot/pull/111) | Seuls les cas testés en CI sont validés ; ne prouve pas un parcours complet d'utilisateur final |
+| Démarrage de l'EXE extrait du véritable MSI sur runner Windows propre | [#112](https://github.com/suvorovpravda/Pravda-Bot/pull/112) | Vérifie démarrage et SQLite isolé, **pas** un scénario de trading |
+| Trois téléchargements distincts, SHA des compagnons et tests Doctor/Harness | [#115](https://github.com/suvorovpravda/Pravda-Bot/pull/115) | Vérification de chaque binaire contre `bundle/SHA256SUMS.txt` du même run |
+| Désinstallation puis réinstallation sans écraser deux fichiers témoins `APPDATA`/`LOCALAPPDATA` | [#116](https://github.com/suvorovpravda/Pravda-Bot/pull/116) | Preuve des canaris, pas une vraie migration/restauration d'une base utilisateur |
+| Vérification précoce des scripts PowerShell | [#117](https://github.com/suvorovpravda/Pravda-Bot/pull/117) | Test syntaxique ; ne remplace pas l'installation réelle |
+| Snapshot d'une base SQLite WAL active + restauration de lignes artificielles | [#118](https://github.com/suvorovpravda/Pravda-Bot/pull/118) | PR **en validation** au 4 novembre ; ne pas la compter comme recette fusionnée |
+
+### Opérations et interdictions
+
+- **Pour vérifier l'intégrité :** dans l'archive principale extraite, consulter `bundle/release-evidence.json`, relever le SHA de commit, vérifier les empreintes `SHA256SUMS.txt` ; pour chaque compagnon, calculer `Get-FileHash -Algorithm SHA256 .\pravda-doctor.exe` ou `Get-FileHash -Algorithm SHA256 .\pravda-harness.exe` dans son propre répertoire et comparer au manifeste principal. **Ne pas récupérer les compagnons de runs différents.**
+- **Pour installer :** exécuter le MSI/NSIS correspondant au SHA validé, laisser SmartScreen actif, vérifier la présence de WebView2 ; la compilation MSVC n'est nécessaire qu'aux développeurs et à la CI, pas à l'utilisateur final d'un installateur.
+- **Pour diagnostiquer :** Doctor est passif, hors réseau, sans réparation automatique. Partager seulement les lignes d'état et `SUMMARY`; ne pas joindre `.db`, fichiers d'authentification ou secrets.
+- **Pour sauvegarder :** ne jamais copier à chaud les seuls fichiers `.db` d'une base WAL. Utiliser une copie transactionnelle (SQLite Online Backup / `VACUUM INTO` sur un nouveau fichier, sous procédure qualifiée) ou fermer proprement avant copie cohérente. Le test G3 en cours n'ajoute pas de commande de restauration pour utilisateurs.
+- **Pour la simulation :** `--smoke` est synthétique et retourne volontairement `build_accepted=false` lorsque les cas refus/crash/timeout sont correctement détectés ; ce n'est pas une qualification d'une stratégie rentable.
+- **Pour la sécurité financière :** aucun ordre de trading réel ni retrait n'est autorisé par la livraison Windows. [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) (trading live) et [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) (Authenticode Enterprise) exigent une acceptation indépendante.
+
+---
+
 ## Manuel d'exploitation — Windows, sécurité financière et dépannage (03/11/2026)
 
 > **Périmètre réel :** outil local d'observation/simulation; **pas** de service de trading live approuvé. Ce guide est la référence unique d'installation, d'utilisation, de diagnostic, de reprise et de validation. Le niveau de défense « fintech réglementée » est une cible à auditer, **pas** une certification obtenue. Le mode quantitatif air-gapped ne doit jamais contenir de clés d'exchange. Lire également [SECURITY.md](../SECURITY.md).
@@ -29,7 +97,7 @@
 | `pravda-server` | Adaptateur Axum de compatibilité / diagnostic ancien | Écoute `127.0.0.1` dans son mode explicite | **Ce n'est pas l'UI Tauri**. Ne pas l'utiliser comme solution de contournement d'IPC |
 | `v0.3.4` depuis Releases | Archive historique pré-PR récentes | Variable selon compilation | Le numéro du ZIP ne prouve ni la date du code ni sa signature |
 
-**Origine des binaires :** [Actions](https://github.com/suvorovpravda/Pravda-Bot/actions) → workflow Rust migration réussi, vérifier le SHA exact et la rubrique **Artifacts**; [Releases](https://github.com/suvorovpravda/Pravda-Bot/releases) est un espace différent. L'absence d'artefact à télécharger pour un workflow n'implique pas une compilation cassée : le job peut construire sans publier le fichier. **Ne jamais renommer une build de test non signée en « Enterprise ».**
+**Origine des binaires :** [Actions](https://github.com/suvorovpravda/Pravda-Bot/actions) → workflow Windows installer packaging réussi, vérifier le SHA exact et la rubrique **Artifacts**; [Releases](https://github.com/suvorovpravda/Pravda-Bot/releases) est un espace différent. L'absence d'artefact à télécharger pour un workflow n'implique pas une compilation cassée : le job peut construire sans publier le fichier. **Ne jamais renommer une build de test non signée en « Enterprise ».**
 
 ### 2. Installation, compilation et première ouverture
 
@@ -68,7 +136,7 @@ Au premier lancement, définir un mot de passe fort d'au moins 15 caractères vi
 
 ### 4. Diagnostic d'un problème : procédure « un clic »
 
-1. Décompresser l'artefact Windows `pravda-doctor-windows-unsigned-test` correspondant au commit souhaité, **sans exécuter directement le ZIP**.
+1. Décompresser l'artefact Windows `pravda-windows-troubleshooting` du **même run validé** que l'application et son manifeste SHA-256, **sans exécuter directement le ZIP**.
 2. Double-cliquer sur `pravda-doctor.exe`; un rapport local `PRAVDA-DOCTOR REPORT v2` s'ouvre dans le Bloc-notes.
 3. Copier **seulement** le rapport `PASS/WARN/FAIL/SKIP` et sa ligne `SUMMARY` dans le support. Ne jamais joindre la base `.db`, le mot de passe, des secrets, des captures de clé ou les répertoires personnels.
 4. Corréler `application_sha256` avec l'artefact/Release testé. Doctor qui ne retrouve pas `pravda-app.exe` émet `adjacent_app_binary | WARN`, **pas** un jugement sur la validité de l'application.

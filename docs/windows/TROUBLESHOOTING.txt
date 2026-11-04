@@ -11,5 +11,8 @@ Lire les lignes PASS / WARN / FAIL / SKIP et SUMMARY. SKIP n'est pas PASS.
 Ne jamais joindre une base SQLite, une cle d'exchange ou un mot de passe au support.
 La presence d'un executable voisin est une verification optionnelle.
 Consulter docs/PRAVDA-GUIDE.md pour le depannage et la sauvegarde.
-Verifier SHA256SUMS.txt et release-evidence.json avec le commit de la release.
+Comparer le SHA-256 du present executable avec bundle/SHA256SUMS.txt de l'archive
+principale du MEME run GitHub Actions et le SHA de bundle/release-evidence.json.
+Ce ZIP compagnon ne contient pas son propre manifeste SHA256SUMS.txt.
+Ne pas melanger les trois archives de runs/commits differents.
 Sans signature Authenticode valide : build de test uniquement.
