@@ -59,6 +59,19 @@ jobs:
             }
             Write-Host "PASS PowerShell parse $path"
           }
+      - name: Verify airgap QA refuses regular Windows invocation
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          try {
+            & ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath 'NO_INSTALLER.msi' -Kind MSI -ExpectedSha256 ('0' * 64)
+            throw 'FAIL: airgap test accepted an unacknowledged host'
+          } catch {
+            if ($_.Exception.Message -notmatch '^REFUSED: disposable-VM acknowledgement required') {
+              throw
+            }
+            Write-Host 'PASS: airgap acceptance cannot run without explicit disposable VM acknowledgement'
+          }
       - name: Verify protected Enterprise signing prerequisites
         if: ${{ inputs.signed }}
         shell: pwsh
