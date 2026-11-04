@@ -293,13 +293,21 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Stage independent companion download folders
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path 'companion-dist/test', 'companion-dist/doctor' | Out-Null
+          Copy-Item -LiteralPath 'crates/pravda-app/target/release/pravda-harness.exe' -Destination 'companion-dist/test/pravda-harness.exe' -ErrorAction Stop
+          Copy-Item -LiteralPath 'docs/windows/PRODUCTION-TEST.txt' -Destination 'companion-dist/test/PRODUCTION-TEST.txt' -ErrorAction Stop
+          Copy-Item -LiteralPath 'crates/pravda-app/target/release/pravda-doctor.exe' -Destination 'companion-dist/doctor/pravda-doctor.exe' -ErrorAction Stop
+          Copy-Item -LiteralPath 'docs/windows/TROUBLESHOOTING.txt' -Destination 'companion-dist/doctor/TROUBLESHOOTING.txt' -ErrorAction Stop
       - name: Publish standalone preproduction test tool
         uses: actions/upload-artifact@v7
         with:
           name: pravda-windows-production-test
           path: |
-            crates/pravda-app/target/release/pravda-harness.exe
-            docs/windows/PRODUCTION-TEST.txt
+            companion-dist/test/*
           if-no-files-found: error
           retention-days: 30
       - name: Publish standalone troubleshooting tool
@@ -307,8 +315,7 @@ jobs:
         with:
           name: pravda-windows-troubleshooting
           path: |
-            crates/pravda-app/target/release/pravda-doctor.exe
-            docs/windows/TROUBLESHOOTING.txt
+            companion-dist/doctor/*
           if-no-files-found: error
           retention-days: 30
 
