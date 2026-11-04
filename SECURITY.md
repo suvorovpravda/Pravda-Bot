@@ -17,6 +17,14 @@
 
 ---
 
+## Sécurité des extensions NautilusTrader / On-Chain — contrat proposé, non homologué
+
+La référence [NautilusTrader](https://nautilustrader.io/) vise un moteur multi-actifs/venues ; le financeur demande également des observations de flux CEX, whales, stablecoins et DeFi. **Ne pas importer de code, de plugins ou de dépendances réseau de ces produits sans revue.** [ADR de comparaison](docs/ADR-001-NAUTILUS-BENCHMARK.md), [risques/trading #123](https://github.com/suvorovpravda/Pravda-Bot/issues/123) et [on-chain #121](https://github.com/suvorovpravda/Pravda-Bot/issues/121).
+
+**Les nouvelles fonctionnalités doivent :** séparer événements de marché et événements modifiant l'état de simulation, préserver les secrets hors WebView, appliquer des montants à précision fixe, un risk gate fail-closed et un état `UNKNOWN` pour les commandes incertaines, conserver source/fraîcheur/confiance sur tout score, et interdire le replay contenant des données futures. Les connecteurs de données externes sont `read-only` avec une allowlist réseau et sans commande shell ; les essais offline Harness restent isolés au niveau OS/VM. Une connexion Proton VPN non vérifiée n'autorise jamais un flux financier supplémentaire. **Trading live OFF** jusqu'à homologation indépendante.
+
+**Licence :** le dépôt NautilusTrader `develop` est LGPL-3.0 ; les idées d'architecture sont analysées, mais toute liaison ou réutilisation de code réclamerait étude obligations de redistribution, droits de relinkage/avis selon configuration, licences transitives, SBOM et contrat d'éditeur. Aucun marqueur « NautilusTrader certifié » ni « sécurité complète » ne doit figurer dans l'UI ou la Release sans preuve. `research_risk.rs` est un prototype Rust autonome **non relié à une exécution d'ordres** ; ses tests ne constituent pas une validation de sécurité de trading réel.
+
 ## Refus du modèle actuel et exigences de sécurité utilisateur — 4 novembre 2026
 
 **Décision propriétaire : modèle de sécurité actuel refusé** pour manque de retour d'information sur l'état des protections. Le produit ne peut être qualifié de prêt pour production sans **centre de sécurité authentifié**, états réels `PROTÉGÉ / ATTENTION / BLOQUÉ / NON VÉRIFIÉ`, remédiations transparentes et audit des tests au SHA exact. Un contrôle non effectué doit rester **NON VÉRIFIÉ**, jamais vert par défaut. Les données d'authentification et les secrets ne sont jamais exposés à WebView2 ou aux rapports. Les erreurs doivent être visibles sans divulguer de détails sensibles.
