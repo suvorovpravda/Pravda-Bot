@@ -218,14 +218,46 @@ pub fn ipc_runtime_metrics(
 // raw errors or a guessed VPN/installation status.
 fn security_report_rows() -> Vec<String> {
     const CHECKS: [(&str, &str, &str); 8] = [
-        ("session", "verified", "Session Rust active; fenetre principale authentifiee"),
-        ("sqlite", "unknown", "Integrite et restauration SQLite non testees par cette consultation; utiliser Doctor"),
-        ("authenticity", "unknown", "Signature Authenticode et provenance du binaire non verifiees ici"),
-        ("capabilities", "unknown", "Audit des permissions IPC et CSP non effectue pendant cette consultation"),
-        ("market", "unknown", "Fraicheur et confidentialite des flux non verifiees ici"),
-        ("orders", "unknown", "Etat financier et autorisation de trading non audites pendant cette consultation"),
-        ("proton", "unknown", "Connexion Proton VPN non verifiee; consulter l'application Proton officielle"),
-        ("kill_switch", "unknown", "Kill switch et protection DNS/IP du VPN non verifies"),
+        (
+            "session",
+            "verified",
+            "Session Rust active; fenetre principale authentifiee",
+        ),
+        (
+            "sqlite",
+            "unknown",
+            "Integrite et restauration SQLite non testees par cette consultation; utiliser Doctor",
+        ),
+        (
+            "authenticity",
+            "unknown",
+            "Signature Authenticode et provenance du binaire non verifiees ici",
+        ),
+        (
+            "capabilities",
+            "unknown",
+            "Audit des permissions IPC et CSP non effectue pendant cette consultation",
+        ),
+        (
+            "market",
+            "unknown",
+            "Fraicheur et confidentialite des flux non verifiees ici",
+        ),
+        (
+            "orders",
+            "unknown",
+            "Etat financier et autorisation de trading non audites pendant cette consultation",
+        ),
+        (
+            "proton",
+            "unknown",
+            "Connexion Proton VPN non verifiee; consulter l'application Proton officielle",
+        ),
+        (
+            "kill_switch",
+            "unknown",
+            "Kill switch et protection DNS/IP du VPN non verifies",
+        ),
     ];
     CHECKS
         .iter()
@@ -244,10 +276,16 @@ pub async fn ipc_security_report(
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
     let mut rows = security_report_rows();
     rows[1] = match desktop.security_database_health_code().await {
-        "database_ok" => "sqlite|verified|SQLite quick_check OK; restauration de sauvegarde non testee",
-        "database_missing" => "sqlite|blocked|Base SQLite absente; consulter Doctor sans reinitialiser",
+        "database_ok" => {
+            "sqlite|verified|SQLite quick_check OK; restauration de sauvegarde non testee"
+        }
+        "database_missing" => {
+            "sqlite|blocked|Base SQLite absente; consulter Doctor sans reinitialiser"
+        }
         "database_invalid_path" => "sqlite|blocked|Chemin de base invalide; consulter Doctor",
-        "database_integrity_failed" => "sqlite|blocked|Controle SQLite en echec; sauvegarder avant toute reparation",
+        "database_integrity_failed" => {
+            "sqlite|blocked|Controle SQLite en echec; sauvegarder avant toute reparation"
+        }
         "database_schema_missing" => "sqlite|blocked|Schema du magasin SQLite incomplet; consulter Doctor",
         _ => "sqlite|unknown|Base indisponible ou occupee; aucune reparation automatique",
     }
