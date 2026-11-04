@@ -34,6 +34,8 @@ assert.doesNotMatch(js,/\bfetch\s*\(|\bnew\s+WebSocket\s*\(|location\.assign\s*\
 assert.match(html,/id="paper-alerts"/,"Paper-simulation events need a separate renderer");
 assert.match(html,/data-tab="security"/,"Security status must be visible to an authenticated user");
 assert.match(js,/ipc_security_report/,"Security UI must retrieve an authenticated Rust-owned report");
+assert.match(js,/ipc_security_events/,"Security events must remain authenticated Tauri IPC only");
+assert.match(html,/id="security-events"/,"Security events must be visible after login");
 assert.match(ipc,/protonvpn.*https:\/\/protonvpn\.com\/support\//,"Proton documentation must be a fixed official URL");
 assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
   "Simulator alerts must be rendered from the Rust IPC snapshot");
