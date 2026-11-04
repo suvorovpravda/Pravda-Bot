@@ -51,6 +51,17 @@ assert.match(html,/id="revolut-consent"[^>]*disabled/,"Optional network module m
 assert.match(js,/ipc_revolut_consent_get/,"UI must read native persisted consent");
 assert.match(js,/ipc_revolut_consent_set/,"UI must persist opt-in through Rust IPC");
 assert.match(ipc,/source == "revolut" && !consent\.enabled\(\)/,"Revolut feed must be gated in Rust");
+assert.match(js,/window\.pravdaLockRevolutConsent\s*=\s*lockRevolutConsentUi/,
+  "Lock must invalidate native feed consent UI after logout");
+assert.match(js,/window\.refreshRevolutConsent\s*=\s*readRevolutConsent/,
+  "Re-authentication must refresh native feed consent");
+assert.match(js,/version !== revolutConsentVersion \|\| shell\.hidden/,
+  "In-flight consent results must be ignored after logout");
+assert.match(auth,/window\.pravdaLockRevolutConsent\(\)/,
+  "Login screen must immediately lock stale optional-network controls");
+assert.match(auth,/window\.refreshRevolutConsent\(\)/,
+  "Signing back in must re-read permission from native Rust");
+
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
 assert.match(js,/if \(!securityVisible\(\) \|\| securityCheckInFlight\) return;/,
