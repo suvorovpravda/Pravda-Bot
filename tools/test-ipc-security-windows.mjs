@@ -363,9 +363,19 @@ try {
   verdict("restart: password verifier unchanged",
     createHash("sha256").update(readFileSync(authFile)).digest("hex")===authHash,
     "Password verifier bytes unchanged");
+  rustDenied("security: unauthenticated user cannot read security status",
+    await invoke("ipc_security_report"));
   const loginAfterRestart=await invoke("ipc_auth_login",{password});
   verdict("restart: existing password logs in",
     loginAfterRestart.state==="resolved",loginAfterRestart.state);
+  const security=await invoke("ipc_security_report");
+  verdict("security: authenticated status is bounded and VPN remains unverified",
+    security.state==="resolved" && Array.isArray(security.value) &&
+    security.value.length===8 && security.value[0].startsWith("session|verified|") &&
+    security.value.some(row=>row.startsWith("proton|unknown|")) &&
+    security.value.some(row=>row.startsWith("kill_switch|unknown|")) &&
+    security.value.every(row=>typeof row==="string" && row.length<300),
+    "Safe local status with honest unknown Proton VPN and kill switch");
   const marketAfterRestart=await invoke("ipc_market_snapshot");
   verdict("restart: market IPC authorized only after login",
     marketAfterRestart.state==="resolved",marketAfterRestart.state);
