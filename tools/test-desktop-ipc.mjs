@@ -130,7 +130,7 @@ vm.runInContext(js.slice(fetchStart, fetchEnd), ui, {filename:"desktop-fetchJson
 const oldRejected = ui.fetchJson("/api/geopolitics");
 ui.window.pravdaAuthGeneration = 4; // session A logout + B login
 release.reject(new Error("UNAUTHORIZED"));
-await assert.rejects(oldRejected, /UNAUTHORIZED/);
+await assert.rejects(oldRejected, /STALE_SESSION/);
 assert.equal(relocks, 0, "Old session rejection must not hide new dashboard");
 
 const oldSucceeded = ui.fetchJson("/api/market");
