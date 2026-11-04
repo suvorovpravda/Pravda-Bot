@@ -54,6 +54,19 @@ for(const page of expected) {
     /\]\((?:docs\/architecture\/|docs\/releases\/)[^)]+\.md(?:#[^)]*)?\)/,
     page+": historical page link not replaced");
 }
+// A release documentation update must reflect the actual Windows installer
+// bootstrap mode instead of promising an unverified download/offline path.
+const windowsConfig=JSON.parse(readFileSync("crates/pravda-app/tauri.conf.json","utf8"));
+assert.equal(windowsConfig.bundle?.windows?.webviewInstallMode?.type,"offlineInstaller",
+  "The Windows packaging contract requires an embedded WebView2 prerequisite");
+assert.equal(windowsConfig.bundle?.windows?.webviewInstallMode?.silent,true);
+for(const page of expected) {
+  const content=readFileSync(page,"utf8");
+  assert.match(content,/offlineInstaller/,
+    page+": must describe the actual embedded WebView2 prerequisite");
+  assert.doesNotMatch(content,/webviewInstallMode=downloadBootstrapper/,
+    page+": contains the retired installer mode");
+}
 assert.match(readFileSync(".gitattributes","utf8"),
   /archive\/python-legacy\/\*\* linguist-vendored/);
 console.log("Docs boundary OK: exactly three Markdown pages");

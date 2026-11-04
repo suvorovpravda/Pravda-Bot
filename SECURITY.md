@@ -17,6 +17,14 @@
 
 ---
 
+## Contrat de sécurité de l'installation Windows — état du 4 novembre 2026
+
+**Intégré sur `main` :** la PR [#125](https://github.com/suvorovpravda/Pravda-Bot/pull/125) sélectionne le prérequis officiel WebView2 `offlineInstaller` avec `silent=true` pour MSI/NSIS. Aucune dépendance de compilation Rust, Python, Node ou MSVC n'est à installer manuellement sur le poste de l'utilisateur final. Ne pas activer de téléchargement arbitraire, d'exécuteur PowerShell distant, d'exception antivirus, de modification UAC ou de contournement SmartScreen.
+
+**Preuves disponibles :** le [workflow Windows #41798857222](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41798857222) a réussi sur le commit `aa759d3` : vérification des empreintes des trois artefacts, installation/démarrage/désinstallation réelle MSI **et** NSIS, absence de listener HTTP local et préservation de deux fichiers témoins par profil. Ce sont des **tests sur runner Windows** ; ce n'est ni un audit indépendant ni une preuve d'installation hors réseau quand WebView2 n'est pas présent.
+
+**Reste NO-GO pour l'attestation « installation entièrement autonome hors réseau » :** test avec runtime WebView2 initialement absent sur VM isolée d'Internet, journal d'installation expurgé, retour d'erreur sur dépendance indisponible, ouverture WebView2 et onboarding, puis upgrade/réinstallation sans perte de données réelles anonymisées. Les choix de modules sont à valider séparément et ne peuvent retirer les protections Rust/IPC. Pour signer une édition Enterprise, la preuve Authenticode de chaque fichier reste requise : [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90). Les ordres réels restent interdits : [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89).
+
 ## Sécurité du moteur événementiel et des extensions on-chain — contrat proposé, non homologué
 
 L'architecture cible prévoit un moteur multi-actifs et multi-plateformes ainsi que des observations de flux CEX, grandes transactions, stablecoins et DeFi. **Ne pas importer de code, de plugins ou de dépendances réseau de ces produits sans revue.** [ADR de comparaison](docs/PRAVDA-GUIDE.md#architecture-de-recherche-et-gestion-des-risques), [risques/trading #123](https://github.com/suvorovpravda/Pravda-Bot/issues/123) et [on-chain #121](https://github.com/suvorovpravda/Pravda-Bot/issues/121).
