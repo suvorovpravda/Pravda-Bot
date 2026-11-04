@@ -286,7 +286,9 @@ pub async fn ipc_security_report(
         "database_integrity_failed" => {
             "sqlite|blocked|Controle SQLite en echec; sauvegarder avant toute reparation"
         }
-        "database_schema_missing" => "sqlite|blocked|Schema du magasin SQLite incomplet; consulter Doctor",
+        "database_schema_missing" => {
+            "sqlite|blocked|Schema du magasin SQLite incomplet; consulter Doctor"
+        }
         _ => "sqlite|unknown|Base indisponible ou occupee; aucune reparation automatique",
     }
     .to_string();
