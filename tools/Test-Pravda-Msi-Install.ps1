@@ -131,7 +131,7 @@ try {
         }
         $header = [System.IO.File]::ReadAllBytes($dbPath)
         if ($header.Length -lt 16 -or
-            [System.Text.Encoding]::ASCII.GetString($header, 0, 16) -cne "SQLite format 3" + [char]0) {
+            [System.Text.Encoding]::ASCII.GetString($header, 0, 16) -cne ("SQLite format 3" + [char]0)) {
             throw 'MSI first launch did not preserve an intact SQLite file'
         }
         $app = Start-Process -FilePath $installedExe -PassThru
