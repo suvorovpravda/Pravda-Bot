@@ -781,7 +781,7 @@ Les seuils par défaut sont **provisoires** : 200 transactions minimum par run, 
 
 Références de conception : gestion événementielle, rejeu déterministe, simulation de défaillance, typage monétaire et séparation recherche/exécution. Les études de provenance restent hors du dépôt public.
 
-**Cadrage :** le projet évalue des principes architecturaux d'un moteur événementiel, sans imposer Python ou un logiciel tiers à l'installation Windows. Il ne s'agit **pas** de remplacer l'EXE Tauri de Pravda-Bot par une application Nautilus complète ni d'installer Python chez l'utilisateur. L'extension « intelligence on-chain » est suivie séparément : [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121). Le **plan de sécurité et livraison Windows #106** demeure prioritaire.
+**Cadrage :** le projet évalue des principes architecturaux d'un moteur événementiel, sans imposer Python ou un logiciel tiers à l'installation Windows. Il ne s'agit **pas** de remplacer l'EXE Tauri de Pravda-Bot par un moteur externe ni d'installer Python chez l'utilisateur. L'extension « intelligence on-chain » est suivie séparément : [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121). Le **plan de sécurité et livraison Windows #106** demeure prioritaire.
 
 ## Décision et bénéfices attendus
 
@@ -816,7 +816,7 @@ Conserver l'application Windows autonome Tauri 2, les modules `pravda-core`, `pr
 - Tauri IPC `main` seulement, session Rust vérifiée ; WebView ne porte aucun secret et n'invoque pas de shell, Node, Python ou serveur HTTP local.
 - Les trois livrables Windows séparés (MSI/NSIS/app, Harness, Doctor) restent autonomes ; composants optionnels sélectionnables lorsque la sélection est réellement implémentée, **sécurité centrale indésactivable**.
 - En cas de perte de réseau, d'horloge incohérente, de base corrompue ou d'exécution incertaine : **STOP/UNKNOWN explicite**, jamais émission ou retry opportuniste.
-- Pour les futures intégrations : pas de réutilisation silencieuse de code LGPL-3.0 ; décider entre **implémentation originale de concepts** et **dépendance Nautilus** après vérification des obligations LGPL (avis, offre de source/relinking selon mode de liaison, versions, licences transitives, conformité distribution MSI/NSIS) et analyse de la supply chain.
+- Pour les futures intégrations : pas de réutilisation silencieuse de code LGPL-3.0 ; décider entre **implémentation originale de concepts** et **dépendance tierce** après vérification des obligations de licence (avis, offre de source/relinking selon mode de liaison, versions, licences transitives, conformité distribution MSI/NSIS) et analyse de la supply chain.
 
 ## Contrats proposés
 
@@ -867,7 +867,7 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 7. **Multi-venue et interface** : capacités des adaptateurs, carnet/portfolio/rapports si sources vérifiées ; Tauri onglet Intelligence + alertes + provenance, unifiée pour Windows.
 8. **Qualification** : soumettre modèles à la recette Windows sur SHA exact (E2E IPC, résilience hors ligne, CodeQL, signatures/commits, fixtures horodatées, crash, 429, latence, data corruption). Publication selon décision GO/NO-GO.
 
-**Hors périmètre du 30 novembre sans dérogation explicite accompagnée de preuves :** parité complète avec un moteur externe, exécution multi-venue réelle, futures/options avec marges, performance HFT ou latence garantie, moteur Python/Redis embarqué, IA qui négocie, service cloud, plan payant Nautilus, ou intégration de code LGPL. Le chantier ne doit pas faire passer un livrable P0 validé en NO-GO par ajout de fonctions non qualifiées.
+**Hors périmètre du 30 novembre sans dérogation explicite accompagnée de preuves :** parité complète avec un moteur externe, exécution multi-venue réelle, futures/options avec marges, performance HFT ou latence garantie, moteur Python/Redis embarqué, IA qui négocie, service cloud, service externe payant, ou intégration de code LGPL. Le chantier ne doit pas faire passer un livrable P0 validé en NO-GO par ajout de fonctions non qualifiées.
 
 ## Tests de recette obligatoires
 
@@ -877,7 +877,7 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 - [ ] types monétaires précis, erreurs de décimales, quantités négatives, overflow, devises et instruments incompatibles
 - [ ] risk engine fail-closed, limites exposées et données obsolètes, aucune permission d'ordre live depuis WebView
 - [ ] modèles de frais/fill/latence comparés à fixtures, partial fills et pertes maximales ; métriques avec provenance
-- [ ] documents de licence et SBOM si une dépendance Nautilus est finalement intégrée
+- [ ] documents de licence et SBOM si une dépendance tierce est finalement intégrée
 - [ ] conformité à #106, #120, #121 ; toute protection manquante = NO-GO pour la fonctionnalité concernée
 
 ## Sources et versionnement
