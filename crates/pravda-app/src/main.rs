@@ -152,6 +152,7 @@ async fn main() {
             ipc::ipc_history_export_csv,
             ipc::ipc_paper_alerts_snapshot,
             ipc::ipc_runtime_metrics,
+            ipc::ipc_security_report,
             ipc::ipc_fx_status,
             ipc::ipc_public_feed,
             ipc::ipc_open_source
