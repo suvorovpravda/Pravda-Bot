@@ -57,7 +57,7 @@ New-Item -ItemType Directory -Path $destination, $isolated -Force | Out-Null
 try {
     # Tauri NSIS follows the documented NSIS uppercase /S, with /D last.
     # The private installation root guarantees no unrelated install is touched.
-    $process = Start-Process -FilePath $installer -ArgumentList @('/S', '/D=' + $destination) -Wait -PassThru
+    $process = Start-Process -FilePath $installer -ArgumentList @('/S', ('/D=' + $destination)) -Wait -PassThru
     if ($process.ExitCode -ne 0) {
         throw "NSIS silent setup failed with code $($process.ExitCode)"
     }
