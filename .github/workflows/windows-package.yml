@@ -11,6 +11,7 @@ on:
       - 'tools/Verify-Pravda-Installer.ps1'
       - 'tools/test-windows-installer-verifier.ps1'
       - 'tools/Test-Pravda-Msi-Install.ps1'
+      - 'tools/Test-Pravda-Nsis-Install.ps1'
   pull_request:
     paths:
       - '.github/workflows/windows-package.yml'
@@ -18,6 +19,7 @@ on:
       - 'tools/Verify-Pravda-Installer.ps1'
       - 'tools/test-windows-installer-verifier.ps1'
       - 'tools/Test-Pravda-Msi-Install.ps1'
+      - 'tools/Test-Pravda-Nsis-Install.ps1'
   workflow_dispatch:
     inputs:
       signed:
@@ -45,7 +47,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
+          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Test-Pravda-Nsis-Install.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
             $tokens = $null
             $errors = $null
             $resolved = (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path
@@ -455,6 +457,14 @@ jobs:
           $files = @(Get-ChildItem -LiteralPath 'downloaded-release/bundle/msi' -Filter '*.msi' -File -ErrorAction Stop)
           if ($files.Count -ne 1) { throw 'Exactly one MSI release candidate is required' }
           & ./tools/Test-Pravda-Msi-Install.ps1 -MsiPath $files[0].FullName
+      - name: Smoke-test NSIS installation and uninstall on pristine Windows
+        shell: pwsh
+        timeout-minutes: 15
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $files = @(Get-ChildItem -LiteralPath 'downloaded-release/bundle/nsis' -Filter '*-setup.exe' -File -ErrorAction Stop)
+          if ($files.Count -ne 1) { throw 'Exactly one NSIS release candidate is required' }
+          & ./tools/Test-Pravda-Nsis-Install.ps1 -NsisPath $files[0].FullName
       - name: Retain MSI installation failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
