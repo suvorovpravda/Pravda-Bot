@@ -17,13 +17,13 @@
 
 ---
 
-## Sécurité des extensions référence événementielle / On-Chain — contrat proposé, non homologué
+## Sécurité du moteur événementiel et des extensions on-chain — contrat proposé, non homologué
 
-La référence référence événementielle vise un moteur multi-actifs/venues ; la feuille de route demande également des observations de flux CEX, whales, stablecoins et DeFi. **Ne pas importer de code, de plugins ou de dépendances réseau de ces produits sans revue.** [ADR de comparaison](docs/PRAVDA-GUIDE.md#architecture-de-recherche-et-gestion-des-risques), [risques/trading #123](https://github.com/suvorovpravda/Pravda-Bot/issues/123) et [on-chain #121](https://github.com/suvorovpravda/Pravda-Bot/issues/121).
+L'architecture cible prévoit un moteur multi-actifs et multi-plateformes ainsi que des observations de flux CEX, grandes transactions, stablecoins et DeFi. **Ne pas importer de code, de plugins ou de dépendances réseau de ces produits sans revue.** [ADR de comparaison](docs/PRAVDA-GUIDE.md#architecture-de-recherche-et-gestion-des-risques), [risques/trading #123](https://github.com/suvorovpravda/Pravda-Bot/issues/123) et [on-chain #121](https://github.com/suvorovpravda/Pravda-Bot/issues/121).
 
 **Les nouvelles fonctionnalités doivent :** séparer événements de marché et événements modifiant l'état de simulation, préserver les secrets hors WebView, appliquer des montants à précision fixe, un risk gate fail-closed et un état `UNKNOWN` pour les commandes incertaines, conserver source/fraîcheur/confiance sur tout score, et interdire le replay contenant des données futures. Les connecteurs de données externes sont `read-only` avec une allowlist réseau et sans commande shell ; les essais offline Harness restent isolés au niveau OS/VM. Une connexion Proton VPN non vérifiée n'autorise jamais un flux financier supplémentaire. **Trading live OFF** jusqu'à homologation indépendante.
 
-**Licence :** le dépôt référence événementielle `develop` est LGPL-3.0 ; les idées d'architecture sont analysées, mais toute liaison ou réutilisation de code réclamerait étude obligations de redistribution, droits de relinkage/avis selon configuration, licences transitives, SBOM et contrat d'éditeur. Aucun marqueur « référence événementielle certifié » ni « sécurité complète » ne doit figurer dans l'UI ou la Release sans preuve. `research_risk.rs` est un prototype Rust autonome **non relié à une exécution d'ordres** ; ses tests ne constituent pas une validation de sécurité de trading réel.
+**Licences :** aucune dépendance issue d'un moteur tiers n'est introduite. Toute réutilisation future de code externe nécessite une étude des obligations de redistribution, des licences transitives et du SBOM. Aucun marqueur « sécurité certifiée » ni « sécurité complète » ne doit figurer dans l'UI ou la Release sans preuve. `research_risk.rs` est un prototype Rust autonome **non relié à une exécution d'ordres** ; ses tests ne constituent pas une validation de sécurité de trading réel.
 
 ## Refus du modèle actuel et exigences de sécurité utilisateur — 4 novembre 2026
 
@@ -350,7 +350,7 @@ flowchart LR
 | **P2 — dépendances** | Cartographier dépendances et produire SBOM, audit et provenance artefacts | SBOM + rapport d'audit associé à un SHA |
 | **P2 — livraison** | Signer **EXE et MSI** Authenticode, horodater RFC 3161, vérifier sur Windows propre, sécuriser rollback | Signatures `signtool` et tests install/upgrade/uninstall |
 
-**Règle de publication :** la chaîne de signature est préparée avec mode d'activation explicite, **mais la release Enterprise reste interdite** sans certificat de signature approuvé, horodatage valide, recette sur Windows propre, intégrité de build et revue de sécurité. La cible client « délai –50 % » n'autorise aucun contournement des validations. Les jalons P0/P1/P2 ne sont pas des échéances calendaires.
+**Règle de publication :** la chaîne de signature est préparée avec mode d'activation explicite, **mais la release Enterprise reste interdite** sans certificat de signature approuvé, horodatage valide, recette sur Windows propre, intégrité de build et revue de sécurité. L'objectif de réduction du cycle « –50 % » n'autorise aucun contournement des validations. Les jalons P0/P1/P2 ne sont pas des échéances calendaires.
 
 ### 🧪 Procédures de contrôle reproductibles
 
