@@ -28,7 +28,7 @@ $uninstallPaths = @(
 function Get-PravdaInstall {
     $matches = @(
         Get-ItemProperty -Path $uninstallPaths -ErrorAction SilentlyContinue |
-            Where-Object { $_.DisplayName -eq 'Pravda-Bot' }
+            Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'Pravda-Bot' }
     )
     return $matches
 }
