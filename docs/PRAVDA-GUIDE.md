@@ -15,6 +15,16 @@
 
 ---
 
+## Benchmark de l'application de référence du client : NautilusTrader
+
+**Décision d'architecture proposée :** renforcer le noyau Rust existant avec un contrat d'événements typés, une gestion du risque fail-closed et un replay déterministe, tout en conservant l'installateur Windows autonome et l'IPC Tauri authentifié. La description Crypto-Hunter v3 est traitée dans [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) ; la référence NautilusTrader dans [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123). Voir [ADR-001](ADR-001-NAUTILUS-BENCHMARK.md) pour le tableau des écarts, la licence LGPL-3.0, la matrice des risques et les lots P0/P1/P2.
+
+Les capacités NautilusTrader (event sourcing durable, modèles fill/frais/latence, comptabilité/portfolio, multi-actifs, DST) **ne doivent pas être présentées comme déjà intégrées**. Le premier module indépendant `crates/pravda-engine/src/research_risk.rs` utilise des montants USDT en micro-unités et vérifie les limites d'un candidat de simulation : aucune I/O, aucun ordre, aucune intégration live. La preuve de compatibilité et le branchement au vrai simulateur constituent des étapes ultérieures.
+
+**Plan GO/NO-GO :** ne pas substituer une API Node/Python/OpenClaw ni un serveur 8080 à l'IPC ; ne jamais mélanger données de marché et journal de décisions, affirmer un VPN actif sans preuve ou déduire des ordres d'un « score d'activité ». Les extensions restent désactivées en l'absence de source/qualité suffisantes et n'empiètent pas sur le jalon Windows du 30 novembre.
+
+---
+
 ## État actuel de livraison et recette — 4 novembre 2026
 
 **Référentiel de production :** [issue #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), [workflow Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), dernier commit de [`main`](https://github.com/suvorovpravda/Pravda-Bot/commits/main). Ce chapitre est prioritaire sur les anciennes estimations de progression et versions reproduites plus bas. **Objectif : 30/11/2026, conditionné aux contrôles.**
