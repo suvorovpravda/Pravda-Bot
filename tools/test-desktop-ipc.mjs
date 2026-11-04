@@ -149,4 +149,80 @@ release.resolve({value:"current"});
 assert.equal((await currentAllowed).value, "current",
   "Current session data must remain usable");
 
+// Every protected asynchronous renderer must ignore a result (or a catch
+// handler) from an older dashboard generation before mutating the new UI.
+for (const name of [
+  "refreshHistory","refreshAlerts","checkPriceAlerts","refreshSources",
+  "refreshMarket","refreshRevolut","refreshSystem","refreshSecurityEvents",
+  "refreshSecurity","refreshFx","refreshFlows","refreshNews",
+  "refreshCrypto","refreshAIS"
+]) {
+  const start = js.indexOf("    async function "+name+"(");
+  const end = js.indexOf("\n    }", start);
+  assert.ok(start >= 0 && end > start, "Missing UI refresh function "+name);
+  const body = js.slice(start,end+6);
+  assert.match(body,/const requestGeneration = window\.pravdaAuthGeneration;/,
+    "UI refresh must identify initial authenticated generation: "+name);
+  assert.match(body,/if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/,
+    "Stale UI refresh must not mutate the new login's dashboard: "+name);
+}
+const nodes = new Map();
+ui.$ = id => {
+  if (!nodes.has(id)) nodes.set(id,{value:"",textContent:"",href:"",
+    replaceChildren(){this.textContent="";}});
+  return nodes.get(id);
+};
+ui.t = key => key;
+ui.setStatus = (target,_status,message) => {target.textContent=message;};
+ui.renderFx = payload => {ui.$("fx-rates").textContent=payload.identity;};
+ui.URLSearchParams = URLSearchParams;
+ui.drawPriceChart = () => {};
+ui.formatDate = String;
+vm.runInContext("let historicalPoints=[];",ui);
+function actualFrontend(name,next) {
+  const start = js.indexOf("    async function "+name+"(");
+  const end = js.indexOf("    async function "+next+"(",start+1);
+  assert.ok(start>=0 && end>start,"Cannot isolate actual "+name+" implementation");
+  vm.runInContext(js.slice(start,end),ui,{filename:"desktop-"+name+".js"});
+}
+actualFrontend("refreshFx","refreshFlows");
+actualFrontend("refreshHistory","refreshAlerts");
+actualFrontend("refreshNews","refreshCrypto");
+
+// The new authenticated session B must win even if A completes *later*.
+const oldFx = ui.refreshFx();
+const releaseOldFx = release;
+ui.window.pravdaAuthGeneration += 2;
+const newFx = ui.refreshFx();
+release.resolve({identity:"session-B"});
+await newFx;
+assert.equal(ui.$("fx-rates").textContent,"session-B");
+releaseOldFx.reject(new Error("UNAUTHORIZED"));
+await oldFx;
+assert.equal(ui.$("fx-rates").textContent,"session-B",
+  "Old FX rejection must not overwrite a newer login's FX values");
+assert.equal(relocks,1,"Old FX rejection must not force login");
+
+for (const [name,url,target,good,bad,payload] of [
+  ["refreshHistory","/api/market/history","history-status","historyReady","unavailableFeed",
+   {observations:[{ticks:1}]}],
+  ["refreshNews","/api/geopolitics","news-list","noArticles","newsFailure",
+   {status:"delayed",source:"GDELT",retrieved_at:"2026-11-04",articles:[]}]
+]) {
+  const old = ui[name]();
+  const releaseOld = release;
+  ui.window.pravdaAuthGeneration += 2;
+  const newer = ui[name]();
+  release.resolve(payload);
+  await newer;
+  const established = ui.$(target).textContent;
+  assert.notEqual(established,bad,"B should show real "+name+" data");
+  releaseOld.reject(new Error("UNAUTHORIZED"));
+  await old;
+  assert.equal(ui.$(target).textContent,established,
+    "Late "+name+" rejection must preserve B's UI");
+}
+assert.equal(relocks,1,
+  "No stale refresh completion may revoke or visually lock the active session");
+
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
