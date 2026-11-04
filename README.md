@@ -23,6 +23,16 @@
 
 ## Français
 
+## Architecture de recherche et intelligence on-chain (travaux proposés)
+
+L'architecture cible prévoit un moteur événementiel et des modules facultatifs d'intelligence on-chain. **Il ne s'agit pas de fonctionnalités livrées actuellement** et l'application Windows conserve sa propre architecture Rust + Tauri, sans Python/Node à installer. Les travaux sont documentés dans [Architecture de recherche et gestion des risques](docs/PRAVDA-GUIDE.md#architecture-de-recherche-et-gestion-des-risques), [#123 : moteur événementiel, risque et simulation](https://github.com/suvorovpravda/Pravda-Bot/issues/123), et [#121 : whales, stablecoins, DeFi et netflows](https://github.com/suvorovpravda/Pravda-Bot/issues/121).
+
+**Priorités de conception :** journal d'événements et replay après crash, horloges contrôlées, types financiers à précision fixe, limites de risque fail-closed, simulation de latence/frais/fill partiel, métadonnées de provenance et qualité des données, indicateurs on-chain non directionnels, tests de déterminisme. Le module indépendant `pravda-engine::research_risk` est un **contrat de recherche/paper hors exécution**, non câblé au simulateur principal ni aux ordres réels. Toute intégration de code tiers exige un audit des licences et de la chaîne d'approvisionnement avant distribution ; aucune dépendance tierce nouvelle n'est ajoutée.
+
+**Non-objectif immédiat :** aucune promesse de parité complète avec un moteur tiers, de performances HFT, de trading automatisé, de futures/options ou d'activation de compte broker. La priorité de release reste [#106](https://github.com/suvorovpravda/Pravda-Bot/issues/106) : installation Windows autonome, sécurité et contrôles P0, objectif 30/11/2026.
+
+---
+
 ## Livraison Windows — situation vérifiée au 4 novembre 2026
 
 **Source de vérité :** [plan directeur #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), code de la branche [main](https://github.com/suvorovpravda/Pravda-Bot/tree/main) et [workflow d'installation Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml). **Livraison cible : 30 novembre 2026** ; cette date ne remplace pas les barrières de sécurité.
@@ -324,18 +334,18 @@ node tools/test-desktop-ipc.mjs
 
 **Recette Windows effectuée après Phase 2 :** lancement natif, setup/login, refus d'un mauvais mot de passe, logout/relogin, redémarrage, mode sans live, fichiers SQLite/auth et absence de socket TCP en écoute pour `pravda-app.exe`. **PR #67 :** 22 tests E2E natifs WebView2 réussis. Les tests complémentaires de fenêtres simultanées et d'origine hostile de #88 ont été validés sur `main` au commit `b2a6fc3` ; tout changement ultérieur doit être testé à son tour. Export CSV réel, reprise historique complexe et distribution signée restent hors preuve.
 
-### 🚀 Réduction du délai de livraison : objectif client –50 %
+### 🚀 Réduction du délai de livraison : objectif de cycle –50 %
 
-La demande du client final est de **diviser par deux le délai initial**. Comme aucune durée de référence contractuelle n'est précisée dans le dépôt, ce **–50 % est un objectif de planification et non une date de livraison garantie**. Le chemin critique est réduit par quatre chantiers **en parallèle**, sans supprimer les contrôles :
+L'objectif de programme est de **diviser par deux le cycle initial**, lorsque sa durée de référence est vérifiable. Comme aucune durée de référence contractuelle n'est précisée dans le dépôt, ce **–50 % est un objectif de planification et non une date de livraison garantie**. Le chemin critique est réduit par quatre chantiers **en parallèle**, sans supprimer les contrôles :
 
 | Chantier parallèle | Premier livrable testable | Bloque la mise en production tant que… |
 |:--|:--|:--|
-| **Revolut X** | Carnet public + GET de soldes signé Ed25519 dans Rust, hors UI | Enrôlement sécurisé des clés du client, tests API authentifiée, contrôle des risques et confirmation individuelle des ordres non validés |
+| **Revolut X** | Carnet public + GET de soldes signé Ed25519 dans Rust, hors UI | Enrôlement sécurisé des clés du compte, tests API authentifiée, contrôle des risques et confirmation individuelle des ordres non validés |
 | **Windows** | `pravda-app.exe` release et candidats MSI/NSIS, signature optionnelle contrôlée | Certificat Authenticode valide, horodatage et tests installation/mise à niveau/désinstallation manquants |
 | **Sécurité** | CI Rust/CodeQL, WebView2 réel, audit des secrets, `Cargo.lock --locked` | Dernier commit de la PR et commit `main` non validés |
-| **Recette utilisateur** | Profil Windows isolé, connexion/arrêt/redémarrage, sources indisponibles | Validation du client final avec données fictives et compte Revolut X autorisé non réalisée |
+| **Recette utilisateur** | Profil Windows isolé, connexion/arrêt/redémarrage, sources indisponibles | Recette sur environnement de test avec données fictives et compte Revolut X autorisé non réalisée |
 
-**Deux niveaux de livraison :** (1) *candidat desktop en lecture seule* après CI et recette ; (2) *trading réel et distribution Enterprise signée* uniquement après vérifications financières, configuration du certificat et approbation explicite du client. Les dépendances externes ne peuvent pas être « accélérées » en supprimant les barrières de sécurité.
+**Deux niveaux de livraison :** (1) *candidat desktop en lecture seule* après CI et recette ; (2) *trading réel et distribution Enterprise signée* uniquement après vérifications financières, configuration du certificat et approbation explicite du responsable d'exploitation. Les dépendances externes ne peuvent pas être « accélérées » en supprimant les barrières de sécurité.
 
 **Configuration requise pour signer :** GitHub Actions → `Windows installer packaging` → `Run workflow`, option `signed=true`. L'environnement GitHub `windows-signing` doit contenir `WINDOWS_CERTIFICATE_BASE64` (PFX de signature de code encodé en base64) et `WINDOWS_CERTIFICATE_PASSWORD`. La signature est refusée si absente, non valide ou non horodatée. Ne jamais versionner le PFX, la clé Revolut X ou des tokens.
 
