@@ -293,6 +293,25 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+      - name: Publish standalone preproduction test tool
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-production-test
+          path: |
+            crates/pravda-app/target/release/pravda-harness.exe
+            docs/windows/PRODUCTION-TEST.txt
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish standalone troubleshooting tool
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-troubleshooting
+          path: |
+            crates/pravda-app/target/release/pravda-doctor.exe
+            docs/windows/TROUBLESHOOTING.txt
+          if-no-files-found: error
+          retention-days: 30
+
   verify-upload:
     name: Verify downloaded release bundle on an independent Windows runner
     needs: package
