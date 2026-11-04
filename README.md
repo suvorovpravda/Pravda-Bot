@@ -23,6 +23,16 @@
 
 ## Français
 
+## Référence du client final : NautilusTrader et Crypto-Hunter v3 (travaux proposés)
+
+Le financeur a transmis [NautilusTrader](https://nautilustrader.io/) comme **référence d'architecture**, en complément du mandat on-chain Crypto-Hunter v3. **Il ne s'agit pas de fonctionnalités livrées actuellement** et l'application Windows conserve sa propre architecture Rust + Tauri, sans Python/Node à installer. Les travaux sont documentés dans [ADR-001 : benchmark NautilusTrader](docs/ADR-001-NAUTILUS-BENCHMARK.md), [#123 : moteur événementiel, risque et simulation](https://github.com/suvorovpravda/Pravda-Bot/issues/123), et [#121 : whales, stablecoins, DeFi et netflows](https://github.com/suvorovpravda/Pravda-Bot/issues/121).
+
+**Priorités de conception :** journal d'événements et replay après crash, horloges contrôlées, types financiers à précision fixe, limites de risque fail-closed, simulation de latence/frais/fill partiel, métadonnées de provenance et qualité des données, indicateurs on-chain non directionnels, tests de déterminisme. Le module indépendant `pravda-engine::research_risk` est un **contrat de recherche/paper hors exécution**, non câblé au simulateur principal ni aux ordres réels. Les futures intégrations de code Nautilus sous licence LGPL-3.0 sont soumises à une revue légale/supply-chain avant distribution commerciale ; pour l'instant **aucune dépendance Nautilus** n'est ajoutée.
+
+**Non-objectif immédiat :** aucune promesse de parité complète avec NautilusTrader, de performances HFT, de trading automatisé, de futures/options ou d'activation de compte broker. La priorité de release reste [#106](https://github.com/suvorovpravda/Pravda-Bot/issues/106) : installation Windows autonome, sécurité et contrôles P0, objectif 30/11/2026.
+
+---
+
 ## Livraison Windows — situation vérifiée au 4 novembre 2026
 
 **Source de vérité :** [plan directeur #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), code de la branche [main](https://github.com/suvorovpravda/Pravda-Bot/tree/main) et [workflow d'installation Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml). **Livraison cible : 30 novembre 2026** ; cette date ne remplace pas les barrières de sécurité.
