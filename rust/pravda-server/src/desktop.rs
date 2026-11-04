@@ -18,6 +18,7 @@ pub struct DesktopPayload(pub Value);
 pub struct DesktopRuntime {
     runtime: Arc<PravdaRuntime>,
     stale_after: std::time::Duration,
+    database_path: String,
     // One client per runtime preserves the shared 1 req/s public-feed throttle.
     revolut_public: Option<pravda_fetchers::revolut_x::RevolutXPublicClient>,
 }
@@ -61,6 +62,7 @@ impl DesktopRuntime {
         Ok(Self {
             runtime,
             stale_after: config.stale_after,
+            database_path: config.database_path.clone(),
             revolut_public: pravda_fetchers::revolut_x::RevolutXPublicClient::new().ok(),
         })
     }
@@ -71,6 +73,17 @@ impl DesktopRuntime {
 
     pub async fn alerts_snapshot(&self) -> DesktopPayload {
         DesktopPayload(self.runtime.alerts_snapshot().await)
+    }
+
+    /// Read-only, bounded diagnostic from the SAME resolved desktop DB.
+    /// Reports only a code, never the path, SQLite rows or raw OS errors.
+    pub async fn security_database_health_code(&self) -> &'static str {
+        let path = self.database_path.clone();
+        tokio::task::spawn_blocking(move || {
+            pravda_store::doctor::inspect_database(std::path::Path::new(&path)).code()
+        })
+        .await
+        .unwrap_or("database_unavailable")
     }
 
     pub fn metrics_snapshot(&self) -> DesktopPayload {

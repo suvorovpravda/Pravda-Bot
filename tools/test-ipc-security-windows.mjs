@@ -215,7 +215,7 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     Boolean(latest), latest?"native title callback received":"no verified native report");
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
-    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_fx_status",
+    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_fx_status",
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
@@ -363,9 +363,35 @@ try {
   verdict("restart: password verifier unchanged",
     createHash("sha256").update(readFileSync(authFile)).digest("hex")===authHash,
     "Password verifier bytes unchanged");
+  rustDenied("security: unauthenticated user cannot read security status",
+    await invoke("ipc_security_report"));
+  rustDenied("security: unauthenticated user cannot read security events",
+    await invoke("ipc_security_events"));
+  const invalidLogin=await invoke("ipc_auth_login",{password:"Incorrect-E2E-Password-DoNotUse"});
+  verdict("security: invalid login is denied with a safe fixed error",
+    invalidLogin.state==="rejected" &&
+    /INVALID_CREDENTIALS/.test(invalidLogin.error||"") &&
+    !(invalidLogin.error||"").includes("Incorrect-E2E-Password"),
+    "Password rejected without echoing credential material");
   const loginAfterRestart=await invoke("ipc_auth_login",{password});
   verdict("restart: existing password logs in",
     loginAfterRestart.state==="resolved",loginAfterRestart.state);
+  const security=await invoke("ipc_security_report");
+  verdict("security: authenticated status is bounded and VPN remains unverified",
+    security.state==="resolved" && Array.isArray(security.value) &&
+    security.value.length===8 && security.value[0].startsWith("session|verified|") &&
+    security.value.some(row=>row.startsWith("proton|unknown|")) &&
+    security.value.some(row=>row.startsWith("kill_switch|unknown|")) &&
+    security.value.every(row=>typeof row==="string" && row.length<300),
+    "Safe local status with honest unknown Proton VPN and kill switch");
+  const events=await invoke("ipc_security_events");
+  verdict("security: authenticated local events contain only coded auth outcomes",
+    events.state==="resolved" && Array.isArray(events.value) &&
+    events.value.length>0 && events.value.length<=64 &&
+    events.value.some(line=>/^\d+\|login_accepted$/.test(line)) &&
+    events.value.some(line=>/^\d+\|login_rejected$/.test(line)) &&
+    events.value.every(line=>/^\d+\|(setup_accepted|setup_rejected|login_accepted|login_rejected|login_locked|session_ended|storage_failure)$/.test(line)),
+    "Bounded local auth event codes; no password or secret payload");
   const marketAfterRestart=await invoke("ipc_market_snapshot");
   verdict("restart: market IPC authorized only after login",
     marketAfterRestart.state==="resolved",marketAfterRestart.state);
