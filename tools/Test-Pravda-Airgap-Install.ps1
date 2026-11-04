@@ -61,7 +61,7 @@ function Get-WebView2EvergreenVersion {
     )) {
         $value = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
         if ($null -eq $value) { continue }
-        $pv = [string]$value.pv
+        $pv = if ($value.PSObject.Properties['pv']) { [string]$value.pv } else { '' }
         if ($pv -match '^\d+\.\d+\.\d+\.\d+$' -and $pv -notmatch '^0+\.0+\.0+\.0+$') {
             return $pv
         }
@@ -89,7 +89,7 @@ $uninstallKeys = @(
     'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
 )
 $existing = @(Get-ItemProperty -Path $uninstallKeys -ErrorAction SilentlyContinue |
-    Where-Object { $_.DisplayName -eq 'Pravda-Bot' })
+    Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'Pravda-Bot' })
 if ($existing.Count -gt 0) {
     throw 'REFUSED: Pravda-Bot already installed'
 }
