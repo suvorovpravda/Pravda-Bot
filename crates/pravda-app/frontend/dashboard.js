@@ -468,6 +468,7 @@ const translations = {
     }
 
     async function refreshHistory() {
+        const requestGeneration = window.pravdaAuthGeneration;
         const symbol = $("chart-symbol").value;
         const exchange = $("chart-exchange").value;
         const period = $("chart-period").value;
@@ -482,7 +483,8 @@ const translations = {
                 : t("historyEmpty");
             drawPriceChart();
             return ticks;
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             $("history-status").textContent = t("unavailableFeed");
             historicalPoints = [];
             drawPriceChart();
@@ -527,18 +529,21 @@ const translations = {
     }
 
     async function refreshAlerts() {
+        const requestGeneration = window.pravdaAuthGeneration;
         // Simulator events are read-only Rust snapshots. Editable thresholds
         // remain in a separate local-only list and never create orders.
         try {
             const payload = await fetchJson("/api/alerts");
             renderAlerts(Array.isArray(payload.alerts) ? payload.alerts : []);
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             $("paper-alerts").textContent = t("unavailableFeed");
         }
         showLocalAlerts();
     }
 
     async function checkPriceAlerts() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             const payload = await fetchJson("/api/alerts/check");
             for (const alert of payload.triggered || []) {
@@ -552,7 +557,8 @@ const translations = {
                     new Notification("Pravda-Bot", { body: message });
                 }
             }
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             $("alert-notice").textContent = t("alertFailure");
         }
     }
@@ -582,9 +588,11 @@ const translations = {
     }
 
     async function refreshSources() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             renderSources(await fetchJson("/api/sources"));
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("sources-status"), "error", t("sourceUnavailable"));
             $("source-status-list").textContent = t("unavailableFeed");
         }
@@ -693,23 +701,38 @@ const translations = {
         };
         const command = commands[parsed.pathname];
         if (!command) throw new Error("UNAVAILABLE");
+        // A response from session A must never relock a new authenticated
+        // dashboard B or render stale data after a logout/login transition.
+        const authGeneration = window.pravdaAuthGeneration;
         try {
             const publicSources = {"/api/eu/flows":"energy", "/api/geopolitics":"news",
                 "/api/sources":"sources", "/api/revolut/public":"revolut"};
             const args = command === "ipc_public_feed" ? {source:publicSources[parsed.pathname]}
                 : parsed.pathname === "/api/market/history" ? { query } : {};
-            return await window.pravdaInvoke(command, args);
+            const result = await window.pravdaInvoke(command, args);
+            if (authGeneration !== window.pravdaAuthGeneration) {
+                throw new Error("STALE_SESSION");
+            }
+            return result;
         } catch (error) {
-            if (String(error).includes("UNAUTHORIZED")) window.pravdaRequireLogin();
+            // Reject a reply from a previous login before any caller can render it.
+            if (authGeneration !== window.pravdaAuthGeneration) {
+                throw new Error("STALE_SESSION");
+            }
+            if (String(error).includes("UNAUTHORIZED")) {
+                window.pravdaRequireLogin();
+            }
             throw error;
         }
     }
     async function refreshMarket() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             renderMarket(await fetchJson("/api/market"));
             // History has a separate, slower polling cadence to avoid repeated SQLite reads.
         }
         catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("market-feed-status"), "error", t("unavailableFeed"));
             $("chart-age").textContent = t("unknownError");
         }
@@ -767,6 +790,7 @@ const translations = {
     readRevolutConsent();
 
     async function refreshRevolut() {
+        const requestGeneration = window.pravdaAuthGeneration;
         const status = $("revolut-status");
         const container = $("revolut-orderbook");
         if (!revolutOptIn) {
@@ -790,12 +814,14 @@ const translations = {
                 panel.append(text,value);container.append(panel);
             }
             setStatus(status,"live","Carnet public reçu");
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             container.textContent="Le carnet public Revolut X est indisponible. Aucun prix fictif n’est affiché.";
             setStatus(status,"error","Source indisponible");
         }
     }
     async function refreshSystem() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             const d = await fetchJson("/api/metrics");
             const fmt=(v,unit="")=>Number.isFinite(v)?numericFormat(v)+unit:"—";
@@ -805,7 +831,8 @@ const translations = {
             $("runtime-pid").textContent=d.pid??"—";
             setStatus($("runtime-status"),d.status==="available"?"live":"pending",
                 d.status==="available"?"Mesures locales":"Mesures partielles");
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("runtime-status"),"error","Diagnostic indisponible");
         }
     }
@@ -815,6 +842,7 @@ const translations = {
     const securityVisible = () => !document.hidden && securityShell && !securityShell.hidden;
     let securityCheckInFlight = false;
     async function refreshSecurityEvents() {
+        const requestGeneration = window.pravdaAuthGeneration;
         const panel = $("security-events");
         const labels = {
             setup_accepted: "Premier mot de passe configuré",
@@ -827,6 +855,7 @@ const translations = {
         };
         try {
             const events = await window.pravdaInvoke("ipc_security_events");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             if (!Array.isArray(events) || events.length > 64) throw new Error("INVALID_EVENTS");
             const nodes = [];
             for (const line of events) {
@@ -848,16 +877,19 @@ const translations = {
             }
             if (nodes.length) panel.replaceChildren(...nodes);
             else panel.textContent = "Aucun événement enregistré depuis le lancement.";
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             panel.textContent = "Historique de sécurité non disponible. Réauthentification nécessaire.";
         }
     }
     async function refreshSecurity() {
+        const requestGeneration = window.pravdaAuthGeneration;
         if (!securityVisible() || securityCheckInFlight) return;
         securityCheckInFlight = true;
         const panel = $("security-checks");
         try {
             const rows = await window.pravdaInvoke("ipc_security_report");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             if (!Array.isArray(rows) || rows.length !== 8) throw new Error("INVALID_REPORT");
             const translated = {
                 verified: "Vérifié",
@@ -898,7 +930,8 @@ const translations = {
             panel.replaceChildren(...nodes);
             setStatus($("security-status"), blocked ? "error" : "pending",
                 blocked ? blocked + " blocage(s) de sécurité" : verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet");
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             panel.textContent = "État de sécurité non disponible. Vérifiez votre session locale.";
             setStatus($("security-status"), "error", "Non vérifié");
         } finally {
@@ -929,25 +962,30 @@ const translations = {
     });
     $("revolut-refresh").addEventListener("click",refreshRevolut);
     async function refreshFx() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try { renderFx(await fetchJson("/api/fx")); }
         catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("fx-status"), "error", t("fxUnavailable"));
             $("fx-rates").textContent = t("fxFailure");
         }
     }
     async function refreshFlows() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             const data=await fetchJson("/api/eu/flows");
             if(data.status==="unavailable")throw new Error(data.notice || "SOURCE_UNAVAILABLE");
             renderFlows(data);
         }
         catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("map-status"), "error", t("unavailable"));
             $("flow-status").textContent = t("unavailable");
             $("flow-rows").textContent = t("flowFailure");
         }
     }
     async function refreshNews() {
+        const requestGeneration = window.pravdaAuthGeneration;
         const list = $("news-list");
         try {
             const payload = await fetchJson("/api/geopolitics");
@@ -982,11 +1020,13 @@ const translations = {
                 meta.append(source, date); item.append(link, meta); list.append(item);
             }
         } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("news-status"), "error", t("unavailableFeed"));
             list.textContent = t("newsFailure");
         }
     }
     async function refreshCrypto() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             const payload=await fetchJson("/api/market");
             const symbols=payload.symbols || {};
@@ -1011,12 +1051,14 @@ const translations = {
                 }
             }
             container.append(table);
-        } catch {
+        } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("bot-status"),"error","Flux local indisponible");
             $("crypto-data").textContent="Lecture des cours indisponible ; aucun prix n'est inventé.";
         }
     }
     async function refreshAIS() {
+        const requestGeneration = window.pravdaAuthGeneration;
         try {
             const payload = await fetchJson("/api/ais/recent?limit=50");
             setStatus($("ais-status"), "live", `${payload.count} ${t("aisTitle")}`);
@@ -1078,6 +1120,7 @@ const translations = {
             }
             container.replaceChildren(table);
         } catch (error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("ais-status"), "error", t("aisUnavailable"));
             $("ais-data").textContent = t("aisUnavailable");
         }

@@ -126,6 +126,33 @@ fn require_authenticated(session: &IpcAuth, label: &str) -> Result<(), &'static 
     Ok(())
 }
 
+/// Capture the exact authenticated Rust session *before* starting an async
+/// read. The mutex guard must never cross an await.
+fn authorized_read_token(session: &IpcAuth, label: &str) -> Result<String, &'static str> {
+    require_main(label)?;
+    let token = session.token();
+    let token = token.as_deref().ok_or("UNAUTHORIZED")?;
+    if !session.authority.session_valid(token) {
+        return Err("UNAUTHORIZED");
+    }
+    Ok(token.to_owned())
+}
+
+/// Reject work completed after logout, expiry or replacement by a new login.
+/// Checking only "some session is active" would incorrectly authorize results
+/// from a previous login after a new session is installed.
+fn finish_authorized_read<T>(
+    session: &IpcAuth,
+    issued_to: &str,
+    completed: Result<T, String>,
+) -> Result<T, String> {
+    let current = session.token();
+    if current.as_deref() != Some(issued_to) || !session.authority.session_valid(issued_to) {
+        return Err("UNAUTHORIZED".to_owned());
+    }
+    completed
+}
+
 fn safe_auth_error(error: AuthError) -> String {
     match error {
         AuthError::WeakPassword => "WEAK_PASSWORD",
@@ -248,8 +275,8 @@ pub async fn ipc_market_snapshot(
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<pravda_server::DesktopPayload, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    Ok(desktop.market_snapshot().await)
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    finish_authorized_read(&session, &issued_to, Ok(desktop.market_snapshot().await))
 }
 
 #[tauri::command]
@@ -258,8 +285,12 @@ pub async fn ipc_history_recent(
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<pravda_server::DesktopPayload, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    desktop.history_recent().await.map_err(str::to_string)
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    finish_authorized_read(
+        &session,
+        &issued_to,
+        desktop.history_recent().await.map_err(str::to_string),
+    )
 }
 
 #[tauri::command]
@@ -269,8 +300,12 @@ pub async fn ipc_history_query(
     desktop: State<'_, pravda_server::DesktopRuntime>,
     query: pravda_server::DesktopHistoryQuery,
 ) -> Result<pravda_server::DesktopPayload, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    desktop.history_query(query).await.map_err(str::to_string)
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    finish_authorized_read(
+        &session,
+        &issued_to,
+        desktop.history_query(query).await.map_err(str::to_string),
+    )
 }
 
 #[tauri::command]
@@ -280,11 +315,15 @@ pub async fn ipc_history_export_csv(
     desktop: State<'_, pravda_server::DesktopRuntime>,
     query: pravda_server::DesktopHistoryQuery,
 ) -> Result<String, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    desktop
-        .history_export_csv(query)
-        .await
-        .map_err(str::to_string)
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    finish_authorized_read(
+        &session,
+        &issued_to,
+        desktop
+            .history_export_csv(query)
+            .await
+            .map_err(str::to_string),
+    )
 }
 
 #[tauri::command]
@@ -293,8 +332,8 @@ pub async fn ipc_paper_alerts_snapshot(
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<pravda_server::DesktopPayload, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    Ok(desktop.alerts_snapshot().await)
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    finish_authorized_read(&session, &issued_to, Ok(desktop.alerts_snapshot().await))
 }
 
 #[tauri::command]
@@ -378,7 +417,7 @@ pub async fn ipc_security_report(
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<Vec<String>, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
     let mut rows = security_report_rows();
     rows[1] = match desktop.security_database_health_code().await {
         "database_ok" => {
@@ -397,7 +436,7 @@ pub async fn ipc_security_report(
         _ => "sqlite|unknown|Base indisponible ou occupee; aucune reparation automatique",
     }
     .to_string();
-    Ok(rows)
+    finish_authorized_read(&session, &issued_to, Ok(rows))
 }
 
 #[tauri::command]
@@ -406,8 +445,8 @@ pub async fn ipc_fx_status(
     session: State<'_, IpcAuth>,
     desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<pravda_server::DesktopPayload, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    Ok(desktop.fx_status().await)
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    finish_authorized_read(&session, &issued_to, Ok(desktop.fx_status().await))
 }
 
 #[tauri::command]
@@ -418,7 +457,7 @@ pub async fn ipc_public_feed(
     consent: State<'_, RevolutPublicConsent>,
     source: String,
 ) -> Result<pravda_server::DesktopPayload, String> {
-    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
     if !matches!(source.as_str(), "energy" | "news" | "revolut" | "sources") {
         return Err("INVALID_PUBLIC_SOURCE".to_owned());
     }
@@ -430,7 +469,7 @@ pub async fn ipc_public_feed(
     if source == "revolut" && !consent.enabled() {
         return Err("PUBLIC_FEED_OPT_IN_REQUIRED".to_owned());
     }
-    Ok(result)
+    finish_authorized_read(&session, &issued_to, Ok(result))
 }
 
 #[tauri::command]
@@ -646,6 +685,47 @@ mod tests {
         session.logout();
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
         assert_eq!(session.token().as_deref(), None);
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[tokio::test]
+    async fn in_flight_read_is_denied_after_logout_and_new_login() {
+        let (session, path) = new_session();
+        let session = Arc::new(session);
+        let password = format!("TestOnlySecret-{}-concurrent", std::process::id());
+        session.authority.set_password(&password).unwrap();
+        let token = session.authority.login(&password).unwrap();
+        session.accept_token(token);
+        let issued_to = authorized_read_token(&session, "main").unwrap();
+        let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let in_flight = Arc::clone(&session);
+        let pending = tokio::spawn(async move {
+            let _ = ready_tx.send(());
+            let _ = release_rx.await;
+            finish_authorized_read(&in_flight, &issued_to, Ok("private-data".to_owned()))
+        });
+        ready_rx.await.unwrap();
+        session.logout();
+        let new_token = session.authority.login(&password).unwrap();
+        session.accept_token(new_token);
+        release_tx.send(()).unwrap();
+        assert_eq!(pending.await.unwrap(), Err("UNAUTHORIZED".to_owned()));
+
+        let current = authorized_read_token(&session, "main").unwrap();
+        assert_eq!(
+            finish_authorized_read(&session, &current, Ok("new-session".to_owned())),
+            Ok("new-session".to_owned())
+        );
+        session.authority.logout(&current);
+        assert_eq!(
+            finish_authorized_read(&session, &current, Ok("expired".to_owned())),
+            Err("UNAUTHORIZED".to_owned())
+        );
+        assert_eq!(
+            authorized_read_token(&session, "other"),
+            Err("FORBIDDEN_WINDOW")
+        );
         let _ = std::fs::remove_file(path);
     }
 
