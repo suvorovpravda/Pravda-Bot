@@ -231,7 +231,9 @@ mod tests {
             .is_err());
 
         // A later tick must not retroactively appear in the saved snapshot.
-        store.insert_tick("BTC/USDT", 99999.0, "Kraken", now).unwrap();
+        store
+            .insert_tick("BTC/USDT", 99999.0, "Kraken", now)
+            .unwrap();
         std::fs::copy(&snapshot, &restored_path).unwrap();
         let restored = PravdaStore::open(restored_path.to_str().unwrap()).unwrap();
         let btc = restored.latest_ticks("BTC/USDT", 10).unwrap();
