@@ -23,7 +23,27 @@
 
 ## Français
 
-## État de livraison — 3 novembre 2026 (objectif : fin novembre)
+## Livraison Windows — situation vérifiée au 4 novembre 2026
+
+**Source de vérité :** [plan directeur #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106), code de la branche [main](https://github.com/suvorovpravda/Pravda-Bot/tree/main) et [workflow d'installation Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml). **Livraison cible : 30 novembre 2026** ; cette date ne remplace pas les barrières de sécurité.
+
+| Livrable Windows x64 | Téléchargement dans le **même run** GitHub Actions | Portée réelle |
+| --- | --- | --- |
+| Application Tauri / installateurs | `pravda-windows-unsigned-candidate-installers` (EXE, MSI, NSIS, Doctor, Harness, SHA256SUMS et provenance) | Desktop avec IPC natif, authentification locale et SQLite ; **édition de test non signée** |
+| Test préproduction indépendant | `pravda-windows-production-test` : `pravda-harness.exe` et `PRODUCTION-TEST.txt` | Replay/smoke synthétique et campagnes hors ligne ; **isolement réseau OS/VM obligatoire** |
+| Dépannage indépendant | `pravda-windows-troubleshooting` : `pravda-doctor.exe` et `TROUBLESHOOTING.txt` | Diagnostic passif local ; aucun ordre, réparation automatique ou test interactif de connexion |
+
+**Téléchargement reproductible :** ouvrir [Actions → Windows installer packaging](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), sélectionner un run **réussi de `main` au SHA voulu**, puis récupérer les **trois artefacts de ce même run**. Sur chaque ZIP, extraire les fichiers avant exécution. Le manifeste `bundle/SHA256SUMS.txt` et `bundle/release-evidence.json` de l'archive principale lient les exécutables au commit et servent à vérifier les binaires indépendants. Les deux ZIP compagnons ne sont pas, à eux seuls, des installateurs MSI et ne contiennent pas chacun leur propre manifeste. Les artefacts GitHub Actions sont temporaires : **ce n'est pas encore une Release stable du 30 novembre**.
+
+**Preuves intégrées :** [#112](https://github.com/suvorovpravda/Pravda-Bot/pull/112) démarrage du vrai EXE installé ; [#115](https://github.com/suvorovpravda/Pravda-Bot/pull/115) séparation et comparaison SHA-256 des trois artefacts ; [#116](https://github.com/suvorovpravda/Pravda-Bot/pull/116) installation/désinstallation/réinstallation et conservation de fichiers utilisateur ; [#117](https://github.com/suvorovpravda/Pravda-Bot/pull/117) prévalidation de syntaxe PowerShell ; [#111](https://github.com/suvorovpravda/Pravda-Bot/pull/111) redémarrage natif et persistance de l'authentification. **La vérification vaut seulement pour les runs verts et leur SHA exact**, pas automatiquement pour les commits ultérieurs.
+
+**Travaux en cours :** [#118](https://github.com/suvorovpravda/Pravda-Bot/pull/118), test de snapshot/restauration SQLite WAL, reste à valider et fusionner. Le test de canaris MSI prouve la préservation de fichiers témoins, **pas** une restauration complète des lignes d'une base utilisateur. Tests d'acceptation sur PC utilisateur, VM réellement isolée du réseau, preuve de signature Authenticode Enterprise [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) et homologation des ordres réels Revolut X [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) restent distincts. **Trading réel OFF** ; ne jamais transmettre des clés ou mots de passe aux rapports.
+
+**Guides opérationnels :** [Guide central](docs/PRAVDA-GUIDE.md), [Politique de sécurité](SECURITY.md), [Mode test](docs/windows/PRODUCTION-TEST.txt), [Dépannage](docs/windows/TROUBLESHOOTING.txt). Les tableaux de progression historiques plus bas sont conservés comme instantanés antérieurs et **ne sont pas le statut de release actuel**.
+
+---
+
+## Historique de livraison — état du 3 novembre 2026 (archive ; voir le suivi ci-dessus)
 
 > **Niveau de sécurité visé : plateforme financière réglementée, défense en profondeur.** Il s'agit d'un **objectif d'architecture et de vérification**, et non d'une certification, d'une équivalence avec l'infrastructure de Revolut, ni d'une garantie d'aptitude à la négociation réelle. Les modules actuels sont expérimentaux; toute mise en production requiert des preuves indépendantes.
 
