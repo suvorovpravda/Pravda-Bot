@@ -38,7 +38,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,14);
+assert.equal(new Set(handlers).size,15);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
