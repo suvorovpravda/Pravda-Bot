@@ -365,6 +365,8 @@ try {
     "Password verifier bytes unchanged");
   rustDenied("security: unauthenticated user cannot read security status",
     await invoke("ipc_security_report"));
+  rustDenied("security: unauthenticated user cannot read security events",
+    await invoke("ipc_security_events"));
   const loginAfterRestart=await invoke("ipc_auth_login",{password});
   verdict("restart: existing password logs in",
     loginAfterRestart.state==="resolved",loginAfterRestart.state);
@@ -376,6 +378,13 @@ try {
     security.value.some(row=>row.startsWith("kill_switch|unknown|")) &&
     security.value.every(row=>typeof row==="string" && row.length<300),
     "Safe local status with honest unknown Proton VPN and kill switch");
+  const events=await invoke("ipc_security_events");
+  verdict("security: authenticated local events contain only coded auth outcomes",
+    events.state==="resolved" && Array.isArray(events.value) &&
+    events.value.length>0 && events.value.length<=64 &&
+    events.value.some(line=>/^\\d+\\|login_accepted$/.test(line)) &&
+    events.value.every(line=>/^\\d+\\|(setup_accepted|setup_rejected|login_accepted|login_rejected|login_locked|session_ended|storage_failure)$/.test(line)),
+    "Bounded local auth event codes; no password or secret payload");
   const marketAfterRestart=await invoke("ipc_market_snapshot");
   verdict("restart: market IPC authorized only after login",
     marketAfterRestart.state==="resolved",marketAfterRestart.state);
