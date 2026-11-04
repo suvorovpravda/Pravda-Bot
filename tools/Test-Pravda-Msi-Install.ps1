@@ -168,6 +168,49 @@ finally {
                 }
             }
             Write-Host 'PASS: existing per-user app data survives MSI uninstall'
+            # Reinstall the same verified MSI and prove user files persist.
+            # Keep the product cleanup inside a finally, even if acceptance fails.
+            try {
+                $again = Start-Process -FilePath $msiexec -ArgumentList @(
+                    '/i', ('"' + $msi + '"'), '/qn', '/norestart'
+                ) -PassThru -Wait
+                if ($again.ExitCode -ne 0) {
+                    throw "MSI reinstall failed with exit code $($again.ExitCode)"
+                }
+                $installedAgain = @(Get-PravdaInstall)
+                if ($installedAgain.Count -ne 1 -or
+                    [string]$installedAgain[0].PSChildName -cne $installedCode) {
+                    throw 'MSI reinstall did not restore exactly the same product registration'
+                }
+                if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
+                    throw 'MSI reinstall did not restore the installed desktop executable'
+                }
+                foreach ($canary in $canaries) {
+                    if (-not (Test-Path -LiteralPath $canary -PathType Leaf) -or
+                        (Get-Content -LiteralPath $canary -Raw).TrimEnd() -cne $canaryContents) {
+                        throw "MSI reinstall changed the existing user-data canary: $canary"
+                    }
+                }
+                Write-Host 'PASS: MSI reinstall preserves both user-data canaries and desktop binary'
+            }
+            finally {
+                $afterReinstall = @(Get-PravdaInstall)
+                if ($afterReinstall.Count -eq 1) {
+                    $guid = [string]$afterReinstall[0].PSChildName
+                    if ($guid -notmatch '^[{][A-Fa-f0-9-]{36}[}]$' -or $guid -cne $installedCode) {
+                        throw 'Unexpected product registration after reinstall; refusing unrelated uninstall'
+                    }
+                    $cleanup = Start-Process -FilePath $msiexec -ArgumentList @(
+                        '/x', $guid, '/qn', '/norestart'
+                    ) -PassThru -Wait
+                    if ($cleanup.ExitCode -ne 0) {
+                        throw "Post-reinstall cleanup failed with code $($cleanup.ExitCode)"
+                    }
+                }
+                if (@(Get-PravdaInstall).Count -ne 0) {
+                    throw 'MSI remains installed after the final uninstall'
+                }
+            }
         }
     }
     foreach ($canary in $canaries) {
