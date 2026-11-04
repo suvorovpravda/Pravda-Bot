@@ -236,12 +236,23 @@ fn security_report_rows() -> Vec<String> {
 /// No internet probe, process enumeration, shell command or broker request.
 /// Must remain main-window-only and behind the Rust-owned live session.
 #[tauri::command]
-pub fn ipc_security_report(
+pub async fn ipc_security_report(
     window: Window,
     session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
 ) -> Result<Vec<String>, String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    Ok(security_report_rows())
+    let mut rows = security_report_rows();
+    rows[1] = match desktop.security_database_health_code().await {
+        "database_ok" => "sqlite|verified|SQLite quick_check OK; restauration de sauvegarde non testee",
+        "database_missing" => "sqlite|blocked|Base SQLite absente; consulter Doctor sans reinitialiser",
+        "database_invalid_path" => "sqlite|blocked|Chemin de base invalide; consulter Doctor",
+        "database_integrity_failed" => "sqlite|blocked|Controle SQLite en echec; sauvegarder avant toute reparation",
+        "database_schema_missing" => "sqlite|blocked|Schema du magasin SQLite incomplet; consulter Doctor",
+        _ => "sqlite|unknown|Base indisponible ou occupee; aucune reparation automatique",
+    }
+    .to_string();
+    Ok(rows)
 }
 
 #[tauri::command]
