@@ -193,6 +193,48 @@ mod tests {
         assert_eq!(rows[0].0, 12345.0);
     }
 
+    /// A live WAL database must support a transactionally consistent SQLite
+    /// backup without copying db/-wal/-shm files or shutting down the writer.
+    /// This proves the snapshot itself restores market rows; it does not
+    /// introduce a production backup/restore command.
+    #[test]
+    fn live_wal_snapshot_restores_rows_without_changing_source() {
+        let dir = tempdir().unwrap();
+        let source = dir.path().join("live.db");
+        let snapshot = dir.path().join("snapshot.db");
+        let restored_path = dir.path().join("restored.db");
+        let now = Utc::now();
+        let store = PravdaStore::open(source.to_str().unwrap()).unwrap();
+        for (symbol, price) in [("BTC/USDT", 12345.0), ("ETH/USDT", 2345.0)] {
+            store.insert_tick(symbol, price, "Kraken", now).unwrap();
+        }
+        let mode: String = store.conn.query_row("PRAGMA journal_mode;", [], |row| row.get(0)).unwrap();
+        assert_eq!(mode, "wal");
+
+        // VACUUM INTO reads a consistent SQLite snapshot while WAL is active.
+        // The output must be a NEW file; no overwrite of an existing backup.
+        store.conn.execute("VACUUM main INTO ?1", params![snapshot.to_str().unwrap()]).unwrap();
+        let snapshot_check: String = Connection::open(&snapshot)
+            .unwrap()
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(snapshot_check, "ok");
+        assert!(store.conn.execute("VACUUM main INTO ?1", params![snapshot.to_str().unwrap()]).is_err());
+
+        // A later tick must not retroactively appear in the saved snapshot.
+        store.insert_tick("BTC/USDT", 99999.0, "Kraken", now).unwrap();
+        std::fs::copy(&snapshot, &restored_path).unwrap();
+        let restored = PravdaStore::open(restored_path.to_str().unwrap()).unwrap();
+        let btc = restored.latest_ticks("BTC/USDT", 10).unwrap();
+        let eth = restored.latest_ticks("ETH/USDT", 10).unwrap();
+        assert_eq!(btc.len(), 1);
+        assert_eq!(btc[0].0, 12345.0);
+        assert_eq!(eth.len(), 1);
+        assert_eq!(eth[0].0, 2345.0);
+        assert_eq!(store.latest_ticks("BTC/USDT", 10).unwrap().len(), 2);
+        assert_eq!(store.latest_ticks("ETH/USDT", 10).unwrap().len(), 1);
+    }
+
     #[test]
     fn test_store_roundtrip() {
         let dir = tempdir().unwrap();
