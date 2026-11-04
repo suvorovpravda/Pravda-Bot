@@ -17,6 +17,8 @@ fn main() {
         "ipc_security_events",
         "ipc_fx_status",
         "ipc_public_feed",
+        "ipc_revolut_consent_get",
+        "ipc_revolut_consent_set",
         "ipc_open_source",
     ];
     tauri_build::try_build(
