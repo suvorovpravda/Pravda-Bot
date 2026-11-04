@@ -65,7 +65,6 @@ impl SecurityEvents {
     }
 }
 
-
 /// Only Rust owns this session token. It is never returned to JavaScript.
 pub struct IpcAuth {
     authority: Arc<Auth>,
@@ -548,7 +547,9 @@ mod tests {
         assert_eq!(list.len(), MAX_SECURITY_EVENTS);
         assert!(list.iter().all(|line| {
             let mut parts = line.split('|');
-            parts.next().is_some_and(|stamp| stamp.parse::<u64>().is_ok())
+            parts
+                .next()
+                .is_some_and(|stamp| stamp.parse::<u64>().is_ok())
                 && parts.next() == Some("login_rejected")
                 && parts.next().is_none()
         }));
