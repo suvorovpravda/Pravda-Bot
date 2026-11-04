@@ -91,14 +91,24 @@ async function start() {
     env:{...process.env, PRAVDA_MARKET_FEEDS_ENABLED:"false"}
   });
   let driverError = null;
+  let driverDiagnostics = "";
   child.on("error", error => {driverError = error;});
-  child.stderr?.on("data", () => {/* never emit private paths */});
-  await until(async () => {
-    if (driverError) throw driverError;
-    if (child.exitCode !== null) throw Error("Tauri driver exited prematurely");
-    try {return Boolean(await http("GET","/status",undefined,1000));}
-    catch {return false;}
-  }, "tauri-driver readiness", 180);
+  child.stderr?.on("data", chunk => {
+    // Keep only a bounded, redacted diagnostic; never publish user paths or secrets.
+    driverDiagnostics = (driverDiagnostics + String(chunk)).slice(-2048);
+  });
+  try {
+    await until(async () => {
+      if (driverError) throw Error("Tauri driver process could not start");
+      if (child.exitCode !== null) throw Error("Tauri driver exited prematurely");
+      try {return Boolean(await http("GET","/status",undefined,1000));}
+      catch {return false;}
+    }, "tauri-driver readiness", 180);
+  } catch (error) {
+    // Restrict emitted output to known diagnostic categories; no raw stderr paths.
+    const diagnostic = /address already in use|access is denied|not recognized|not found|unknown option|invalid option|webdriver|msedgedriver|permission denied/i.exec(driverDiagnostics)?.[0] || "unclassified";
+    throw Error(String(error.message).slice(0,100) + " (driver diagnostic: " + diagnostic + ")");
+  }
   const opened = await http("POST", "/session", {
     capabilities:{alwaysMatch:{browserName:"wry", "tauri:options":{application:exe}}}
   }, 120000);
