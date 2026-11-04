@@ -2,6 +2,7 @@
 import {readFileSync} from "node:fs";
 import {join} from "node:path";
 import assert from "node:assert/strict";
+import vm from "node:vm";
 const root=join(process.cwd(),"crates/pravda-app");
 const read=p=>readFileSync(join(root,p),"utf8");
 const cfg=JSON.parse(read("tauri.conf.json"));
@@ -104,4 +105,48 @@ for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query"
 }
 assert.match(ipc,/current\.as_deref\(\) != Some\(issued_to\) \|\| !session\.authority\.session_valid\(issued_to\)/,
   "Async response barrier must bind original token and verify it is still valid");
+// Exercise the real dashboard IPC adapter (not a copied mock) across
+// logout/relogin. Old rejections must not revoke a newer Rust-authenticated UI.
+assert.match(auth, /window\.pravdaAuthGeneration = 0;/);
+assert.equal((auth.match(/window\.pravdaAuthGeneration\+\+;/g)||[]).length, 2,
+  "Both logout-screen and successful login transitions must invalidate old UI requests");
+const fetchStart = js.indexOf("    async function fetchJson(url) {");
+const fetchEnd = js.indexOf("    async function refreshMarket()", fetchStart);
+assert.ok(fetchStart >= 0 && fetchEnd > fetchStart, "Actual IPC adapter must be testable");
+let release = null;
+let relocks = 0;
+const ui = {
+  URL,
+  window: {
+    pravdaAuthGeneration: 2,
+    pravdaRequireLogin() { relocks++; },
+    pravdaInvoke() {
+      return new Promise((resolve,reject) => { release = {resolve,reject}; });
+    }
+  }
+};
+vm.createContext(ui);
+vm.runInContext(js.slice(fetchStart, fetchEnd), ui, {filename:"desktop-fetchJson.js"});
+const oldRejected = ui.fetchJson("/api/geopolitics");
+ui.window.pravdaAuthGeneration = 4; // session A logout + B login
+release.reject(new Error("UNAUTHORIZED"));
+await assert.rejects(oldRejected, /UNAUTHORIZED/);
+assert.equal(relocks, 0, "Old session rejection must not hide new dashboard");
+
+const oldSucceeded = ui.fetchJson("/api/market");
+ui.window.pravdaAuthGeneration = 6;
+release.resolve({value:"stale"});
+await assert.rejects(oldSucceeded, /STALE_SESSION/);
+assert.equal(relocks, 0, "Old successful data must not change new login state");
+
+const currentDenied = ui.fetchJson("/api/market");
+release.reject(new Error("UNAUTHORIZED"));
+await assert.rejects(currentDenied, /UNAUTHORIZED/);
+assert.equal(relocks, 1, "Rejection of current session must still show login");
+
+const currentAllowed = ui.fetchJson("/api/market");
+release.resolve({value:"current"});
+assert.equal((await currentAllowed).value, "current",
+  "Current session data must remain usable");
+
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
