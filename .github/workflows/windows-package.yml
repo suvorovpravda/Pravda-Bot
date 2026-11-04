@@ -40,6 +40,20 @@ jobs:
         with:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
+      - name: Parse Windows installer scripts before expensive builds
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
+            $tokens = $null
+            $errors = $null
+            $resolved = (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path
+            [System.Management.Automation.Language.Parser]::ParseFile($resolved, [ref]$tokens, [ref]$errors) | Out-Null
+            if (@($errors).Count -gt 0) {
+              throw "PowerShell syntax invalid in $path"
+            }
+            Write-Host "PASS PowerShell parse $path"
+          }
       - name: Verify protected Enterprise signing prerequisites
         if: ${{ inputs.signed }}
         shell: pwsh
