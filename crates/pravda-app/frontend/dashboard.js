@@ -714,9 +714,66 @@ const translations = {
             $("chart-age").textContent = t("unknownError");
         }
     }
+    let revolutOptIn = false;
+    const revolutConsentCheckbox = $("revolut-consent");
+    const revolutConsentStatus = $("revolut-consent-status");
+    const revolutReadButton = $("revolut-refresh");
+
+    async function readRevolutConsent() {
+        revolutConsentCheckbox.disabled = true;
+        revolutReadButton.disabled = true;
+        try {
+            const enabled = await window.pravdaInvoke("ipc_revolut_consent_get");
+            if (typeof enabled !== "boolean") throw new Error("INVALID_CONSENT");
+            revolutOptIn = enabled;
+            revolutConsentCheckbox.checked = enabled;
+            revolutConsentCheckbox.disabled = false;
+            revolutReadButton.disabled = !enabled;
+            revolutConsentStatus.textContent = enabled
+                ? "Lecture publique autorisée. Aucun compte ou ordre réel connecté."
+                : "Désactivé : aucune lecture du carnet public Revolut X.";
+        } catch {
+            revolutOptIn = false;
+            revolutConsentCheckbox.checked = false;
+            revolutConsentStatus.textContent = "Consentement indisponible : carnet désactivé.";
+        }
+    }
+
+    revolutConsentCheckbox.addEventListener("change", async () => {
+        const requested = revolutConsentCheckbox.checked;
+        revolutConsentCheckbox.disabled = true;
+        revolutReadButton.disabled = true;
+        try {
+            const stored = await window.pravdaInvoke("ipc_revolut_consent_set", {enabled: requested});
+            if (stored !== requested) throw new Error("CONSENT_NOT_PERSISTED");
+            revolutOptIn = stored;
+            revolutConsentCheckbox.checked = stored;
+            revolutConsentStatus.textContent = stored
+                ? "Lecture publique autorisée. Aucun compte ou ordre réel connecté."
+                : "Désactivé : aucune lecture du carnet public Revolut X.";
+            if (!stored) {
+                $("revolut-orderbook").textContent = "Module facultatif désactivé.";
+                setStatus($("revolut-status"), "pending", "Désactivé");
+            }
+        } catch {
+            revolutOptIn = false;
+            revolutConsentCheckbox.checked = false;
+            revolutConsentStatus.textContent = "Préférence non enregistrée : aucune lecture autorisée.";
+        } finally {
+            revolutConsentCheckbox.disabled = false;
+            revolutReadButton.disabled = !revolutOptIn;
+        }
+    });
+    readRevolutConsent();
+
     async function refreshRevolut() {
         const status = $("revolut-status");
         const container = $("revolut-orderbook");
+        if (!revolutOptIn) {
+            container.textContent = "Module facultatif désactivé.";
+            setStatus(status, "pending", "Désactivé");
+            return;
+        }
         setStatus(status,"pending","Lecture du carnet public…");
         try {
             const data = await fetchJson("/api/revolut/public");

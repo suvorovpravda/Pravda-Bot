@@ -57,7 +57,9 @@
             <span class="feature-kicker">01 / PUBLIC MARKET DATA</span>
             <h2>Revolut X</h2>
             <p>Carnet public BTC/USD, sans clé. Connexion au compte et ordres réels volontairement séparés.</p>
-            <div class="feature-actions"><button id="revolut-refresh" class="button button-primary" type="button">Lire le carnet</button>
+            <label class="feature-consent"><input id="revolut-consent" type="checkbox" disabled> Autoriser la lecture du carnet public Revolut X (réseau, facultatif)</label>
+            <p class="fine-print" id="revolut-consent-status" role="status" aria-live="polite">Vérification du consentement local…</p>
+            <div class="feature-actions"><button id="revolut-refresh" class="button button-primary" type="button" disabled>Lire le carnet</button>
                 <a class="button" href="https://exchange.revolut.com/" data-source-link="revolutx" target="_blank" rel="noopener noreferrer">Ouvrir Revolut X ↗</a></div>
         </article>
         <article class="feature-tile">

@@ -222,6 +222,10 @@ body{background:radial-gradient(ellipse at 16% 0%,rgba(42,101,170,.19),transpare
 .security-check strong{display:block;font-size:13px;text-transform:capitalize;color:var(--text);margin-bottom:5px}
 .security-check p{font-size:12px;color:var(--muted);margin:0;line-height:1.5}
 @media(max-width:700px){.security-checks{grid-template-columns:1fr}}
+.feature-consent{display:flex;align-items:flex-start;gap:8px;font-size:13px;line-height:1.5;color:var(--text);margin:8px 0}
+.feature-consent input{margin-top:3px;accent-color:var(--cyan)}
+.feature-consent input:disabled{opacity:.55}
+#revolut-consent-status{margin:6px 0}
 .hidden{display:none!important}
 @media(max-width:1100px){.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.provider-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.runtime-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.feature-grid,.provider-grid,.connector-grid{grid-template-columns:1fr}.topbar{position:static}.workspace-flag{display:none}.intro{display:block}.runtime-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.feature-tile{min-height:0}}

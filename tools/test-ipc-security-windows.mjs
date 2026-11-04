@@ -215,7 +215,7 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     Boolean(latest), latest?"native title callback received":"no verified native report");
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
-    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_fx_status",
+    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_fx_status",
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
@@ -317,9 +317,23 @@ try {
   for(const name of ["ipc_history_query","ipc_history_export_csv"])
     rustDenied("no session: "+name,await invoke(name,{query}));
 
+  rustDenied("opt-in: no session cannot read preference",await invoke("ipc_revolut_consent_get"));
+  rustDenied("opt-in: no session cannot change preference",await invoke("ipc_revolut_consent_set",{enabled:true}));
   const password="Pravda-E2E-"+randomBytes(32).toString("hex");
   const setup=await invoke("ipc_auth_setup",{password,confirm:password});
   verdict("main: one-time test setup",setup.state==="resolved",setup.state);
+  const consentInitial=await invoke("ipc_revolut_consent_get");
+  verdict("opt-in: Revolut public network disabled by default",
+    consentInitial.state==="resolved" && consentInitial.value===false,
+    "New profile has no Revolut public-feed consent");
+  const blockedFeed=await invoke("ipc_public_feed",{source:"revolut"});
+  verdict("opt-in: native Rust refuses public book without consent",
+    blockedFeed.state==="rejected" && /PUBLIC_FEED_OPT_IN_REQUIRED/.test(blockedFeed.error||""),
+    "Public feed rejected before network access");
+  const consentOn=await invoke("ipc_revolut_consent_set",{enabled:true});
+  verdict("opt-in: authenticated main can enable public feed",
+    consentOn.state==="resolved" && consentOn.value===true,
+    "Enabled explicitly without reading a live feed");
   const market=await invoke("ipc_market_snapshot");
   verdict("main: authenticated snapshot",market.state==="resolved",market.state);
   await checkConcurrentWindowAfterAuth(Date.now());
@@ -373,9 +387,21 @@ try {
     /INVALID_CREDENTIALS/.test(invalidLogin.error||"") &&
     !(invalidLogin.error||"").includes("Incorrect-E2E-Password"),
     "Password rejected without echoing credential material");
+  rustDenied("opt-in: unauthenticated cannot change consent after restart",
+    await invoke("ipc_revolut_consent_set",{enabled:false}));
   const loginAfterRestart=await invoke("ipc_auth_login",{password});
   verdict("restart: existing password logs in",
     loginAfterRestart.state==="resolved",loginAfterRestart.state);
+  const consentPersisted=await invoke("ipc_revolut_consent_get");
+  verdict("opt-in: explicit consent survives desktop restart",
+    consentPersisted.state==="resolved" && consentPersisted.value===true,
+    "Reopened profile retained native permission");
+  const consentOff=await invoke("ipc_revolut_consent_set",{enabled:false});
+  const revoked=await invoke("ipc_public_feed",{source:"revolut"});
+  verdict("opt-in: revocation persists and blocks network read",
+    consentOff.state==="resolved" && consentOff.value===false &&
+    revoked.state==="rejected" && /PUBLIC_FEED_OPT_IN_REQUIRED/.test(revoked.error||""),
+    "Native Rust blocks optional endpoint after opt-out");
   const security=await invoke("ipc_security_report");
   verdict("security: authenticated status is bounded and VPN remains unverified",
     security.state==="resolved" && Array.isArray(security.value) &&

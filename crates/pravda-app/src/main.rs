@@ -1,3 +1,4 @@
+mod consent;
 mod ipc;
 
 use std::sync::Arc;
@@ -114,6 +115,7 @@ async fn main() {
         }
         return;
     }
+    let public_consent = consent::RevolutPublicConsent::load(std::path::Path::new(&auth_path));
     let shared_auth = match pravda_server::Auth::load(
         std::path::PathBuf::from(auth_path),
         pravda_server::PBKDF2_ITERATIONS,
@@ -139,6 +141,7 @@ async fn main() {
     // The only native WebView opens bundled local assets; no remote origin.
     tauri::Builder::default()
         .manage(ipc_auth)
+        .manage(public_consent)
         .manage(ipc::SecurityEvents::default())
         .manage(desktop)
         .invoke_handler(tauri::generate_handler![
@@ -157,6 +160,8 @@ async fn main() {
             ipc::ipc_security_events,
             ipc::ipc_fx_status,
             ipc::ipc_public_feed,
+            ipc::ipc_revolut_consent_get,
+            ipc::ipc_revolut_consent_set,
             ipc::ipc_open_source
         ])
         .setup(|app| {
