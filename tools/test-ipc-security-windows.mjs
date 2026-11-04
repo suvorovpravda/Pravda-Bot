@@ -367,6 +367,12 @@ try {
     await invoke("ipc_security_report"));
   rustDenied("security: unauthenticated user cannot read security events",
     await invoke("ipc_security_events"));
+  const invalidLogin=await invoke("ipc_auth_login",{password:"Incorrect-E2E-Password-DoNotUse"});
+  verdict("security: invalid login is denied with a safe fixed error",
+    invalidLogin.state==="rejected" &&
+    /INVALID_CREDENTIALS/.test(invalidLogin.error||"") &&
+    !(invalidLogin.error||"").includes("Incorrect-E2E-Password"),
+    "Password rejected without echoing credential material");
   const loginAfterRestart=await invoke("ipc_auth_login",{password});
   verdict("restart: existing password logs in",
     loginAfterRestart.state==="resolved",loginAfterRestart.state);
@@ -383,6 +389,7 @@ try {
     events.state==="resolved" && Array.isArray(events.value) &&
     events.value.length>0 && events.value.length<=64 &&
     events.value.some(line=>/^\d+\|login_accepted$/.test(line)) &&
+    events.value.some(line=>/^\d+\|login_rejected$/.test(line)) &&
     events.value.every(line=>/^\d+\|(setup_accepted|setup_rejected|login_accepted|login_rejected|login_locked|session_ended|storage_failure)$/.test(line)),
     "Bounded local auth event codes; no password or secret payload");
   const marketAfterRestart=await invoke("ipc_market_snapshot");
