@@ -763,26 +763,39 @@ const translations = {
                 warning: "Attention",
                 blocked: "Bloqué"
             };
+            const checkNames = {
+                session: "Authentification Rust",
+                sqlite: "Intégrité SQLite",
+                authenticity: "Authenticité du binaire",
+                capabilities: "Permissions IPC et CSP",
+                market: "Données de marché",
+                orders: "Ordres et sécurité financière",
+                proton: "Proton VPN",
+                kill_switch: "Protection anti-fuite VPN"
+            };
             const nodes = [];
             let verified = 0;
+            let blocked = 0;
             for (const row of rows) {
                 if (typeof row !== "string" || row.length > 300) throw new Error("INVALID_ROW");
                 const parts = row.split("|");
                 if (parts.length !== 3 || !translated[parts[1]] ||
-                    !/^[a-z_]+$/.test(parts[0])) throw new Error("INVALID_ROW");
+                    !Object.hasOwn(checkNames, parts[0])) throw new Error("INVALID_ROW");
                 if (parts[1] === "verified") verified++;
+                if (parts[1] === "blocked") blocked++;
                 const item = document.createElement("div");
                 item.className = "security-check";
                 item.setAttribute("role", "listitem");
                 const header = document.createElement("strong");
-                header.textContent = parts[0].replaceAll("_", " ") + " · " + translated[parts[1]];
+                header.textContent = checkNames[parts[0]] + " · " + translated[parts[1]];
                 const detail = document.createElement("p");
                 detail.textContent = parts[2];
                 item.append(header, detail);
                 nodes.push(item);
             }
             panel.replaceChildren(...nodes);
-            setStatus($("security-status"), "pending", verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet");
+            setStatus($("security-status"), blocked ? "error" : "pending",
+                blocked ? blocked + " blocage(s) de sécurité" : verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet");
         } catch {
             panel.textContent = "État de sécurité non disponible. Vérifiez votre session locale.";
             setStatus($("security-status"), "error", "Non vérifié");
