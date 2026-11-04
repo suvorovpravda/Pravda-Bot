@@ -168,7 +168,12 @@ try {
   report.installed_exe_sha256 = digest(exe);
   const password = "Pravda-Acceptance-" + randomBytes(24).toString("hex");
   await start();
-  await until(async () => (await ui()).login, "first-use setup screen");
+  // Wait until ipc_auth_status has selected the first-use form, not merely
+  // until the login screen is visible (it exists before the IPC reply).
+  await until(async () => {
+    const state = await ui();
+    return state.login && !state.dashboard && state.setup && !state.confirmHidden;
+  }, "initialized first-use setup screen");
   let state = await ui();
   check("First-use GUI demands password setup",
     state.login && !state.dashboard && state.setup && !state.confirmHidden);
@@ -185,7 +190,12 @@ try {
   const verifier = digest(auth);
   await stop();
   await start();
-  await until(async () => (await ui()).login, "restart login screen");
+  // After restart, the login screen initially exists in an uninitialized
+  // state. Require confirmation to be hidden before checking persisted login.
+  await until(async () => {
+    const state = await ui();
+    return state.login && !state.dashboard && !state.setup && state.confirmHidden;
+  }, "initialized existing-profile login screen");
   state = await ui();
   check("Restart offers login and hides setup",
     state.login && !state.dashboard && !state.setup && state.confirmHidden);
