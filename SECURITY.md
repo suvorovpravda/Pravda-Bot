@@ -17,6 +17,14 @@
 
 ---
 
+## Refus du modèle actuel et exigences de sécurité utilisateur — 4 novembre 2026
+
+**Décision propriétaire : modèle de sécurité actuel refusé** pour manque de retour d'information sur l'état des protections. Le produit ne peut être qualifié de prêt pour production sans **centre de sécurité authentifié**, états réels `PROTÉGÉ / ATTENTION / BLOQUÉ / NON VÉRIFIÉ`, remédiations transparentes et audit des tests au SHA exact. Un contrôle non effectué doit rester **NON VÉRIFIÉ**, jamais vert par défaut. Les données d'authentification et les secrets ne sont jamais exposés à WebView2 ou aux rapports. Les erreurs doivent être visibles sans divulguer de détails sensibles.
+
+**Proton VPN en option (aucun compte exigé dans Pravda-Bot) :** si l'utilisateur dispose d'un accès Proton VPN, il doit pouvoir choisir cette option indépendamment du cœur d'authentification. Préférer l'application officielle Proton VPN Windows et son propre processus de connexion. Un bouton « ouvrir Proton VPN » ou des instructions ne constituent **pas** une activation automatique. La CLI Proton documentée concerne Linux ; aucun protocole de commande Windows non officiel ne sera improvisé. Ne déclarer `VPN actif` qu'avec une **preuve fiable de connexion/tunnel et de protection effective**, pas seulement la présence de l'application ou une déclaration d'abonnement. Sinon `INCONNU`. L'activation du kill switch standard/avancé reste dans l'application officielle et exige le choix explicite de l'utilisateur ; le mode avancé peut bloquer l'accès Internet, y compris lors de la connexion Windows. Un VPN n'est pas une preuve suffisante de sécurité du trading ni une alternative à TLS, au coffre ou à l'IPC sécurisé. Références : [Application Windows Proton VPN](https://protonvpn.com/support/protonvpn-windows-vpn-application), [Kill switch avancé](https://protonvpn.com/support/advanced-kill-switch).
+
+**Statut :** cette section fixe des **exigences de développement, non une fonctionnalité actuellement livrée**. Les nouvelles protections et leur recette sont suivies dans [#106](https://github.com/suvorovpravda/Pravda-Bot/issues/106).
+
 ## Situation des contrôles et de la distribution — 4 novembre 2026
 
 Cette rubrique complète le modèle de menace historique ci-dessous. **Les badges, les tests unitaires et une CI verte ne sont ni un audit indépendant ni une certification de sécurité.** [Plan de production #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106).
