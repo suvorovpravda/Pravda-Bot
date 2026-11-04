@@ -409,8 +409,10 @@ jobs:
             'restart: password setup persisted across native process',
             'restart: old session revoked after native process exit',
             'security: unauthenticated user cannot read security status',
+            'security: unauthenticated user cannot read security events',
             'restart: existing password logs in',
             'security: authenticated status is bounded and VPN remains unverified',
+            'security: authenticated local events contain only coded auth outcomes',
             'restart: market IPC authorized only after login',
             'restart: SQLite remains accessible'
           )
