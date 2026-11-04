@@ -752,6 +752,46 @@ const translations = {
             setStatus($("runtime-status"),"error","Diagnostic indisponible");
         }
     }
+    async function refreshSecurity() {
+        const panel = $("security-checks");
+        try {
+            const rows = await window.pravdaInvoke("ipc_security_report");
+            if (!Array.isArray(rows) || rows.length !== 8) throw new Error("INVALID_REPORT");
+            const translated = {
+                verified: "Vérifié",
+                unknown: "Non vérifié",
+                warning: "Attention",
+                blocked: "Bloqué"
+            };
+            const nodes = [];
+            let verified = 0;
+            for (const row of rows) {
+                if (typeof row !== "string" || row.length > 300) throw new Error("INVALID_ROW");
+                const parts = row.split("|");
+                if (parts.length !== 3 || !translated[parts[1]] ||
+                    !/^[a-z_]+$/.test(parts[0])) throw new Error("INVALID_ROW");
+                if (parts[1] === "verified") verified++;
+                const item = document.createElement("div");
+                item.className = "security-check";
+                item.setAttribute("role", "listitem");
+                const header = document.createElement("strong");
+                header.textContent = parts[0].replaceAll("_", " ") + " · " + translated[parts[1]];
+                const detail = document.createElement("p");
+                detail.textContent = parts[2];
+                item.append(header, detail);
+                nodes.push(item);
+            }
+            panel.replaceChildren(...nodes);
+            setStatus($("security-status"), "pending", verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet");
+        } catch {
+            panel.textContent = "État de sécurité non disponible. Vérifiez votre session locale.";
+            setStatus($("security-status"), "error", "Non vérifié");
+        }
+    }
+    $("security-refresh").addEventListener("click", refreshSecurity);
+    window.refreshSecurity = refreshSecurity;
+    refreshSecurity();
+    setInterval(refreshSecurity, 30000);
     document.addEventListener("click",async event => {
         const tab=event.target.closest("[data-go-tab]");
         if(tab){document.querySelector('.tab-btn[data-tab="'+tab.dataset.goTab+'"]')?.click();return;}
