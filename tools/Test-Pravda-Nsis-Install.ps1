@@ -33,7 +33,7 @@ $uninstallPaths = @(
 )
 function Get-PravdaNsisRegistration {
     return @(Get-ItemProperty -Path $uninstallPaths -ErrorAction SilentlyContinue |
-        Where-Object { $_.DisplayName -eq 'Pravda-Bot' })
+        Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'Pravda-Bot' })
 }
 
 if (@(Get-PravdaNsisRegistration).Count -ne 0) {
