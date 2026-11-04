@@ -381,6 +381,50 @@ jobs:
           }
           & ./tools/Verify-Pravda-Installer.ps1 @args
           Write-Host "Verified independently downloaded Windows release from commit $env:EXPECTED_COMMIT"
+      - name: Download standalone production test application
+        uses: actions/download-artifact@v8
+        with:
+          name: pravda-windows-production-test
+          path: downloaded-test
+      - name: Download standalone troubleshooting application
+        uses: actions/download-artifact@v8
+        with:
+          name: pravda-windows-troubleshooting
+          path: downloaded-doctor
+      - name: Verify independent companion archives against main release manifest
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifest = @(Get-Content -LiteralPath 'downloaded-release/bundle/SHA256SUMS.txt' -Encoding ascii)
+          foreach ($case in @(
+            @{ Folder = 'downloaded-test'; Exe = 'pravda-harness.exe'; Guide = 'PRODUCTION-TEST.txt' },
+            @{ Folder = 'downloaded-doctor'; Exe = 'pravda-doctor.exe'; Guide = 'TROUBLESHOOTING.txt' }
+          )) {
+            $binary = Join-Path $case.Folder $case.Exe
+            $guide = Join-Path $case.Folder $case.Guide
+            if (-not (Test-Path -LiteralPath $guide -PathType Leaf)) { throw 'Missing independent companion instructions' }
+            $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
+            $matching = @($manifest | Where-Object { $_ -ceq ($hash + '  ' + $case.Exe) })
+            if ($matching.Count -ne 1) { throw 'Independent companion does not match main release manifest' }
+            Write-Host ('Verified standalone companion ' + $case.Exe + ' SHA256=' + $hash)
+          }
+      - name: Smoke test independent downloaded Doctor and offline harness
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $doctor = @(& './downloaded-doctor/pravda-doctor.exe' --no-open)
+          if ($LASTEXITCODE -ne 0 -or ($doctor -join [Environment]::NewLine) -notmatch 'PRAVDA-DOCTOR REPORT v2') {
+            throw 'Standalone Doctor failed diagnostic startup'
+          }
+          $harness = @(& './downloaded-test/pravda-harness.exe' --smoke)
+          if ($LASTEXITCODE -ne 0) { throw 'Standalone Harness synthetic smoke failed' }
+          $summary = ($harness | Select-Object -Last 1) | ConvertFrom-Json
+          if ($summary.aggregate.pass -ne 1 -or $summary.aggregate.rejected -ne 1 -or
+              $summary.aggregate.timeout -ne 1 -or $summary.aggregate.crash -ne 1 -or
+              $summary.build_accepted -ne $false) {
+            throw 'Unexpected offline test harness synthetic results'
+          }
+          Write-Host 'PASS standalone Doctor and preproduction Harness synthetic smoke'
       - name: Smoke-test MSI installation and uninstall on pristine Windows
         shell: pwsh
         timeout-minutes: 12
