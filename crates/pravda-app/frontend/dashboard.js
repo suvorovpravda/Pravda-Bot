@@ -693,14 +693,24 @@ const translations = {
         };
         const command = commands[parsed.pathname];
         if (!command) throw new Error("UNAVAILABLE");
+        // A response from session A must never relock a new authenticated
+        // dashboard B or render stale data after a logout/login transition.
+        const authGeneration = window.pravdaAuthGeneration;
         try {
             const publicSources = {"/api/eu/flows":"energy", "/api/geopolitics":"news",
                 "/api/sources":"sources", "/api/revolut/public":"revolut"};
             const args = command === "ipc_public_feed" ? {source:publicSources[parsed.pathname]}
                 : parsed.pathname === "/api/market/history" ? { query } : {};
-            return await window.pravdaInvoke(command, args);
+            const result = await window.pravdaInvoke(command, args);
+            if (authGeneration !== window.pravdaAuthGeneration) {
+                throw new Error("STALE_SESSION");
+            }
+            return result;
         } catch (error) {
-            if (String(error).includes("UNAUTHORIZED")) window.pravdaRequireLogin();
+            if (String(error).includes("UNAUTHORIZED") &&
+                authGeneration === window.pravdaAuthGeneration) {
+                window.pravdaRequireLogin();
+            }
             throw error;
         }
     }
