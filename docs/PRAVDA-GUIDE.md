@@ -31,6 +31,26 @@ Sur la page [GitHub Actions du packaging Windows](https://github.com/suvorovprav
 
 Les ZIP compagnons sont des **applications distinctes**, mais **ne sont pas chacun un MSI**. Les deux compagnons sont comparés par la CI au manifeste SHA-256 de l'archive principale, correspondant au même commit. Leurs guides sont des fichiers `.txt`. Aucun certificat de signature Enterprise n'a été annoncé comme validé : **les artefacts `unsigned` restent des builds de test**, même lorsque les checks sont verts. Les artefacts Actions ont une durée de conservation limitée ; ce ne sont pas des Releases stables pérennes.
 
+### Installation autonome et personnalisée — contrat à réaliser (P0)
+
+L'utilisateur final n'est **pas** un développeur : télécharger le MSI/NSIS, lancer, choisir **Standard recommandé** ou **Personnalisé**, puis configurer son mot de passe applicatif dans la fenêtre native. Aucune commande PowerShell, installation manuelle Rust, Visual Studio, Python, Node ou WebView2. Windows peut légitimement demander l'autorisation UAC ; ne jamais la contourner.
+
+**Sélection cible (non encore disponible/validée dans les installateurs actuels) :**
+
+| Composant | Standard | Personnalisé | Restriction de sécurité |
+| --- | --- | --- | --- |
+| Noyau desktop Tauri/WebView2, auth, SQLite indispensable, intégrité et IPC sécurisé | Obligatoire | Non décochable | Aucun contournement de l'auth ni ajout de permission arbitraire |
+| Cours publics et feeds Kraken/Binance | Selon profil d'observation | Activable/désactivable | Aucun accès broker privé implicite |
+| Simulation papier | Activée si profil test | Activable/désactivable | Aucun ordre réel |
+| Doctor passif | Recommandé | Facultatif, archive séparée préservée | Aucune collecte/transmission de secrets |
+| Harness préproduction | Non installé par défaut | Facultatif, archive séparée préservée | Campagnes en VM/OS sans réseau, hors compte réel |
+| Revolut X en lecture seule | Désactivé | Opt-in **seulement si homologué** | Consentement explicite et coffre natif, zéro ordre |
+| Trading live / retraits | **Absent** | **Non proposé** | Bloqué par [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) |
+
+**À implémenter et démontrer :** option list et dépendances versionnées ; étude WiX MSI vs NSIS pour une sélection vraiment installable ; prérequis WebView2 silencieux vérifié, modules authentifiés et signatures de provenance ; cohérence des capacités Tauri et accès réseau entre modules installés/désactivés ; persistance des options en upgrade ; absence de perte de profils/données ; scénarios d'échec et rollback sans désactiver SmartScreen/UAC. Si le découpage natif MSI/NSIS n'est pas réalisable avec les protections requises, utiliser des **installateurs distincts** ou une **activation post-installation sûre** documentée plutôt qu'une case qui ne fait rien. Aucun module tiers non signé. **La présence de `downloadBootstrapper` ne constitue pas une preuve d'installation offline.**
+
+**Recette obligatoire :** Windows 10/11 propre, MSI et NSIS, runtime WebView2 absent/présent, connecté/déconnecté, Standard/Personnalisé, options individuellement et combinaisons, upgrade et désinstallation/réinstallation, refus des manifestes altérés, vérification effective des privilèges et ports. [Plan #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106). Ne pas déclarer « installation personnalisable » tant que ces cas ne sont pas démontrés sur un SHA exact.
+
 ### Matrice de recette fondée sur les PR
 
 | Critère | Source des tests | Interprétation |
