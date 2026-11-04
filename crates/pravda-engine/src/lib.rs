@@ -1,4 +1,5 @@
 pub mod backtest;
+pub mod research_risk;
 pub use backtest::{replay, ReplayConfig, ReplayError, ReplayResult, ReplayTick};
 
 use chrono::{DateTime, Utc};
