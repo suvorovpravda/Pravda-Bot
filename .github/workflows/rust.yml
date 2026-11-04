@@ -400,6 +400,7 @@ jobs:
             'concurrent: ipc_paper_alerts_snapshot denied with main authenticated',
             'concurrent: ipc_runtime_metrics denied with main authenticated',
             'concurrent: ipc_security_report denied with main authenticated',
+            'concurrent: ipc_security_events denied with main authenticated',
             'concurrent: ipc_fx_status denied with main authenticated',
             'concurrent: plugin:fs|write_text_file denied with main authenticated',
             'concurrent: plugin:shell|execute denied with main authenticated',
