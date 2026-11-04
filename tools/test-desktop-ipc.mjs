@@ -9,6 +9,16 @@ const cap=JSON.parse(read("capabilities/main.json"));
 const main=read("src/main.rs"), ipc=read("src/ipc.rs"), build=read("build.rs");
 const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
+const msiAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Msi-Install.ps1"),"utf8");
+const nsisAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Nsis-Install.ps1"),"utf8");
+for (const [type, acceptance] of [["MSI",msiAcceptance],["NSIS",nsisAcceptance]]) {
+  assert.match(acceptance,/installed release desktop restarts with its existing SQLite and no implicit auth/,
+    type+": packaged desktop must survive process restart on the same SQLite");
+  assert.match(acceptance,/SQLite format 3/,
+    type+": post-restart SQLite signature must be checked");
+  assert.match(acceptance,/secondListeners/,
+    type+": restarted installed desktop must not expose a TCP listener");
+}
 assert.equal(cfg.build.frontendDist,"frontend");
 assert.deepEqual([...cfg.bundle.targets].sort(),["msi","nsis"],
   "Both MSI and NSIS must be produced for Windows release");
