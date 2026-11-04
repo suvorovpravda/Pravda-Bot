@@ -1,5 +1,5 @@
-mod ipc;
 mod consent;
+mod ipc;
 
 use std::sync::Arc;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
