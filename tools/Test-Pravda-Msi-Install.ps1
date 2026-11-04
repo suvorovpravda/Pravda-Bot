@@ -123,6 +123,36 @@ try {
             throw 'Installed desktop created password verifier before onboarding'
         }
         Write-Host 'PASS: installed release desktop starts, initializes isolated SQLite and has no HTTP listener'
+        # Restart the actual installed release executable against the same
+        # durable SQLite path, not a new test database. No password is enrolled.
+        Stop-Process -Id $app.Id -Force -ErrorAction Stop
+        if (-not $app.WaitForExit(10000)) {
+            throw 'Installed MSI desktop did not exit before restart'
+        }
+        $header = [System.IO.File]::ReadAllBytes($dbPath)
+        if ($header.Length -lt 16 -or
+            [System.Text.Encoding]::ASCII.GetString($header, 0, 16) -cne "SQLite format 3" + [char]0) {
+            throw 'MSI first launch did not preserve an intact SQLite file'
+        }
+        $app = Start-Process -FilePath $installedExe -PassThru
+        Start-Sleep -Seconds 3
+        $app.Refresh()
+        if ($app.HasExited) {
+            throw "Installed MSI desktop exited on second launch: $($app.ExitCode)"
+        }
+        if (-not (Test-Path -LiteralPath $dbPath -PathType Leaf) -or
+            (Get-Item -LiteralPath $dbPath).Length -lt 16) {
+            throw 'MSI second launch failed to retain the original SQLite file'
+        }
+        if (Test-Path -LiteralPath $authPath) {
+            throw 'MSI desktop created a password verifier without onboarding after restart'
+        }
+        $secondListeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $_.OwningProcess -eq $app.Id })
+        if ($secondListeners.Count -ne 0) {
+            throw 'MSI installed desktop opened a TCP listener after restart'
+        }
+        Write-Host 'PASS: MSI installed release desktop restarts with its existing SQLite and no implicit auth'
     }
     finally {
         if ($null -ne $app) {
