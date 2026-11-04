@@ -9,6 +9,13 @@ const cap=JSON.parse(read("capabilities/main.json"));
 const main=read("src/main.rs"), ipc=read("src/ipc.rs"), build=read("build.rs");
 const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
 assert.equal(cfg.build.frontendDist,"frontend");
+assert.deepEqual([...cfg.bundle.targets].sort(),["msi","nsis"],
+  "Both MSI and NSIS must be produced for Windows release");
+assert.equal(cfg.bundle.windows?.webviewInstallMode?.type,"offlineInstaller",
+  "Windows installers must contain the official offline WebView2 prerequisite");
+assert.equal(cfg.bundle.windows?.webviewInstallMode?.silent,true,
+  "WebView2 must install automatically, without user-run commands");
+
 assert.equal(cfg.app.withGlobalTauri,true);
 assert.deepEqual(cfg.app.security.capabilities,["main-ipc"]);
 assert.match(cfg.app.security.csp["connect-src"],/ipc:/);
