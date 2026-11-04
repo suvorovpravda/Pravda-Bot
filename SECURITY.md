@@ -17,6 +17,30 @@
 
 ---
 
+## Situation des contrôles et de la distribution — 4 novembre 2026
+
+Cette rubrique complète le modèle de menace historique ci-dessous. **Les badges, les tests unitaires et une CI verte ne sont ni un audit indépendant ni une certification de sécurité.** [Plan de production #106](https://github.com/suvorovpravda/Pravda-Bot/issues/106).
+
+| Frontière / preuve | Présent dans le code et la CI | Ce qui n'est pas démontré |
+| --- | --- | --- |
+| WebView2 / IPC natif | Tests de refus fenêtre hostile/non authentifiée, persistance du mot de passe et perte de session après redémarrage ([#111](https://github.com/suvorovpravda/Pravda-Bot/pull/111)) | Pentest indépendant, tous scénarios E2E sur un PC externe |
+| Windows MSI / NSIS | Distribution de trois artefacts indépendants ; ZIP compagnon contrôlés contre le SHA-256 du manifeste principal ([#115](https://github.com/suvorovpravda/Pravda-Bot/pull/115)) ; smoke du binaire installé ([#112](https://github.com/suvorovpravda/Pravda-Bot/pull/112)) | Réputation SmartScreen, signature de l'éditeur, chaîne PKI/horodatage sur les paquets **non signés de test** |
+| Réinstallation et conservation | Essai automatisé sur runner Windows propre : enregistrement MSI, démarrage, désinstallation/réinstallation et préservation de **deux fichiers témoins** ([#116](https://github.com/suvorovpravda/Pravda-Bot/pull/116)) | Conservation de toutes les bases SQLite réelles, migration de profils préexistants et rollback sur PC utilisateur |
+| Stockage SQLite | WAL et tests existants de réouverture ; [#118](https://github.com/suvorovpravda/Pravda-Bot/pull/118) vérifie en cours de CI la copie transactionnelle et la restauration de lignes de test | Qualification complète de backup/restore, redémarrage brutal, verrouillage et reprise après corruption |
+| Diagnostic local | `pravda-doctor.exe` : contrôles passifs et rapport `PASS/WARN/FAIL/SKIP` expurgé, hors réseau ; une lecture de l'état de santé **ne vaut pas** une réparation | Résolution automatique de panne, récupération de secret, authenticité d'un compte distant |
+| Simulation préproduction | `pravda-harness.exe` : smoke succès/refus/crash/timeout et validation de métriques | Isolement **OS/VM** et interdiction d'egress prouvés, replay de données de marché réelles ou acceptation économique des seuils |
+| Revolut X / fonds réels | Modes d'observation, échanges read-only limités et garde-fous hors ligne | **Aucun ordre réel homologué**, aucun retrait et aucune permission de négociation approuvée ([#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89)) |
+
+**Politique de release :** la CI ne peut publier l'étiquette « Enterprise signée » que si la signature Authenticode de **tous** les binaires/installateurs est valide, horodatée et liée au certificat autorisé ; en l'absence de ce certificat, proposer uniquement une **version d'essai non signée** explicitement identifiée ([#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90)). Ne pas recommander de désactiver SmartScreen. Les ZIP GitHub Actions sont temporaires : ne pas les présenter comme une Release stable.
+
+**Données/diagnostics :** ne publier ni mots de passe, clés API, tokens, exports d'authentification, bases `.db`, journaux `-wal`/`-shm` ou historiques de transactions. Un rapport Doctor ne doit contenir que les diagnostics autorisés ; **SKIP ≠ PASS**. En présence d'une base potentiellement corrompue : arrêter l'application, préserver les fichiers, diagnostiquer une copie cohérente et ne lancer aucune réparation automatique. Le test SQLite de [#118](https://github.com/suvorovpravda/Pravda-Bot/pull/118) utilise des données artificielles et n'est pas un bouton de sauvegarde utilisateur.
+
+**Périmètre des actions financières :** `PRAVDA_LIVE_TRADING_ENABLED` ne doit jamais être utilisé comme raccourci pour contourner la validation d'ordres ; un futur trading live exige approbation explicite distincte, gestion native des secrets, limites durables, audit, contrôle du broker et rapprochement des états inconnus. **Aucun ordre réel ne doit être émis par le Doctor, le Harness, les scripts d'installation ni les essais CI.**
+
+**Preuves :** [Actions Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), [CodeQL](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml), [PR de persistance MSI #116](https://github.com/suvorovpravda/Pravda-Bot/pull/116), [contrôle syntaxique PowerShell #117](https://github.com/suvorovpravda/Pravda-Bot/pull/117). Toujours citer le SHA exact d'une campagne réussie.
+
+---
+
 ## Exigence nouvelle — architecture fintech renforcée (mise à jour 03/11/2026)
 
 **Statut : conception et durcissement en cours.** « Niveau Revolut » est une exigence qualitative de robustesse, **pas** un standard public mesurable, une attestation de conformité Revolut, une certification ISO 27001, SOC 2 ou PCI DSS, ni une homologation réglementaire. L'objectif est une architecture de type opérateur financier : contrôles indépendants, moindre privilège, isolation de données, contrôles pré- et post-trade, et preuves vérifiables. Aucun composant actuel ne doit être présenté comme « sécurisé niveau banque » avant audit externe documenté.
