@@ -39,6 +39,8 @@ Cette rubrique complète le modèle de menace historique ci-dessous. **Les badge
 
 **Périmètre des actions financières :** `PRAVDA_LIVE_TRADING_ENABLED` ne doit jamais être utilisé comme raccourci pour contourner la validation d'ordres ; un futur trading live exige approbation explicite distincte, gestion native des secrets, limites durables, audit, contrôle du broker et rapprochement des états inconnus. **Aucun ordre réel ne doit être émis par le Doctor, le Harness, les scripts d'installation ni les essais CI.**
 
+**Environnement GitHub `unsigned-test` :** le libellé `Deployed` affiché dans `Settings → Environments` correspond aux jobs CI associés à l'environnement ; **il ne prouve pas** une installation machine, un vrai déploiement opérationnel, une signature de code ou une homologation financière. La séparation entre artefacts temporaires, Release publique et déploiement réel doit rester explicite. Un ancien échec d'exécution est traçable mais n'invalide pas automatiquement un dernier SHA revalidé.
+
 **Preuves :** [Actions Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), [CodeQL](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml), [PR de persistance MSI #116](https://github.com/suvorovpravda/Pravda-Bot/pull/116), [contrôle syntaxique PowerShell #117](https://github.com/suvorovpravda/Pravda-Bot/pull/117). Toujours citer le SHA exact d'une campagne réussie.
 
 ---
