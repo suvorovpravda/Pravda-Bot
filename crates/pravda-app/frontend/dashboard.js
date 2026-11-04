@@ -714,16 +714,34 @@ const translations = {
             $("chart-age").textContent = t("unknownError");
         }
     }
+    // Auth boundaries invalidate pending IPC results and any cached consent UI.
     let revolutOptIn = false;
+    let revolutConsentVersion = 0;
     const revolutConsentCheckbox = $("revolut-consent");
     const revolutConsentStatus = $("revolut-consent-status");
     const revolutReadButton = $("revolut-refresh");
 
+    function lockRevolutConsentUi() {
+        revolutConsentVersion++;
+        revolutOptIn = false;
+        revolutConsentCheckbox.checked = false;
+        revolutConsentCheckbox.disabled = true;
+        revolutReadButton.disabled = true;
+        revolutConsentStatus.textContent = "Session verrouillée : consentement non consultable.";
+        $("revolut-orderbook").textContent = "Lecture facultative verrouillée.";
+        setStatus($("revolut-status"), "pending", "Verrouillé");
+    }
+    window.pravdaLockRevolutConsent = lockRevolutConsentUi;
+
     async function readRevolutConsent() {
+        const version = ++revolutConsentVersion;
+        revolutOptIn = false;
+        revolutConsentCheckbox.checked = false;
         revolutConsentCheckbox.disabled = true;
         revolutReadButton.disabled = true;
         try {
             const enabled = await window.pravdaInvoke("ipc_revolut_consent_get");
+            if (version !== revolutConsentVersion || shell.hidden) return;
             if (typeof enabled !== "boolean") throw new Error("INVALID_CONSENT");
             revolutOptIn = enabled;
             revolutConsentCheckbox.checked = enabled;
@@ -733,18 +751,27 @@ const translations = {
                 ? "Lecture publique autorisée. Aucun compte ou ordre réel connecté."
                 : "Désactivé : aucune lecture du carnet public Revolut X.";
         } catch {
+            if (version !== revolutConsentVersion || shell.hidden) return;
             revolutOptIn = false;
             revolutConsentCheckbox.checked = false;
+            revolutReadButton.disabled = true;
             revolutConsentStatus.textContent = "Consentement indisponible : carnet désactivé.";
         }
     }
+    window.refreshRevolutConsent = readRevolutConsent;
 
     revolutConsentCheckbox.addEventListener("change", async () => {
+        if (shell.hidden) {
+            lockRevolutConsentUi();
+            return;
+        }
+        const version = ++revolutConsentVersion;
         const requested = revolutConsentCheckbox.checked;
         revolutConsentCheckbox.disabled = true;
         revolutReadButton.disabled = true;
         try {
             const stored = await window.pravdaInvoke("ipc_revolut_consent_set", {enabled: requested});
+            if (version !== revolutConsentVersion || shell.hidden) return;
             if (stored !== requested) throw new Error("CONSENT_NOT_PERSISTED");
             revolutOptIn = stored;
             revolutConsentCheckbox.checked = stored;
@@ -756,12 +783,15 @@ const translations = {
                 setStatus($("revolut-status"), "pending", "Désactivé");
             }
         } catch {
+            if (version !== revolutConsentVersion || shell.hidden) return;
             revolutOptIn = false;
             revolutConsentCheckbox.checked = false;
             revolutConsentStatus.textContent = "Préférence non enregistrée : aucune lecture autorisée.";
         } finally {
-            revolutConsentCheckbox.disabled = false;
-            revolutReadButton.disabled = !revolutOptIn;
+            if (version === revolutConsentVersion && !shell.hidden) {
+                revolutConsentCheckbox.disabled = false;
+                revolutReadButton.disabled = !revolutOptIn;
+            }
         }
     });
     readRevolutConsent();
