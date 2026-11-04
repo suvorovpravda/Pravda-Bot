@@ -2,10 +2,69 @@
 //! The current External WebView is NOT granted remote Tauri IPC permissions.
 //! The frontend transport switch is a separate, reviewed PR.
 use pravda_server::{Auth, AuthError};
+use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{State, Window};
 
 const MAIN_WINDOW: &str = "main";
+
+const MAX_SECURITY_EVENTS: usize = 64;
+
+/// Codes are a closed enum: callers cannot accidentally log a password,
+/// machine identifier, token, path or arbitrary raw error string.
+#[derive(Clone, Copy)]
+enum SecurityEventCode {
+    SetupAccepted,
+    SetupRejected,
+    LoginAccepted,
+    LoginRejected,
+    LoginLocked,
+    SessionEnded,
+    StorageFailure,
+}
+impl SecurityEventCode {
+    const fn label(self) -> &'static str {
+        match self {
+            Self::SetupAccepted => "setup_accepted",
+            Self::SetupRejected => "setup_rejected",
+            Self::LoginAccepted => "login_accepted",
+            Self::LoginRejected => "login_rejected",
+            Self::LoginLocked => "login_locked",
+            Self::SessionEnded => "session_ended",
+            Self::StorageFailure => "storage_failure",
+        }
+    }
+}
+
+/// Volatile, bounded, in-process security feedback. Does not touch SQLite or
+/// persist sensitive authentication activity to disk. It resets on restart.
+#[derive(Default)]
+pub struct SecurityEvents {
+    events: Mutex<VecDeque<(u64, &'static str)>>,
+}
+impl SecurityEvents {
+    fn record(&self, code: SecurityEventCode) {
+        let unix_seconds = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let mut entries = self.events.lock().unwrap_or_else(|e| e.into_inner());
+        if entries.len() == MAX_SECURITY_EVENTS {
+            entries.pop_front();
+        }
+        entries.push_back((unix_seconds, code.label()));
+    }
+    fn snapshot(&self) -> Vec<String> {
+        self.events
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .rev()
+            .map(|(seconds, label)| format!("{seconds}|{label}"))
+            .collect()
+    }
+}
+
 
 /// Only Rust owns this session token. It is never returned to JavaScript.
 pub struct IpcAuth {
@@ -88,28 +147,42 @@ pub fn ipc_auth_status(window: Window, session: State<'_, IpcAuth>) -> Result<bo
     Ok(session.authority.is_configured())
 }
 
-/// Public bootstrap exception: creates the *existing* PBKDF2 verifier.
+/// Public bootstrap exception: creates the existing PBKDF2 verifier.
+/// Only closed event codes are recorded; never password material.
 #[tauri::command]
 pub async fn ipc_auth_setup(
     window: Window,
     session: State<'_, IpcAuth>,
+    events: State<'_, SecurityEvents>,
     password: String,
     confirm: String,
 ) -> Result<(), String> {
     require_main(window.label()).map_err(str::to_string)?;
     if password != confirm {
+        events.record(SecurityEventCode::SetupRejected);
         return Err("PASSWORD_MISMATCH".into());
     }
     let authority = session.authority.clone();
-    let created = tauri::async_runtime::spawn_blocking(move || {
+    let result = tauri::async_runtime::spawn_blocking(move || {
         authority.set_password(&password)?;
         authority.login(&password)
     })
-    .await
-    .map_err(|_| "STORAGE_FAILURE".to_owned())?
-    .map_err(safe_auth_error)?;
-    session.accept_token(created);
-    Ok(())
+    .await;
+    match result {
+        Ok(Ok(token)) => {
+            session.accept_token(token);
+            events.record(SecurityEventCode::SetupAccepted);
+            Ok(())
+        }
+        Ok(Err(error)) => {
+            events.record(SecurityEventCode::SetupRejected);
+            Err(safe_auth_error(error))
+        }
+        Err(_) => {
+            events.record(SecurityEventCode::StorageFailure);
+            Err("STORAGE_FAILURE".into())
+        }
+    }
 }
 
 /// Public bootstrap exception: PBKDF2 runs on a blocking worker, not WebView.
@@ -117,23 +190,44 @@ pub async fn ipc_auth_setup(
 pub async fn ipc_auth_login(
     window: Window,
     session: State<'_, IpcAuth>,
+    events: State<'_, SecurityEvents>,
     password: String,
 ) -> Result<(), String> {
     require_main(window.label()).map_err(str::to_string)?;
     let authority = session.authority.clone();
-    let token = tauri::async_runtime::spawn_blocking(move || authority.login(&password))
-        .await
-        .map_err(|_| "STORAGE_FAILURE".to_owned())?
-        .map_err(safe_auth_error)?;
-    session.accept_token(token);
-    Ok(())
+    let result = tauri::async_runtime::spawn_blocking(move || authority.login(&password)).await;
+    match result {
+        Ok(Ok(token)) => {
+            session.accept_token(token);
+            events.record(SecurityEventCode::LoginAccepted);
+            Ok(())
+        }
+        Ok(Err(error)) => {
+            let code = if matches!(error, AuthError::Locked(_)) {
+                SecurityEventCode::LoginLocked
+            } else {
+                SecurityEventCode::LoginRejected
+            };
+            events.record(code);
+            Err(safe_auth_error(error))
+        }
+        Err(_) => {
+            events.record(SecurityEventCode::StorageFailure);
+            Err("STORAGE_FAILURE".into())
+        }
+    }
 }
 
 /// Protected command: an unsigned-in or expired user cannot revoke sessions.
 #[tauri::command]
-pub fn ipc_auth_logout(window: Window, session: State<'_, IpcAuth>) -> Result<(), String> {
+pub fn ipc_auth_logout(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    events: State<'_, SecurityEvents>,
+) -> Result<(), String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
     session.logout();
+    events.record(SecurityEventCode::SessionEnded);
     Ok(())
 }
 
@@ -263,6 +357,17 @@ fn security_report_rows() -> Vec<String> {
         .iter()
         .map(|(id, status, details)| format!("{id}|{status}|{details}"))
         .collect()
+}
+
+/// Locally generated, allowlisted codes only. No paths, payloads or raw errors.
+#[tauri::command]
+pub fn ipc_security_events(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    events: State<'_, SecurityEvents>,
+) -> Result<Vec<String>, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(events.snapshot())
 }
 
 /// No internet probe, process enumeration, shell command or broker request.
@@ -430,6 +535,25 @@ mod tests {
         ));
         let authority = Arc::new(Auth::load(&path, 1_000).unwrap());
         (IpcAuth::new(authority), path)
+    }
+
+    #[test]
+    fn security_events_are_bounded_constant_only_and_newest_first() {
+        let events = SecurityEvents::default();
+        events.record(SecurityEventCode::StorageFailure);
+        for _ in 0..70 {
+            events.record(SecurityEventCode::LoginRejected);
+        }
+        let list = events.snapshot();
+        assert_eq!(list.len(), MAX_SECURITY_EVENTS);
+        assert!(list.iter().all(|line| {
+            let mut parts = line.split('|');
+            parts.next().is_some_and(|stamp| stamp.parse::<u64>().is_ok())
+                && parts.next() == Some("login_rejected")
+                && parts.next().is_none()
+        }));
+        events.record(SecurityEventCode::LoginAccepted);
+        assert!(events.snapshot()[0].ends_with("|login_accepted"));
     }
 
     #[test]
