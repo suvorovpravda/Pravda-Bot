@@ -20,7 +20,6 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-fA-F0-9]{64}$')]
     [string]$ExpectedSha256,
-    [Parameter(Mandatory = $true)]
     [switch]$DisposableVm
 )
 $ErrorActionPreference = 'Stop'
@@ -31,6 +30,14 @@ if (-not $DisposableVm) {
 }
 if ($env:OS -ne 'Windows_NT') {
     throw 'REFUSED: Windows VM required'
+}
+# Refuse likely physical machines, even if the explicit switch was supplied.
+# Heuristics can false-negative: they are only an additional guard, not proof
+# of disposable hypervisor isolation or authorization to touch user files.
+$computer = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop
+$machineModel = ([string]$computer.Manufacturer + ' ' + [string]$computer.Model)
+if ($machineModel -notmatch '(?i)Virtual|VMware|QEMU|KVM|Xen|Parallels|Hyper-V|HVM domU|OpenStack|Amazon EC2') {
+    throw 'REFUSED: system does not identify as a virtual machine'
 }
 if (-not (Get-Command Get-NetAdapter -ErrorAction SilentlyContinue)) {
     throw 'REFUSED: cannot verify disconnected network adapters'
