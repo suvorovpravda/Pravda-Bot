@@ -882,7 +882,7 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 
 ## Sources et versionnement
 
-- Version examinée : `nautechsystems/nautilus_trader` analyse technique non attribuée au 04/11/2026 ; la documentation `latest` peut évoluer sans notification.
+- Version examinée : une étude d'architecture menée sans publication de sa provenance au 04/11/2026 ; la documentation `latest` peut évoluer sans notification.
 - LGPL-3.0 ne signifie ni intégration automatique sûre ni droit d'ignorer les obligations de distribution. Les offres commerciales `Pro/Cloud/Institutional` sont distinctes du dépôt open-source.
 - Références : liens en tête du document ; garder le SHA de la source d'inspiration dans toute revue de compatibilité et les fichiers de preuves.
 
