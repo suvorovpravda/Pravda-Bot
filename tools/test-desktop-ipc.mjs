@@ -31,7 +31,7 @@ assert.equal(cfg.bundle.windows?.webviewInstallMode?.silent,true,
 assert.match(installerWorkflow,/Smoke-test MSI installation and uninstall on pristine Windows/);
 assert.match(installerWorkflow,/pravda-windows-single-file-setup/,
   "Single user-facing setup must be published independently from CI artifacts");
-assert.match(setupSource,/PathBuf::from\(system_root\)\.join\("System32"\)\.join\("msiexec\.exe"\)/,
+assert.match(setupSource,/PathBuf::from\(system_root\)\s*\.join\("System32"\)\s*\.join\("msiexec\.exe"\)/,
   "Installer must use SystemRoot/System32 instead of an untrusted PATH executable");
 assert.match(setupSource,/Command::new\(msiexec\)/,
   "User-facing setup must invoke the actual Windows Installer MSI program");
