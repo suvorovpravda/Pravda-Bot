@@ -28,7 +28,7 @@
 | Rust / tests / CodeQL | 🟢 CI disponible | [Workflows GitHub](https://github.com/suvorovpravda/Pravda-Bot/actions) ; vérifier le SHA |
 | Installation MSI + NSIS | 🟢 Testée sur runner | Contrôles de démarrage, désinstallation et persistance |
 | Diagnostic Doctor et simulation Harness | 🟢 Compilés | Compagnons autonomes, sans ordres réels |
-| **Un seul EXE qui lance les trois tests** | 🟡 En revue | [PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138), pas encore homologuée |
+| **Un seul EXE qui lance les trois tests** | 🟢 Compilé et testé en CI | [PR #138 fusionnée](https://github.com/suvorovpravda/Pravda-Bot/pull/138) ; double-clic sur PC utilisateur encore à confirmer |
 | Installation totalement hors réseau sans WebView2 initial | 🟠 Non prouvée | Recette VM indépendante requise |
 | Installation Standard / Personnalisée | 🟠 À valider | Retrait des modules facultatifs côté Rust |
 | Enterprise signée / horodatée | 🔴 Non livrée | [Issue #90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) |
@@ -42,14 +42,14 @@
 
 ### ⬇️ Téléchargements Windows
 
-Le dernier run de référence vérifié le **5 novembre 2026** sur la branche principale est le [packaging #41972245070](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41972245070), lié au commit **b2fb618b53408b0fd5fd2c4265cdfe0a05ffc898**. Rust, CodeQL, MSI et NSIS ont réussi sur ce commit. Toute version ultérieure doit être vérifiée séparément.
+**Preuve du centre unifié (5 novembre 2026) :** [packaging Windows #42016900394](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394), sur le commit de PR **038c9318ca80ba3e6f67ccdc0fe237415f77ec21**, vérifié sur un second runner Windows (13/13 contrôles réussis). Cette PR a été fusionnée sur `main` par le commit **8b87783232b2c118d4e8d1e34c04b2f89dd6de8a**. Ne pas confondre la réussite de la CI de la PR avec une certification ou avec une validation de chaque commit ultérieur sur `main`.
 
 | Archive GitHub Actions | Contenu | Utilisation |
 | :--- | :--- | :--- |
 | **pravda-windows-unsigned-candidate-installers** | MSI, NSIS, EXE, sommes SHA-256 | Installation Windows de test |
 | **pravda-windows-troubleshooting** | Doctor Windows | Double-clic, diagnostic passif |
 | **pravda-windows-production-test** | Harness Rust | Scénarios de simulation synthétiques |
-| **pravda-windows-one-click-test-center** | Centre de test tout-en-un | **Prévu en PR #138, à télécharger seulement après CI verte** |
+| **pravda-windows-one-click-test-center** | `pravda-test-center.exe` : Doctor + Harness + Desktop intégrés | [Artefact du run réussi #42016900394](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394/artifacts/13410339411) : extraire le ZIP, double-cliquer l'EXE |
 
 Pour récupérer une version, ouvrir [Windows installer packaging](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), choisir un run **réussi sur le SHA souhaité**, descendre à **Artifacts**, puis extraire l'archive.
 
@@ -63,9 +63,9 @@ Les paquets MSI/NSIS configurent le prérequis officiel WebView2 avec **offlineI
 ![Confidentialité](https://img.shields.io/badge/Diagnostic-Local-16a34a)
 ![Exécution](https://img.shields.io/badge/Utilisateur-Un%20double--clic-2563eb)
 
-La [PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138) développe un **seul exécutable Windows autonome** embarquant les trois composants : interface, Doctor et Harness. Il doit déclencher les vérifications, ouvrir un rapport HTML lisible et générer un JSON détaillé destiné au dépannage.
+Le centre unifié, [fusionné via la PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138), embarque les trois composants natifs (desktop, Doctor et Harness) dans **un seul fichier `pravda-test-center.exe`**. Après extraction de l'archive, un double-clic lance les vérifications synthétiques en profils isolés, ouvre un rapport HTML coloré et crée un JSON détaillé. Le rapport de CI a été [archivé](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394/artifacts/13410164620). L'exécution du double-clic sur ton propre PC reste un test utilisateur distinct.
 
-**Statut actuel : en compilation/revue, pas encore un livrable validé.** Les tests qui exigent une VM réellement isolée, un installer personnalisé ou une signature Enterprise resteront **NON VÉRIFIÉS**, jamais déclarés réussis automatiquement.
+**Statut actuel : candidat de test non signé, validé sur runner Windows et par Codex (13/13 contrôles).** Ce n'est **pas** une publication Enterprise. Les tests qui exigent une VM réellement hors réseau, un installateur personnalisé ou une signature Enterprise restent **NON VÉRIFIÉS**, et le rapport conserve `SKIP` pour ces scénarios.
 
 Le programme n'envoie pas le rapport vers un service externe. L'utilisateur doit examiner le JSON avant tout partage ; ne jamais transmettre mot de passe, clé privée, base SQLite ou historique financier.
 
@@ -128,8 +128,8 @@ Les fractions suivantes sont conservées pour la cohérence des trois documents 
 
 ## 🇬🇧 English
 
-Pravda-Bot is a Windows-native Rust/Tauri 2 market-monitoring and paper-simulation application. MSI/NSIS installers and independent Doctor/Harness diagnostics are built in CI. A consolidated one-click diagnostic EXE is being developed in [PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138). Clean offline VM acceptance, genuine modular installation and Enterprise signing are **not yet certified**. Live trading remains **disabled**. See [Security](SECURITY.md).
+Pravda-Bot is a Windows-native Rust/Tauri 2 market-monitoring and paper-simulation application. MSI/NSIS installers and independent Doctor/Harness diagnostics are built in CI. A consolidated one-click diagnostic EXE was merged in [PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138) and independently tested on a Windows CI runner; user-machine double-click acceptance is still pending. Clean offline VM acceptance, genuine modular installation and Enterprise signing are **not yet certified**. Live trading remains **disabled**. See [Security](SECURITY.md).
 
 ## 🇷🇺 Русский
 
-Pravda-Bot — локальное приложение для Windows на Rust и Tauri 2. Пакеты MSI/NSIS и диагностические инструменты собираются в CI. Единая тестовая программа находится в разработке. Полностью автономная установка на чистой виртуальной машине и цифровая подпись Enterprise ещё не подтверждены. **Реальная торговля отключена.** См. [безопасность](SECURITY.md).
+Pravda-Bot — локальное приложение для Windows на Rust и Tauri 2. Пакеты MSI/NSIS и диагностические инструменты собираются в CI. Единая тестовая программа собрана и проверена в Windows CI; запуск двойным щелчком на компьютере пользователя ещё предстоит подтвердить. Полностью автономная установка на чистой виртуальной машине и цифровая подпись Enterprise ещё не подтверждены. **Реальная торговля отключена.** См. [безопасность](SECURITY.md).
