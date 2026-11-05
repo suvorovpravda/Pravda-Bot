@@ -11,6 +11,9 @@ fn main() {
     for name in ["pravda-app.exe", "pravda-doctor.exe", "pravda-harness.exe"] {
         let target = destination.join(name);
         let origin = source.as_ref().map(|dir| dir.join(name));
+        if let Some(source_path) = &origin {
+            println!("cargo:rerun-if-changed={}", source_path.display());
+        }
         if let Some(file) = origin.as_ref().filter(|p| p.is_file()) {
             let bytes = fs::read(file).expect("Cannot read test center payload");
             if required && (bytes.len() < 100_000 || !bytes.starts_with(b"MZ")) {
