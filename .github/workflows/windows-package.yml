@@ -177,7 +177,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           cargo build --locked --release -p pravda-server --bin pravda-doctor --bin pravda-harness
           if ($LASTEXITCODE -ne 0) { throw 'Rust companions build failed' }
-          foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe', 'pravda-test-center.exe')) {
+          foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
             $source = Get-Item -LiteralPath (Join-Path 'target/release' $name) -ErrorAction Stop
             if ($source.Length -lt 100000) { throw 'Invalid Rust companion binary' }
             Copy-Item -LiteralPath $source.FullName -Destination (Join-Path 'crates/pravda-app/target/release' $name) -Force
