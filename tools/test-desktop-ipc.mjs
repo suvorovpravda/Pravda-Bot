@@ -31,8 +31,12 @@ assert.equal(cfg.bundle.windows?.webviewInstallMode?.silent,true,
 assert.match(installerWorkflow,/Smoke-test MSI installation and uninstall on pristine Windows/);
 assert.match(installerWorkflow,/pravda-windows-single-file-setup/,
   "Single user-facing setup must be published independently from CI artifacts");
-assert.match(setupSource,/PathBuf::from\(system_root\)\s*\.join\("System32"\)\s*\.join\("msiexec\.exe"\)/,
-  "Installer must use SystemRoot/System32 instead of an untrusted PATH executable");
+assert.match(setupSource,/GetSystemDirectoryW/,
+  "Installer must resolve System32 using the native Windows API");
+assert.match(setupSource,/fn trusted_windows_installer\(\)/,
+  "Installer path must be validated before process launch");
+assert.doesNotMatch(setupSource,/std::env::var_os\("SystemRoot"\)/,
+  "Installer must not trust a caller-controlled SystemRoot environment variable");
 assert.match(setupSource,/Command::new\(msiexec\)/,
   "User-facing setup must invoke the actual Windows Installer MSI program");
 assert.doesNotMatch(setupSource,/launch_diagnostic|const CENTER|six-second/i,

@@ -4,6 +4,8 @@
 // No exchange access, private-profile data migration, or live trading.
 
 #[cfg(windows)]
+use std::os::windows::ffi::OsStringExt;
+#[cfg(windows)]
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
@@ -109,19 +111,38 @@ fn find_installed_app() -> Option<PathBuf> {
 }
 
 #[cfg(windows)]
+fn trusted_windows_installer() -> Result<PathBuf, &'static str> {
+    use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
+
+    // Resolve the kernel-reported system directory, not an environment string
+    // or PATH executable supplied by the process that launched this setup.
+    let required = unsafe { GetSystemDirectoryW(std::ptr::null_mut(), 0) };
+    if required == 0 || required > 32_768 {
+        return Err("Windows system directory is unavailable");
+    }
+    let mut chars = vec![0u16; required as usize];
+    let used = unsafe { GetSystemDirectoryW(chars.as_mut_ptr(), required) };
+    if used == 0 || used >= required {
+        return Err("Windows system directory cannot be resolved");
+    }
+    let directory = std::path::PathBuf::from(std::ffi::OsString::from_wide(
+        &chars[..used as usize],
+    ));
+    let installer = directory.join("msiexec.exe");
+    if !installer.is_file() {
+        return Err("Windows Installer is unavailable");
+    }
+    Ok(installer)
+}
+
+#[cfg(windows)]
 fn install(bundle: &TemporaryBundle) -> Result<ExitStatus, &'static str> {
     let msi = bundle
         .write("Pravda-Bot.msi", MSI)
         .map_err(|_| "Cannot stage offline MSI")?;
     // Windows Installer owns the normal installation UI and consent/UAC.
     // No unattended elevation, registry modification, or security bypass.
-    let system_root = std::env::var_os("SystemRoot").ok_or("Windows system root is missing")?;
-    let msiexec = PathBuf::from(system_root)
-        .join("System32")
-        .join("msiexec.exe");
-    if !msiexec.is_file() {
-        return Err("Windows Installer is unavailable");
-    }
+    let msiexec = trusted_windows_installer()?;
     Command::new(msiexec)
         .arg("/i")
         .arg(&msi)
@@ -145,7 +166,7 @@ fn run() -> Result<(), &'static str> {
         return Err("Unsupported argument");
     }
     // Preflight is read-only; Windows Installer owns all installation changes.
-    if std::env::consts::ARCH != "x86_64" || std::env::var_os("SystemRoot").is_none() {
+    if std::env::consts::ARCH != "x86_64" {
         return Err("Windows x64 is required");
     }
     let choice = dialog(
