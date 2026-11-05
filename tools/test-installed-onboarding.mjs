@@ -6,14 +6,18 @@ import { spawn, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
+import { allocateDriverPorts, driverPortsAvailable } from "./driver-port-preflight.mjs";
 
 const exe = resolve(process.env.PRAVDA_INSTALLED_EXE || "");
 const auth = resolve(process.env.PRAVDA_AUTH_PATH || "");
 const db = resolve(process.env.PRAVDA_DB_PATH || "");
 const kind = process.env.PRAVDA_INSTALL_KIND;
 const reportPath = process.env.PRAVDA_ONBOARDING_REPORT;
-const port = Number(process.env.PRAVDA_ONBOARDING_DRIVER_PORT || "4444");
-const nativePort = Number(process.env.PRAVDA_ONBOARDING_NATIVE_DRIVER_PORT || "4445");
+const configuredPort = process.env.PRAVDA_ONBOARDING_DRIVER_PORT === undefined
+  ? null : Number(process.env.PRAVDA_ONBOARDING_DRIVER_PORT);
+const configuredNativePort = process.env.PRAVDA_ONBOARDING_NATIVE_DRIVER_PORT === undefined
+  ? null : Number(process.env.PRAVDA_ONBOARDING_NATIVE_DRIVER_PORT);
+let port = null, nativePort = null;
 const report = {
   version: 1, kind, sha: process.env.GITHUB_SHA || "",
   windows: process.env.PRAVDA_E2E_WINDOWS_VERSION || "",
@@ -83,10 +87,15 @@ const ipc = name => wd("POST", "/execute/async", {
   args: [name]
 });
 async function start() {
-  let occupied = false;
-  try { occupied = Boolean(await http("GET", "/status", undefined, 1000)); }
-  catch { /* private driver port should be unused */ }
-  check("Private WebDriver port available", !occupied);
+  // Choose fresh OS-assigned ports on each start/restart; honor explicit
+  // overrides only when available, and never skip the collision check.
+  ({port, nativePort} = await allocateDriverPorts(configuredPort, configuredNativePort));
+  report.driver_ports = {proxy: port, native: nativePort};
+  // /status alone is not a port availability probe: an unrelated listener
+  // might reply with a non-WebDriver payload or refuse HTTP entirely.
+  // Fail closed if either tauri-driver or native EdgeDriver port is occupied.
+  check("Private WebDriver and native ports available",
+    await driverPortsAvailable(port, nativePort));
   child = spawn("tauri-driver", ["--port", String(port), "--native-port", String(nativePort)], {
     windowsHide:true, stdio:["ignore","ignore","pipe"],
     env:{...process.env, PRAVDA_MARKET_FEEDS_ENABLED:"false"}
@@ -108,7 +117,11 @@ async function start() {
   } catch (error) {
     // Restrict emitted output to known diagnostic categories; no raw stderr paths.
     const diagnostic = /address already in use|access is denied|not recognized|not found|unknown option|invalid option|webdriver|msedgedriver|permission denied/i.exec(driverDiagnostics)?.[0] || "unclassified";
-    throw Error(String(error.message).slice(0,100) + " (driver diagnostic: " + diagnostic + ")");
+    const category = driverError ? "spawn-failed"
+      : child.exitCode !== null || child.signalCode !== null ? "process-exited"
+      : "server-unresponsive";
+    throw Error(String(error.message).slice(0,100) +
+      " (driver state: " + category + ", diagnostic: " + diagnostic + ")");
   }
   const opened = await http("POST", "/session", {
     capabilities:{alwaysMatch:{browserName:"wry", "tauri:options":{application:exe}}}
@@ -157,10 +170,13 @@ try {
   assert.ok(/^\d+\.\d+\.\d+\.\d+$/.test(report.webview2),
     "WebView2 runtime version required");
   assert.ok(report.windows, "Windows version required");
-  assert.ok(Number.isInteger(port) && port >= 1024 && port <= 65535,
-    "Valid private WebDriver port required");
-  assert.ok(Number.isInteger(nativePort) && nativePort >= 1024 && nativePort <= 65535 && nativePort !== port,
-    "Native WebDriver port must be valid and distinct from Tauri driver port");
+  for (const requested of [configuredPort, configuredNativePort])
+    assert.ok(requested === null ||
+      (Number.isInteger(requested) && requested >= 1024 && requested <= 65535),
+      "Optional fixed WebDriver ports must be valid");
+  assert.ok(configuredPort === null || configuredNativePort === null ||
+    configuredNativePort !== configuredPort,
+    "Explicit native WebDriver port must differ from proxy port");
   assert.ok(existsSync(exe) && existsSync(db) && !existsSync(auth),
     "Isolated installed app, SQLite and empty auth profile required");
   assert.equal(process.env.PRAVDA_MARKET_FEEDS_ENABLED, "false",

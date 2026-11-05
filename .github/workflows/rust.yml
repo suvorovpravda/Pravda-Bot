@@ -325,7 +325,7 @@ jobs:
           git diff -- crates/pravda-app/Cargo.lock
 
       - name: Install Tauri's native Windows WebDriver adapter
-        run: cargo install tauri-driver --locked
+        run: cargo install tauri-driver --version '=2.1.0' --locked
 
       - name: Download matching EdgeDriver from Microsoft only
         shell: pwsh
