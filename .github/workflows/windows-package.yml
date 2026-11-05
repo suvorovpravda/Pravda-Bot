@@ -491,7 +491,7 @@ jobs:
             @{ Folder = 'downloaded-oneclick'; Exe = 'pravda-production-center.exe'; Guide = $null }
           )) {
             $binary = Join-Path $case.Folder $case.Exe
-            $guide = Join-Path $case.Folder $case.Guide
+            $guide = if ($case.Guide) { Join-Path $case.Folder $case.Guide } else { $null }
             if ($case.Guide -and -not (Test-Path -LiteralPath $guide -PathType Leaf)) { throw 'Missing independent companion instructions' }
             $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
             $matching = @($manifest | Where-Object { $_ -ceq ($hash + '  ' + $case.Exe) })
