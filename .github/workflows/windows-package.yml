@@ -513,8 +513,13 @@ jobs:
           New-Item -ItemType Directory -Force $env:PRAVDA_TEST_CENTER_REPORT_DIR | Out-Null
           & './downloaded-center/pravda-test-center.exe' --ci
           $testerExit = $LASTEXITCODE
-          $reports = @(Get-ChildItem -LiteralPath $env:PRAVDA_TEST_CENTER_REPORT_DIR -Recurse -File -Filter 'PRAVDA-TEST-REPORT.json')
-          if ($reports.Count -ne 1) { throw 'Integrated test report missing or ambiguous' }
+          Write-Host ('Integrated tester exit code: ' + $testerExit)
+          $files = @(Get-ChildItem -LiteralPath $env:PRAVDA_TEST_CENTER_REPORT_DIR -Recurse -File -ErrorAction SilentlyContinue)
+          Write-Host ('Integrated tester generated file count: ' + $files.Count)
+          $reports = @($files | Where-Object { $_.Name -ceq 'PRAVDA-TEST-REPORT.json' })
+          if ($reports.Count -ne 1) {
+            throw ('Integrated test report missing or ambiguous; tester exit=' + $testerExit + '; generated files=' + $files.Count)
+          }
           $report = Get-Content -LiteralPath $reports[0].FullName -Raw | ConvertFrom-Json
           foreach ($finding in $report.findings) {
             if ($finding.status -eq 'FAIL') { Write-Host ('Integrated FAIL check=' + $finding.check + ' detail=' + $finding.detail) }
