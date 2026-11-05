@@ -142,7 +142,7 @@ mod tests {
         assert!(buy.iter().any(|x| x == "cash_cents|934766")); // 650.00 + 2.34
         assert!(buy.iter().any(|x| x == "position_milli|BTC|10"));
         let sell = paper.trade("BTC", "SELL", 10).unwrap();
-        assert!(sell.iter().any(|x| x == "cash_cents|995320")); // 4.68 in fees
+        assert!(sell.iter().any(|x| x == "cash_cents|999532")); // 4.68 in fees
         assert!(sell.iter().any(|x| x == "position_milli|BTC|0"));
         assert!(paper.reset().iter().any(|x| x == "cash_cents|1000000"));
     }
