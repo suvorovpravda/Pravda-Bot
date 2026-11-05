@@ -6,6 +6,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
+import { driverPortsAvailable } from "./driver-port-preflight.mjs";
 
 const exe = resolve(process.env.PRAVDA_INSTALLED_EXE || "");
 const auth = resolve(process.env.PRAVDA_AUTH_PATH || "");
@@ -83,10 +84,11 @@ const ipc = name => wd("POST", "/execute/async", {
   args: [name]
 });
 async function start() {
-  let occupied = false;
-  try { occupied = Boolean(await http("GET", "/status", undefined, 1000)); }
-  catch { /* private driver port should be unused */ }
-  check("Private WebDriver port available", !occupied);
+  // /status alone is not a port availability probe: an unrelated listener
+  // might reply with a non-WebDriver payload or refuse HTTP entirely.
+  // Fail closed if either tauri-driver or native EdgeDriver port is occupied.
+  check("Private WebDriver and native ports available",
+    await driverPortsAvailable(port, nativePort));
   child = spawn("tauri-driver", ["--port", String(port), "--native-port", String(nativePort)], {
     windowsHide:true, stdio:["ignore","ignore","pipe"],
     env:{...process.env, PRAVDA_MARKET_FEEDS_ENABLED:"false"}
@@ -108,7 +110,11 @@ async function start() {
   } catch (error) {
     // Restrict emitted output to known diagnostic categories; no raw stderr paths.
     const diagnostic = /address already in use|access is denied|not recognized|not found|unknown option|invalid option|webdriver|msedgedriver|permission denied/i.exec(driverDiagnostics)?.[0] || "unclassified";
-    throw Error(String(error.message).slice(0,100) + " (driver diagnostic: " + diagnostic + ")");
+    const category = driverError ? "spawn-failed"
+      : child.exitCode !== null || child.signalCode !== null ? "process-exited"
+      : "server-unresponsive";
+    throw Error(String(error.message).slice(0,100) +
+      " (driver state: " + category + ", diagnostic: " + diagnostic + ")");
   }
   const opened = await http("POST", "/session", {
     capabilities:{alwaysMatch:{browserName:"wry", "tauri:options":{application:exe}}}

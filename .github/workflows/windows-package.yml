@@ -103,7 +103,7 @@ jobs:
       - name: Install Tauri 2 CLI
         shell: pwsh
         run: |
-          cargo install tauri-cli --version '^2' --locked
+          cargo install tauri-cli --version '=2.12.4' --locked
           if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI install failed' }
       - name: Import code-signing certificate (explicit manual opt-in)
         if: ${{ inputs.signed }}
@@ -477,7 +477,7 @@ jobs:
       - name: Check installed GUI acceptance script syntax
         run: node --check tools/test-installed-onboarding.mjs
       - name: Install Tauri's native Windows WebDriver adapter
-        run: cargo install tauri-driver --locked
+        run: cargo install tauri-driver --version '=2.1.0' --locked
 
       - name: Download matching EdgeDriver from Microsoft only
         shell: pwsh
