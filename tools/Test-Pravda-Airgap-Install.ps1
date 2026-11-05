@@ -8,7 +8,7 @@
   The hypervisor must disable all network access BEFORE starting this script.
   This script never changes firewall, UAC, SmartScreen or network configuration.
 .EXAMPLE
-  ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath ./Pravda-Bot_x64.msi -Kind MSI -ExpectedSha256 HASH_FROM_TRUSTED_MANIFEST -DisposableVm
+  ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath ./Pravda-Bot_x64.msi -Kind MSI -ExpectedSha256 HASH_FROM_TRUSTED_MANIFEST -ExpectedCommitSha 40_CHAR_SHA -DisposableVm
 #>
 [CmdletBinding()]
 param(
@@ -20,6 +20,9 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-fA-F0-9]{64}$')]
     [string]$ExpectedSha256,
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[a-fA-F0-9]{40}$')]
+    [string]$ExpectedCommitSha,
     [switch]$DisposableVm
 )
 $ErrorActionPreference = 'Stop'
@@ -90,6 +93,20 @@ if ($actual -cne $ExpectedSha256.ToLowerInvariant()) {
     throw 'REFUSED: installer hash differs from trusted release manifest'
 }
 
+# Test-only toolchain must be staged before the hypervisor disconnects
+# the disposable VM. No download, installation or user-data change here.
+foreach ($binary in @('node.exe', 'tauri-driver.exe', 'msedgedriver.exe')) {
+    if (-not (Get-Command -Name $binary -CommandType Application -ErrorAction SilentlyContinue)) {
+        throw "REFUSED: offline GUI test tool missing: $binary"
+    }
+}
+foreach ($required in @('Test-Pravda-Msi-Install.ps1', 'Test-Pravda-Nsis-Install.ps1',
+                       'Initialize-Pravda-Airgap-Gui.ps1', 'test-installed-onboarding.mjs')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $required) -PathType Leaf)) {
+        throw "REFUSED: offline GUI acceptance script missing: $required"
+    }
+}
+
 $uninstallKeys = @(
     'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
     'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -104,9 +121,19 @@ if ($existing.Count -gt 0) {
 $root = Join-Path $env:TEMP ('pravda-offline-acceptance-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $oldTemp = [Environment]::GetEnvironmentVariable('RUNNER_TEMP', 'Process')
+$oldEnvironment = @{}
+foreach ($name in @('GITHUB_SHA', 'PRAVDA_AIRGAP_ACCEPTANCE',
+                    'PRAVDA_E2E_WEBVIEW2_VERSION', 'PRAVDA_E2E_WINDOWS_VERSION')) {
+    $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
 $success = $false
 try {
     $env:RUNNER_TEMP = $root
+    # The operator supplies the trusted source SHA, never inferred from VM.
+    $env:GITHUB_SHA = $ExpectedCommitSha.ToLowerInvariant()
+    $env:PRAVDA_AIRGAP_ACCEPTANCE = 'true'
+    Remove-Item Env:PRAVDA_E2E_WEBVIEW2_VERSION -ErrorAction SilentlyContinue
+    Remove-Item Env:PRAVDA_E2E_WINDOWS_VERSION -ErrorAction SilentlyContinue
     # Run the EXACT existing Windows CI smoke, with synthetic local SQLite,
     # auth and market feeds disabled. It installs and uninstalls the app.
     if ($Kind -eq 'MSI') {
@@ -124,6 +151,43 @@ try {
     if (@(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' }).Count -ne 0) {
         throw 'FAIL: network interface was enabled during the test'
     }
+    # The GUI JSON lives in RUNNER_TEMP and would otherwise be destroyed by
+    # routine cleanup. Retain a redacted, hashed proof separately on this VM.
+    # The VM operator exports it only after the offline tests are complete.
+    $reportName = if ($Kind -eq 'MSI') {
+        'Pravda-msi-installed-onboarding.json'
+    } else {
+        'Pravda-nsis-installed-onboarding.json'
+    }
+    $reportPath = Join-Path $root $reportName
+    if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+        throw 'FAIL: installed GUI acceptance proof is missing'
+    }
+    $gui = Get-Content -LiteralPath $reportPath -Raw -ErrorAction Stop | ConvertFrom-Json
+    if ($gui.version -ne 1 -or $gui.passed -ne $true -or
+        $gui.kind -ine $Kind -or $gui.sha -cne $ExpectedCommitSha.ToLowerInvariant() -or
+        @($gui.tests).Count -lt 14 -or
+        @($gui.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+        throw 'FAIL: installed GUI acceptance proof is inconsistent'
+    }
+    $proofName = 'pravda-airgap-evidence-' + [guid]::NewGuid().ToString('N')
+    $proofRoot = Join-Path $env:TEMP $proofName
+    New-Item -ItemType Directory -Path $proofRoot -ErrorAction Stop | Out-Null
+    $proofCopy = Join-Path $proofRoot 'installed-gui-report.json'
+    Copy-Item -LiteralPath $reportPath -Destination $proofCopy -ErrorAction Stop
+    $proofMeta = [ordered]@{
+        version = 1
+        kind = $Kind
+        source_sha = $ExpectedCommitSha.ToLowerInvariant()
+        installer_sha256 = $actual
+        installed_gui_report_sha256 = (Get-FileHash -LiteralPath $proofCopy -Algorithm SHA256).Hash.ToLowerInvariant()
+        webview2_version = $after
+        passed = $true
+        scope = 'Disposable VM with disconnected hypervisor and no initial WebView2'
+        limitation = 'Operator must independently attest the hypervisor snapshot and network isolation'
+    }
+    $proofMeta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $proofRoot 'airgap-evidence.json') -Encoding utf8 -ErrorAction Stop
+    Write-Host ('PASS: retained offline acceptance evidence in TEMP/' + $proofName)
     $success = $true
     Write-Host ('PASS: offline ' + $Kind + ' install/start/uninstall on WebView2-free VM')
     Write-Host ('PASS: SHA256=' + $actual)
@@ -131,6 +195,9 @@ try {
 }
 finally {
     [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $oldTemp, 'Process')
+    foreach ($name in $oldEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name], 'Process')
+    }
     if ($success -and (Test-Path -LiteralPath $root)) {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }

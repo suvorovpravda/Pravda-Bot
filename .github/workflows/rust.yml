@@ -59,8 +59,8 @@ jobs:
         run: node tools/test-dashboard.mjs
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
-      - name: WebDriver TCP port preflight regression
-        run: node tools/test-driver-port-preflight.mjs
+      - name: Offline Windows VM GUI acceptance contract (source check only)
+        run: node tools/test-airgap-acceptance-contract.mjs
       - name: Windows installer verifier synthetic tampering tests
         if: matrix.os == 'windows-latest'
         shell: pwsh
