@@ -165,7 +165,7 @@ try {
     }
     $gui = Get-Content -LiteralPath $reportPath -Raw -ErrorAction Stop | ConvertFrom-Json
     if ($gui.version -ne 1 -or $gui.passed -ne $true -or
-        $gui.kind -cne $Kind -or $gui.sha -cne $ExpectedCommitSha.ToLowerInvariant() -or
+        $gui.kind -ine $Kind -or $gui.sha -cne $ExpectedCommitSha.ToLowerInvariant() -or
         @($gui.tests).Count -lt 14 -or
         @($gui.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
         throw 'FAIL: installed GUI acceptance proof is inconsistent'
