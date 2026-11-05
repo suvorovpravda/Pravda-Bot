@@ -7,7 +7,7 @@ const root=join(process.cwd(),"crates/pravda-app");
 const read=p=>readFileSync(join(root,p),"utf8");
 const cfg=JSON.parse(read("tauri.conf.json"));
 const cap=JSON.parse(read("capabilities/main.json"));
-const main=read("src/main.rs"), ipc=read("src/ipc.rs"), build=read("build.rs");
+const main=read("src/main.rs"), ipc=read("src/ipc.rs"), paper=read("src/paper.rs"), build=read("build.rs");
 const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
 const msiAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Msi-Install.ps1"),"utf8");
@@ -69,6 +69,38 @@ assert.match(html,/centre externe|centre de test complet|centre externe/i,
 
 assert.match(js,/ipc_security_report/,"Security UI must retrieve an authenticated Rust-owned report");
 assert.match(js,/ipc_security_events/,"Security events must remain authenticated Tauri IPC only");
+assert.match(html,/id="paper-sandbox"/,"Paper mode must be accessible from authenticated settings");
+assert.match(html,/id="paper-order-form"/,"Paper orders must have a usable form");
+assert.match(html,/cotations fixes et fictives|Cotations fixes et fictives/,
+  "Paper-only quotes must never be mislabeled as live market data");
+assert.match(main,/\.manage\(paper::PaperSandbox::default\(\)\)/,
+  "Native session must own the independent synthetic portfolio");
+assert.match(auth,/window\.refreshPaper\(\)/,
+  "Reauthentication must refresh the synthetic portfolio");
+assert.match(js,/window\.pravdaInvoke\("ipc_paper_trade"/,
+  "Paper trading should use local Rust IPC only");
+assert.match(js,/paperAction\("ipc_paper_trade"/,
+  "Paper order submit must be wired");
+assert.match(js,/paperAction\("ipc_paper_reset"\)/,
+  "Paper reset must be wired");
+assert.match(paper,/START_CENTS:\s*u64\s*=\s*1_000_000/,
+  "Synthetic initial balance must be deterministic and declared");
+assert.match(paper,/FEE_BPS:\s*u64\s*=\s*36/,
+  "Fixed paper fees must be explicit");
+assert.match(paper,/MAX_NOTIONAL_CENTS:\s*u64\s*=\s*250_000/,
+  "Every simulated order must be risk capped");
+assert.doesNotMatch(paper,/reqwest|tokio_tungstenite|std::net|TcpStream|CredentialManager|sign_order|revolut_x_private/,
+  "Paper sandbox must not contain a network, credential or broker path");
+assert.match(ipc,/fn paper_session_guard/,
+  "Native paper commands must hold Rust auth lock during mutations");
+for(const cmd of ["ipc_paper_snapshot","ipc_paper_trade","ipc_paper_reset"]) {
+  const start=ipc.indexOf("fn "+cmd+"(");
+  const end=ipc.indexOf("\n#[tauri::command]",start+1);
+  const part=ipc.slice(start,end>start?end:ipc.length);
+  assert.match(part,/paper_session_guard\(&session, window\.label\(\)\)/,
+    "Paper commands must be restricted to the main authenticated session: "+cmd);
+}
+
 assert.match(html,/id="revolut-consent"[^>]*disabled/,"Optional network module must default disabled");
 assert.match(js,/ipc_revolut_consent_get/,"UI must read native persisted consent");
 assert.match(js,/ipc_revolut_consent_set/,"UI must persist opt-in through Rust IPC");
@@ -98,7 +130,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,18);
+assert.equal(new Set(handlers).size,21);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
