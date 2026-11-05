@@ -809,7 +809,10 @@ mod tests {
             let _guard = paper_session_guard(&session, "main").unwrap();
             paper.trade("SOL", "BUY", 10).unwrap();
         }
-        assert!(paper.snapshot().iter().any(|row| row == "position_milli|SOL|10"));
+        assert!(paper
+            .snapshot()
+            .iter()
+            .any(|row| row == "position_milli|SOL|10"));
 
         let second = session.authority.login(&password).unwrap();
         session.accept_token(second, &paper);
@@ -818,7 +821,10 @@ mod tests {
             assert_eq!(paper.snapshot(), PaperSandbox::default().snapshot());
             paper.trade("SOL", "BUY", 1).unwrap();
         }
-        assert!(paper.snapshot().iter().any(|row| row == "position_milli|SOL|1"));
+        assert!(paper
+            .snapshot()
+            .iter()
+            .any(|row| row == "position_milli|SOL|1"));
         session.logout();
         let _ = std::fs::remove_file(path);
     }
