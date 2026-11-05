@@ -59,6 +59,8 @@ jobs:
         run: node tools/test-dashboard.mjs
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
+      - name: WebDriver TCP port preflight regression
+        run: node tools/test-driver-port-preflight.mjs
       - name: Windows installer verifier synthetic tampering tests
         if: matrix.os == 'windows-latest'
         shell: pwsh
@@ -323,7 +325,7 @@ jobs:
           git diff -- crates/pravda-app/Cargo.lock
 
       - name: Install Tauri's native Windows WebDriver adapter
-        run: cargo install tauri-driver --locked
+        run: cargo install tauri-driver --version '=2.1.0' --locked
 
       - name: Download matching EdgeDriver from Microsoft only
         shell: pwsh
