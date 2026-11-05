@@ -30,8 +30,7 @@ impl DesktopRuntime {
     /// the same PRAVDA_DB_PATH and legacy migration contract as the HTTP CLI.
     pub async fn start(auth: Arc<Auth>) -> Result<Self, Box<dyn std::error::Error>> {
         let config = ServerConfig::from_env()?;
-        let diagnostic_offline =
-            std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true");
+        let diagnostic_offline = std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true");
         if !auth.is_configured() {
             if let Ok(initial) = std::env::var("PRAVDA_ADMIN_PASSWORD") {
                 let authority = auth.clone();
