@@ -199,6 +199,34 @@ jobs:
             & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
             if ($LASTEXITCODE -ne 0) { throw 'Companion signing failed' }
           }
+      - name: Build single-click Windows production test center with embedded payloads
+        shell: pwsh
+        env:
+          PRAVDA_BUILD_COMMIT: ${{ github.sha }}
+          PRAVDA_TEST_CENTER_REQUIRE_PAYLOADS: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PRAVDA_TEST_CENTER_PAYLOAD_DIR = (Resolve-Path 'crates/pravda-app/target/release').Path
+          cargo build --locked --release -p pravda-server --bin pravda-test-center
+          if ($LASTEXITCODE -ne 0) { throw 'Native single-click production test center compilation failed' }
+          $exe = Get-Item -LiteralPath 'target/release/pravda-test-center.exe' -ErrorAction Stop
+          if ($exe.Length -lt 1000000) { throw 'Single-click test center did not embed the release payloads' }
+          Copy-Item -LiteralPath $exe.FullName -Destination 'crates/pravda-app/target/release/pravda-test-center.exe' -Force
+      - name: Sign embedded one-click test center with Authenticode
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $thumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Signing identity missing' }
+          $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $tools = @(Get-ChildItem -LiteralPath $kit -Recurse -File -Filter signtool.exe -ErrorAction Stop |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool.exe$' } |
+            Sort-Object FullName -Descending)
+          if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
+          $file = 'crates/pravda-app/target/release/pravda-test-center.exe'
+          & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated test center signing failed' }
       - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
         shell: pwsh
         env:
@@ -211,8 +239,9 @@ jobs:
           $exe=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
           $doctor=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-doctor.exe' -ErrorAction Stop
           $harness=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-harness.exe' -ErrorAction Stop
+          $center=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-test-center.exe' -ErrorAction Stop
           if ($msi.Count -lt 1 -or $nsis.Count -lt 1) { throw 'MSI or NSIS installer missing' }
-          foreach ($file in @($exe)+@($doctor)+@($harness)+@($msi)+@($nsis)) {
+          foreach ($file in @($exe)+@($doctor)+@($harness)+@($center)+@($msi)+@($nsis)) {
             $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             Write-Host "$($file.Name) SHA256=$hash"
             $sig=Get-AuthenticodeSignature -FilePath $file.FullName
@@ -234,10 +263,11 @@ jobs:
           $exe = Get-Item 'crates/pravda-app/target/release/pravda-app.exe' -ErrorAction Stop
           $doctor = Get-Item 'crates/pravda-app/target/release/pravda-doctor.exe' -ErrorAction Stop
           $harness = Get-Item 'crates/pravda-app/target/release/pravda-harness.exe' -ErrorAction Stop
+          $center = Get-Item 'crates/pravda-app/target/release/pravda-test-center.exe' -ErrorAction Stop
           $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
           $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
           if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
-          $files = @($exe) + @($doctor) + @($harness) + $msi + $nsis
+          $files = @($exe) + @($doctor) + @($harness) + @($center) + $msi + $nsis
           $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
           $manifest = foreach ($file in ($files | Sort-Object FullName)) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -329,6 +359,7 @@ jobs:
             crates/pravda-app/target/release/bundle/release-evidence.json
             crates/pravda-app/target/release/pravda-doctor.exe
             crates/pravda-app/target/release/pravda-harness.exe
+            crates/pravda-app/target/release/pravda-test-center.exe
             crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 30
@@ -342,6 +373,13 @@ jobs:
           Copy-Item -LiteralPath 'docs/windows/PRODUCTION-TEST.txt' -Destination 'companion-dist/test/PRODUCTION-TEST.txt' -ErrorAction Stop
           Copy-Item -LiteralPath 'crates/pravda-app/target/release/pravda-doctor.exe' -Destination 'companion-dist/doctor/pravda-doctor.exe' -ErrorAction Stop
           Copy-Item -LiteralPath 'docs/windows/TROUBLESHOOTING.txt' -Destination 'companion-dist/doctor/TROUBLESHOOTING.txt' -ErrorAction Stop
+      - name: Publish one-click production acceptance center
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-one-click-test-center
+          path: crates/pravda-app/target/release/pravda-test-center.exe
+          if-no-files-found: error
+          retention-days: 30
       - name: Publish standalone preproduction test tool
         uses: actions/upload-artifact@v7
         with:
@@ -456,6 +494,65 @@ jobs:
             if ($matching.Count -ne 1) { throw 'Independent companion does not match main release manifest' }
             Write-Host ('Verified standalone companion ' + $case.Exe + ' SHA256=' + $hash)
           }
+      - name: Download single-click integrated production tester
+        uses: actions/download-artifact@v8
+        with:
+          name: pravda-windows-one-click-test-center
+          path: downloaded-center
+      - name: Execute integrated diagnostic and verify report
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $center = (Resolve-Path './downloaded-center/pravda-test-center.exe' -ErrorAction Stop).Path
+          $hash = (Get-FileHash -LiteralPath $center -Algorithm SHA256).Hash.ToLowerInvariant()
+          $manifest = @(Get-Content -LiteralPath 'downloaded-release/bundle/SHA256SUMS.txt' -Encoding ascii)
+          if (@($manifest | Where-Object { $_ -ceq ($hash + '  pravda-test-center.exe') }).Count -ne 1) {
+            throw 'Independent one-click tester is not listed in the trusted release manifest'
+          }
+          $env:PRAVDA_TEST_CENTER_REPORT_DIR = (Join-Path $env:RUNNER_TEMP 'pravda-one-click-acceptance')
+          New-Item -ItemType Directory -Force $env:PRAVDA_TEST_CENTER_REPORT_DIR | Out-Null
+          # GUI-subsystem PE binaries do not reliably populate LASTEXITCODE when
+          # invoked directly from PowerShell. Wait for the process handle instead.
+          $tester = Start-Process -FilePath $center -ArgumentList '--ci' -Wait -PassThru -NoNewWindow
+          $testerExit = [int]$tester.ExitCode
+          Write-Host ('Integrated tester exit code: ' + $testerExit)
+          $files = @(Get-ChildItem -LiteralPath $env:PRAVDA_TEST_CENTER_REPORT_DIR -Recurse -File -ErrorAction SilentlyContinue)
+          Write-Host ('Integrated tester generated file count: ' + $files.Count)
+          # Only leaf names of fixed synthetic test outputs; never log private paths.
+          foreach ($file in $files) {
+            if ($file.Name -in @('PRAVDA-TEST-REPORT.json', 'PRAVDA-TEST-REPORT.html', 'pravda-app.exe', 'pravda-doctor.exe', 'pravda-harness.exe')) {
+              Write-Host ('Integrated tester output type: ' + $file.Name)
+            }
+          }
+          $reports = @($files | Where-Object { $_.Name -ceq 'PRAVDA-TEST-REPORT.json' })
+          if ($reports.Count -ne 1) {
+            throw ('Integrated test report missing or ambiguous; tester exit=' + $testerExit + '; generated files=' + $files.Count)
+          }
+          $report = Get-Content -LiteralPath $reports[0].FullName -Raw | ConvertFrom-Json
+          foreach ($finding in $report.findings) {
+            if ($finding.status -eq 'FAIL') { Write-Host ('Integrated FAIL check=' + $finding.check + ' detail=' + $finding.detail) }
+          }
+          if ($testerExit -ne 0) { throw 'Integrated tester terminated unsuccessfully; inspect retained report' }
+          if ($report.schema_version -ne 1 -or $report.commit -ne '${{ github.sha }}') {
+            throw 'Integrated report is not linked to the verified commit'
+          }
+          foreach ($check in @('doctor_startup','harness_smoke','desktop_process')) {
+            $matching = @($report.findings | Where-Object check -EQ $check)
+            if ($matching.Count -ne 1 -or $matching[0].status -ne 'PASS') {
+              throw "Integrated test failed required check: $check"
+            }
+          }
+          if (@($report.findings | Where-Object check -EQ 'desktop_gui' | Where-Object status -EQ 'SKIP').Count -ne 1) {
+            throw 'GUI interaction must remain explicitly unverified in the integrated tester'
+          }
+      - name: Retain integrated diagnostic reports even on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-integrated-diagnostic-report
+          path: ${{ runner.temp }}/pravda-one-click-acceptance/**/PRAVDA-TEST-REPORT.*
+          if-no-files-found: warn
+          retention-days: 30
       - name: Smoke test independent downloaded Doctor and offline harness
         shell: pwsh
         run: |
