@@ -8,7 +8,7 @@
   The hypervisor must disable all network access BEFORE starting this script.
   This script never changes firewall, UAC, SmartScreen or network configuration.
 .EXAMPLE
-  ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath ./Pravda-Bot_x64.msi -Kind MSI -ExpectedSha256 HASH_FROM_TRUSTED_MANIFEST -DisposableVm
+  ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath ./Pravda-Bot_x64.msi -Kind MSI -ExpectedSha256 HASH_FROM_TRUSTED_MANIFEST -ExpectedCommitSha 40_CHAR_SHA -DisposableVm
 #>
 [CmdletBinding()]
 param(
@@ -20,6 +20,9 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-fA-F0-9]{64}$')]
     [string]$ExpectedSha256,
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[a-fA-F0-9]{40}$')]
+    [string]$ExpectedCommitSha,
     [switch]$DisposableVm
 )
 $ErrorActionPreference = 'Stop'
@@ -90,6 +93,20 @@ if ($actual -cne $ExpectedSha256.ToLowerInvariant()) {
     throw 'REFUSED: installer hash differs from trusted release manifest'
 }
 
+# Test-only toolchain must be staged before the hypervisor disconnects
+# the disposable VM. No download, installation or user-data change here.
+foreach ($binary in @('node.exe', 'tauri-driver.exe', 'msedgedriver.exe')) {
+    if (-not (Get-Command -Name $binary -CommandType Application -ErrorAction SilentlyContinue)) {
+        throw "REFUSED: offline GUI test tool missing: $binary"
+    }
+}
+foreach ($required in @('Test-Pravda-Msi-Install.ps1', 'Test-Pravda-Nsis-Install.ps1',
+                       'Initialize-Pravda-Airgap-Gui.ps1', 'test-installed-onboarding.mjs')) {
+    if (-not (Test-Path -LiteralPath (Join-Path $PSScriptRoot $required) -PathType Leaf)) {
+        throw "REFUSED: offline GUI acceptance script missing: $required"
+    }
+}
+
 $uninstallKeys = @(
     'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
     'Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
@@ -104,9 +121,19 @@ if ($existing.Count -gt 0) {
 $root = Join-Path $env:TEMP ('pravda-offline-acceptance-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $oldTemp = [Environment]::GetEnvironmentVariable('RUNNER_TEMP', 'Process')
+$oldEnvironment = @{}
+foreach ($name in @('GITHUB_SHA', 'PRAVDA_AIRGAP_ACCEPTANCE',
+                    'PRAVDA_E2E_WEBVIEW2_VERSION', 'PRAVDA_E2E_WINDOWS_VERSION')) {
+    $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
+}
 $success = $false
 try {
     $env:RUNNER_TEMP = $root
+    # The operator supplies the trusted source SHA, never inferred from VM.
+    $env:GITHUB_SHA = $ExpectedCommitSha.ToLowerInvariant()
+    $env:PRAVDA_AIRGAP_ACCEPTANCE = 'true'
+    Remove-Item Env:PRAVDA_E2E_WEBVIEW2_VERSION -ErrorAction SilentlyContinue
+    Remove-Item Env:PRAVDA_E2E_WINDOWS_VERSION -ErrorAction SilentlyContinue
     # Run the EXACT existing Windows CI smoke, with synthetic local SQLite,
     # auth and market feeds disabled. It installs and uninstalls the app.
     if ($Kind -eq 'MSI') {
@@ -131,6 +158,9 @@ try {
 }
 finally {
     [Environment]::SetEnvironmentVariable('RUNNER_TEMP', $oldTemp, 'Process')
+    foreach ($name in $oldEnvironment.Keys) {
+        [Environment]::SetEnvironmentVariable($name, $oldEnvironment[$name], 'Process')
+    }
     if ($success -and (Test-Path -LiteralPath $root)) {
         Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
     }
