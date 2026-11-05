@@ -58,6 +58,7 @@ function showLogin() {
     if (loginVisible) return;
     window.pravdaAuthGeneration++;
     loginVisible = true;
+    if (typeof window.pravdaLockRevolutConsent === "function") window.pravdaLockRevolutConsent();
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -73,6 +74,7 @@ function activateDashboard() {
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {
+        if (typeof window.refreshRevolutConsent === "function") window.refreshRevolutConsent();
         if (typeof window.refreshAll === "function") window.refreshAll();
         if (typeof window.refreshSecurity === "function") window.refreshSecurity();
         if (typeof window.refreshSecurityEvents === "function") window.refreshSecurityEvents();
