@@ -414,10 +414,19 @@ fn main() {
     match run() {
         Ok(folder) => {
             if ci {
-                println!(
-                    "PRAVDA_TEST_REPORT={}",
-                    folder.join("PRAVDA-TEST-REPORT.json").display()
-                );
+                let path = folder.join("PRAVDA-TEST-REPORT.json");
+                println!("PRAVDA_TEST_REPORT={}", path.display());
+                let failed = fs::read_to_string(&path)
+                    .ok()
+                    .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+                    .and_then(|report| report["findings"].as_array().map(|rows| {
+                        rows.iter().any(|row| row["status"] == "FAIL")
+                    }))
+                    .unwrap_or(true);
+                if failed {
+                    eprintln!("PRAVDA_TEST_FAILED: see structured JSON report");
+                    std::process::exit(2);
+                }
             } else {
                 message(&format!("Tests terminés.\n\nRapport HTML et JSON :\n{}\n\nTu peux partager uniquement le JSON après vérification.",folder.display()));
             }
