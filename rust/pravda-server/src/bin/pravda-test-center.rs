@@ -98,6 +98,33 @@ fn run_bounded_capture(
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .creation_flags(CREATE_NO_WINDOW);
+    // Doctor and Harness must never inspect the caller's real auth/SQLite profile.
+    // Use the same isolated environment boundary as the desktop smoke test.
+    command.env_clear();
+    for key in [
+        "SystemRoot", "WINDIR", "PATH", "COMSPEC", "PATHEXT",
+        "ProgramFiles", "ProgramFiles(x86)", "PROGRAMDATA",
+    ] {
+        if let Some(value) = std::env::var_os(key) {
+            command.env(key, value);
+        }
+    }
+    let local = folder.join("AppData").join("Local");
+    let roaming = folder.join("AppData").join("Roaming");
+    for dir in [&local, &roaming] {
+        fs::create_dir_all(dir).map_err(|_| "isolated_profile_creation_failed")?;
+    }
+    command
+        .env("LOCALAPPDATA", &local)
+        .env("APPDATA", &roaming)
+        .env("USERPROFILE", folder)
+        .env("TEMP", folder)
+        .env("TMP", folder)
+        .env("PRAVDA_DB_PATH", folder.join("synthetic.db"))
+        .env("PRAVDA_AUTH_PATH", folder.join("synthetic-auth.json"))
+        .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
+        .env("PRAVDA_OFFLINE_TEST", "true")
+        .env("PRAVDA_LIVE_TRADING_ENABLED", "false");
     let mut child = command.spawn().map_err(|_| "child_spawn_failed")?;
     let Some(stdout) = child.stdout.take() else {
         let _ = child.kill();
