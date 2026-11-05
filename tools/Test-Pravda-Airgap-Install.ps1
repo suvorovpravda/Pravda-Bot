@@ -151,6 +151,43 @@ try {
     if (@(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' }).Count -ne 0) {
         throw 'FAIL: network interface was enabled during the test'
     }
+    # The GUI JSON lives in RUNNER_TEMP and would otherwise be destroyed by
+    # routine cleanup. Retain a redacted, hashed proof separately on this VM.
+    # The VM operator exports it only after the offline tests are complete.
+    $reportName = if ($Kind -eq 'MSI') {
+        'Pravda-msi-installed-onboarding.json'
+    } else {
+        'Pravda-nsis-installed-onboarding.json'
+    }
+    $reportPath = Join-Path $root $reportName
+    if (-not (Test-Path -LiteralPath $reportPath -PathType Leaf)) {
+        throw 'FAIL: installed GUI acceptance proof is missing'
+    }
+    $gui = Get-Content -LiteralPath $reportPath -Raw -ErrorAction Stop | ConvertFrom-Json
+    if ($gui.version -ne 1 -or $gui.passed -ne $true -or
+        $gui.kind -cne $Kind -or $gui.sha -cne $ExpectedCommitSha.ToLowerInvariant() -or
+        @($gui.tests).Count -lt 14 -or
+        @($gui.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+        throw 'FAIL: installed GUI acceptance proof is inconsistent'
+    }
+    $proofName = 'pravda-airgap-evidence-' + [guid]::NewGuid().ToString('N')
+    $proofRoot = Join-Path $env:TEMP $proofName
+    New-Item -ItemType Directory -Path $proofRoot -ErrorAction Stop | Out-Null
+    $proofCopy = Join-Path $proofRoot 'installed-gui-report.json'
+    Copy-Item -LiteralPath $reportPath -Destination $proofCopy -ErrorAction Stop
+    $proofMeta = [ordered]@{
+        version = 1
+        kind = $Kind
+        source_sha = $ExpectedCommitSha.ToLowerInvariant()
+        installer_sha256 = $actual
+        installed_gui_report_sha256 = (Get-FileHash -LiteralPath $proofCopy -Algorithm SHA256).Hash.ToLowerInvariant()
+        webview2_version = $after
+        passed = $true
+        scope = 'Disposable VM with disconnected hypervisor and no initial WebView2'
+        limitation = 'Operator must independently attest the hypervisor snapshot and network isolation'
+    }
+    $proofMeta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $proofRoot 'airgap-evidence.json') -Encoding utf8 -ErrorAction Stop
+    Write-Host ('PASS: retained offline acceptance evidence in TEMP/' + $proofName)
     $success = $true
     Write-Host ('PASS: offline ' + $Kind + ' install/start/uninstall on WebView2-free VM')
     Write-Host ('PASS: SHA256=' + $actual)
