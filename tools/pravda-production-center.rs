@@ -13,6 +13,7 @@ use std::fs::{self, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::windows::process::CommandExt;
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread::sleep;
@@ -199,19 +200,59 @@ fn escape_html(s: &str) -> String {
 
 fn output_dir(cli: Option<PathBuf>) -> PathBuf {
     if let Some(dir) = cli { return dir; }
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let name = format!("Pravda-Report-{stamp}-{}", std::process::id());
     if let Some(home) = std::env::var_os("USERPROFILE") {
         let home = PathBuf::from(home);
-        for name in ["Desktop", "Documents"] {
-            let dir = home.join(name);
-            if dir.is_dir() { return dir.join("Pravda-Reports"); }
+        for place in ["Desktop", "Documents"] {
+            let folder = home.join(place);
+            if folder.is_dir() { return folder.join(&name); }
         }
     }
-    std::env::temp_dir().join("Pravda-Reports")
+    std::env::temp_dir().join(name)
+}
+fn refuses_reparse(path: &Path) -> io::Result<()> {
+    if let Ok(meta) = fs::symlink_metadata(path) {
+        if meta.file_attributes() & 0x400 != 0 {
+            return Err(io::Error::new(io::ErrorKind::PermissionDenied, "reparse_point_denied"));
+        }
+    }
+    Ok(())
+}
+fn replace_file_safely(path: &Path, contents: &[u8]) -> io::Result<()> {
+    // Create a fresh sibling and rename it over the destination: unlike
+    // fs::write, the existing pathname is never opened and truncated.
+    refuses_reparse(path)?;
+    let stamp = SystemTime::now().duration_since(UNIX_EPOCH)
+        .unwrap_or_default().as_nanos();
+    let target_name = path.file_name().ok_or(io::ErrorKind::InvalidInput)?;
+    let temp = path.with_file_name(format!(
+        "{}-{stamp}-{}.tmp", target_name.to_string_lossy(), std::process::id()
+    ));
+    let mut handle = OpenOptions::new().create_new(true).write(true).open(&temp)?;
+    let written = handle.write_all(contents).and_then(|_| handle.sync_all());
+    drop(handle);
+    if let Err(error) = written {
+        let _ = fs::remove_file(&temp);
+        return Err(error);
+    }
+    let mut result = fs::rename(&temp, path);
+    // Antivirus/HTML viewer can hold a short-lived open handle on Windows.
+    for _ in 0..10 {
+        if result.is_ok() { break; }
+        sleep(Duration::from_millis(100));
+        refuses_reparse(path)?;
+        result = fs::rename(&temp, path);
+    }
+    if result.is_err() { let _ = fs::remove_file(temp); }
+    result
 }
 fn persist(report: &Report, dir: &Path, working: bool) -> io::Result<()> {
     fs::create_dir_all(dir)?;
-    fs::write(dir.join("Pravda-Production-Report.txt"), report.text())?;
-    fs::write(dir.join("Pravda-Production-Report.html"), report.html(working))
+    refuses_reparse(dir)?;
+    replace_file_safely(&dir.join("Pravda-Production-Report.txt"), report.text().as_bytes())?;
+    replace_file_safely(&dir.join("Pravda-Production-Report.html"), report.html(working).as_bytes())
 }
 
 fn extract(dir: &Path, name: &str, data: &[u8]) -> io::Result<PathBuf> {
