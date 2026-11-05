@@ -26,14 +26,14 @@
 | Authentification / révocation | 🟢 En place | Vérifications Rust, rejet des résultats de sessions périmées |
 | Stockage / sauvegarde SQLite | 🟢 Tests intégrés | Les restaurations complexes et profils utilisateur demandent une qualification séparée |
 | Doctor et Harness | 🟢 Intégrés | Diagnostic passif et simulation synthétique sans transaction |
-| Centre de test unifié | 🟡 En revue | [PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138), pas encore livré |
+| Centre de test unifié | 🟢 Intégré et testé en CI | [PR #138 fusionnée](https://github.com/suvorovpravda/Pravda-Bot/pull/138), 13/13 contrôles au SHA source ; recette PC physique distincte |
 | MSI / NSIS sur runner Windows | 🟢 Vérifiés en CI | Ne prouvent pas le scénario sans WebView2 ni réseau |
 | VM isolée sans WebView2 | 🟠 Non vérifiée | Critère bloquant [#134](https://github.com/suvorovpravda/Pravda-Bot/issues/134) |
 | Installation réellement modulaire | 🟠 Non validée | Options Standard / Personnalisée non homologuées |
 | Chaîne Authenticode | 🔴 Non attestée | Certificat, identité, signature, horodatage et réputation [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) |
 | Ordres de trading réels | 🔒 Interdits | Aucun ordre, retrait ou accès privé privilégié sans [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) |
 
-**Preuve de référence au 5 novembre 2026 :** [workflow Windows #41972245070](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/41972245070) réussi sur le commit **b2fb618b53408b0fd5fd2c4265cdfe0a05ffc898**. Le dernier état de la branche principale doit toujours être revérifié après un nouveau commit.
+**Preuve du centre intégré au 5 novembre 2026 :** [workflow Windows #42016900394](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394), réussi sur le commit source **038c9318ca80ba3e6f67ccdc0fe237415f77ec21**, dont l'artefact et le [rapport intégré HTML/JSON](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394/artifacts/13410164620) ont été vérifiés sur un second runner Windows. Fusion dans `main` : **8b87783232b2c118d4e8d1e34c04b2f89dd6de8a**. Les commits suivants exigent leurs propres preuves.
 
 ### 🔐 Frontières de confiance
 
@@ -58,7 +58,7 @@ Le dépôt possède des commandes IPC explicitement nommées, des tests de refus
 
 Le Doctor Windows est **passif** : il ne transmet aucune donnée par DNS, HTTP ou TCP et ne répare rien automatiquement. Il produit les états **PASS**, **WARN**, **FAIL**, **SKIP** ; **SKIP ne vaut jamais PASS**. Le Harness lance des scénarios synthétiques de réussite, refus, crash et timeout. Ni Doctor ni Harness ne constituent une certification de performance financière ou une recette d'installation sur machine vierge.
 
-Le centre de test intégré en [PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138) vise à regrouper ces contrôles dans un **seul fichier EXE** avec rapport HTML et JSON local. **Il n'est pas homologué tant que sa propre compilation et la recette Windows ne sont pas passées.** Aucun rapport n'est envoyé automatiquement ; les noms de contrôle sont filtrés pour limiter la divulgation.
+Le centre de test intégré, [fusionné dans la PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138), regroupe ces contrôles dans **un seul fichier `pravda-test-center.exe`** et génère un rapport HTML et JSON local. Sa compilation et sa recette sur runner Windows sont réussies, mais cela n'atteste **ni le double-clic sur le PC de l'utilisateur, ni la VM sans réseau/WebView2, ni la certification Enterprise**. Aucun rapport n'est envoyé automatiquement ; les identifiants des contrôles sont filtrés pour réduire la divulgation.
 
 ### 🪟 Installation et provenance Windows
 
