@@ -1,6 +1,6 @@
 {
   "identifier": "main-ipc",
-  "description": "Bundled main window only: local auth bootstrap plus authenticated read-only desktop commands.",
+  "description": "Bundled main window: authenticated read-only diagnostics and a synthetic-only in-memory paper sandbox.",
   "windows": [
     "main"
   ],
