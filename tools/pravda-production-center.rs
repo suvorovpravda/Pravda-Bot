@@ -440,7 +440,11 @@ fn run() -> Result<(), &'static str> {
 fn main() {
     if let Err(problem) = run() {
         // A GUI-subsystem process must never vanish without a diagnostic.
-        let dir = output_dir(None);
+        let args: Vec<_> = std::env::args_os().skip(1).collect();
+        let ci = args.iter().any(|a| a == "--ci");
+        let custom = args.windows(2).find(|w| w[0] == "--report-dir")
+            .map(|w| PathBuf::from(&w[1]));
+        let dir = output_dir(custom);
         let _ = fs::create_dir_all(&dir);
         let file = dir.join("Pravda-Production-Report.txt");
         let _ = fs::write(&file, format!(
@@ -449,6 +453,74 @@ fn main() {
              FAIL | launcher | {problem}\n\
              No credentials or production data were changed by this launcher.\n"
         ));
+        if ci {
+            std::process::exit(1);
+        }
         let _ = Command::new("notepad.exe").arg(file).spawn();
+    }
+}
+
+
+#[cfg(all(test, windows))]
+mod tests {
+    use super::*;
+
+    fn scratch() -> PathBuf {
+        let stamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "pravda-center-selftest-{}-{stamp}", std::process::id()
+        ));
+        fs::create_dir(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn report_publishing_does_not_truncate_existing_hardlink_target() {
+        let base = scratch();
+        let canary = base.join("canary.txt");
+        fs::write(&canary, "SENTINEL_UNCHANGED").unwrap();
+        let reports = base.join("reports");
+        fs::create_dir(&reports).unwrap();
+        fs::hard_link(&canary, reports.join("Pravda-Production-Report.txt")).unwrap();
+        persist(&Report::new(), &reports, false).unwrap();
+        assert_eq!(fs::read_to_string(&canary).unwrap(), "SENTINEL_UNCHANGED");
+        assert!(fs::read_to_string(reports.join("Pravda-Production-Report.html"))
+            .unwrap().contains("Centre de recette"));
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn report_publishing_rejects_symlink_if_windows_can_create_it() {
+        let base = scratch();
+        let canary = base.join("canary.txt");
+        fs::write(&canary, "SENTINEL_UNCHANGED").unwrap();
+        let reports = base.join("reports");
+        fs::create_dir(&reports).unwrap();
+        let target = reports.join("Pravda-Production-Report.txt");
+        if std::os::windows::fs::symlink_file(&canary, &target).is_ok() {
+            assert!(persist(&Report::new(), &reports, false).is_err());
+            assert_eq!(fs::read_to_string(&canary).unwrap(), "SENTINEL_UNCHANGED");
+        }
+        let _ = fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn bounded_capture_rejects_child_excessive_stdout_without_pipe_deadlock() {
+        let result = run_capture(
+            Path::new("powershell.exe"),
+            &["-NoProfile", "-NonInteractive", "-Command",
+              "[Console]::Out.Write('X' * 150000)"],
+            Duration::from_secs(20),
+        );
+        assert_eq!(result.unwrap_err(), "OUTPUT_EXCEEDS_LIMIT");
+    }
+
+    #[test]
+    fn html_report_escapes_user_controlled_text() {
+        let mut report = Report::new();
+        report.add("Output encoding", "WARN", "<script>alert(1)</script>");
+        let html = report.html(false);
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(!html.contains("<script>"));
     }
 }
