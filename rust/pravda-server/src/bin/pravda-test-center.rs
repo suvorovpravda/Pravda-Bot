@@ -338,10 +338,10 @@ fn run() -> Result<PathBuf, String> {
                     ));
                     report.findings.extend(items);
                 }
-                Err(_) => report.findings.push(finding(
+                Err(reason) => report.findings.push(finding(
                     "doctor_startup",
                     "FAIL",
-                    "Doctor process could not start",
+                    format!("Doctor execution failed: {reason}"),
                 )),
             }
         }
@@ -393,10 +393,10 @@ fn run() -> Result<PathBuf, String> {
                         "Synthetic pass/refusal/timeout/crash; build_accepted=false is expected",
                     ));
                 }
-                Err(_) => report.findings.push(finding(
+                Err(reason) => report.findings.push(finding(
                     "harness_smoke",
                     "FAIL",
-                    "Harness process could not start",
+                    format!("Harness execution failed: {reason}"),
                 )),
             }
         }
