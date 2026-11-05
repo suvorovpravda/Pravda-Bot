@@ -178,7 +178,18 @@ async fn main() {
                     .build()?;
                 return Ok(());
             }
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+            // The standalone production-center probes the release GUI with
+            // isolated SQLite/auth AND WebView2 storage. Never touch the real
+            // installed application's browser cache or localStorage.
+            let mut main_window =
+                WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()));
+            #[cfg(windows)]
+            if std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true") {
+                if let Some(path) = std::env::var_os("PRAVDA_DIAGNOSTIC_WEBVIEW_DIR") {
+                    main_window = main_window.data_directory(std::path::PathBuf::from(path));
+                }
+            }
+            main_window
                 .title("Pravda-Bot")
                 .inner_size(1280.0, 800.0)
                 .resizable(true)
