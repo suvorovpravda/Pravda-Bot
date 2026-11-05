@@ -199,16 +199,28 @@ fn run() -> Result<PathBuf,String> {
     fs::write(&json,serde_json::to_vec_pretty(&report).map_err(|_|"Cannot serialize report")?)
         .map_err(|_|"Cannot save report JSON")?;
     fs::write(&html,render_html(&report)).map_err(|_|"Cannot save report HTML")?;
-    let _=Command::new("explorer.exe").arg(&html).spawn();
+    if !std::env::args().any(|arg|arg=="--ci") {
+        let _=Command::new("explorer.exe").arg(&html).spawn();
+    }
     Ok(folder)
 }
 #[cfg(not(windows))]
 fn run()->Result<PathBuf,String>{Err("Windows x64 only".into())}
 
 fn main() {
+    let ci=std::env::args().any(|arg|arg=="--ci");
     match run(){
-        Ok(folder)=>message(&format!("Tests terminés.\n\nRapport HTML et JSON :\n{}\n\nTu peux partager uniquement le JSON après vérification.",folder.display())),
-        Err(error)=>message(&format!("Les tests n'ont pas démarré : {error}")),
+        Ok(folder)=>{
+            if ci {
+                println!("PRAVDA_TEST_REPORT={}",folder.join("PRAVDA-TEST-REPORT.json").display());
+            } else {
+                message(&format!("Tests terminés.\n\nRapport HTML et JSON :\n{}\n\nTu peux partager uniquement le JSON après vérification.",folder.display()));
+            }
+        },
+        Err(error)=>{
+            if ci {eprintln!("PRAVDA_TEST_ERROR={error}");std::process::exit(1);}
+            message(&format!("Les tests n'ont pas démarré : {error}"));
+        }
     }
 }
 
