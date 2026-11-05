@@ -40,10 +40,8 @@ impl TemporaryBundle {
             .duration_since(UNIX_EPOCH)
             .unwrap_or_default()
             .as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "pravda-setup-{}-{nanos}",
-            std::process::id()
-        ));
+        let directory =
+            std::env::temp_dir().join(format!("pravda-setup-{}-{nanos}", std::process::id()));
         // Never overwrite an existing path or work in a real user profile.
         fs::create_dir(&directory)?;
         Ok(Self { directory })
@@ -194,7 +192,9 @@ fn run() -> Result<(), &'static str> {
             );
             return Ok(());
         }
-        _ => return Err("MSI installation failed or was cancelled; no diagnostics were substituted"),
+        _ => {
+            return Err("MSI installation failed or was cancelled; no diagnostics were substituted")
+        }
     }
     let choice = dialog(
         "Pravda-Bot — Installation terminée",
