@@ -78,6 +78,7 @@ function activateDashboard() {
         if (typeof window.refreshAll === "function") window.refreshAll();
         if (typeof window.refreshSecurity === "function") window.refreshSecurity();
         if (typeof window.refreshSecurityEvents === "function") window.refreshSecurityEvents();
+        if (typeof window.refreshPaper === "function") window.refreshPaper();
         return;
     }
     const script = document.createElement("script");
