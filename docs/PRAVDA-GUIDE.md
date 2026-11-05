@@ -15,6 +15,99 @@
 
 ---
 
+## 🧰 Architecture cible — bootstrapper, maintenance Tauri et audit de trading (05/11/2026)
+
+![Périmètre](https://img.shields.io/badge/Cible-Windows%20x64-2563eb)
+![État](https://img.shields.io/badge/Bootstrapper-À%20développer-f59e0b)
+![Contrôle](https://img.shields.io/badge/IPC-Rust%20authentifié-16a34a)
+![Trading](https://img.shields.io/badge/Ordres%20réels-DÉSACTIVÉS-dc2626)
+
+**Décision :** une **chaîne Windows unique**, 100 % Rust pour les contrôles et Tauri 2 pour la session applicative. L'actuel `pravda-test-center.exe` réalise des diagnostics **sans installer** Pravda-Bot ; les paquets MSI/NSIS sont distincts. Le futur `Pravda-Setup.exe` qui fera prédiagnostic + installation n'est **pas encore implémenté**. Ne pas le présenter comme disponible ni décliner une version DMG/AppImage sans chantier explicite.
+
+### A. Comment le bootstrapper communique avec l'application installée
+
+```text
+Pravda-Setup.exe (Win32 natif/Rust, indépendant de WebView2)
+   |-- Prédiagnostic OFFLINE : OS x64, mémoire, disque, prérequis,
+   |   empreinte/signature des artefacts, droits, conflits non destructifs
+   |-- L'utilisateur choisit Installer / Annuler et Standard / Personnalisée
+   |-- Extraction et validation d'un MSI EMBARQUÉ + prérequis WebView2 offline
+   |-- Installation via les API Windows / MSI ; UAC visible si nécessaire
+   |-- Rapport de préinstallation JSON versionné, avec statut PASS/WARN/FAIL/SKIP
+   `-- Sur succès vérifié : lancement de l'EXE installé (chemin canonique)
+                  |
+                  v
+           Pravda-Bot / Tauri 2 / fenêtre `main`
+                  |
+             IPC Tauri allowlist + session Rust
+                  |
+                  v
+            Bibliothèque de contrôles Rust commune
+                  |-- sécurité et intégrité (lecture seule)
+                  |-- rapports expurgés et diagnostic local
+                  `-- journal d'événements financier (distinct des traces techniques)
+```
+
+Le bootstrapper ne doit **pas** se connecter à Tauri par HTTP, WebSocket, port localhost, argument contenant un secret ou réutilisation du jeton de session. Après installation, il lance l'application puis **se termine**. Le rapport préinstallation n'est qu'une **preuve d'observation**, jamais une autorisation de connexion/trading : Tauri revérifie les critères utiles. Toute donnée transmise entre processus est structurée, bornée, versionnée, relue depuis un chemin contrôlé, et réputée non fiable tant que sa provenance/intégrité ne sont pas validées. Éviter de faire passer un simple hash non authentifié pour une preuve d'origine ; le statut de signature Enterprise est distinct.
+
+Le programme d'installation ne dépend pas de WebView2 pour **sa propre interface** : une fenêtre native Rust/Win32 est nécessaire si le runtime est absent. Les contrôles réseau sont OFF par défaut ; un test TLS vers des hôtes **explicitement autorisés** peut être proposé séparément, après consentement. L'absence de réseau ne bloque jamais l'installation des dépendances **embarquées**. Aucun changement silencieux d'antivirus, pare-feu, VPN, registre critique ou politique UAC. L'installation modulaire ne doit pas permettre de retirer la sécurité centrale.
+
+### B. Comment relancer les contrôles depuis Paramètres → Sécurité & dépannage
+
+Le code actuel possède l'onglet `security`, `ipc_security_report`, `ipc_security_events`, `ipc_runtime_metrics` et une actualisation sur clic/ouverture. Ces contrôles lisent l'état de la session et SQLite **sans** exécuter automatiquement les binaires Doctor/Harness. Ils sont **intégrés** mais ne remplacent pas une recette GUI, une signature vérifiée ou le test hyperviseur #134.
+
+**Extension proposée, sans commande shell générique ni privilège ajouté par défaut :**
+
+| Interface | Contrat Rust prévu | Contrôle de sécurité |
+| :--- | :--- | :--- |
+| Lancer un test local | `ipc_diagnostic_start(kind)` avec enum fermé (`integrity`, `storage`, `runtime`) | Fenêtre `main`, session liée, mode lecture seule, limite de concurrence et timeout |
+| Voir la progression / annuler | `ipc_diagnostic_status(id)`, `ipc_diagnostic_cancel(id)` | ID aléatoire associé à la même session ; annulation sans réparation |
+| Consulter les logs | `ipc_audit_events_recent(filter)` | Résultats paginés, codes/types autorisés, aucune sortie brute |
+| Exporter un rapport | `ipc_diagnostic_export(id, format)` | JSON/HTML et ZIP de support expurgés, quotas de taille, dossier propre à l'utilisateur, pas de transmission |
+| Réparation / nettoyage | Commandes séparées, **non implémentées** | Confirmation explicite, sauvegarde et vérification du périmètre, jamais de suppression de vault/ordres/SQLite par défaut |
+| Diagnostic réseau | Action optionnelle, **non implémentée** | Accord explicite ; hôtes et ports approuvés, TLS vérifié, timeout ; `SKIP` en air-gap |
+
+Aucun `Command::new` avec une chaîne commandée par la WebView ; aucune permission Tauri `shell:*`, filesystem générique ou origine distante. Le job est **découplé de la fenêtre** via le backend Rust, ne garde pas un mutex sur `await` et refuse les réponses qui terminent après déconnexion/reconnexion. Les examens nécessitant l'UAC seront un **helper signé distinct**, invoqué pour une tâche précise avec consentement et vérification d'éditeur, et non un service permanent administrateur. Les métriques CPU/RAM déjà présentes sont read-only ; le gestionnaire de mises à jour devra vérifier signature, version et provenance **avant** toute installation manuelle.
+
+### C. Journalisation du bot de trading : trois niveaux et aucune fuite
+
+| Journal | Durabilité / contenu | Politique de confidentialité |
+| :--- | :--- | :--- |
+| **Technique** | `tracing` structuré : démarrage, versions, erreurs catégorisées, latence, connexion au fournisseur, timeouts | Rotation et limites ; ni URL avec identifiants ni headers auth/corps de requêtes |
+| **Sécurité locale** | Aujourd'hui : 64 codes événementiels en RAM dans `SecurityEvents`, effacés au redémarrage | Pas de chemins, mot de passe, jeton, clé, identifiant machine ou réponse brute |
+| **Audit financier** | **À implémenter durablement** : intention, décisions de risque, réservation, état de soumission, ACK, exécutions partielles, rejets, demande d'annulation, `UNKNOWN`, rapprochement | Journal transactionnel SQLite avec permissions Windows ; export contrôlé et expurgé, jamais de clés Ed25519/API |
+
+**Contrat minimal d'événement futur** (schéma conceptuel, **pas** un endpoint ni un journal live livré) :
+
+```text
+AuditEventV1 {
+  version, seq, event_id, correlation_id, causation_id, run_id,
+  event_utc, monotonic_elapsed_ms, mode: PAPER | LIVE,
+  venue_id?, instrument_id?, client_order_id?,
+  event: RISK_DENIED | INTENT_RESERVED | SUBMIT_ATTEMPT |
+         EXCHANGE_ACCEPTED | PARTIAL_FILL | FILLED |
+         CANCEL_REQUESTED | REJECTED | UNKNOWN | RECONCILED,
+  reason_code?, state_before?, state_after?, policy_version?,
+  source_quality?, payload_digest?
+}
+```
+
+Une soumission LIVE future exigera **écriture durable de l'intention et de la décision de risque AVANT effet externe**, identifiant client idempotent, passage en `UNKNOWN` si la réponse exchange est incertaine, puis **réconciliation de lecture seule avant toute nouvelle tentative** ; jamais de retry aveugle. L'actuel module `revolut_x_lifecycle.rs` maintient un registre d'états **hors ligne et en mémoire**, pas encore un audit financier permanent ni une preuve d'ordres réels. Les clés restent dans Windows Credential Manager ; les journaux n'enregistrent jamais credentials, signatures, en-têtes HTTP d'authentification ou payloads privés. Les décisions risquées ne doivent jamais dépendre d'une simple ligne de log qui pourrait échouer silencieusement.
+
+### D. Contrats d'acceptation et dépendances de livraison
+
+- **B0 — Périmètre** : un seul `Pravda-Setup.exe` Windows, une interface native indépendante de WebView2 ; le centre de test existant reste disponible comme outil de recette.
+- **B1 — Préinstallation** : vérifications OFFLINE bornées, vérification authentifiée des composants, état PASS/WARN/FAIL/SKIP honnête, aucun changement de machine avant consentement, chemins d'échec représentés.
+- **B2 — Installation** : choix Standard/Personnalisée réel, MSI signé selon l'édition, WebView2 `offlineInstaller` intégré, UAC uniquement si requis ; désinstallation/réinstallation et données conservées.
+- **B3 — Ouverture** : chemin d'installation vérifié, lancement de `pravda-app.exe` et arrêt du bootstrapper ; jamais de jeton d'authentification transféré.
+- **M1 — Maintenance** : UI Paramètres, commandes Tauri nommées, quotas/expiration, régression déconnexion pendant test, `SKIP ≠ PASS`, rapports expurgés.
+- **A1 — Audit** : events PAPER/LIVE séparés, séquence stable après crash, aucune clé dans les logs, `UNKNOWN` conservé, export support expurgé et test de limites/taille.
+- **GO/NO-GO** : CI Windows au SHA exact, analyse CodeQL, revue indépendante et essais sur **VM sans WebView2 et sans réseau au niveau hyperviseur** ; signature Authenticode exigée uniquement pour une édition annoncée Enterprise.
+
+**État au 5 novembre 2026 :** la PR #138 a intégré le centre de diagnostic local, pas un installateur préflight tout-en-un. L'issue #134 suit encore la qualification des vrais MSI/NSIS, de la VM propre et des composants facultatifs. Les commandes IPC supplémentaires, le bootstrapper et le journal financier persistant de cette section sont des **spécifications futures**, et aucune de ces fonctionnalités n'autorise les ordres réels.
+
+---
+
 ## Recette Windows — preuve MSI/NSIS et prérequis embarqué (4 novembre 2026)
 
 ### Configuration effectivement présente
