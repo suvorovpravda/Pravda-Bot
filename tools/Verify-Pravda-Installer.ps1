@@ -32,7 +32,7 @@ if ($lines.Count -lt 3) {
 }
 $paths = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
 $kinds = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
-$pattern = '^([0-9a-f]{64})  (pravda-app\.exe|pravda-doctor\.exe|pravda-harness\.exe|bundle/msi/[^/\\]+\.msi|bundle/nsis/[^/\\]+-setup\.exe)$'
+$pattern = '^([0-9a-f]{64})  (pravda-app\.exe|pravda-doctor\.exe|pravda-harness\.exe|pravda-production-center\.exe|bundle/msi/[^/\\]+\.msi|bundle/nsis/[^/\\]+-setup\.exe)$'
 foreach ($line in $lines) {
     if ($line -cnotmatch $pattern) {
         throw 'Malformed or unsafe checksum manifest entry'
@@ -48,6 +48,8 @@ foreach ($line in $lines) {
         'doctor'
     } elseif ($relative -eq 'pravda-harness.exe') {
         'harness'
+    } elseif ($relative -eq 'pravda-production-center.exe') {
+        'center'
     } elseif ($relative.StartsWith('bundle/msi/')) {
         'msi'
     } else {
@@ -74,7 +76,7 @@ foreach ($line in $lines) {
     }
 }
 $requiredKinds = @('exe', 'msi', 'nsis')
-if ($RequireCompanions) { $requiredKinds += @('doctor', 'harness') }
+if ($RequireCompanions) { $requiredKinds += @('doctor', 'harness', 'center') }
 foreach ($expectedKind in $requiredKinds) {
     if (-not $kinds.Contains($expectedKind)) {
         throw "Release manifest is missing the $expectedKind candidate"
@@ -84,6 +86,7 @@ $actualCandidates = @(
     Get-Item -LiteralPath (Join-Path $root 'pravda-app.exe') -ErrorAction Stop
     Get-ChildItem -LiteralPath $root -Filter 'pravda-doctor.exe' -File -ErrorAction Stop
     Get-ChildItem -LiteralPath $root -Filter 'pravda-harness.exe' -File -ErrorAction Stop
+    Get-ChildItem -LiteralPath $root -Filter 'pravda-production-center.exe' -File -ErrorAction Stop
     Get-ChildItem -LiteralPath (Join-Path $root 'bundle/msi') -Filter '*.msi' -File -ErrorAction Stop
     Get-ChildItem -LiteralPath (Join-Path $root 'bundle/nsis') -Filter '*-setup.exe' -File -ErrorAction Stop
 )
