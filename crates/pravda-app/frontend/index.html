@@ -48,7 +48,7 @@
         <button class="tab-btn" data-tab="revolut" type="button">Revolut X</button>
         <button class="tab-btn" data-tab="sources" type="button">Sources</button>
         <button class="tab-btn" data-tab="system" type="button">Système</button>
-        <button class="tab-btn" data-tab="security" type="button">Sécurité</button>
+        <button class="tab-btn" data-tab="security" type="button">Paramètres · Sécurité &amp; dépannage</button>
     </nav>
 
 
@@ -117,23 +117,34 @@
         </article>
         <article class="card secondary-card" data-category="security">
             <div class="card-head">
-                <div><h2>Centre de sécurité · états vérifiables</h2>
-                    <p>Lecture locale après connexion, sans télémétrie ni récupération de secrets</p></div>
+                <div><h2>Sécurité &amp; dépannage · centre de contrôle</h2>
+                    <p>Contrôles locaux depuis la session Rust ; aucun ordre réel ni transmission automatique</p></div>
                 <span class="status pending" id="security-status" role="status" aria-live="polite">Non vérifié</span>
             </div>
             <div class="card-body">
-                <p class="fine-print">Un résultat non testé reste « Non vérifié ». Aucun indicateur vert global ni certification implicite.</p>
+                <div class="maintenance-notice"><strong>Tests de sécurité</strong><span>Vérifications de session et SQLite en lecture seule. Les autres états non contrôlés restent « Non vérifié ».</span></div>
                 <div id="security-checks" class="security-checks" role="list" aria-live="polite">
                     <p class="fine-print">Contrôles en attente de la session Rust.</p>
                 </div>
                 <div class="feature-actions">
-                    <button class="button button-primary" id="security-refresh" type="button">Recontrôler les états locaux</button>
+                    <button class="button button-primary" id="security-refresh" type="button">Relancer les tests locaux</button>
                 </div>
                 <hr>
-                <h3>Événements de sécurité locaux</h3>
-                <p class="fine-print">64 événements maximum en mémoire, depuis le démarrage actuel. Pas de transfert réseau, pas de conservation après fermeture.</p>
+                <h3>Dépannage · journal de sécurité local</h3>
+                <p class="fine-print">64 événements maximum, en mémoire et depuis ce démarrage. Ces codes ne sont pas un journal d'ordres financier persistant. Aucun transfert automatique.</p>
                 <div id="security-events" class="security-events" role="list" aria-live="polite">
                     <p class="fine-print">Historique non chargé.</p>
+                </div>
+                <hr>
+                <h3>Outils embarqués et rapports</h3>
+                <div class="maintenance-notice">
+                    <strong>Moniteur de performance · disponible</strong>
+                    <span>CPU, RAM et durée du processus depuis les métriques Rust de l'application.</span>
+                    <div class="feature-actions"><button class="button" type="button" data-go-tab="system">Consulter les métriques</button></div>
+                </div>
+                <div class="maintenance-notice maintenance-pending">
+                    <strong>Rapport complet · centre externe</strong>
+                    <span>Le diagnostic Doctor + Harness + Desktop et les rapports HTML/JSON sont actuellement produits par <code>pravda-test-center.exe</code>. Son lancement et l'export ZIP directement depuis ces paramètres restent à développer ; aucun scan administrateur, réseau ou mise à jour n'est lancé ici.</span>
                 </div>
                 <hr>
                 <h3>Proton VPN · option facultative</h3>
