@@ -26,4 +26,34 @@ fn main() {
             fs::write(&target, []).expect("Cannot create check-only placeholder");
         }
     }
+    // The user-facing setup is a distinct EXE. It embeds a full offline
+    // MSI and the verified one-click diagnostic rather than opening a
+    // six-second desktop smoke window as if it were the installed app.
+    println!("cargo:rerun-if-env-changed=PRAVDA_SETUP_PAYLOAD_DIR");
+    println!("cargo:rerun-if-env-changed=PRAVDA_SETUP_REQUIRE_PAYLOADS");
+    let setup_dir = env::var_os("PRAVDA_SETUP_PAYLOAD_DIR").map(PathBuf::from);
+    let setup_required = env::var("PRAVDA_SETUP_REQUIRE_PAYLOADS").as_deref() == Ok("1");
+    {
+        let (name, file_name, header) = (
+            "pravda-embedded-installer.msi",
+            "pravda-installer.msi",
+            b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".as_slice(),
+        );
+        let destination_file = destination.join(name);
+        let origin = setup_dir.as_ref().map(|dir| dir.join(file_name));
+        if let Some(file) = &origin {
+            println!("cargo:rerun-if-changed={}", file.display());
+        }
+        if let Some(file) = origin.filter(|file| file.is_file()) {
+            let bytes = fs::read(&file).expect("Cannot read unified setup payload");
+            if setup_required && (bytes.len() < 100_000 || !bytes.starts_with(header)) {
+                panic!("Required Windows setup payload invalid: {file_name}");
+            }
+            fs::write(destination_file, bytes).expect("Cannot embed Windows setup payload");
+        } else if setup_required {
+            panic!("Required Windows setup payload missing: {file_name}");
+        } else {
+            fs::write(destination_file, []).expect("Cannot create setup check-only placeholder");
+        }
+    }
 }

@@ -227,6 +227,40 @@ jobs:
           $file = 'crates/pravda-app/target/release/pravda-test-center.exe'
           & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
           if ($LASTEXITCODE -ne 0) { throw 'Integrated test center signing failed' }
+      - name: Build one-file Windows installer with embedded offline MSI
+        shell: pwsh
+        env:
+          PRAVDA_SETUP_REQUIRE_PAYLOADS: '1'
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msi = @(Get-ChildItem 'crates/pravda-app/target/release/bundle/msi' -Filter '*.msi' -File)
+          if ($msi.Count -ne 1) { throw 'Unified setup requires exactly one MSI candidate' }
+          $folder = Join-Path $env:RUNNER_TEMP 'pravda-unified-input'
+          New-Item -ItemType Directory -Force -Path $folder | Out-Null
+          Copy-Item -LiteralPath $msi[0].FullName -Destination (Join-Path $folder 'pravda-installer.msi') -ErrorAction Stop
+          $env:PRAVDA_SETUP_PAYLOAD_DIR = $folder
+          cargo build --locked --release -p pravda-server --bin pravda-setup
+          if ($LASTEXITCODE -ne 0) { throw 'Unified Windows setup compilation failed' }
+          $setup = Get-Item 'target/release/pravda-setup.exe' -ErrorAction Stop
+          if ($setup.Length -le $msi[0].Length) { throw 'Unified setup does not embed the MSI payload' }
+          Copy-Item -LiteralPath $setup.FullName -Destination 'crates/pravda-app/target/release/pravda-setup.exe' -Force
+          $process = Start-Process -FilePath 'crates/pravda-app/target/release/pravda-setup.exe' -ArgumentList '--verify-only' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Unified setup payload verification failed' }
+      - name: Sign unified setup when Enterprise signing was requested
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $thumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Signing identity missing' }
+          $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $tools = @(Get-ChildItem -LiteralPath $kit -Recurse -File -Filter signtool.exe -ErrorAction Stop |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool.exe$' } |
+            Sort-Object FullName -Descending)
+          if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
+          $file = 'crates/pravda-app/target/release/pravda-setup.exe'
+          & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+          if ($LASTEXITCODE -ne 0) { throw 'Unified setup Authenticode signing failed' }
       - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
         shell: pwsh
         env:
@@ -240,8 +274,9 @@ jobs:
           $doctor=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-doctor.exe' -ErrorAction Stop
           $harness=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-harness.exe' -ErrorAction Stop
           $center=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-test-center.exe' -ErrorAction Stop
+          $setup=Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-setup.exe' -ErrorAction Stop
           if ($msi.Count -lt 1 -or $nsis.Count -lt 1) { throw 'MSI or NSIS installer missing' }
-          foreach ($file in @($exe)+@($doctor)+@($harness)+@($center)+@($msi)+@($nsis)) {
+          foreach ($file in @($exe)+@($doctor)+@($harness)+@($center)+@($setup)+@($msi)+@($nsis)) {
             $hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             Write-Host "$($file.Name) SHA256=$hash"
             $sig=Get-AuthenticodeSignature -FilePath $file.FullName
@@ -264,10 +299,11 @@ jobs:
           $doctor = Get-Item 'crates/pravda-app/target/release/pravda-doctor.exe' -ErrorAction Stop
           $harness = Get-Item 'crates/pravda-app/target/release/pravda-harness.exe' -ErrorAction Stop
           $center = Get-Item 'crates/pravda-app/target/release/pravda-test-center.exe' -ErrorAction Stop
+          $setup = Get-Item 'crates/pravda-app/target/release/pravda-setup.exe' -ErrorAction Stop
           $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
           $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
           if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
-          $files = @($exe) + @($doctor) + @($harness) + @($center) + $msi + $nsis
+          $files = @($exe) + @($doctor) + @($harness) + @($center) + @($setup) + $msi + $nsis
           $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
           $manifest = foreach ($file in ($files | Sort-Object FullName)) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -360,10 +396,19 @@ jobs:
             crates/pravda-app/target/release/pravda-doctor.exe
             crates/pravda-app/target/release/pravda-harness.exe
             crates/pravda-app/target/release/pravda-test-center.exe
+            crates/pravda-app/target/release/pravda-setup.exe
             crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 30
 
+      # The only operator download; forensic builds remain separate.
+      - name: Publish single-file Windows setup
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-single-file-setup
+          path: crates/pravda-app/target/release/pravda-setup.exe
+          if-no-files-found: error
+          retention-days: 30
       - name: Stage independent companion download folders
         shell: pwsh
         run: |
@@ -467,6 +512,18 @@ jobs:
           }
           & ./tools/Verify-Pravda-Installer.ps1 @args
           Write-Host "Verified independently downloaded Windows release from commit $env:EXPECTED_COMMIT"
+      - name: Verify unified setup executable without installing
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $setup = (Resolve-Path './downloaded-release/pravda-setup.exe' -ErrorAction Stop).Path
+          $manifest = @(Get-Content -LiteralPath 'downloaded-release/bundle/SHA256SUMS.txt' -Encoding ascii)
+          $digest = (Get-FileHash -LiteralPath $setup -Algorithm SHA256).Hash.ToLowerInvariant()
+          if (@($manifest | Where-Object { $_ -ceq ($digest + '  pravda-setup.exe') }).Count -ne 1) {
+            throw 'Unified setup does not match downloaded release manifest'
+          }
+          $process = Start-Process -FilePath $setup -ArgumentList '--verify-only' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Unified setup payload self-test failed' }
       - name: Download standalone production test application
         uses: actions/download-artifact@v8
         with:

@@ -506,6 +506,79 @@ pub async fn ipc_security_report(
     finish_authorized_read(&session, &issued_to, Ok(rows))
 }
 
+// Acceptance tests are requested from the installed desktop UI, not a separate
+// diagnostic app. All results are allowlisted. No shell, broker API, network,
+// user-profile enumeration, backup mutation or installation action is performed.
+fn acceptance_report_rows(phase: &str) -> Result<Vec<String>, &'static str> {
+    if phase != "preproduction" && phase != "postproduction" {
+        return Err("INVALID_ACCEPTANCE_PHASE");
+    }
+    let synthetic = PaperSandbox::default();
+    let original = synthetic.snapshot();
+    let verified = synthetic.trade("SOL", "BUY", 1).is_ok()
+        && synthetic.trade("DOGE", "BUY", 1).is_err()
+        && synthetic.reset() == original;
+    let paper_status = if verified { "verified" } else { "blocked" };
+    let paper_detail = if verified {
+        "Achat fictif, instrument interdit et reinitialisation testes en memoire"
+    } else {
+        "Echec d'un test de simulation fictive; operations reelles interdites"
+    };
+    let phase_detail = if phase == "preproduction" {
+        "Preproduction : tests locaux, pas une qualification de publication"
+    } else {
+        "Postproduction : tests dans l'application installee; recette VM distincte"
+    };
+    Ok(vec![
+        format!("phase|verified|{phase_detail}"),
+        "session|verified|Session Rust requise pour demander et lire ce rapport".to_owned(),
+        "ipc|verified|Commande IPC de la fenetre principale autorisee".to_owned(),
+        format!("paper|{paper_status}|{paper_detail}"),
+        "sqlite|unknown|Controle SQLite en cours; restauration non verifiee".to_owned(),
+        "webview|verified|Cette fenetre Tauri peut communiquer par IPC Rust".to_owned(),
+        "installer|unknown|Installation hors reseau sur VM sans WebView2 non verifiee ici"
+            .to_owned(),
+        "persistence|unknown|Redemarrage, mise a niveau et sauvegarde non verifies ici".to_owned(),
+        "authenticode|unknown|Signature et horodatage non verifies ici".to_owned(),
+        "live|unknown|Aucune verification d'une autorisation de trading reel; ne pas l'activer"
+            .to_owned(),
+    ])
+}
+
+/// Read-only, local pre/postproduction acceptance directly inside Pravda-Bot.
+/// Unrelated diagnostic suites and physical installation tests remain separate
+/// gates; a local PASS must never replace a host-level VM/installer acceptance.
+#[tauri::command]
+pub async fn ipc_acceptance_report(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    phase: String,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let mut rows = acceptance_report_rows(&phase).map_err(str::to_string)?;
+    rows[4] = match desktop.security_database_health_code().await {
+        "database_ok" => {
+            "sqlite|verified|SQLite quick_check OK; sauvegarde et restauration non verifiees"
+        }
+        "database_missing" => {
+            "sqlite|blocked|Base SQLite absente; aucune reinitialisation automatique"
+        }
+        "database_invalid_path" => {
+            "sqlite|blocked|Chemin de base invalide; aucune reinitialisation automatique"
+        }
+        "database_integrity_failed" => {
+            "sqlite|blocked|SQLite quick_check en echec; aucune reparation automatique"
+        }
+        "database_schema_missing" => {
+            "sqlite|blocked|Schema SQLite attendu manquant; aucune reparation automatique"
+        }
+        _ => "sqlite|unknown|SQLite indisponible ou occupee; aucune action automatique",
+    }
+    .to_owned();
+    finish_authorized_read(&session, &issued_to, Ok(rows))
+}
+
 #[tauri::command]
 pub async fn ipc_fx_status(
     window: Window,
@@ -672,6 +745,22 @@ mod tests {
         ));
         let authority = Arc::new(Auth::load(&path, 1_000).unwrap());
         (IpcAuth::new(authority), path)
+    }
+
+    #[test]
+    fn acceptance_report_keeps_physical_and_financial_gates_unverified() {
+        for phase in ["preproduction", "postproduction"] {
+            let rows = acceptance_report_rows(phase).unwrap();
+            assert_eq!(rows.len(), 10);
+            assert!(rows.iter().all(|line| line.split('|').count() == 3));
+            assert!(rows[3].starts_with("paper|verified|"));
+            for row in &rows[6..] {
+                assert_eq!(row.split('|').nth(1), Some("unknown"));
+            }
+            assert!(!rows.join(" ").contains("API_KEY"));
+        }
+        assert!(acceptance_report_rows("production").is_err());
+        assert!(acceptance_report_rows("../install").is_err());
     }
 
     #[test]
