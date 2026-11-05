@@ -189,8 +189,7 @@ async fn main() {
                     main_window = main_window.data_directory(std::path::PathBuf::from(path));
                 }
             }
-            let diagnostic_title = if std::env::var("PRAVDA_OFFLINE_TEST").as_deref()
-                == Ok("true")
+            let diagnostic_title = if std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true")
                 && std::env::var_os("PRAVDA_DIAGNOSTIC_WEBVIEW_DIR").is_some()
             {
                 "Pravda-Bot | Diagnostic temporaire (aucune saisie requise)"
