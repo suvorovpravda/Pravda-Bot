@@ -7,7 +7,7 @@
 use std::{
     fs::{self, OpenOptions},
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Command, ExitStatus},
     time::{SystemTime, UNIX_EPOCH},
 };
