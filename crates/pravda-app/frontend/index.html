@@ -178,10 +178,18 @@
                     <span>CPU, RAM et durée du processus depuis les métriques Rust de l'application.</span>
                     <div class="feature-actions"><button class="button" type="button" data-go-tab="system">Consulter les métriques</button></div>
                 </div>
-                <div class="maintenance-notice maintenance-pending">
-                    <strong>Rapport complet · centre externe</strong>
-                    <span>Le diagnostic Doctor + Harness + Desktop et les rapports HTML/JSON sont actuellement produits par <code>pravda-test-center.exe</code>. Son lancement et l'export ZIP directement depuis ces paramètres restent à développer ; aucun scan administrateur, réseau ou mise à jour n'est lancé ici.</span>
-                </div>
+                <section id="acceptance-center" class="maintenance-notice" aria-label="Centre de tests intégré">
+                    <h3>Préproduction et postproduction · centre de tests intégré</h3>
+                    <p class="fine-print">Tests locaux Rust exécutés sur demande, directement dans Pravda-Bot. Simulation sur portefeuille fictif indépendant, aucune connexion à une plateforme financière. Les essais VM hors réseau, la signature et la restauration restent non vérifiés ici.</p>
+                    <div class="feature-actions">
+                        <button class="button button-primary" id="acceptance-pre" type="button">Lancer les tests préproduction</button>
+                        <button class="button" id="acceptance-post" type="button">Lancer les tests postproduction</button>
+                    </div>
+                    <p class="fine-print" id="acceptance-status" role="status" aria-live="polite">Aucune campagne lancée.</p>
+                    <div id="acceptance-results" class="security-checks" role="list" aria-live="polite">Aucun résultat disponible.</div>
+                    <label for="acceptance-json">Rapport JSON à copier après relecture</label>
+                    <textarea id="acceptance-json" class="acceptance-json" rows="5" readonly>Aucun rapport généré.</textarea>
+                </section>
                 <hr>
                 <h3>Proton VPN · option facultative</h3>
                 <p>Si vous avez un compte Proton VPN, ouvrez l’application officielle Windows et connectez-vous dedans. Pravda-Bot ne collecte pas vos identifiants, ne lance aucune commande VPN non documentée et ne prétend pas vérifier votre tunnel.</p>

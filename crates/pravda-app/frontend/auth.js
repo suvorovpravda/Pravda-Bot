@@ -60,6 +60,7 @@ function showLogin() {
     loginVisible = true;
     if (typeof window.pravdaLockRevolutConsent === "function") window.pravdaLockRevolutConsent();
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
+    if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -74,6 +75,7 @@ function activateDashboard() {
     loginVisible = false;
     // Never display prior-session synthetic positions while the new snapshot loads.
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
+    if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {

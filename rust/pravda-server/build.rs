@@ -39,11 +39,6 @@ fn main() {
             "pravda-installer.msi",
             b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".as_slice(),
         ),
-        (
-            "pravda-embedded-center.exe",
-            "pravda-test-center.exe",
-            b"MZ".as_slice(),
-        ),
     ] {
         let destination_file = destination.join(name);
         let origin = setup_dir.as_ref().map(|dir| dir.join(file_name));

@@ -227,7 +227,7 @@ jobs:
           $file = 'crates/pravda-app/target/release/pravda-test-center.exe'
           & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
           if ($LASTEXITCODE -ne 0) { throw 'Integrated test center signing failed' }
-      - name: Build one-file Windows installer with embedded MSI and test center
+      - name: Build one-file Windows installer with embedded offline MSI
         shell: pwsh
         env:
           PRAVDA_SETUP_REQUIRE_PAYLOADS: '1'
@@ -238,7 +238,6 @@ jobs:
           $folder = Join-Path $env:RUNNER_TEMP 'pravda-unified-input'
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           Copy-Item -LiteralPath $msi[0].FullName -Destination (Join-Path $folder 'pravda-installer.msi') -ErrorAction Stop
-          Copy-Item -LiteralPath 'crates/pravda-app/target/release/pravda-test-center.exe' -Destination (Join-Path $folder 'pravda-test-center.exe') -ErrorAction Stop
           $env:PRAVDA_SETUP_PAYLOAD_DIR = $folder
           cargo build --locked --release -p pravda-server --bin pravda-setup
           if ($LASTEXITCODE -ne 0) { throw 'Unified Windows setup compilation failed' }

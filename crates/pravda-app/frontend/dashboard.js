@@ -968,6 +968,78 @@ const translations = {
             securityCheckInFlight = false;
         }
     }
+    // Native, authenticated pre/postproduction tests belong to the installed
+    // desktop. No test center executable, shell invocation or HTTP endpoint.
+    let acceptanceBusy = false;
+    const acceptanceLabels = {
+        phase: "Campagne", session: "Authentification Rust", ipc: "IPC de la fenêtre",
+        paper: "Simulation fictive", sqlite: "Intégrité SQLite",
+        webview: "Tauri / WebView2", installer: "Installation hors réseau",
+        persistence: "Redémarrage et restauration", authenticode: "Signature",
+        live: "Trading réel"
+    };
+    function clearAcceptanceUi() {
+        $("acceptance-results").textContent = "Aucun résultat disponible.";
+        $("acceptance-status").textContent = "Aucune campagne lancée.";
+        $("acceptance-json").value = "Aucun rapport généré.";
+    }
+    window.pravdaClearAcceptance = clearAcceptanceUi;
+    async function runAcceptance(phase) {
+        const requestGeneration = window.pravdaAuthGeneration;
+        if (!securityVisible() || acceptanceBusy ||
+            !["preproduction", "postproduction"].includes(phase)) return;
+        acceptanceBusy = true;
+        $("acceptance-pre").disabled = true;
+        $("acceptance-post").disabled = true;
+        $("acceptance-status").textContent = "Tests Rust locaux en cours…";
+        try {
+            const rows = await window.pravdaInvoke("ipc_acceptance_report", {phase});
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (!Array.isArray(rows) || rows.length !== 10) throw new Error("INVALID_ACCEPTANCE_REPORT");
+            let verified = 0, blocked = 0, unknown = 0;
+            const nodes = [];
+            for (const line of rows) {
+                if (typeof line !== "string" || line.length > 250) throw new Error("INVALID_ACCEPTANCE_ROW");
+                const parts = line.split("|");
+                if (parts.length !== 3 || !Object.hasOwn(acceptanceLabels, parts[0]) ||
+                    !["verified", "blocked", "unknown"].includes(parts[1])) {
+                    throw new Error("INVALID_ACCEPTANCE_ROW");
+                }
+                if (parts[1] === "verified") verified++;
+                if (parts[1] === "blocked") blocked++;
+                if (parts[1] === "unknown") unknown++;
+                const item = document.createElement("div");
+                item.className = "security-check";
+                item.setAttribute("role", "listitem");
+                const header = document.createElement("strong");
+                header.textContent = acceptanceLabels[parts[0]] + " · " +
+                    {verified: "Vérifié", blocked: "Échec", unknown: "Non vérifié"}[parts[1]];
+                const detail = document.createElement("p");
+                detail.textContent = parts[2];
+                item.append(header, detail);
+                nodes.push(item);
+            }
+            $("acceptance-results").replaceChildren(...nodes);
+            $("acceptance-status").textContent =
+                (phase === "preproduction" ? "Préproduction" : "Postproduction") +
+                " : " + verified + " vérifiés, " + blocked + " échec(s), " +
+                unknown + " non vérifiés. Ne constitue pas une homologation.";
+            $("acceptance-json").value = JSON.stringify({
+                schema_version: 1, phase, verified, blocked, unknown, findings: rows
+            }, null, 2);
+        } catch (_error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            $("acceptance-results").textContent = "Rapport non disponible.";
+            $("acceptance-status").textContent = "Échec de contrôle. Aucun PASS déduit.";
+            $("acceptance-json").value = "Aucun rapport valide généré.";
+        } finally {
+            acceptanceBusy = false;
+            $("acceptance-pre").disabled = false;
+            $("acceptance-post").disabled = false;
+        }
+    }
+    $("acceptance-pre").addEventListener("click", () => runAcceptance("preproduction"));
+    $("acceptance-post").addEventListener("click", () => runAcceptance("postproduction"));
     $("security-refresh").addEventListener("click", refreshSecurity);
     $("security-refresh").addEventListener("click", refreshSecurityEvents);
     window.refreshSecurity = refreshSecurity;

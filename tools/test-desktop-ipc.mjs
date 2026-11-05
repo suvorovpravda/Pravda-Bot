@@ -12,6 +12,7 @@ const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=re
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
 const msiAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Msi-Install.ps1"),"utf8");
 const nsisAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Nsis-Install.ps1"),"utf8");
+const setupSource=readFileSync(join(process.cwd(),"rust/pravda-server/src/bin/pravda-setup.rs"),"utf8");
 for (const [type, acceptance] of [["MSI",msiAcceptance],["NSIS",nsisAcceptance]]) {
   assert.match(acceptance,/installed release desktop restarts with its existing SQLite and no implicit auth/,
     type+": packaged desktop must survive process restart on the same SQLite");
@@ -28,6 +29,12 @@ assert.equal(cfg.bundle.windows?.webviewInstallMode?.type,"offlineInstaller",
 assert.equal(cfg.bundle.windows?.webviewInstallMode?.silent,true,
   "WebView2 must install automatically, without user-run commands");
 assert.match(installerWorkflow,/Smoke-test MSI installation and uninstall on pristine Windows/);
+assert.match(installerWorkflow,/pravda-windows-single-file-setup/,
+  "Single user-facing setup must be published independently from CI artifacts");
+assert.match(setupSource,/Command::new\("msiexec\.exe"\)/,
+  "User-facing setup must invoke actual Windows MSI installation");
+assert.doesNotMatch(setupSource,/launch_diagnostic|const CENTER|six-second/i,
+  "Installer must not substitute the temporary diagnostic desktop for the installed application");
 assert.match(installerWorkflow,/Smoke-test NSIS installation and uninstall on pristine Windows/);
 assert.match(installerWorkflow,/Test-Pravda-Nsis-Install\.ps1/,
   "Release gate must execute the actual NSIS installer in a disposable Windows environment");

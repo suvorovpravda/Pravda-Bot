@@ -260,3 +260,6 @@ body{background:radial-gradient(ellipse at 16% 0%,rgba(42,101,170,.19),transpare
 .paper-actions{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px}
 .paper-actions button:disabled{opacity:.65;cursor:wait}
 @media (max-width:540px){.paper-sandbox{padding:12px}.paper-actions .button{width:100%}}
+
+        .acceptance-json { display:block; width:100%; min-height:100px; padding:11px; margin-top:9px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--text); resize:vertical; font:12px/1.5 Consolas,monospace; }
+        #acceptance-center .feature-actions { margin:12px 0; }
