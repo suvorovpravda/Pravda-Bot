@@ -288,6 +288,12 @@ fn run_one(case: &TestCase, path: &Path, index: u32, limits: GateLimits) -> Resu
     if let Some(parent) = path.parent() {
         cmd.current_dir(parent);
     }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // A hidden parent does not hide newly spawned console fixture children.
+        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
+    }
     let mut child = match cmd.spawn() {
         Ok(child) => child,
         Err(_) => return ResultRow::invalid("spawn_failed"),
