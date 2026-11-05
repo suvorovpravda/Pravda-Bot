@@ -5,6 +5,9 @@ use sha2::{Digest, Sha256};
 use std::{
     fs, io,
     path::{Path, PathBuf},
+};
+#[cfg(windows)]
+use std::{
     process::{Command, Stdio},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -33,7 +36,7 @@ struct Report {
 }
 
 fn checksum(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
+    Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
 }
 fn is_pe(bytes: &[u8]) -> bool {
     bytes.len() > 100_000 && bytes.starts_with(b"MZ")
