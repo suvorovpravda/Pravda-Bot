@@ -102,8 +102,14 @@ fn run_bounded_capture(
     // Use the same isolated environment boundary as the desktop smoke test.
     command.env_clear();
     for key in [
-        "SystemRoot", "WINDIR", "PATH", "COMSPEC", "PATHEXT",
-        "ProgramFiles", "ProgramFiles(x86)", "PROGRAMDATA",
+        "SystemRoot",
+        "WINDIR",
+        "PATH",
+        "COMSPEC",
+        "PATHEXT",
+        "ProgramFiles",
+        "ProgramFiles(x86)",
+        "PROGRAMDATA",
     ] {
         if let Some(value) = std::env::var_os(key) {
             command.env(key, value);
