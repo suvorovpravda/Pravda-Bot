@@ -974,6 +974,150 @@ const translations = {
     window.refreshSecurityEvents = refreshSecurityEvents;
     refreshSecurity();
     refreshSecurityEvents();
+
+    // Paper Trading is a deterministic, Rust-owned sandbox and never touches
+    // authenticated exchanges, local browser storage, or actual account funds.
+    const paperFormat = cents => (cents / 100).toLocaleString("fr-FR", {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    }) + " USDT fictifs";
+    const paperNumber = value => {
+        if (!/^\d{1,15}$/.test(value)) throw new Error("INVALID_PAPER_RESULT");
+        const number = Number(value);
+        if (!Number.isSafeInteger(number)) throw new Error("INVALID_PAPER_RESULT");
+        return number;
+    };
+    function renderPaper(rows) {
+        if (!Array.isArray(rows) || rows.length > 40) throw new Error("INVALID_PAPER_RESULT");
+        const state = {mode:"", cash:null, equity:null, fee:null, priceType:"",
+            prices:{}, positions:{}, events:[]};
+        for (const raw of rows) {
+            if (typeof raw !== "string" || raw.length > 120) throw new Error("INVALID_PAPER_RESULT");
+            const parts = raw.split("|");
+            switch (parts[0]) {
+                case "mode":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.mode = parts[1]; break;
+                case "cash_cents":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.cash = paperNumber(parts[1]); break;
+                case "equity_cents":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.equity = paperNumber(parts[1]); break;
+                case "fee_bps":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.fee = paperNumber(parts[1]); break;
+                case "price_type":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.priceType = parts[1]; break;
+                case "price_cents":
+                    if (parts.length !== 3 || !["BTC","ETH","SOL"].includes(parts[1]))
+                        throw new Error("INVALID_PAPER_RESULT");
+                    state.prices[parts[1]] = paperNumber(parts[2]); break;
+                case "position_milli":
+                    if (parts.length !== 3 || !["BTC","ETH","SOL"].includes(parts[1]))
+                        throw new Error("INVALID_PAPER_RESULT");
+                    state.positions[parts[1]] = paperNumber(parts[2]); break;
+                case "event":
+                    if (parts.length !== 7 || !["BUY","SELL"].includes(parts[2]) ||
+                        !["BTC","ETH","SOL"].includes(parts[3]))
+                        throw new Error("INVALID_PAPER_RESULT");
+                    state.events.push({seq:paperNumber(parts[1]),side:parts[2],symbol:parts[3],
+                        quantity:paperNumber(parts[4]),gross:paperNumber(parts[5]),
+                        fee:paperNumber(parts[6])});
+                    break;
+                default: throw new Error("INVALID_PAPER_RESULT");
+            }
+        }
+        if (state.mode !== "PAPER_ONLY" || state.priceType !== "SYNTHETIC_FIXED" ||
+            state.cash === null || state.equity === null || state.fee !== 36 ||
+            ["BTC","ETH","SOL"].some(symbol =>
+                !Number.isSafeInteger(state.prices[symbol]) ||
+                !Number.isSafeInteger(state.positions[symbol])) ||
+            state.events.length > 20) throw new Error("INVALID_PAPER_RESULT");
+        $("paper-summary").textContent =
+            "Solde : " + paperFormat(state.cash) + " · Équité : " + paperFormat(state.equity);
+        const positions = ["BTC","ETH","SOL"].map(symbol => {
+            const node = document.createElement("div");
+            node.textContent = symbol + " · " + (state.positions[symbol] / 1000).toFixed(3)
+                + " unité fictive · cotation fixe " + paperFormat(state.prices[symbol]);
+            return node;
+        });
+        $("paper-positions").replaceChildren(...positions);
+        const events = state.events.map(item => {
+            const node = document.createElement("div");
+            node.setAttribute("role","listitem");
+            node.textContent = "#" + item.seq + " " +
+                (item.side === "BUY" ? "Achat" : "Vente") + " simulé · "
+                + (item.quantity / 1000).toFixed(3) + " " + item.symbol
+                + " · montant " + paperFormat(item.gross)
+                + " · frais " + paperFormat(item.fee);
+            return node;
+        });
+        if (events.length) $("paper-events").replaceChildren(...events);
+        else $("paper-events").textContent = "Aucune transaction simulée.";
+    }
+    let paperBusy = false;
+    function paperMessage(error) {
+        const messages = {
+            INVALID_PAPER_INSTRUMENT:"Instrument fictif non autorisé.",
+            INVALID_PAPER_SIDE:"Action non autorisée.",
+            INVALID_PAPER_QUANTITY:"Quantité simulée incorrecte.",
+            PAPER_RISK_LIMIT:"Limite de risque : 2 500 USDT fictifs par opération.",
+            PAPER_INSUFFICIENT_FUNDS:"Solde fictif insuffisant.",
+            PAPER_INSUFFICIENT_POSITION:"Position fictive insuffisante.",
+            PAPER_ARITHMETIC_ERROR:"Opération bloquée : contrôle arithmétique.",
+            UNAUTHORIZED:"Session expirée : reconnectez-vous."
+        };
+        return messages[String(error)] || "Simulation locale indisponible.";
+    }
+    async function refreshPaper() {
+        const generation = window.pravdaAuthGeneration;
+        if (!securityVisible() || paperBusy) return;
+        try {
+            const rows = await window.pravdaInvoke("ipc_paper_snapshot");
+            if (generation !== window.pravdaAuthGeneration) return;
+            renderPaper(rows);
+            $("paper-notice").textContent =
+                "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("paper-notice").textContent = paperMessage(error);
+        }
+    }
+    async function paperAction(command, args = {}) {
+        if (paperBusy) return;
+        const generation = window.pravdaAuthGeneration;
+        paperBusy = true;
+        $("paper-trade").disabled = true;
+        $("paper-reset").disabled = true;
+        try {
+            const rows = await window.pravdaInvoke(command, args);
+            if (generation !== window.pravdaAuthGeneration) return;
+            renderPaper(rows);
+            $("paper-notice").textContent = command === "ipc_paper_reset"
+                ? "Portefeuille fictif remis à zéro. Aucun compte réel affecté."
+                : "Opération PAPER simulée en mémoire. Aucun ordre réel envoyé.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("paper-notice").textContent = paperMessage(error);
+        } finally {
+            paperBusy = false;
+            $("paper-trade").disabled = false;
+            $("paper-reset").disabled = false;
+        }
+    }
+    $("paper-order-form").addEventListener("submit", event => {
+        event.preventDefault();
+        paperAction("ipc_paper_trade", {
+            symbol:$("paper-symbol").value,
+            side:$("paper-side").value,
+            quantityMilli:Number($("paper-quantity").value)
+        });
+    });
+    $("paper-reset").addEventListener("click", () => paperAction("ipc_paper_reset"));
+    window.refreshPaper = refreshPaper;
+    refreshPaper();
+
     // No unconditional security polling: SQLite diagnostics are only requested
     // on login, an explicit refresh or when the Security tab is opened.
     document.addEventListener("click",async event => {
@@ -1303,6 +1447,7 @@ const translations = {
         if (tab === "security") {
             refreshSecurity();
             refreshSecurityEvents();
+            refreshPaper();
         }
     }
     const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
