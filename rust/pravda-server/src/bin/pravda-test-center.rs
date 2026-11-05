@@ -1,13 +1,13 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 // One Windows executable containing the desktop, Doctor and offline Harness.
 // No installation, shell script, network connection or development runtime.
+#[cfg(windows)]
 use sha2::{Digest, Sha256};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-};
+use std::{fs, path::PathBuf};
 #[cfg(windows)]
 use std::{
+    io,
+    path::Path,
     process::{Command, Stdio},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
@@ -19,12 +19,14 @@ const DOCTOR: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/pravda-doctor.ex
 #[cfg(windows)]
 const HARNESS: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/pravda-harness.exe"));
 
+#[cfg(any(windows, test))]
 #[derive(serde::Serialize)]
 struct Finding {
     check: &'static str,
     status: &'static str,
     detail: String,
 }
+#[cfg(windows)]
 #[derive(serde::Serialize)]
 struct Report {
     schema_version: u32,
@@ -35,15 +37,18 @@ struct Report {
     findings: Vec<Finding>,
 }
 
+#[cfg(windows)]
 fn checksum(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
 }
+#[cfg(any(windows, test))]
 fn is_pe(bytes: &[u8]) -> bool {
     bytes.len() > 100_000 && bytes.starts_with(b"MZ")
 }
+#[cfg(any(windows, test))]
 fn html_escape(input: &str) -> String {
     input
         .replace('&', "&amp;")
@@ -52,6 +57,7 @@ fn html_escape(input: &str) -> String {
         .replace('"', "&quot;")
         .replace('\'', "&#39;")
 }
+#[cfg(windows)]
 fn save_binary(path: &Path, bytes: &[u8]) -> io::Result<()> {
     use std::io::Write;
     let mut file = fs::OpenOptions::new()
@@ -61,6 +67,7 @@ fn save_binary(path: &Path, bytes: &[u8]) -> io::Result<()> {
     file.write_all(bytes)?;
     file.flush()
 }
+#[cfg(any(windows, test))]
 fn finding(check: &'static str, status: &'static str, detail: impl Into<String>) -> Finding {
     Finding {
         check,
@@ -68,6 +75,7 @@ fn finding(check: &'static str, status: &'static str, detail: impl Into<String>)
         detail: detail.into(),
     }
 }
+#[cfg(any(windows, test))]
 fn safe_doctor_results(output: &str) -> Vec<Finding> {
     // Never copy arbitrary diagnostic output to the report: status and
     // check identifiers only. No paths, user names, secrets, or auth content.
@@ -100,6 +108,7 @@ fn safe_doctor_results(output: &str) -> Vec<Finding> {
         .take(100)
         .collect()
 }
+#[cfg(windows)]
 fn render_html(report: &Report) -> String {
     let mut rows = String::new();
     for f in &report.findings {
