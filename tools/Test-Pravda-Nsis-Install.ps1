@@ -154,7 +154,10 @@ try {
         $env:PRAVDA_INSTALLED_EXE = $applications[0].FullName
         $env:PRAVDA_INSTALL_KIND = 'NSIS'
         $env:PRAVDA_ONBOARDING_REPORT = Join-Path $env:RUNNER_TEMP 'Pravda-nsis-installed-onboarding.json'
-        node tools/test-installed-onboarding.mjs
+        if ($env:PRAVDA_AIRGAP_ACCEPTANCE -ceq 'true') {
+            & (Join-Path $PSScriptRoot 'Initialize-Pravda-Airgap-Gui.ps1')
+        }
+        node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')
         if ($LASTEXITCODE -ne 0) {
             throw 'NSIS installed production GUI onboarding acceptance failed'
         }
