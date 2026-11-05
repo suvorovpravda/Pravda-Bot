@@ -67,19 +67,43 @@ try {
     # and Harness, but historic 3-artifact test candidates remain compatible.
     foreach ($item in @(
         @{ Path = 'pravda-doctor.exe'; Data = 'synthetic doctor' },
-        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' }
+        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' },
+        @{ Path = 'pravda-production-center.exe'; Data = 'synthetic center' }
     )) {
         $file = Join-Path $root $item.Path
         [IO.File]::WriteAllText($file, $item.Data)
     }
     $fullManifest = @($manifest)
-    foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
+    foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe', 'pravda-production-center.exe')) {
         $file = Join-Path $root $name
         $sum = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
         $fullManifest += "$sum  $name"
     }
     $fullManifest | Set-Content -LiteralPath $manifestPath -Encoding ascii
     & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireCompanions
+
+    # The one-click wrapper is a required companion. Reject byte substitution.
+    $center = Join-Path $root 'pravda-production-center.exe'
+    [IO.File]::AppendAllText($center, '-tampered')
+    $rejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireCompanions
+    } catch {
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'Tampered one-click center passed checksum validation' }
+    [IO.File]::WriteAllText($center, 'synthetic center')
+
+    # Reject a missing one-click wrapper even with Doctor and Harness present.
+    Move-Item -LiteralPath $center -Destination ($center + '.missing')
+    $rejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireCompanions
+    } catch {
+        $rejected = $true
+    }
+    if (-not $rejected) { throw 'Missing one-click center passed companion verification' }
+    Move-Item -LiteralPath ($center + '.missing') -Destination $center
 
     # Missing companion must fail closed rather than publishing partial release.
     Remove-Item -LiteralPath (Join-Path $root 'pravda-harness.exe') -Force
