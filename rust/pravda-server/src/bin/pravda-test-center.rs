@@ -69,10 +69,13 @@ fn safe_doctor_results(output: &str) -> Vec<Finding> {
         .lines()
         .filter_map(|line| {
             let mut pieces = line.splitn(3, " | ");
-            let status = pieces.next()?.trim();
-            if !matches!(status, "PASS" | "WARN" | "FAIL" | "SKIP") {
-                return None;
-            }
+            let status = match pieces.next()?.trim() {
+                "PASS" => "PASS",
+                "WARN" => "WARN",
+                "FAIL" => "FAIL",
+                "SKIP" => "SKIP",
+                _ => return None,
+            };
             let check = pieces.next()?.trim();
             if check.is_empty()
                 || check.len() > 64
