@@ -203,10 +203,41 @@ fn finding(check: &'static str, status: &'static str, detail: impl Into<String>)
         detail: detail.into(),
     }
 }
+/// Translate only exact, known Doctor explanations into safe user-facing
+/// diagnostic context. Raw output is deliberately never placed in the report.
+#[cfg(any(windows, test))]
+fn doctor_context(check: &str, status: &str, advice: &str) -> &'static str {
+    match (check, status, advice) {
+        (
+            "application_process",
+            "WARN",
+            "Pravda-Bot process not observed during snapshot",
+        ) => "Normal before the temporary desktop process is started",
+        (
+            "local_auth_file",
+            "WARN",
+            "File not found; installation or setup may be incomplete",
+        ) => "Isolated diagnostic profile has no saved login record before enrollment",
+        ("auth_readability", "WARN", "File not configured yet") => {
+            "Isolated diagnostic profile has not yet enrolled a password"
+        }
+        ("sqlite_health", "WARN", "SQLite missing; start Pravda-Bot once") => {
+            "Doctor checks its isolated default directory before desktop startup; see synthetic_sqlite_health"
+        }
+        (
+            "sqlite_health",
+            "WARN",
+            "SQLite inaccessible; inspect file permissions or lock",
+        ) => "Doctor could not read its isolated default database; see synthetic_sqlite_health",
+        _ => "Doctor classification recorded; raw details withheld for privacy",
+    }
+}
+
 #[cfg(any(windows, test))]
 fn safe_doctor_results(output: &str) -> Vec<Finding> {
-    // Never copy arbitrary diagnostic output to the report: status and
-    // check identifiers only. No paths, user names, secrets, or auth content.
+    // Never copy arbitrary diagnostic output to the report: only known
+    // status/check codes and exact allowlisted descriptions. No file paths,
+    // user names, tokens, credentials or auth-record contents.
     output
         .lines()
         .filter_map(|line| {
@@ -227,10 +258,11 @@ fn safe_doctor_results(output: &str) -> Vec<Finding> {
             {
                 return None;
             }
+            let advice = pieces.next()?.trim();
             Some(finding(
                 "doctor_check",
                 status,
-                format!("{check}: see Doctor classification"),
+                format!("{check}: {}", doctor_context(check, status, advice)),
             ))
         })
         .take(100)
@@ -517,6 +549,34 @@ fn run() -> Result<PathBuf, String> {
                     "Windows could not launch the bundled desktop",
                 )),
             }
+            // Doctor's pre-start check targets the isolated default profile,
+            // not the desktop's explicit synthetic DB. Inspect the actual
+            // database only after the desktop process has exited.
+            use pravda_store::doctor::{inspect_database, DatabaseHealth};
+            let health = inspect_database(&db);
+            let (status, detail) = match health {
+                DatabaseHealth::Healthy => (
+                    "PASS",
+                    "Disposable SQLite passed read-only integrity and ticks-schema checks",
+                ),
+                DatabaseHealth::Missing => (
+                    "FAIL",
+                    "Desktop did not create its disposable SQLite database",
+                ),
+                DatabaseHealth::NotAFile => {
+                    ("FAIL", "Disposable SQLite path is not a regular file")
+                }
+                DatabaseHealth::Unavailable => {
+                    ("FAIL", "Disposable SQLite database cannot be read")
+                }
+                DatabaseHealth::Corrupt => ("FAIL", "Disposable SQLite integrity check failed"),
+                DatabaseHealth::SchemaMissing => {
+                    ("FAIL", "Disposable SQLite has no expected ticks schema")
+                }
+            };
+            report
+                .findings
+                .push(finding("synthetic_sqlite_health", status, detail));
         }
         for file in [&app, &doctor, &harness] {
             let _ = fs::remove_file(file);
@@ -588,13 +648,41 @@ fn main() {
 mod tests {
     use super::*;
     #[test]
+    fn doctor_warnings_are_explained_without_leaking_raw_details() {
+        let input = concat!(
+            "WARN | application_process | Pravda-Bot process not observed during snapshot\n",
+            "WARN | local_auth_file | File not found; installation or setup may be incomplete\n",
+            "WARN | auth_readability | File not configured yet\n",
+            "WARN | sqlite_health | SQLite missing; start Pravda-Bot once\n",
+            "FAIL | sqlite_health | C:\\\\Users\\\\Secret\\\\data.db; PRIVATE=leak\n",
+        );
+        let result = safe_doctor_results(input);
+        assert_eq!(result.len(), 5);
+        assert!(result[0]
+            .detail
+            .contains("before the temporary desktop process"));
+        assert!(result[1].detail.contains("Isolated diagnostic profile"));
+        assert!(result[2].detail.contains("enrolled a password"));
+        assert!(result[3].detail.contains("synthetic_sqlite_health"));
+        assert_eq!(result[4].status, "FAIL");
+        assert!(result[4].detail.contains("raw details withheld"));
+        for row in result {
+            assert!(!row.detail.contains("Secret"));
+            assert!(!row.detail.contains("PRIVATE="));
+        }
+    }
+
+    #[test]
     fn output_escapes_html_and_rejects_untrusted_doctor_lines() {
         assert_eq!(html_escape("<>&"), "&lt;&gt;&amp;");
         let r = safe_doctor_results(
             "PASS | sqlite_health | C:\\Users\\Private\nPRIVATE=SECRET\nFAIL | bad/name | path",
         );
         assert_eq!(r.len(), 1);
-        assert_eq!(r[0].detail, "sqlite_health: see Doctor classification");
+        assert_eq!(
+            r[0].detail,
+            "sqlite_health: Doctor classification recorded; raw details withheld for privacy"
+        );
         assert!(!r[0].detail.contains("Private"));
     }
     #[test]

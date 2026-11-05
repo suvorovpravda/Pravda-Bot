@@ -536,7 +536,7 @@ jobs:
           if ($report.schema_version -ne 1 -or $report.commit -ne '${{ github.sha }}') {
             throw 'Integrated report is not linked to the verified commit'
           }
-          foreach ($check in @('doctor_startup','harness_smoke','desktop_process')) {
+          foreach ($check in @('doctor_startup','harness_smoke','desktop_process','synthetic_sqlite_health')) {
             $matching = @($report.findings | Where-Object check -EQ $check)
             if ($matching.Count -ne 1 -or $matching[0].status -ne 'PASS') {
               throw "Integrated test failed required check: $check"
