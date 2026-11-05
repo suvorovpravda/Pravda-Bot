@@ -102,7 +102,11 @@ fn message(text:&str){eprintln!("{text}");}
 #[cfg(windows)]
 fn run() -> Result<PathBuf,String> {
     let now=SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
-    let folder=std::env::temp_dir().join(format!("pravda-test-center-{}-{now}",std::process::id()));
+    let base=if std::env::args().any(|arg|arg=="--ci") {
+        std::env::var_os("PRAVDA_TEST_CENTER_REPORT_DIR")
+            .map(PathBuf::from).unwrap_or_else(std::env::temp_dir)
+    } else { std::env::temp_dir() };
+    let folder=base.join(format!("pravda-test-center-{}-{now}",std::process::id()));
     fs::create_dir(&folder).map_err(|_|"Cannot create isolated test folder")?;
     let mut report=Report{schema_version:1,product:"Pravda-Bot",commit:option_env!("PRAVDA_BUILD_COMMIT").unwrap_or("UNKNOWN"),
         generated_unix:now,signed_release:false,findings:Vec::new()};
