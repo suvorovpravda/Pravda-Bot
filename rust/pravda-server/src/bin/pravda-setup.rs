@@ -125,9 +125,8 @@ fn trusted_windows_installer() -> Result<PathBuf, &'static str> {
     if used == 0 || used >= required {
         return Err("Windows system directory cannot be resolved");
     }
-    let directory = std::path::PathBuf::from(std::ffi::OsString::from_wide(
-        &chars[..used as usize],
-    ));
+    let directory =
+        std::path::PathBuf::from(std::ffi::OsString::from_wide(&chars[..used as usize]));
     let installer = directory.join("msiexec.exe");
     if !installer.is_file() {
         return Err("Windows Installer is unavailable");
