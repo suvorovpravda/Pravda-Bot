@@ -50,7 +50,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v cargo-audit >/dev/null 2>&1 || [ "$(cargo audit --version)" != 'cargo-audit 0.22.2' ]; then
+          # cargo-audit's Cargo subcommand prints a prefixed name such as
+          # "cargo-audit-audit 0.22.2"; compare the pinned version suffix.
+          installed_version="$(cargo audit --version 2>/dev/null || true)"
+          if ! command -v cargo-audit >/dev/null 2>&1 || [[ "$installed_version" != *' 0.22.2' ]]; then
             cargo install cargo-audit --version 0.22.2 --locked --force
           fi
           cargo audit --version
