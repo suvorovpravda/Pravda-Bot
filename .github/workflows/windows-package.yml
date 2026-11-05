@@ -217,8 +217,14 @@ jobs:
           if ($exe.Length -le 1000000) { throw 'One-click embedded binary is incomplete' }
       - name: Test standalone one-click reporter safety (Windows native)
         shell: pwsh
+        env:
+          PRAVDA_SOURCE_SHA: ${{ github.sha }}
         run: |
           $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path 'crates/pravda-app/target/release').Path
+          $env:PRAVDA_EMBED_APP = (Resolve-Path (Join-Path $root 'pravda-app.exe')).Path
+          $env:PRAVDA_EMBED_DOCTOR = (Resolve-Path (Join-Path $root 'pravda-doctor.exe')).Path
+          $env:PRAVDA_EMBED_HARNESS = (Resolve-Path (Join-Path $root 'pravda-harness.exe')).Path
           $testExe = Join-Path $env:RUNNER_TEMP 'pravda-production-center-tests.exe'
           & rustc --test --edition=2021 --crate-name pravda_production_center_tests tools/pravda-production-center.rs -o $testExe
           if ($LASTEXITCODE -ne 0) { throw 'One-click native test harness did not compile' }
