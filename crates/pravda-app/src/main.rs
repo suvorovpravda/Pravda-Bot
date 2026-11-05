@@ -1,5 +1,6 @@
 mod consent;
 mod ipc;
+mod paper;
 
 use std::sync::Arc;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -143,6 +144,7 @@ async fn main() {
         .manage(ipc_auth)
         .manage(public_consent)
         .manage(ipc::SecurityEvents::default())
+        .manage(paper::PaperSandbox::default())
         .manage(desktop)
         .invoke_handler(tauri::generate_handler![
             ipc::ipc_auth_status,
@@ -155,6 +157,9 @@ async fn main() {
             ipc::ipc_history_query,
             ipc::ipc_history_export_csv,
             ipc::ipc_paper_alerts_snapshot,
+            ipc::ipc_paper_snapshot,
+            ipc::ipc_paper_trade,
+            ipc::ipc_paper_reset,
             ipc::ipc_runtime_metrics,
             ipc::ipc_security_report,
             ipc::ipc_security_events,
