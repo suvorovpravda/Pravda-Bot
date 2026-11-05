@@ -59,6 +59,7 @@ function showLogin() {
     window.pravdaAuthGeneration++;
     loginVisible = true;
     if (typeof window.pravdaLockRevolutConsent === "function") window.pravdaLockRevolutConsent();
+    if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -71,6 +72,8 @@ window.pravdaRequireLogin = showLogin;
 function activateDashboard() {
     window.pravdaAuthGeneration++;
     loginVisible = false;
+    // Never display prior-session synthetic positions while the new snapshot loads.
+    if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {
@@ -78,6 +81,7 @@ function activateDashboard() {
         if (typeof window.refreshAll === "function") window.refreshAll();
         if (typeof window.refreshSecurity === "function") window.refreshSecurity();
         if (typeof window.refreshSecurityEvents === "function") window.refreshSecurityEvents();
+        if (typeof window.refreshPaper === "function") window.refreshPaper();
         return;
     }
     const script = document.createElement("script");
