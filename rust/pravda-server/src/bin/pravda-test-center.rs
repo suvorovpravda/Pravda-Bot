@@ -549,6 +549,40 @@ fn run() -> Result<PathBuf, String> {
                     "Windows could not launch the bundled desktop",
                 )),
             }
+            // Doctor's pre-start check targets the isolated default profile,
+            // not the desktop's explicit synthetic DB. Inspect the actual
+            // database only after the desktop process has exited.
+            use pravda_store::doctor::{inspect_database, DatabaseHealth};
+            let health = inspect_database(&db);
+            let (status, detail) = match health {
+                DatabaseHealth::Healthy => (
+                    "PASS",
+                    "Disposable SQLite passed read-only integrity and ticks-schema checks",
+                ),
+                DatabaseHealth::Missing => (
+                    "FAIL",
+                    "Desktop did not create its disposable SQLite database",
+                ),
+                DatabaseHealth::NotAFile => (
+                    "FAIL",
+                    "Disposable SQLite path is not a regular file",
+                ),
+                DatabaseHealth::Unavailable => (
+                    "FAIL",
+                    "Disposable SQLite database cannot be read",
+                ),
+                DatabaseHealth::Corrupt => (
+                    "FAIL",
+                    "Disposable SQLite integrity check failed",
+                ),
+                DatabaseHealth::SchemaMissing => (
+                    "FAIL",
+                    "Disposable SQLite has no expected ticks schema",
+                ),
+            };
+            report
+                .findings
+                .push(finding("synthetic_sqlite_health", status, detail));
         }
         for file in [&app, &doctor, &harness] {
             let _ = fs::remove_file(file);
@@ -649,7 +683,10 @@ mod tests {
             "PASS | sqlite_health | C:\\Users\\Private\nPRIVATE=SECRET\nFAIL | bad/name | path",
         );
         assert_eq!(r.len(), 1);
-        assert_eq!(r[0].detail, "sqlite_health: see Doctor classification");
+        assert_eq!(
+            r[0].detail,
+            "sqlite_health: Doctor classification recorded; raw details withheld for privacy"
+        );
         assert!(!r[0].detail.contains("Private"));
     }
     #[test]
