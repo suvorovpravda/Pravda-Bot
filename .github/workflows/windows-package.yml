@@ -215,6 +215,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'One-click Windows production center compilation failed' }
           $exe = Get-Item -LiteralPath (Join-Path $root 'pravda-production-center.exe') -ErrorAction Stop
           if ($exe.Length -le 1000000) { throw 'One-click embedded binary is incomplete' }
+      - name: Test standalone one-click reporter safety (Windows native)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $testExe = Join-Path $env:RUNNER_TEMP 'pravda-production-center-tests.exe'
+          & rustc --test --edition=2021 --crate-name pravda_production_center_tests tools/pravda-production-center.rs -o $testExe
+          if ($LASTEXITCODE -ne 0) { throw 'One-click native test harness did not compile' }
+          $test = Start-Process -FilePath $testExe -ArgumentList '--test-threads=1' -Wait -PassThru
+          if ($test.ExitCode -ne 0) { throw 'One-click native tests failed' }
       - name: Sign one-click production center when signing is requested
         if: ${{ inputs.signed }}
         shell: pwsh
