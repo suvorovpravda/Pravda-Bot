@@ -264,7 +264,8 @@ jobs:
           $msi = @(Get-ChildItem "$bundle/msi" -Filter '*.msi' -File -ErrorAction Stop)
           $nsis = @(Get-ChildItem "$bundle/nsis" -Filter '*-setup.exe' -File -ErrorAction Stop)
           if ($msi.Count -eq 0 -or $nsis.Count -eq 0) { throw 'Installers missing; cannot produce manifest' }
-          $files = @($exe) + @($doctor) + @($harness) + $msi + $nsis
+          $center = Get-Item 'crates/pravda-app/target/release/pravda-production-center.exe' -ErrorAction Stop
+          $files = @($exe) + @($doctor) + @($harness) + @($center) + $msi + $nsis
           $releaseRoot = (Resolve-Path 'crates/pravda-app/target/release').Path
           $manifest = foreach ($file in ($files | Sort-Object FullName)) {
             $hash = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -356,6 +357,7 @@ jobs:
             crates/pravda-app/target/release/bundle/release-evidence.json
             crates/pravda-app/target/release/pravda-doctor.exe
             crates/pravda-app/target/release/pravda-harness.exe
+            crates/pravda-app/target/release/pravda-production-center.exe
             crates/pravda-app/target/release/pravda-app.exe
           if-no-files-found: error
           retention-days: 30
@@ -369,6 +371,13 @@ jobs:
           Copy-Item -LiteralPath 'docs/windows/PRODUCTION-TEST.txt' -Destination 'companion-dist/test/PRODUCTION-TEST.txt' -ErrorAction Stop
           Copy-Item -LiteralPath 'crates/pravda-app/target/release/pravda-doctor.exe' -Destination 'companion-dist/doctor/pravda-doctor.exe' -ErrorAction Stop
           Copy-Item -LiteralPath 'docs/windows/TROUBLESHOOTING.txt' -Destination 'companion-dist/doctor/TROUBLESHOOTING.txt' -ErrorAction Stop
+      - name: Publish unified one-click local production report
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-oneclick-report
+          path: crates/pravda-app/target/release/pravda-production-center.exe
+          if-no-files-found: error
+          retention-days: 30
       - name: Publish standalone preproduction test tool
         uses: actions/upload-artifact@v7
         with:
@@ -400,7 +409,7 @@ jobs:
         with:
           name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
           path: downloaded-release
-      - name: Validate extracted EXE, MSI, NSIS, Doctor, Harness and provenance
+      - name: Validate extracted EXE, MSI, NSIS, Doctor, Harness, one-click center and provenance
         shell: pwsh
         env:
           EXPECTED_COMMIT: ${{ github.sha }}
@@ -417,7 +426,7 @@ jobs:
             throw 'Downloaded artifact provenance, commit or signed mode mismatch'
           }
           $entries = @(Get-Content -LiteralPath (Join-Path $root 'bundle/SHA256SUMS.txt') -Encoding ascii)
-          if ($entries.Count -lt 5 -or @($evidence.artifacts).Count -ne $entries.Count) {
+          if ($entries.Count -lt 6 -or @($evidence.artifacts).Count -ne $entries.Count) {
             throw 'Missing or duplicate release evidence for an artifact'
           }
           $covered = [System.Collections.Generic.HashSet[string]]::new([StringComparer]::OrdinalIgnoreCase)
@@ -466,6 +475,11 @@ jobs:
         with:
           name: pravda-windows-troubleshooting
           path: downloaded-doctor
+      - name: Download standalone one-click production center
+        uses: actions/download-artifact@v8
+        with:
+          name: pravda-windows-oneclick-report
+          path: downloaded-oneclick
       - name: Verify independent companion archives against main release manifest
         shell: pwsh
         run: |
@@ -473,11 +487,12 @@ jobs:
           $manifest = @(Get-Content -LiteralPath 'downloaded-release/bundle/SHA256SUMS.txt' -Encoding ascii)
           foreach ($case in @(
             @{ Folder = 'downloaded-test'; Exe = 'pravda-harness.exe'; Guide = 'PRODUCTION-TEST.txt' },
-            @{ Folder = 'downloaded-doctor'; Exe = 'pravda-doctor.exe'; Guide = 'TROUBLESHOOTING.txt' }
+            @{ Folder = 'downloaded-doctor'; Exe = 'pravda-doctor.exe'; Guide = 'TROUBLESHOOTING.txt' },
+            @{ Folder = 'downloaded-oneclick'; Exe = 'pravda-production-center.exe'; Guide = $null }
           )) {
             $binary = Join-Path $case.Folder $case.Exe
             $guide = Join-Path $case.Folder $case.Guide
-            if (-not (Test-Path -LiteralPath $guide -PathType Leaf)) { throw 'Missing independent companion instructions' }
+            if ($case.Guide -and -not (Test-Path -LiteralPath $guide -PathType Leaf)) { throw 'Missing independent companion instructions' }
             $hash = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash.ToLowerInvariant()
             $matching = @($manifest | Where-Object { $_ -ceq ($hash + '  ' + $case.Exe) })
             if ($matching.Count -ne 1) { throw 'Independent companion does not match main release manifest' }
@@ -500,6 +515,24 @@ jobs:
             throw 'Unexpected offline test harness synthetic results'
           }
           Write-Host 'PASS standalone Doctor and preproduction Harness synthetic smoke'
+      - name: Run standalone one-click center and validate local reports
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $report = Join-Path $env:RUNNER_TEMP 'Pravda-oneclick-acceptance'
+          $binary = (Resolve-Path './downloaded-oneclick/pravda-production-center.exe').Path
+          $p = Start-Process -FilePath $binary -ArgumentList @('--ci', '--skip-desktop', '--report-dir', ('"' + $report + '"')) -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw 'One-click acceptance executable exited unsuccessfully' }
+          $txt = Get-Content -Raw -LiteralPath (Join-Path $report 'Pravda-Production-Report.txt') -ErrorAction Stop
+          if ($txt -notmatch '(?m)^PASS \| Doctor diagnostic \|' -or
+              $txt -notmatch '(?m)^PASS \| Harness deterministic smoke \|' -or
+              $txt -match '(?m)^FAIL \|') {
+            throw 'The standalone one-click audit reported a failed or missing component'
+          }
+          if (-not (Test-Path (Join-Path $report 'Pravda-Production-Report.html'))) {
+            throw 'One-click audit did not produce a visual HTML report'
+          }
+          Write-Host 'PASS portable one-click center: embedded Doctor + Harness + HTML/TXT reports'
       # Match native WebView2/EdgeDriver on the same Windows image as security E2E.
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/setup-node@v7
