@@ -14,6 +14,8 @@ on:
       - 'tools/Test-Pravda-Nsis-Install.ps1'
       - 'tools/test-installed-onboarding.mjs'
       - 'tools/Test-Pravda-Airgap-Install.ps1'
+      - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
+      - 'tools/test-airgap-acceptance-contract.mjs'
   pull_request:
     paths:
       - '.github/workflows/windows-package.yml'
@@ -26,6 +28,8 @@ on:
       - 'tools/Test-Pravda-Nsis-Install.ps1'
       - 'tools/test-installed-onboarding.mjs'
       - 'tools/Test-Pravda-Airgap-Install.ps1'
+      - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
+      - 'tools/test-airgap-acceptance-contract.mjs'
   workflow_dispatch:
     inputs:
       signed:
@@ -53,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Test-Pravda-Nsis-Install.ps1', 'tools/Test-Pravda-Airgap-Install.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
+          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Test-Pravda-Nsis-Install.ps1', 'tools/Test-Pravda-Airgap-Install.ps1', 'tools/Initialize-Pravda-Airgap-Gui.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
             $tokens = $null
             $errors = $null
             $resolved = (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path
@@ -68,7 +72,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           try {
-            & ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath 'NO_INSTALLER.msi' -Kind MSI -ExpectedSha256 ('0' * 64)
+            & ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath 'NO_INSTALLER.msi' -Kind MSI -ExpectedSha256 ('0' * 64) -ExpectedCommitSha ('0' * 40)
             throw 'FAIL: airgap test accepted an unacknowledged host'
           } catch {
             if ($_.Exception.Message -notmatch '^REFUSED: disposable-VM acknowledgement required') {
