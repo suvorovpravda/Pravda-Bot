@@ -511,11 +511,19 @@ jobs:
           }
           $env:PRAVDA_TEST_CENTER_REPORT_DIR = (Join-Path $env:RUNNER_TEMP 'pravda-one-click-acceptance')
           New-Item -ItemType Directory -Force $env:PRAVDA_TEST_CENTER_REPORT_DIR | Out-Null
-          & './downloaded-center/pravda-test-center.exe' --ci
-          $testerExit = $LASTEXITCODE
+          # GUI-subsystem PE binaries do not reliably populate LASTEXITCODE when
+          # invoked directly from PowerShell. Wait for the process handle instead.
+          $tester = Start-Process -FilePath $center -ArgumentList '--ci' -Wait -PassThru -NoNewWindow
+          $testerExit = [int]$tester.ExitCode
           Write-Host ('Integrated tester exit code: ' + $testerExit)
           $files = @(Get-ChildItem -LiteralPath $env:PRAVDA_TEST_CENTER_REPORT_DIR -Recurse -File -ErrorAction SilentlyContinue)
           Write-Host ('Integrated tester generated file count: ' + $files.Count)
+          # Only leaf names of fixed synthetic test outputs; never log private paths.
+          foreach ($file in $files) {
+            if ($file.Name -in @('PRAVDA-TEST-REPORT.json', 'PRAVDA-TEST-REPORT.html', 'pravda-app.exe', 'pravda-doctor.exe', 'pravda-harness.exe')) {
+              Write-Host ('Integrated tester output type: ' + $file.Name)
+            }
+          }
           $reports = @($files | Where-Object { $_.Name -ceq 'PRAVDA-TEST-REPORT.json' })
           if ($reports.Count -ne 1) {
             throw ('Integrated test report missing or ambiguous; tester exit=' + $testerExit + '; generated files=' + $files.Count)
