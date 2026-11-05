@@ -2,6 +2,7 @@
 //! The current External WebView is NOT granted remote Tauri IPC permissions.
 //! The frontend transport switch is a separate, reviewed PR.
 use crate::consent::RevolutPublicConsent;
+use crate::paper::PaperSandbox;
 use pravda_server::{Auth, AuthError};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -181,6 +182,7 @@ pub async fn ipc_auth_setup(
     window: Window,
     session: State<'_, IpcAuth>,
     events: State<'_, SecurityEvents>,
+    paper: State<'_, PaperSandbox>,
     password: String,
     confirm: String,
 ) -> Result<(), String> {
@@ -198,6 +200,7 @@ pub async fn ipc_auth_setup(
     match result {
         Ok(Ok(token)) => {
             session.accept_token(token);
+            paper.reset(); // New authentication never inherits old paper positions.
             events.record(SecurityEventCode::SetupAccepted);
             Ok(())
         }
@@ -218,6 +221,7 @@ pub async fn ipc_auth_login(
     window: Window,
     session: State<'_, IpcAuth>,
     events: State<'_, SecurityEvents>,
+    paper: State<'_, PaperSandbox>,
     password: String,
 ) -> Result<(), String> {
     require_main(window.label()).map_err(str::to_string)?;
@@ -226,6 +230,7 @@ pub async fn ipc_auth_login(
     match result {
         Ok(Ok(token)) => {
             session.accept_token(token);
+            paper.reset(); // New authentication never inherits old paper positions.
             events.record(SecurityEventCode::LoginAccepted);
             Ok(())
         }
@@ -251,9 +256,15 @@ pub fn ipc_auth_logout(
     window: Window,
     session: State<'_, IpcAuth>,
     events: State<'_, SecurityEvents>,
+    paper: State<'_, PaperSandbox>,
 ) -> Result<(), String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    session.logout();
+    // Serialize logout with every synchronous paper portfolio mutation.
+    let mut current = session.token();
+    if let Some(token) = current.take() {
+        session.authority.logout(&token);
+    }
+    paper.reset();
     events.record(SecurityEventCode::SessionEnded);
     Ok(())
 }
@@ -334,6 +345,57 @@ pub async fn ipc_paper_alerts_snapshot(
 ) -> Result<pravda_server::DesktopPayload, String> {
     let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
     finish_authorized_read(&session, &issued_to, Ok(desktop.alerts_snapshot().await))
+}
+
+/// Every paper action holds the Rust session lock during the synchronous
+/// mutation. Logout cannot interleave with a simulated trade.
+fn paper_session_guard<'a>(
+    session: &'a IpcAuth,
+    label: &str,
+) -> Result<MutexGuard<'a, Option<String>>, String> {
+    require_main(label).map_err(str::to_string)?;
+    let token = session.token();
+    if !token
+        .as_deref()
+        .is_some_and(|current| session.authority.session_valid(current))
+    {
+        return Err("UNAUTHORIZED".to_owned());
+    }
+    Ok(token)
+}
+
+/// Only synthetic fixed-price quotes. No exchange, secret or network access.
+#[tauri::command]
+pub fn ipc_paper_snapshot(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+) -> Result<Vec<String>, String> {
+    let _session_guard = paper_session_guard(&session, window.label())?;
+    Ok(paper.snapshot())
+}
+
+#[tauri::command]
+pub fn ipc_paper_trade(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+    symbol: String,
+    side: String,
+    quantity_milli: u32,
+) -> Result<Vec<String>, String> {
+    let _session_guard = paper_session_guard(&session, window.label())?;
+    paper.trade(&symbol, &side, quantity_milli).map_err(str::to_string)
+}
+
+#[tauri::command]
+pub fn ipc_paper_reset(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+) -> Result<Vec<String>, String> {
+    let _session_guard = paper_session_guard(&session, window.label())?;
+    Ok(paper.reset())
 }
 
 #[tauri::command]
