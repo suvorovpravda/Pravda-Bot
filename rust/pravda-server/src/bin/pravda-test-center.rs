@@ -563,22 +563,16 @@ fn run() -> Result<PathBuf, String> {
                     "FAIL",
                     "Desktop did not create its disposable SQLite database",
                 ),
-                DatabaseHealth::NotAFile => (
-                    "FAIL",
-                    "Disposable SQLite path is not a regular file",
-                ),
-                DatabaseHealth::Unavailable => (
-                    "FAIL",
-                    "Disposable SQLite database cannot be read",
-                ),
-                DatabaseHealth::Corrupt => (
-                    "FAIL",
-                    "Disposable SQLite integrity check failed",
-                ),
-                DatabaseHealth::SchemaMissing => (
-                    "FAIL",
-                    "Disposable SQLite has no expected ticks schema",
-                ),
+                DatabaseHealth::NotAFile => {
+                    ("FAIL", "Disposable SQLite path is not a regular file")
+                }
+                DatabaseHealth::Unavailable => {
+                    ("FAIL", "Disposable SQLite database cannot be read")
+                }
+                DatabaseHealth::Corrupt => ("FAIL", "Disposable SQLite integrity check failed"),
+                DatabaseHealth::SchemaMissing => {
+                    ("FAIL", "Disposable SQLite has no expected ticks schema")
+                }
             };
             report
                 .findings
@@ -664,7 +658,9 @@ mod tests {
         );
         let result = safe_doctor_results(input);
         assert_eq!(result.len(), 5);
-        assert!(result[0].detail.contains("before the temporary desktop process"));
+        assert!(result[0]
+            .detail
+            .contains("before the temporary desktop process"));
         assert!(result[1].detail.contains("Isolated diagnostic profile"));
         assert!(result[2].detail.contains("enrolled a password"));
         assert!(result[3].detail.contains("synthetic_sqlite_health"));
