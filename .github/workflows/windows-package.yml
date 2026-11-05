@@ -512,10 +512,14 @@ jobs:
           $env:PRAVDA_TEST_CENTER_REPORT_DIR = (Join-Path $env:RUNNER_TEMP 'pravda-one-click-acceptance')
           New-Item -ItemType Directory -Force $env:PRAVDA_TEST_CENTER_REPORT_DIR | Out-Null
           & './downloaded-center/pravda-test-center.exe' --ci
-          if ($LASTEXITCODE -ne 0) { throw 'Integrated tester terminated unsuccessfully' }
+          $testerExit = $LASTEXITCODE
           $reports = @(Get-ChildItem -LiteralPath $env:PRAVDA_TEST_CENTER_REPORT_DIR -Recurse -File -Filter 'PRAVDA-TEST-REPORT.json')
           if ($reports.Count -ne 1) { throw 'Integrated test report missing or ambiguous' }
           $report = Get-Content -LiteralPath $reports[0].FullName -Raw | ConvertFrom-Json
+          foreach ($finding in $report.findings) {
+            if ($finding.status -eq 'FAIL') { Write-Host ('Integrated FAIL check=' + $finding.check + ' detail=' + $finding.detail) }
+          }
+          if ($testerExit -ne 0) { throw 'Integrated tester terminated unsuccessfully; inspect retained report' }
           if ($report.schema_version -ne 1 -or $report.commit -ne '${{ github.sha }}') {
             throw 'Integrated report is not linked to the verified commit'
           }
@@ -528,6 +532,14 @@ jobs:
           if (@($report.findings | Where-Object check -EQ 'desktop_gui' | Where-Object status -EQ 'SKIP').Count -ne 1) {
             throw 'GUI interaction must remain explicitly unverified in the integrated tester'
           }
+      - name: Retain integrated diagnostic reports even on failure
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-integrated-diagnostic-report
+          path: ${{ runner.temp }}/pravda-one-click-acceptance/**/PRAVDA-TEST-REPORT.*
+          if-no-files-found: warn
+          retention-days: 30
       - name: Smoke test independent downloaded Doctor and offline harness
         shell: pwsh
         run: |
