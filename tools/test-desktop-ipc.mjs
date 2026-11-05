@@ -97,6 +97,12 @@ assert.match(paper,/MAX_NOTIONAL_CENTS:\s*u64\s*=\s*250_000/,
   "Every simulated order must be risk capped");
 assert.doesNotMatch(paper,/reqwest|tokio_tungstenite|std::net|TcpStream|CredentialManager|sign_order|revolut_x_private/,
   "Paper sandbox must not contain a network, credential or broker path");
+assert.match(ipc,/fn accept_token\(&self, token: String, paper: &PaperSandbox\)/,
+  "Replacing the authenticated session must own the paper reset");
+assert.match(ipc,/let mut current = self\.token\(\);[\s\S]*?paper\.reset\(\);[\s\S]*?\*current = Some\(token\);/,
+  "Session replacement and paper reset must hold the same Rust lock");
+assert.match(ipc,/session\.accept_token\(token, &paper\);/,
+  "Authenticated login and setup must reset the portfolio atomically");
 assert.match(ipc,/fn paper_session_guard/,
   "Native paper commands must hold Rust auth lock during mutations");
 for(const cmd of ["ipc_paper_snapshot","ipc_paper_trade","ipc_paper_reset"]) {

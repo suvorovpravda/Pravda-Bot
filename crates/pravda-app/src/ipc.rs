@@ -87,10 +87,15 @@ impl IpcAuth {
             .unwrap_or_else(|poison| poison.into_inner())
     }
 
-    fn accept_token(&self, token: String) {
-        if let Some(previous) = self.token().replace(token) {
+    fn accept_token(&self, token: String, paper: &PaperSandbox) {
+        // Match paper_session_guard and logout: session lock, then portfolio lock.
+        // The next session is not visible until its portfolio is reset.
+        let mut current = self.token();
+        if let Some(previous) = current.take() {
             self.authority.logout(&previous);
         }
+        paper.reset();
+        *current = Some(token);
     }
 
     fn logout(&self) {
@@ -199,8 +204,7 @@ pub async fn ipc_auth_setup(
     .await;
     match result {
         Ok(Ok(token)) => {
-            session.accept_token(token);
-            paper.reset(); // New authentication never inherits old paper positions.
+            session.accept_token(token, &paper);
             events.record(SecurityEventCode::SetupAccepted);
             Ok(())
         }
@@ -229,8 +233,7 @@ pub async fn ipc_auth_login(
     let result = tauri::async_runtime::spawn_blocking(move || authority.login(&password)).await;
     match result {
         Ok(Ok(token)) => {
-            session.accept_token(token);
-            paper.reset(); // New authentication never inherits old paper positions.
+            session.accept_token(token, &paper);
             events.record(SecurityEventCode::LoginAccepted);
             Ok(())
         }
@@ -739,7 +742,7 @@ mod tests {
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
 
         let token = session.authority.login(&password).unwrap();
-        session.accept_token(token);
+        session.accept_token(token, &PaperSandbox::default());
         assert_eq!(require_authenticated(&session, "main"), Ok(()));
         assert_eq!(
             require_authenticated(&session, "other"),
@@ -759,7 +762,7 @@ mod tests {
         let password = format!("TestOnlySecret-{}-concurrent", std::process::id());
         session.authority.set_password(&password).unwrap();
         let token = session.authority.login(&password).unwrap();
-        session.accept_token(token);
+        session.accept_token(token, &PaperSandbox::default());
         let issued_to = authorized_read_token(&session, "main").unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let (release_tx, release_rx) = tokio::sync::oneshot::channel();
@@ -772,7 +775,7 @@ mod tests {
         ready_rx.await.unwrap();
         session.logout();
         let new_token = session.authority.login(&password).unwrap();
-        session.accept_token(new_token);
+        session.accept_token(new_token, &PaperSandbox::default());
         release_tx.send(()).unwrap();
         assert_eq!(pending.await.unwrap(), Err("UNAUTHORIZED".to_owned()));
 
@@ -794,12 +797,39 @@ mod tests {
     }
 
     #[test]
+    fn replacing_session_resets_synthetic_portfolio_before_authorizing_new_trades() {
+        let (session, path) = new_session();
+        let paper = PaperSandbox::default();
+        let password = format!("TestOnlySecret-{}-paper-reset", std::process::id());
+        session.authority.set_password(&password).unwrap();
+
+        let first = session.authority.login(&password).unwrap();
+        session.accept_token(first, &paper);
+        {
+            let _guard = paper_session_guard(&session, "main").unwrap();
+            paper.trade("SOL", "BUY", 10).unwrap();
+        }
+        assert!(paper.snapshot().iter().any(|row| row == "position_milli|SOL|10"));
+
+        let second = session.authority.login(&password).unwrap();
+        session.accept_token(second, &paper);
+        {
+            let _guard = paper_session_guard(&session, "main").unwrap();
+            assert_eq!(paper.snapshot(), PaperSandbox::default().snapshot());
+            paper.trade("SOL", "BUY", 1).unwrap();
+        }
+        assert!(paper.snapshot().iter().any(|row| row == "position_milli|SOL|1"));
+        session.logout();
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn expired_or_revoked_session_fails_closed() {
         let (session, path) = new_session();
         let password = format!("TestOnlySecret-{}-uvwxyz", std::process::id());
         session.authority.set_password(&password).unwrap();
         let token = session.authority.login(&password).unwrap();
-        session.accept_token(token.clone());
+        session.accept_token(token.clone(), &PaperSandbox::default());
         session.authority.logout(&token);
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
         assert_eq!(safe_auth_error(AuthError::Invalid), "INVALID_CREDENTIALS");
