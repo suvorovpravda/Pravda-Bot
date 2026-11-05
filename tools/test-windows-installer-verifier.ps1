@@ -67,7 +67,7 @@ try {
     # and Harness, but historic 3-artifact test candidates remain compatible.
     foreach ($item in @(
         @{ Path = 'pravda-doctor.exe'; Data = 'synthetic doctor' },
-        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' ,
+        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' },
         @{ Path = 'pravda-test-center.exe'; Data = 'synthetic integrated test center' }
     )) {
         $file = Join-Path $root $item.Path
