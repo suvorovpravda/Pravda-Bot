@@ -54,6 +54,11 @@ Le programme d'installation ne dépend pas de WebView2 pour **sa propre interfac
 
 ### B. Comment relancer les contrôles depuis Paramètres → Sécurité & dépannage
 
+**Mode Paper Trading interactif (implémentation en cours dans la PR #144).** Le nouveau panneau Paramètres héberge un portefeuille fictif **en mémoire** géré par `crates/pravda-app/src/paper.rs`, indépendant du `PaperSimulator` de la stratégie d'arbitrage. Les commandes `ipc_paper_snapshot`, `ipc_paper_trade` et `ipc_paper_reset` sont limitées à la fenêtre principale authentifiée. Un solde initial de **10 000 USDT fictifs**, des cotations volontairement **fixes et synthétiques** BTC/ETH/SOL, des frais simulés de **0,36 %**, une limite par transaction de **2 500 USDT fictifs**, un journal de 20 opérations et un bouton de remise à zéro permettent de vérifier la mécanique sans API, données d'exchange ni argent réel. Les positions sont effacées au redémarrage, à la déconnexion et à la nouvelle authentification. Les scénarios ne modélisent pas le slippage, le carnet réel ni des performances financières attendues. **Il ne s'agit pas encore d'une simulation utilisant les cotations réelles de Binance/Kraken.** La CI et la revue de cette PR sont obligatoires avant de déclarer la fonction disponible.
+
+**Plateformes présentes dans les sources :** adaptateurs cotations publiques `Binance` et `Kraken` (WebSocket BTC/ETH/SOL), `Revolut X` (carnet public et API privée de lecture sous autorisation). Aucun connecteur `Bybit` ou `MetaTrader` présent dans le périmètre inspecté. Tous les diagnostics de simulation restent hors réseau ; aucun test de connectivité aux exchanges n'est lancé implicitement. Le moteur de trading live est désactivé.
+
+
 Le code actuel possède l'onglet `security`, `ipc_security_report`, `ipc_security_events`, `ipc_runtime_metrics` et une actualisation sur clic/ouverture. Ces contrôles lisent l'état de la session et SQLite **sans** exécuter automatiquement les binaires Doctor/Harness. Ils sont **intégrés** mais ne remplacent pas une recette GUI, une signature vérifiée ou le test hyperviseur #134.
 
 **Extension proposée, sans commande shell générique ni privilège ajouté par défaut :**
