@@ -81,6 +81,8 @@ impl PaperSandbox {
             .ok_or("PAPER_ARITHMETIC_ERROR")?
             / 10_000;
         let mut state = self.state.lock().unwrap_or_else(|e| e.into_inner());
+        // Check all fallible sequence arithmetic before mutating portfolio values.
+        let next_seq = state.seq.checked_add(1).ok_or("PAPER_ARITHMETIC_ERROR")?;
         if side == "BUY" {
             let total = gross.checked_add(fee).ok_or("PAPER_ARITHMETIC_ERROR")?;
             if total > state.cash_cents {
@@ -103,7 +105,7 @@ impl PaperSandbox {
             state.cash_cents = next;
             state.positions_milli[index] -= quantity_milli;
         }
-        state.seq = state.seq.checked_add(1).ok_or("PAPER_ARITHMETIC_ERROR")?;
+        state.seq = next_seq;
         if state.events.len() == MAX_EVENTS {
             state.events.pop_front();
         }
