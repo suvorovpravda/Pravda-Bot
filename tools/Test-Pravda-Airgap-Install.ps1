@@ -151,6 +151,11 @@ try {
     if (@(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.Status -eq 'Up' }).Count -ne 0) {
         throw 'FAIL: network interface was enabled during the test'
     }
+    if (@(Get-NetRoute -ErrorAction Stop | Where-Object {
+        $_.DestinationPrefix -in @('0.0.0.0/0', '::/0')
+    }).Count -ne 0) {
+        throw 'FAIL: default network route appeared during the test'
+    }
     # The GUI JSON lives in RUNNER_TEMP and would otherwise be destroyed by
     # routine cleanup. Retain a redacted, hashed proof separately on this VM.
     # The VM operator exports it only after the offline tests are complete.
