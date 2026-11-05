@@ -36,7 +36,10 @@ struct Report {
 }
 
 fn checksum(bytes: &[u8]) -> String {
-    Sha256::digest(bytes).iter().map(|byte| format!("{byte:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
 }
 fn is_pe(bytes: &[u8]) -> bool {
     bytes.len() > 100_000 && bytes.starts_with(b"MZ")
@@ -312,8 +315,14 @@ fn run() -> Result<PathBuf, String> {
             let mut desktop_command = Command::new(&app);
             desktop_command.env_clear();
             for key in [
-                "SystemRoot", "WINDIR", "PATH", "COMSPEC", "PATHEXT",
-                "ProgramFiles", "ProgramFiles(x86)", "PROGRAMDATA",
+                "SystemRoot",
+                "WINDIR",
+                "PATH",
+                "COMSPEC",
+                "PATHEXT",
+                "ProgramFiles",
+                "ProgramFiles(x86)",
+                "PROGRAMDATA",
             ] {
                 if let Some(value) = std::env::var_os(key) {
                     desktop_command.env(key, value);
@@ -419,9 +428,11 @@ fn main() {
                 let failed = fs::read_to_string(&path)
                     .ok()
                     .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
-                    .and_then(|report| report["findings"].as_array().map(|rows| {
-                        rows.iter().any(|row| row["status"] == "FAIL")
-                    }))
+                    .and_then(|report| {
+                        report["findings"]
+                            .as_array()
+                            .map(|rows| rows.iter().any(|row| row["status"] == "FAIL"))
+                    })
                     .unwrap_or(true);
                 if failed {
                     eprintln!("PRAVDA_TEST_FAILED: see structured JSON report");
