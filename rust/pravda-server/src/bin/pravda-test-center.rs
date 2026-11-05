@@ -65,7 +65,102 @@ fn save_binary(path: &Path, bytes: &[u8]) -> io::Result<()> {
         .create_new(true)
         .open(path)?;
     file.write_all(bytes)?;
-    file.flush()
+    file.flush()?;
+    file.sync_all()?;
+    // Verify what will actually be executed, not just the embedded constant.
+    if fs::read(path)?.as_slice() != bytes {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Extracted executable does not match embedded payload",
+        ));
+    }
+    Ok(())
+}
+
+/// Bounded, timeout-enforced capture: no transient console, no unbounded
+/// stdout allocation or hung child when the output pipe fills up.
+#[cfg(windows)]
+fn run_bounded_capture(
+    path: &Path,
+    args: &[&str],
+    folder: &Path,
+) -> Result<std::process::Output, &'static str> {
+    use std::io::Read;
+    use std::os::windows::process::CommandExt;
+    use std::sync::mpsc;
+    use std::time::Instant;
+    const MAX_OUTPUT: usize = 128 * 1024;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut command = Command::new(path);
+    command
+        .args(args)
+        .current_dir(folder)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(CREATE_NO_WINDOW);
+    let mut child = command.spawn().map_err(|_| "child_spawn_failed")?;
+    let Some(stdout) = child.stdout.take() else {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err("stdout_capture_unavailable");
+    };
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let mut output = Vec::new();
+        let result = stdout
+            .take((MAX_OUTPUT + 1) as u64)
+            .read_to_end(&mut output);
+        let _ = tx.send((result, output));
+    });
+    let deadline = Instant::now() + Duration::from_secs(45);
+    let mut captured = None;
+    loop {
+        if captured.is_none() {
+            match rx.try_recv() {
+                Ok((Ok(_), bytes)) if bytes.len() <= MAX_OUTPUT => captured = Some(bytes),
+                Ok((Ok(_), _)) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("child_output_limit_exceeded");
+                }
+                Ok((Err(_), _)) | Err(mpsc::TryRecvError::Disconnected) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err("child_stdout_read_failed");
+                }
+                Err(mpsc::TryRecvError::Empty) => {}
+            }
+        }
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                let stdout = match captured {
+                    Some(bytes) => bytes,
+                    None => match rx.recv_timeout(Duration::from_millis(500)) {
+                        Ok((Ok(_), bytes)) if bytes.len() <= MAX_OUTPUT => bytes,
+                        Ok((Ok(_), _)) => return Err("child_output_limit_exceeded"),
+                        _ => return Err("child_stdout_read_failed"),
+                    },
+                };
+                return Ok(std::process::Output {
+                    status,
+                    stdout,
+                    stderr: Vec::new(),
+                });
+            }
+            Ok(None) => {}
+            Err(_) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err("child_wait_failed");
+            }
+        }
+        if Instant::now() >= deadline {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("child_timeout");
+        }
+        std::thread::sleep(Duration::from_millis(25));
+    }
 }
 #[cfg(any(windows, test))]
 fn finding(check: &'static str, status: &'static str, detail: impl Into<String>) -> Finding {
@@ -212,21 +307,18 @@ fn run() -> Result<PathBuf, String> {
                         checksum(bytes)
                     ),
                 )),
-                Err(_) => report.findings.push(finding(
-                    "payload_extract",
-                    "FAIL",
-                    "Cannot materialize test executable in isolated temp folder",
-                )),
+                Err(_) => {
+                    let _ = fs::remove_file(file);
+                    report.findings.push(finding(
+                        "payload_extract",
+                        "FAIL",
+                        "Cannot verify the extracted executable in the isolated test folder",
+                    ));
+                }
             }
         }
         if doctor.is_file() {
-            match Command::new(&doctor)
-                .arg("--no-open")
-                .current_dir(&folder)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .output()
-            {
+            match run_bounded_capture(&doctor, &["--no-open"], &folder) {
                 Ok(output) => {
                     let text = String::from_utf8_lossy(&output.stdout);
                     let items = safe_doctor_results(&text);
@@ -254,13 +346,7 @@ fn run() -> Result<PathBuf, String> {
             }
         }
         if harness.is_file() {
-            match Command::new(&harness)
-                .arg("--smoke")
-                .current_dir(&folder)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::null())
-                .output()
-            {
+            match run_bounded_capture(&harness, &["--smoke"], &folder) {
                 Ok(output) => {
                     let value = String::from_utf8_lossy(&output.stdout)
                         .lines()
