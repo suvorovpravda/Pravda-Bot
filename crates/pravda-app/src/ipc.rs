@@ -536,10 +536,12 @@ fn acceptance_report_rows(phase: &str) -> Result<Vec<String>, &'static str> {
         format!("paper|{paper_status}|{paper_detail}"),
         "sqlite|unknown|Controle SQLite en cours; restauration non verifiee".to_owned(),
         "webview|verified|Cette fenetre Tauri peut communiquer par IPC Rust".to_owned(),
-        "installer|unknown|Installation hors reseau sur VM sans WebView2 non verifiee ici".to_owned(),
+        "installer|unknown|Installation hors reseau sur VM sans WebView2 non verifiee ici"
+            .to_owned(),
         "persistence|unknown|Redemarrage, mise a niveau et sauvegarde non verifies ici".to_owned(),
         "authenticode|unknown|Signature et horodatage non verifies ici".to_owned(),
-        "live|unknown|Aucune verification d'une autorisation de trading reel; ne pas l'activer".to_owned(),
+        "live|unknown|Aucune verification d'une autorisation de trading reel; ne pas l'activer"
+            .to_owned(),
     ])
 }
 
@@ -556,11 +558,21 @@ pub async fn ipc_acceptance_report(
     let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
     let mut rows = acceptance_report_rows(&phase).map_err(str::to_string)?;
     rows[4] = match desktop.security_database_health_code().await {
-        "database_ok" => "sqlite|verified|SQLite quick_check OK; sauvegarde et restauration non verifiees",
-        "database_missing" => "sqlite|blocked|Base SQLite absente; aucune reinitialisation automatique",
-        "database_invalid_path" => "sqlite|blocked|Chemin de base invalide; aucune reinitialisation automatique",
-        "database_integrity_failed" => "sqlite|blocked|SQLite quick_check en echec; aucune reparation automatique",
-        "database_schema_missing" => "sqlite|blocked|Schema SQLite attendu manquant; aucune reparation automatique",
+        "database_ok" => {
+            "sqlite|verified|SQLite quick_check OK; sauvegarde et restauration non verifiees"
+        }
+        "database_missing" => {
+            "sqlite|blocked|Base SQLite absente; aucune reinitialisation automatique"
+        }
+        "database_invalid_path" => {
+            "sqlite|blocked|Chemin de base invalide; aucune reinitialisation automatique"
+        }
+        "database_integrity_failed" => {
+            "sqlite|blocked|SQLite quick_check en echec; aucune reparation automatique"
+        }
+        "database_schema_missing" => {
+            "sqlite|blocked|Schema SQLite attendu manquant; aucune reparation automatique"
+        }
         _ => "sqlite|unknown|SQLite indisponible ou occupee; aucune action automatique",
     }
     .to_owned();

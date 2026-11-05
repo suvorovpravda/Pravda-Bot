@@ -33,13 +33,11 @@ fn main() {
     println!("cargo:rerun-if-env-changed=PRAVDA_SETUP_REQUIRE_PAYLOADS");
     let setup_dir = env::var_os("PRAVDA_SETUP_PAYLOAD_DIR").map(PathBuf::from);
     let setup_required = env::var("PRAVDA_SETUP_REQUIRE_PAYLOADS").as_deref() == Ok("1");
-    for (name, file_name, header) in [
-        (
-            "pravda-embedded-installer.msi",
-            "pravda-installer.msi",
-            b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".as_slice(),
-        ),
-    ] {
+    for (name, file_name, header) in [(
+        "pravda-embedded-installer.msi",
+        "pravda-installer.msi",
+        b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".as_slice(),
+    )] {
         let destination_file = destination.join(name);
         let origin = setup_dir.as_ref().map(|dir| dir.join(file_name));
         if let Some(file) = &origin {

@@ -71,8 +71,16 @@ assert.match(html,/data-go-tab="system">Consulter les métriques<\//,
   "Maintenance must reuse the existing Rust runtime metrics, not spawn a shell");
 assert.match(html,/id="security-events"/,
   "Maintenance must retain bounded in-memory security event viewer");
-assert.match(html,/centre externe|centre de test complet|centre externe/i,
-  "Unimplemented support ZIP and external full diagnostics must be visibly disclosed");
+assert.match(html,/id="acceptance-center"/,
+  "Installed desktop must own a native test center");
+assert.match(html,/id="acceptance-pre"/, "Preproduction button must exist");
+assert.match(html,/id="acceptance-post"/, "Postproduction button must exist");
+assert.match(js,/window\.pravdaInvoke\("ipc_acceptance_report", \{phase\}\)/,
+  "Pre/postproduction tests must be native authenticated Rust IPC");
+assert.match(auth,/window\.pravdaClearAcceptance\(\)/,
+  "Logout must erase old-session acceptance results");
+assert.doesNotMatch(html,/centre externe|pravda-test-center\.exe/i,
+  "User-facing app must not redirect to a separate diagnostic executable");
 
 assert.match(js,/ipc_security_report/,"Security UI must retrieve an authenticated Rust-owned report");
 assert.match(js,/ipc_security_events/,"Security events must remain authenticated Tauri IPC only");
@@ -149,7 +157,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,21);
+assert.equal(new Set(handlers).size,22);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -158,11 +166,11 @@ for(const cmd of handlers) {
 const asyncSessionBound = new Set([
   "ipc_market_snapshot","ipc_history_recent","ipc_history_query",
   "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_fx_status",
-  "ipc_public_feed","ipc_security_report"
+  "ipc_public_feed","ipc_security_report","ipc_acceptance_report"
 ]);
 for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query",
  "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics",
- "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_security_events","ipc_auth_logout"]) {
+ "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
   const part=ipc.slice(i,next>i?next:ipc.length);
@@ -226,7 +234,7 @@ assert.equal((await currentAllowed).value, "current",
 for (const name of [
   "refreshHistory","refreshAlerts","checkPriceAlerts","refreshSources",
   "refreshMarket","refreshRevolut","refreshSystem","refreshSecurityEvents",
-  "refreshSecurity","refreshFx","refreshFlows","refreshNews",
+  "refreshSecurity","runAcceptance","refreshFx","refreshFlows","refreshNews",
   "refreshCrypto","refreshAIS"
 ]) {
   const start = js.indexOf("    async function "+name+"(");
