@@ -385,7 +385,9 @@ pub fn ipc_paper_trade(
     quantity_milli: u32,
 ) -> Result<Vec<String>, String> {
     let _session_guard = paper_session_guard(&session, window.label())?;
-    paper.trade(&symbol, &side, quantity_milli).map_err(str::to_string)
+    paper
+        .trade(&symbol, &side, quantity_milli)
+        .map_err(str::to_string)
 }
 
 #[tauri::command]
