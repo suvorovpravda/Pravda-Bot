@@ -115,7 +115,12 @@ fn install(bundle: &TemporaryBundle) -> Result<ExitStatus, &'static str> {
         .map_err(|_| "Cannot stage offline MSI")?;
     // Windows Installer owns the normal installation UI and consent/UAC.
     // No unattended elevation, registry modification, or security bypass.
-    Command::new("msiexec.exe")
+    let system_root = std::env::var_os("SystemRoot").ok_or("Windows system root is missing")?;
+    let msiexec = PathBuf::from(system_root).join("System32").join("msiexec.exe");
+    if !msiexec.is_file() {
+        return Err("Windows Installer is unavailable");
+    }
+    Command::new(msiexec)
         .arg("/i")
         .arg(&msi)
         .arg("/norestart")
