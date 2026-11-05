@@ -307,8 +307,29 @@ fn run() -> Result<PathBuf, String> {
         if app.is_file() {
             let db = folder.join("synthetic.db");
             let auth = folder.join("synthetic-auth.json");
-            let child = Command::new(&app)
+            // Inherit only Windows runtime prerequisites, never credentials
+            // or legacy migration paths from the user's real desktop profile.
+            let mut desktop_command = Command::new(&app);
+            desktop_command.env_clear();
+            for key in [
+                "SystemRoot", "WINDIR", "PATH", "COMSPEC", "PATHEXT",
+                "ProgramFiles", "ProgramFiles(x86)", "PROGRAMDATA",
+            ] {
+                if let Some(value) = std::env::var_os(key) {
+                    desktop_command.env(key, value);
+                }
+            }
+            let local = folder.join("AppData").join("Local");
+            let roaming = folder.join("AppData").join("Roaming");
+            let _ = fs::create_dir_all(&local);
+            let _ = fs::create_dir_all(&roaming);
+            let child = desktop_command
                 .current_dir(&folder)
+                .env("LOCALAPPDATA", &local)
+                .env("APPDATA", &roaming)
+                .env("USERPROFILE", &folder)
+                .env("TEMP", &folder)
+                .env("TMP", &folder)
                 .env("PRAVDA_DB_PATH", &db)
                 .env("PRAVDA_AUTH_PATH", &auth)
                 .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
