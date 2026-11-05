@@ -229,3 +229,15 @@ body{background:radial-gradient(ellipse at 16% 0%,rgba(42,101,170,.19),transpare
 .hidden{display:none!important}
 @media(max-width:1100px){.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.provider-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.runtime-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.feature-grid,.provider-grid,.connector-grid{grid-template-columns:1fr}.topbar{position:static}.workspace-flag{display:none}.intro{display:block}.runtime-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}.feature-tile{min-height:0}}
+
+
+/* Authenticated maintenance hub: no new IPC, navigation or background polling. */
+.maintenance-notice{display:grid;gap:8px;margin:11px 0;padding:15px 17px;
+    border:1px solid rgba(63,185,148,.32);border-left:3px solid var(--green);
+    border-radius:11px;background:linear-gradient(115deg,rgba(16,83,77,.22),rgba(12,24,39,.4));}
+.maintenance-notice strong{color:var(--text);font-size:13px}
+.maintenance-notice span{color:var(--muted);font-size:12px;line-height:1.6}
+.maintenance-notice .feature-actions{margin-top:5px}
+.maintenance-notice code{font-size:12px;overflow-wrap:anywhere}
+.maintenance-pending{border-color:rgba(248,185,94,.32);border-left-color:var(--amber);
+    background:linear-gradient(115deg,rgba(92,69,18,.14),rgba(12,24,39,.4))}
