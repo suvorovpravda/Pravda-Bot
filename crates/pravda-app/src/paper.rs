@@ -96,7 +96,10 @@ impl PaperSandbox {
                 return Err("PAPER_INSUFFICIENT_POSITION");
             }
             let proceeds = gross.checked_sub(fee).ok_or("PAPER_ARITHMETIC_ERROR")?;
-            let next = state.cash_cents.checked_add(proceeds).ok_or("PAPER_ARITHMETIC_ERROR")?;
+            let next = state
+                .cash_cents
+                .checked_add(proceeds)
+                .ok_or("PAPER_ARITHMETIC_ERROR")?;
             state.cash_cents = next;
             state.positions_milli[index] -= quantity_milli;
         }
@@ -124,7 +127,10 @@ fn snapshot(state: &PaperState) -> Vec<String> {
         let value = price_cents * u64::from(state.positions_milli[index]) / 1_000;
         equity += value;
         rows.push(format!("price_cents|{symbol}|{price_cents}"));
-        rows.push(format!("position_milli|{symbol}|{}", state.positions_milli[index]));
+        rows.push(format!(
+            "position_milli|{symbol}|{}",
+            state.positions_milli[index]
+        ));
     }
     rows.insert(2, format!("equity_cents|{equity}"));
     rows.extend(state.events.iter().rev().cloned());
@@ -172,7 +178,10 @@ mod tests {
             paper.trade("SOL", "SELL", 1).unwrap();
         }
         let rows = paper.snapshot();
-        assert_eq!(rows.iter().filter(|r| r.starts_with("event|")).count(), MAX_EVENTS);
+        assert_eq!(
+            rows.iter().filter(|r| r.starts_with("event|")).count(),
+            MAX_EVENTS
+        );
         assert_eq!(rows.first().map(String::as_str), Some("mode|PAPER_ONLY"));
     }
 }
