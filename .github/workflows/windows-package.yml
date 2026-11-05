@@ -182,6 +182,23 @@ jobs:
             if ($source.Length -lt 100000) { throw 'Invalid Rust companion binary' }
             Copy-Item -LiteralPath $source.FullName -Destination (Join-Path 'crates/pravda-app/target/release' $name) -Force
           }
+      - name: Sign standalone companions with Authenticode
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $thumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Signing identity missing' }
+          $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $tools = @(Get-ChildItem -LiteralPath $kit -Recurse -File -Filter signtool.exe -ErrorAction Stop |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool.exe$' } |
+            Sort-Object FullName -Descending)
+          if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
+          foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
+            $file = Join-Path 'crates/pravda-app/target/release' $name
+            & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+            if ($LASTEXITCODE -ne 0) { throw 'Companion signing failed' }
+          }
       - name: Build single-click Windows production test center with embedded payloads
         shell: pwsh
         env:
@@ -195,7 +212,7 @@ jobs:
           $exe = Get-Item -LiteralPath 'target/release/pravda-test-center.exe' -ErrorAction Stop
           if ($exe.Length -lt 1000000) { throw 'Single-click test center did not embed the release payloads' }
           Copy-Item -LiteralPath $exe.FullName -Destination 'crates/pravda-app/target/release/pravda-test-center.exe' -Force
-      - name: Sign standalone companions with Authenticode
+      - name: Sign embedded one-click test center with Authenticode
         if: ${{ inputs.signed }}
         shell: pwsh
         run: |
@@ -207,11 +224,9 @@ jobs:
             Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool.exe$' } |
             Sort-Object FullName -Descending)
           if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
-          foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe', 'pravda-test-center.exe')) {
-            $file = Join-Path 'crates/pravda-app/target/release' $name
-            & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
-            if ($LASTEXITCODE -ne 0) { throw 'Companion signing failed' }
-          }
+          $file = 'crates/pravda-app/target/release/pravda-test-center.exe'
+          & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
+          if ($LASTEXITCODE -ne 0) { throw 'Integrated test center signing failed' }
       - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
         shell: pwsh
         env:
