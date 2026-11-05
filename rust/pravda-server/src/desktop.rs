@@ -21,6 +21,8 @@ pub struct DesktopRuntime {
     database_path: String,
     // One client per runtime preserves the shared 1 req/s public-feed throttle.
     revolut_public: Option<pravda_fetchers::revolut_x::RevolutXPublicClient>,
+    // An isolated production-center smoke must never reach public endpoints.
+    diagnostic_offline: bool,
 }
 
 impl DesktopRuntime {
@@ -28,6 +30,8 @@ impl DesktopRuntime {
     /// the same PRAVDA_DB_PATH and legacy migration contract as the HTTP CLI.
     pub async fn start(auth: Arc<Auth>) -> Result<Self, Box<dyn std::error::Error>> {
         let config = ServerConfig::from_env()?;
+        let diagnostic_offline =
+            std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true");
         if !auth.is_configured() {
             if let Ok(initial) = std::env::var("PRAVDA_ADMIN_PASSWORD") {
                 let authority = auth.clone();
@@ -63,7 +67,12 @@ impl DesktopRuntime {
             runtime,
             stale_after: config.stale_after,
             database_path: config.database_path.clone(),
-            revolut_public: pravda_fetchers::revolut_x::RevolutXPublicClient::new().ok(),
+            revolut_public: if diagnostic_offline {
+                None
+            } else {
+                pravda_fetchers::revolut_x::RevolutXPublicClient::new().ok()
+            },
+            diagnostic_offline,
         })
     }
 
@@ -92,11 +101,19 @@ impl DesktopRuntime {
 
     /// Public FX references, not exchange execution quotes. No credentials.
     pub async fn fx_status(&self) -> DesktopPayload {
+        if self.diagnostic_offline {
+            return DesktopPayload(json!({"status":"unavailable",
+                "notice":"DIAGNOSTIC_OFFLINE","rates":{}}));
+        }
         DesktopPayload(pravda_fetchers::public_feeds::reference_fx().await)
     }
 
     /// Strict enum dispatch. Never turns caller text into an HTTP URL.
     pub async fn public_feed(&self, source: &str) -> DesktopPayload {
+        if self.diagnostic_offline {
+            return DesktopPayload(json!({"status":"unavailable",
+                "notice":"DIAGNOSTIC_OFFLINE"}));
+        }
         let payload = match source {
             "energy" => pravda_fetchers::public_feeds::energy_flows().await,
             "news" => pravda_fetchers::public_feeds::geopolitical_news().await,
