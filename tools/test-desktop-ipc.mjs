@@ -56,6 +56,17 @@ assert.match(css,/\.ipc-auth-card label\[hidden\]/);
 assert.doesNotMatch(js,/\bfetch\s*\(|\bnew\s+WebSocket\s*\(|location\.assign\s*\(/);
 assert.match(html,/id="paper-alerts"/,"Paper-simulation events need a separate renderer");
 assert.match(html,/data-tab="security"/,"Security status must be visible to an authenticated user");
+assert.match(html,/data-tab="security"[^>]*>Paramètres · Sécurité &amp; dépannage<\//,
+  "Settings must expose the authenticated Security and Troubleshooting hub");
+assert.match(html,/id="security-refresh"[^>]*>Relancer les tests locaux<\//,
+  "User must explicitly be able to rerun existing read-only IPC security checks");
+assert.match(html,/data-go-tab="system">Consulter les métriques<\//,
+  "Maintenance must reuse the existing Rust runtime metrics, not spawn a shell");
+assert.match(html,/id="security-events"/,
+  "Maintenance must retain bounded in-memory security event viewer");
+assert.match(html,/centre externe|centre de test complet|centre externe/i,
+  "Unimplemented support ZIP and external full diagnostics must be visibly disclosed");
+
 assert.match(js,/ipc_security_report/,"Security UI must retrieve an authenticated Rust-owned report");
 assert.match(js,/ipc_security_events/,"Security events must remain authenticated Tauri IPC only");
 assert.match(html,/id="revolut-consent"[^>]*disabled/,"Optional network module must default disabled");
