@@ -77,8 +77,8 @@ assert.match(main,/\.manage\(paper::PaperSandbox::default\(\)\)/,
   "Native session must own the independent synthetic portfolio");
 assert.match(auth,/window\.refreshPaper\(\)/,
   "Reauthentication must refresh the synthetic portfolio");
-assert.match(js,/window\.pravdaInvoke\("ipc_paper_trade"/,
-  "Paper trading should use local Rust IPC only");
+assert.match(js,/window\.pravdaInvoke\(command, args\)/,
+  "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
 assert.match(js,/paperAction\("ipc_paper_trade"/,
   "Paper order submit must be wired");
 assert.match(js,/paperAction\("ipc_paper_reset"\)/,
