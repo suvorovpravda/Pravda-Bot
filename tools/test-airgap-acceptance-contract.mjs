@@ -30,6 +30,12 @@ for (const [name,source] of [["MSI",msi],["NSIS",nsis]]) {
   assert.ok(source.includes("node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')"),
     name+" must use its own local test script rather than current directory");
 }
+for (const required of ["pravda-airgap-evidence-", "installed-gui-report.json",
+  "installed_gui_report_sha256", "installer_sha256", "source_sha",
+  "GUI acceptance proof is inconsistent"]) {
+  assert.ok(offline.includes(required),
+    "Offline run must preserve separately hashed GUI evidence: "+required);
+}
 assert.ok(workflow.includes("Initialize-Pravda-Airgap-Gui.ps1"),
   "Windows CI must parse the offline GUI helper");
 assert.ok(workflow.includes("-ExpectedCommitSha ('0' * 40)"),
