@@ -67,13 +67,14 @@ try {
     # and Harness, but historic 3-artifact test candidates remain compatible.
     foreach ($item in @(
         @{ Path = 'pravda-doctor.exe'; Data = 'synthetic doctor' },
-        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' }
+        @{ Path = 'pravda-harness.exe'; Data = 'synthetic harness' ,
+        @{ Path = 'pravda-test-center.exe'; Data = 'synthetic integrated test center' }
     )) {
         $file = Join-Path $root $item.Path
         [IO.File]::WriteAllText($file, $item.Data)
     }
     $fullManifest = @($manifest)
-    foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe')) {
+    foreach ($name in @('pravda-doctor.exe', 'pravda-harness.exe', 'pravda-test-center.exe')) {
         $file = Join-Path $root $name
         $sum = (Get-FileHash -LiteralPath $file -Algorithm SHA256).Hash.ToLowerInvariant()
         $fullManifest += "$sum  $name"
@@ -90,6 +91,14 @@ try {
         $rejected = $true
     }
     if (-not $rejected) { throw 'Missing Harness passed companion verification' }
+    # The integrated EXE is mandatory for complete P0 companion releases.
+    [IO.File]::WriteAllText((Join-Path $root 'pravda-harness.exe'), 'synthetic harness')
+    Remove-Item -LiteralPath (Join-Path $root 'pravda-test-center.exe') -Force
+    $rejected = $false
+    try {
+        & "$PSScriptRoot/Verify-Pravda-Installer.ps1" -ReleaseRoot $root -RequireCompanions
+    } catch { $rejected = $true }
+    if (-not $rejected) { throw 'Missing test-center passed companion verification' }
     Write-Host 'Installer manifest, companions and tampering tests passed.'
 } finally {
     Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
