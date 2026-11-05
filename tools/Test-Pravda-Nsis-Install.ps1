@@ -75,7 +75,7 @@ try {
     }
     $installed = $true
 
-    $keys = @('PRAVDA_DB_PATH', 'PRAVDA_AUTH_PATH', 'PRAVDA_MARKET_FEEDS_ENABLED')
+    $keys = @('PRAVDA_DB_PATH', 'PRAVDA_AUTH_PATH', 'PRAVDA_MARKET_FEEDS_ENABLED', 'PRAVDA_INSTALLED_EXE', 'PRAVDA_INSTALL_KIND', 'PRAVDA_ONBOARDING_REPORT')
     $previous = @{}
     foreach ($key in $keys) {
         $previous[$key] = [Environment]::GetEnvironmentVariable($key, 'Process')
@@ -145,6 +145,28 @@ try {
             throw 'NSIS installed desktop opened a TCP listener after restart'
         }
         Write-Host 'PASS: NSIS installed release desktop restarts with its existing SQLite and no implicit auth'
+        # Execute a REAL first-use graphical WebView2 flow on the installed
+        # release EXE, after the ordinary two-launch smoke. Synthetic storage.
+        Stop-Process -Id $app.Id -Force -ErrorAction Stop
+        if (-not $app.WaitForExit(10000)) {
+            throw 'NSIS installed desktop did not stop for graphical onboarding acceptance'
+        }
+        $env:PRAVDA_INSTALLED_EXE = $applications[0].FullName
+        $env:PRAVDA_INSTALL_KIND = 'NSIS'
+        $env:PRAVDA_ONBOARDING_REPORT = Join-Path $env:RUNNER_TEMP 'Pravda-nsis-installed-onboarding.json'
+        node tools/test-installed-onboarding.mjs
+        if ($LASTEXITCODE -ne 0) {
+            throw 'NSIS installed production GUI onboarding acceptance failed'
+        }
+        $uiEvidence = Get-Content -LiteralPath $env:PRAVDA_ONBOARDING_REPORT -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($uiEvidence.version -ne 1 -or $uiEvidence.passed -ne $true -or
+            $uiEvidence.kind -cne 'NSIS' -or $uiEvidence.sha -cne $env:GITHUB_SHA -or
+            @($uiEvidence.tests).Count -lt 14 -or
+            @($uiEvidence.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw 'NSIS native GUI onboarding evidence is missing or invalid'
+        }
+        Write-Host 'PASS: NSIS installed production WebView2 first-use setup, restart, login and logout'
+
     }
     finally {
         if ($null -ne $app) {

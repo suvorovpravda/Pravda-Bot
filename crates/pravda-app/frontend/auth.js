@@ -44,6 +44,9 @@ let setup = false;
 let dashboardLoaded = false;
 let working = false;
 let loginVisible = false;
+// UI-only epoch for ignoring stale IPC results after logout or a new login.
+// The real authorization boundary remains the Rust-owned session.
+window.pravdaAuthGeneration = 0;
 
 window.pravdaInvoke = async (command, args = {}) => {
     if (typeof invoke !== "function") throw new Error("TAURI_IPC_UNAVAILABLE");
@@ -53,6 +56,7 @@ window.pravdaInvoke = async (command, args = {}) => {
 function showLogin() {
     // Idempotent: background polling must never erase a password being typed.
     if (loginVisible) return;
+    window.pravdaAuthGeneration++;
     loginVisible = true;
     if (typeof window.pravdaLockRevolutConsent === "function") window.pravdaLockRevolutConsent();
     shell.hidden = true;
@@ -65,6 +69,7 @@ function showLogin() {
 window.pravdaRequireLogin = showLogin;
 
 function activateDashboard() {
+    window.pravdaAuthGeneration++;
     loginVisible = false;
     screen.hidden = true;
     shell.hidden = false;

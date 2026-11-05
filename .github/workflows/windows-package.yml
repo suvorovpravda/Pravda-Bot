@@ -12,6 +12,7 @@ on:
       - 'tools/test-windows-installer-verifier.ps1'
       - 'tools/Test-Pravda-Msi-Install.ps1'
       - 'tools/Test-Pravda-Nsis-Install.ps1'
+      - 'tools/test-installed-onboarding.mjs'
       - 'tools/Test-Pravda-Airgap-Install.ps1'
   pull_request:
     paths:
@@ -23,6 +24,7 @@ on:
       - 'tools/test-windows-installer-verifier.ps1'
       - 'tools/Test-Pravda-Msi-Install.ps1'
       - 'tools/Test-Pravda-Nsis-Install.ps1'
+      - 'tools/test-installed-onboarding.mjs'
       - 'tools/Test-Pravda-Airgap-Install.ps1'
   workflow_dispatch:
     inputs:
@@ -356,8 +358,9 @@ jobs:
   verify-upload:
     name: Verify downloaded release bundle on an independent Windows runner
     needs: package
-    runs-on: windows-latest
-    timeout-minutes: 20
+    # WebView2/EdgeDriver native E2E is validated on windows-2022.
+    runs-on: windows-2022
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -466,6 +469,42 @@ jobs:
             throw 'Unexpected offline test harness synthetic results'
           }
           Write-Host 'PASS standalone Doctor and preproduction Harness synthetic smoke'
+      # Match native WebView2/EdgeDriver on the same Windows image as security E2E.
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Check installed GUI acceptance script syntax
+        run: node --check tools/test-installed-onboarding.mjs
+      - name: Install Tauri's native Windows WebDriver adapter
+        run: cargo install tauri-driver --locked
+
+      - name: Download matching EdgeDriver from Microsoft only
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Tauri WebView2 uses Microsoft Edge WebView2 Runtime, NOT the
+          # separate msedge.exe browser. Driver major must match runtime.
+          $key = 'HKLM:\SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}'
+          $webview = Get-ItemProperty -LiteralPath $key -ErrorAction SilentlyContinue
+          $version = $webview.pv
+          if (-not $version -or $version -notmatch '^\d+\.\d+\.\d+\.\d+$') {
+            throw "Cannot determine installed Microsoft WebView2 Runtime version; fail closed"
+          }
+          Write-Host "WebView2 Runtime version $version (registry)"
+          $zipPath = Join-Path $env:RUNNER_TEMP 'edgedriver.zip'
+          $binDir = Join-Path $env:RUNNER_TEMP 'edgedriver-bin'
+          $uri = "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip"
+          Invoke-WebRequest -Uri $uri -OutFile $zipPath -ErrorAction Stop
+          Expand-Archive -LiteralPath $zipPath -DestinationPath $binDir
+          if (-not (Test-Path (Join-Path $binDir 'msedgedriver.exe'))) {
+            throw "Microsoft EdgeDriver binary missing"
+          }
+          $binDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          Write-Host "Matched Microsoft EdgeDriver version $version"
+          "PRAVDA_E2E_WEBVIEW2_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "PRAVDA_E2E_WINDOWS_VERSION=$([System.Environment]::OSVersion.VersionString)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: Smoke-test MSI installation and uninstall on pristine Windows
         shell: pwsh
         timeout-minutes: 12
@@ -482,6 +521,16 @@ jobs:
           $files = @(Get-ChildItem -LiteralPath 'downloaded-release/bundle/nsis' -Filter '*-setup.exe' -File -ErrorAction Stop)
           if ($files.Count -ne 1) { throw 'Exactly one NSIS release candidate is required' }
           & ./tools/Test-Pravda-Nsis-Install.ps1 -NsisPath $files[0].FullName
+      - name: Retain installed release GUI onboarding evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-windows-installed-gui-onboarding
+          path: |
+            ${{ runner.temp }}/Pravda-msi-installed-onboarding.json
+            ${{ runner.temp }}/Pravda-nsis-installed-onboarding.json
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Retain MSI installation failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v7
