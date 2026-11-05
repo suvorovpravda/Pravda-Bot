@@ -199,6 +199,33 @@ jobs:
             & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 $file
             if ($LASTEXITCODE -ne 0) { throw 'Companion signing failed' }
           }
+      - name: Compile portable one-click production center (three embedded Windows EXEs)
+        shell: pwsh
+        env:
+          PRAVDA_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $root = (Resolve-Path 'crates/pravda-app/target/release').Path
+          $env:PRAVDA_EMBED_APP = (Resolve-Path (Join-Path $root 'pravda-app.exe')).Path
+          $env:PRAVDA_EMBED_DOCTOR = (Resolve-Path (Join-Path $root 'pravda-doctor.exe')).Path
+          $env:PRAVDA_EMBED_HARNESS = (Resolve-Path (Join-Path $root 'pravda-harness.exe')).Path
+          & rustc --edition=2021 --crate-name pravda_production_center -C opt-level=2 -C panic=abort tools/pravda-production-center.rs -o (Join-Path $root 'pravda-production-center.exe')
+          if ($LASTEXITCODE -ne 0) { throw 'One-click Windows production center compilation failed' }
+          $exe = Get-Item -LiteralPath (Join-Path $root 'pravda-production-center.exe') -ErrorAction Stop
+          if ($exe.Length -le 1000000) { throw 'One-click embedded binary is incomplete' }
+      - name: Sign one-click production center when signing is requested
+        if: ${{ inputs.signed }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $thumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
+          if ($thumbprint -notmatch '^[0-9A-Fa-f]{40}$') { throw 'Signing identity missing' }
+          $kit = Join-Path ${env:ProgramFiles(x86)} 'Windows Kits/10/bin'
+          $tools = @(Get-ChildItem -LiteralPath $kit -Recurse -File -Filter signtool.exe -ErrorAction Stop |
+            Where-Object { $_.FullName -match '[\\/]x64[\\/]signtool.exe$' } | Sort-Object FullName -Descending)
+          if ($tools.Count -eq 0) { throw 'Windows SDK x64 signtool missing' }
+          & ($tools[0].FullName) sign /sha1 $thumbprint /fd sha256 /tr http://timestamp.digicert.com /td sha256 'crates/pravda-app/target/release/pravda-production-center.exe'
+          if ($LASTEXITCODE -ne 0) { throw 'One-click center signing failed' }
       - name: Verify EXE/MSI/NSIS and fail closed when signing was requested
         shell: pwsh
         env:
