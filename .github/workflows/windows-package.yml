@@ -488,6 +488,12 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+          $center = (Resolve-Path './downloaded-center/pravda-test-center.exe' -ErrorAction Stop).Path
+          $hash = (Get-FileHash -LiteralPath $center -Algorithm SHA256).Hash.ToLowerInvariant()
+          $manifest = @(Get-Content -LiteralPath 'downloaded-release/bundle/SHA256SUMS.txt' -Encoding ascii)
+          if (@($manifest | Where-Object { $_ -ceq ($hash + '  pravda-test-center.exe') }).Count -ne 1) {
+            throw 'Independent one-click tester is not listed in the trusted release manifest'
+          }
           $env:PRAVDA_TEST_CENTER_REPORT_DIR = (Join-Path $env:RUNNER_TEMP 'pravda-one-click-acceptance')
           New-Item -ItemType Directory -Force $env:PRAVDA_TEST_CENTER_REPORT_DIR | Out-Null
           & './downloaded-center/pravda-test-center.exe' --ci
