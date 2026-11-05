@@ -77,6 +77,12 @@ assert.match(main,/\.manage\(paper::PaperSandbox::default\(\)\)/,
   "Native session must own the independent synthetic portfolio");
 assert.match(auth,/window\.refreshPaper\(\)/,
   "Reauthentication must refresh the synthetic portfolio");
+assert.match(auth,/window\.pravdaClearPaper\(\)/,
+  "Logout and reauthentication must erase previous paper values from the DOM");
+assert.match(js,/window\.pravdaClearPaper\s*=\s*clearPaperUi/,
+  "Paper UI must expose a local clear method without contacting exchanges");
+assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) refreshPaper\(\);/,
+  "Stale paper action completion must refresh after a new login");
 assert.match(js,/window\.pravdaInvoke\(command, args\)/,
   "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
 assert.match(js,/paperAction\("ipc_paper_trade"/,

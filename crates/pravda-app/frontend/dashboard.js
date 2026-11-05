@@ -1056,6 +1056,13 @@ const translations = {
         if (events.length) $("paper-events").replaceChildren(...events);
         else $("paper-events").textContent = "Aucune transaction simulée.";
     }
+    function clearPaperUi() {
+        $("paper-summary").textContent = "Portefeuille fictif non chargé.";
+        $("paper-positions").textContent = "Positions fictives non chargées.";
+        $("paper-events").textContent = "Aucune transaction simulée chargée.";
+        $("paper-notice").textContent = "Simulation disponible après authentification.";
+    }
+    window.pravdaClearPaper = clearPaperUi;
     let paperBusy = false;
     function paperMessage(error) {
         const messages = {
@@ -1104,6 +1111,9 @@ const translations = {
             paperBusy = false;
             $("paper-trade").disabled = false;
             $("paper-reset").disabled = false;
+            // An old response may finish after a new Rust login reset the portfolio.
+            // Fetch the current session snapshot instead of leaving a blank/stale view.
+            if (generation !== window.pravdaAuthGeneration) refreshPaper();
         }
     }
     $("paper-order-form").addEventListener("submit", event => {
