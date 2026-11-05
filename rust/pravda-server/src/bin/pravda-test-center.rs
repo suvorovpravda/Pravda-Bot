@@ -425,8 +425,10 @@ fn run() -> Result<PathBuf, String> {
             }
             let local = folder.join("AppData").join("Local");
             let roaming = folder.join("AppData").join("Roaming");
+            let webview = folder.join("isolated-webview-profile");
             let _ = fs::create_dir_all(&local);
             let _ = fs::create_dir_all(&roaming);
+            let _ = fs::create_dir_all(&webview);
             let child = desktop_command
                 .current_dir(&folder)
                 .env("LOCALAPPDATA", &local)
@@ -437,6 +439,8 @@ fn run() -> Result<PathBuf, String> {
                 .env("PRAVDA_DB_PATH", &db)
                 .env("PRAVDA_AUTH_PATH", &auth)
                 .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
+                .env("PRAVDA_OFFLINE_TEST", "true")
+                .env("PRAVDA_DIAGNOSTIC_WEBVIEW_DIR", &webview)
                 .env("PRAVDA_LIVE_TRADING_ENABLED", "false")
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
