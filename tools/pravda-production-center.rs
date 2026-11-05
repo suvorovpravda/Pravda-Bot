@@ -10,7 +10,8 @@ compile_error!("pravda-production-center must be compiled for Windows");
 use std::ffi::{c_void, OsStr};
 use std::fmt::Write as FmtWrite;
 use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
+use std::os::windows::process::CommandExt;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -222,33 +223,54 @@ fn extract(dir: &Path, name: &str, data: &[u8]) -> io::Result<PathBuf> {
 }
 
 fn run_capture(path: &Path, args: &[&str], limit: Duration) -> Result<String, &'static str> {
-    let mut child = Command::new(path)
-        .args(args).stdin(Stdio::null()).stdout(Stdio::piped())
-        .stderr(Stdio::null()).spawn().map_err(|_| "START_FAILED")?;
+    const MAX_OUTPUT: usize = 96_000;
+    let mut command = Command::new(path);
+    command.args(args).stdin(Stdio::null()).stdout(Stdio::piped())
+        .stderr(Stdio::null());
+    command.creation_flags(0x0800_0000); // CREATE_NO_WINDOW, including Doctor and Harness.
+    let mut child = command.spawn().map_err(|_| "START_FAILED")?;
+    let mut stdout = child.stdout.take().ok_or("STDOUT_UNAVAILABLE")?;
+    // Drain concurrently so a verbose child cannot deadlock the parent.
+    // Bounded take() also prevents unbounded report memory consumption.
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let read = stdout.by_ref().take(MAX_OUTPUT as u64 + 1).read_to_end(&mut bytes);
+        (bytes, read.is_ok())
+    });
     let began = Instant::now();
-    loop {
+    let status = loop {
         match child.try_wait() {
-            Ok(Some(status)) => {
-                let output = child.wait_with_output().map_err(|_| "READ_FAILED")?;
-                if !status.success() { return Err("PROCESS_EXIT_NONZERO"); }
-                if output.stdout.len() > 96_000 { return Err("OUTPUT_EXCEEDS_LIMIT"); }
-                return String::from_utf8(output.stdout).map_err(|_| "NON_UTF8_OUTPUT");
-            }
+            Ok(Some(status)) => break Some(status),
             Ok(None) if began.elapsed() < limit => sleep(Duration::from_millis(100)),
-            Ok(None) => { let _ = child.kill(); let _ = child.wait(); return Err("TIMEOUT"); }
-            Err(_) => { let _ = child.kill(); let _ = child.wait(); return Err("PROCESS_STATUS_FAILED"); }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
         }
-    }
+    };
+    let (bytes, readable) = reader.join().map_err(|_| "STDOUT_READER_FAILED")?;
+    if bytes.len() > MAX_OUTPUT { return Err("OUTPUT_EXCEEDS_LIMIT"); }
+    if !readable { return Err("READ_FAILED"); }
+    let status = status.ok_or("TIMEOUT_OR_PROCESS_STATUS_FAILED")?;
+    if !status.success() { return Err("PROCESS_EXIT_NONZERO"); }
+    String::from_utf8(bytes).map_err(|_| "NON_UTF8_OUTPUT")
 }
 
 fn smoke_desktop(path: &Path, data_dir: &Path, ci: bool) -> Result<&'static str, &'static str> {
+    let profile = data_dir.join("isolated-webview-profile");
+    fs::create_dir(&profile).map_err(|_| "WEBVIEW_PROFILE_UNAVAILABLE")?;
     let mut cmd = Command::new(path);
     cmd.env("PRAVDA_DB_PATH", data_dir.join("market-test.db"))
         .env("PRAVDA_AUTH_PATH", data_dir.join("auth-test.json"))
         .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
         .env("PRAVDA_OFFLINE_TEST", "true")
+        .env("PRAVDA_DIAGNOSTIC_WEBVIEW_DIR", &profile)
+        .env_remove("PRAVDA_LEGACY_DB_PATH")
+        .env_remove("MARKET_HISTORY_DB")
         .current_dir(data_dir)
         .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null());
+    cmd.creation_flags(0x0800_0000); // Never open a console during the probe.
     let mut child = cmd.spawn().map_err(|_| "DESKTOP_START_FAILED")?;
     let duration = if ci { Duration::from_secs(4) } else { Duration::from_secs(10) };
     let began = Instant::now();
