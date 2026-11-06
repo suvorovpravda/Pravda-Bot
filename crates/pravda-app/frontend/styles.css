@@ -263,3 +263,73 @@ body{background:radial-gradient(ellipse at 16% 0%,rgba(42,101,170,.19),transpare
 
         .acceptance-json { display:block; width:100%; min-height:100px; padding:11px; margin-top:9px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--text); resize:vertical; font:12px/1.5 Consolas,monospace; }
         #acceptance-center .feature-actions { margin:12px 0; }
+
+
+/* Terminal x fintech: keep the information density, add restrained depth.
+   Pure CSS: no new runtime, remote assets, or data dependencies. */
+:root {
+    --terminal-ink: #07101f;
+    --terminal-stroke: rgba(110, 162, 221, .24);
+    --terminal-blue-glow: rgba(58, 149, 245, .13);
+    --terminal-focus: #8dd7ff;
+}
+body {
+    background:
+        radial-gradient(ellipse at 12% -12%, rgba(41, 103, 187, .21), transparent 48%),
+        radial-gradient(ellipse at 92% 12%, rgba(28, 115, 132, .12), transparent 38%),
+        var(--bg);
+}
+.shell { max-width: 1740px; }
+.topbar {
+    border: 1px solid rgba(123, 176, 226, .12);
+    border-radius: 16px;
+    padding: 12px 17px;
+    background: rgba(10, 24, 42, .85);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .12);
+}
+@supports (backdrop-filter: blur(12px)) {
+    .topbar { backdrop-filter: blur(12px); }
+}
+.card, .feature-tile, .provider-link, .button, .tab-btn {
+    transition: border-color 180ms ease, background-color 180ms ease,
+                box-shadow 180ms ease, transform 180ms ease;
+}
+.card:hover, .feature-tile:hover {
+    border-color: var(--terminal-stroke);
+    box-shadow: 0 16px 42px rgba(0, 0, 0, .22), 0 0 0 1px var(--terminal-blue-glow);
+}
+.feature-tile:hover { transform: translateY(-1px); }
+.metric-value, .runtime-tiles strong {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -.035em;
+}
+.tab-btn.active {
+    box-shadow: inset 0 -2px 0 var(--cyan), 0 8px 18px rgba(33, 110, 212, .09);
+    color: var(--text);
+}
+.button-primary:not(:disabled):hover {
+    box-shadow: 0 4px 18px rgba(47, 132, 244, .18);
+}
+button:disabled { opacity: .72; cursor: not-allowed; }
+button:focus-visible, select:focus-visible, a:focus-visible,
+textarea:focus-visible, input:focus-visible {
+    outline: 2px solid var(--terminal-focus);
+    outline-offset: 3px;
+}
+#acceptance-center {
+    border-color: var(--terminal-stroke);
+    background: linear-gradient(125deg, rgba(21, 64, 91, .23), rgba(9, 25, 47, .69));
+}
+#acceptance-status[role="status"] { min-height: 1.5em; }
+@media (max-width: 700px) {
+    .topbar { padding: 12px; border-radius: 11px; }
+    .shell { padding-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .card, .feature-tile, .provider-link, .button, .tab-btn {
+        transition: none;
+        animation: none;
+    }
+    .feature-tile:hover { transform: none; }
+}
