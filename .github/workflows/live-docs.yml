@@ -34,10 +34,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  update:
-    # Do not allow PR workflow_run events to cause privileged repository writes.
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main'
+  verify_pr:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+      - name: Validate historical data, SVG and security semantics without network
+        run: node tools/update-live-dashboard.mjs --test
+
+  update:
+    # Privileged updates must NEVER execute a PR's untrusted code.
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+      issues: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -48,14 +68,12 @@ jobs:
       - name: Verify honest percentages, SHA matching and audit boundaries
         run: node tools/update-live-dashboard.mjs --test
       - name: Aggregate live CI, open PR/issue counts and guide progression
-        if: github.event_name != 'pull_request'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: main
         run: node tools/update-live-dashboard.mjs
       - name: Commit only changed status evidence (not a new build)
-        if: github.event_name != 'pull_request'
         shell: bash
         run: |
           set -euo pipefail
