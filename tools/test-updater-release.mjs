@@ -16,6 +16,13 @@ assert.match(workflowSource, /TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_S
   "Never embed a signing private key in source or plain workflow defaults");
 assert.match(workflowSource, /name: pravda-signed-updater-metadata-candidate/,
   "Prepared metadata must be archived for review without automatic release publication");
+assert.match(workflowSource, /TAURI_UPDATER_PUBLIC_KEY: \$\{\{ secrets\.TAURI_SIGNING_PUBLIC_KEY \}\}/,
+  "The signed-tag Tauri config must receive the protected public signing key");
+assert.match(workflowSource, /pubkey = \$env:TAURI_UPDATER_PUBLIC_KEY\.Trim\(\)/,
+  "Tauri CLI must get the verification pubkey when producing update signatures");
+assert.match(workflowSource, /endpoints = @\('https:\/\/github\.com\/suvorovpravda\/Pravda-Bot\/releases\/latest\/download\/latest\.json'\)/,
+  "The updater channel must remain the fixed GitHub latest.json asset");
+
 
 const msi = join(root, "Pravda-Bot_0.3.4_x64_en-US.msi");
 const sig = msi + ".sig";
