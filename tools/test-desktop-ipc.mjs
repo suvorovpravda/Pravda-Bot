@@ -322,7 +322,7 @@ ui.renderFx = payload => {ui.$("fx-rates").textContent=payload.identity;};
 ui.URLSearchParams = URLSearchParams;
 ui.drawPriceChart = () => {};
 ui.formatDate = String;
-vm.runInContext("let historicalPoints=[];",ui);
+vm.runInContext("let historicalPoints=[], fxRequestNumber=0, lastSettledFxRequest=0;",ui);
 function actualFrontend(name,next) {
   const start = js.indexOf("    async function "+name+"(");
   const end = js.indexOf("    async function "+next+"(",start+1);
@@ -402,7 +402,11 @@ marketUi.renderMarket = payload => {
   marketUi.lastPayload = payload;
   vm.runInContext("latestMarket=lastPayload",marketUi);
 };
-marketUi.renderFx = payload => marketUi.fxRenders.push(payload);
+marketUi.renderFx = payload => {
+  marketUi.fxRenders.push(payload);
+  marketUi.lastFxPayload = payload;
+  vm.runInContext("latestFx=lastFxPayload",marketUi);
+};
 vm.createContext(marketUi);
 vm.runInContext('let currentLanguage="fr", latestMarket={session:"A"}, ' +
   'latestFx={session:"A"}, historicalPoints=[{price:123}];',marketUi);
@@ -414,7 +418,7 @@ function runRealSection(startMarker,endMarker) {
 runRealSection("    function applyLanguage()", "    const $ =");
 runRealSection("    function clearMarketSnapshot()", "    function updateTerminalWatchlist(");
 runRealSection("    let marketRequestNumber = 0;", "    // Auth boundaries invalidate");
-runRealSection("    async function refreshFx()", "    async function refreshFlows()");
+runRealSection("    let fxRequestNumber = 0;", "    async function refreshFlows()");
 marketUi.window.pravdaClearMarketSession();
 marketUi.applyLanguage();
 assert.equal(marketUi.marketRenders.length,0,"Language change must not replay session A quotes");
@@ -465,5 +469,25 @@ marketPending[2].reject(new Error("offline"));
 await oldFailure;
 assert.equal(vm.runInContext("latestMarket.session",marketUi),"newest",
   "An older failure must not erase a newer successful market refresh");
+const fxPending=[];
+marketUi.fetchJson=()=>new Promise((resolve,reject)=>fxPending.push({resolve,reject}));
+const oldFxRequest=marketUi.refreshFx();
+const newFxRequest=marketUi.refreshFx();
+fxPending[1].resolve({session:"newest-FX"});
+await newFxRequest;
+fxPending[0].reject(new Error("offline"));
+await oldFxRequest;
+assert.equal(vm.runInContext("latestFx.session",marketUi),"newest-FX",
+  "An older FX failure must not erase a newer successful FX refresh");
+const earlierFxSuccess=marketUi.refreshFx();
+const laterFxFailure=marketUi.refreshFx();
+fxPending[3].reject(new Error("offline"));
+await laterFxFailure;
+const fxRendersAfterFailure=marketUi.fxRenders.length;
+fxPending[2].resolve({session:"obsolete-FX"});
+await earlierFxSuccess;
+assert.equal(marketUi.fxRenders.length,fxRendersAfterFailure,
+  "An older FX success must not undo a newer failed FX refresh");
+assert.equal(vm.runInContext("latestFx",marketUi),null);
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");

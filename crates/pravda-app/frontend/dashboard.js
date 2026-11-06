@@ -1323,11 +1323,22 @@ const translations = {
         }catch{msg.textContent="Impossible d’ouvrir la source officielle. Vérifiez votre navigateur par défaut.";}
     });
     $("revolut-refresh").addEventListener("click",refreshRevolut);
+    let fxRequestNumber = 0;
+    let lastSettledFxRequest = 0;
     async function refreshFx() {
         const requestGeneration = window.pravdaAuthGeneration;
-        try { renderFx(await fetchJson("/api/fx")); }
+        const requestNumber = ++fxRequestNumber;
+        try {
+            const payload = await fetchJson("/api/fx");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestNumber < lastSettledFxRequest) return;
+            lastSettledFxRequest = requestNumber;
+            renderFx(payload);
+        }
         catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestNumber < lastSettledFxRequest) return;
+            lastSettledFxRequest = requestNumber;
             // Old FX rates must not be reused for conversions or replayed by
             // a later language change when the current request has failed.
             latestFx = null;
