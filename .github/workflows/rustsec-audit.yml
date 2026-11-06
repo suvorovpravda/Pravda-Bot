@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'crates/pravda-app/Cargo.lock'
       - 'Cargo.toml'
       - '**/Cargo.toml'
       - '.cargo/audit.toml'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'crates/pravda-app/Cargo.lock'
       - 'Cargo.toml'
       - '**/Cargo.toml'
       - '.cargo/audit.toml'
@@ -64,11 +66,19 @@ jobs:
         run: |
           set -euo pipefail
           cargo audit --file Cargo.lock --format sarif > rustsec.sarif
+      - name: Audit desktop updater dependencies
+        id: desktop_audit
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo audit --file crates/pravda-app/Cargo.lock --format sarif > rustsec-desktop.sarif
       - name: Explain audit outcome
         if: always()
         shell: bash
         env:
           AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          DESKTOP_AUDIT_OUTCOME: ${{ steps.desktop_audit.outcome }}
         run: |
           {
             echo '### RustSec Cargo.lock audit — observation phase'
@@ -81,13 +91,27 @@ jobs:
               echo 'The audit did not complete. No claim of a clean dependency set is permitted.'
               echo '::warning::RustSec audit was not completed.'
             fi
-            echo 'This check is advisory during the rollout; it does not validate signed Windows packages or the physical offline VM acceptance.'
+            echo ''
+            echo '### RustSec desktop Cargo.lock audit — observation phase'
+            if [ "$DESKTOP_AUDIT_OUTCOME" = 'success' ]; then
+              echo 'Desktop dependencies were scanned successfully; inspect the desktop SARIF artifact.'
+            elif [ "$DESKTOP_AUDIT_OUTCOME" = 'failure' ]; then
+              echo '::warning::Desktop Cargo.lock audit returned a nonzero status; inspect advisories or tool/database errors.'
+              echo 'Review the desktop SARIF report; a green non-blocking workflow is not proof of zero vulnerabilities.'
+            else
+              echo '::warning::Desktop Cargo.lock audit was not completed.'
+              echo 'No claim of clean desktop dependencies is permitted.'
+            fi
+            echo ''
+            echo 'Both audits are advisory during the rollout; neither validates signed Windows packages or physical offline VM acceptance.'
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve SARIF findings for review
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: rustsec-dependency-scan-${{ github.sha }}
-          path: rustsec.sarif
+          path: |
+            rustsec.sarif
+            rustsec-desktop.sarif
           if-no-files-found: warn
           retention-days: 30
