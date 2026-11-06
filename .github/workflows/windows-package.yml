@@ -96,6 +96,21 @@ jobs:
               $env:RELEASE_REF -notmatch '^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?$') {
             throw 'Enterprise signing requires main or versioned tag'
           }
+      - name: Require Tauri signer for tagged Windows updater candidates
+        if: ${{ inputs.signed && startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        env:
+          UPDATER_KEY_CONFIGURED: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+          UPDATER_PUBLIC_KEY_CONFIGURED: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY != '' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:UPDATER_KEY_CONFIGURED -ne 'true' -or $env:UPDATER_PUBLIC_KEY_CONFIGURED -ne 'true') {
+            throw 'Protected Tauri updater signing and verification keys are required for tagged candidates'
+          }
+          $currentVersion = (Get-Content 'crates/pravda-app/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF -cne ("refs/tags/v" + $currentVersion)) {
+            throw 'Tagged updater candidate must use the exact desktop stable version'
+          }
       - name: Verify root and Tauri locks
         shell: pwsh
         run: |
@@ -143,6 +158,8 @@ jobs:
         if: ${{ inputs.signed }}
         shell: pwsh
         working-directory: crates/pravda-app
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
         run: |
           $ErrorActionPreference='Stop'
           if ($env:PRAVDA_SIGNING_THUMBPRINT -notmatch '^[0-9A-Fa-f]{40}$') {
@@ -157,12 +174,29 @@ jobs:
               }
             }
           }
+          if ($env:GITHUB_REF -match '^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$') {
+            # Tauri CLI requires an updater pubkey to sign update artifacts.
+            # This CI-only config does not install a runtime updater plugin.
+            if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY) -or
+                $env:TAURI_UPDATER_PUBLIC_KEY.Trim().Length -lt 40) {
+              throw 'A real Tauri updater public verification key is required'
+            }
+            $config.bundle.createUpdaterArtifacts = $true
+            $config.plugins = @{
+              updater = @{
+                pubkey = $env:TAURI_UPDATER_PUBLIC_KEY.Trim()
+                endpoints = @('https://github.com/suvorovpravda/Pravda-Bot/releases/latest/download/latest.json')
+              }
+            }
+          }
           $config | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'tauri.signing.ci.json' -Encoding utf8
       - name: Build NSIS and MSI with locked Cargo dependencies
         shell: pwsh
         working-directory: crates/pravda-app
         env:
           PRAVDA_SIGNED: ${{ inputs.signed }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $ErrorActionPreference='Stop'
           if ($env:PRAVDA_SIGNED -eq 'true') {
@@ -331,6 +365,35 @@ jobs:
             $verifyArgs.ExpectedThumbprint = $env:PRAVDA_SIGNING_THUMBPRINT
           }
           & ./tools/Verify-Pravda-Installer.ps1 @verifyArgs
+      - name: Prepare SHA-bound Tauri signed updater metadata candidate
+        if: ${{ inputs.signed && startsWith(github.ref, 'refs/tags/v') }}
+        shell: pwsh
+        env:
+          RELEASE_COMMIT_SHA: ${{ github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bundle = 'crates/pravda-app/target/release/bundle'
+          $msi = @(Get-ChildItem -LiteralPath (Join-Path $bundle 'msi') -Filter '*.msi' -File -ErrorAction Stop)
+          if ($msi.Count -ne 1) { throw 'Exactly one signed Windows x64 MSI required for updater metadata' }
+          $signature = $msi[0].FullName + '.sig'
+          if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) {
+            throw 'Tauri updater signature missing from signed release candidate'
+          }
+          $version = (Get-Content 'crates/pravda-app/tauri.conf.json' -Raw | ConvertFrom-Json).version
+          $hash = (Get-FileHash -LiteralPath $msi[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          node tools/prepare-updater-release.mjs --version $version --tag $env:GITHUB_REF_NAME --commit $env:RELEASE_COMMIT_SHA --installer $msi[0].FullName --signature $signature --sha256 $hash --output-dir $bundle
+          if ($LASTEXITCODE -ne 0) { throw 'Updater metadata candidate validation failed' }
+      - name: Archive signed updater metadata candidate (not published as a release)
+        if: ${{ inputs.signed && startsWith(github.ref, 'refs/tags/v') }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-signed-updater-metadata-candidate
+          path: |
+            crates/pravda-app/target/release/bundle/latest.json
+            crates/pravda-app/target/release/bundle/latest.provenance.json
+            crates/pravda-app/target/release/bundle/msi/*.msi.sig
+          if-no-files-found: error
+          retention-days: 30
       - name: Produce commit-bound SHA-256 and Authenticode evidence
         shell: pwsh
         env:

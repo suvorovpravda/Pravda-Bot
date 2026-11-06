@@ -73,6 +73,12 @@ function validateUpdaterEndpoint(endpoint) {
   assert.equal(url.password,"","Updater metadata must not contain credentials");
   assert.equal(url.port,"","Updater metadata must use default HTTPS port");
   assert.equal(url.hash,"","Updater metadata must not contain a fragment");
+  assert.equal(url.search,"","Updater metadata must not contain query parameters");
+  assert.equal(url.hostname.toLowerCase(),"github.com",
+    "Updater metadata must be hosted on the fixed GitHub release channel");
+  assert.match(url.pathname,
+    /^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/releases\/latest\/download\/latest\.json$/,
+    "Updater metadata must use the stable latest.json release asset path");
   const host=url.hostname.replace(/^\[|\]$/g,"").toLowerCase();
   assert.ok(host && !isIP(host) && host!=="localhost" &&
     !host.endsWith(".localhost") && !host.endsWith(".local") &&
@@ -91,6 +97,10 @@ for(const bad of [
   "https://user:pass@github.com/latest.json",
   "http://github.com/latest.json",
   "https://github.com:8443/latest.json",
+  "https://github.com/owner/repo/releases/latest/download/latest.json?token=secret",
+  "https://github.com/owner/repo/releases/latest/download/other.json",
+  "https://github.com/owner/repo/releases/download/v1/latest.json",
+  "https://attacker.example.net/owner/repo/releases/latest/download/latest.json",
   "https://example.com/latest.json",
   "https://github.com/{{version}}/latest.json"
 ]) assert.throws(()=>validateUpdaterEndpoint(bad),
