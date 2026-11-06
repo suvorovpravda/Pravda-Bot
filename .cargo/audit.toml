@@ -1,0 +1,7 @@
+# RustSec advisory policy for the locked Rust workspace.
+# Keep the ignore list empty. Add an advisory ID only with a separate,
+# documented, reproducible assessment of impact and an alternative mitigation.
+# The independent CI workflow is initially non-blocking, but findings must be
+# reviewed before release; a green workflow is not a security certification.
+[advisories]
+ignore = []
