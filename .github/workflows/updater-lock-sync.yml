@@ -21,7 +21,7 @@ jobs:
           set -euo pipefail
           cargo fetch --manifest-path crates/pravda-app/Cargo.toml
           cargo fmt --all --manifest-path crates/pravda-app/Cargo.toml
-          cargo tree --manifest-path crates/pravda-app/Cargo.toml --target x86_64-pc-windows-msvc -e features | grep -F tauri-plugin-updater >/dev/null
+          cargo tree --manifest-path crates/pravda-app/Cargo.toml --target x86_64-pc-windows-msvc --features signed-updater -e features | grep -F tauri-plugin-updater >/dev/null
       - name: Export candidate lockfile (untrusted until CI checks it)
         uses: actions/upload-artifact@v7
         with:
