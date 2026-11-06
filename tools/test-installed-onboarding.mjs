@@ -59,6 +59,9 @@ const evaluate = script => wd("POST", "/execute/sync", {script, args: []});
 const ui = () => evaluate(
   "return {login:document.querySelector('.ipc-auth-screen')?.hidden===false," +
   "dashboard:document.querySelector('main.shell')?.hidden===false," +
+  "ready:window.pravdaDashboardReady===true," +
+  "startupFailure:!!document.querySelector('.ipc-startup-recovery,main.shell>.ipc-auth-error')," +
+  "startupCode:document.querySelector('.ipc-startup-recovery input')?.value || ''," +
   "setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
   "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
 );
@@ -198,9 +201,19 @@ try {
   await enter(".ipc-auth-screen form label:nth-of-type(1) input", password);
   await enter(".ipc-auth-screen form label:nth-of-type(2) input", password);
   await click(".ipc-auth-screen button[type=submit]");
-  await until(async () => (await ui()).dashboard, "GUI password enrollment");
-  check("GUI enrollment created verifier and unlocked dashboard",
-    existsSync(auth) && (await ui()).dashboard);
+  await until(async () => {
+    const view = await ui();
+    if (view.startupFailure) {
+      const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
+        ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
+      throw Error("Desktop startup reported a partial dashboard initialization: "+code);
+    }
+    return view.dashboard && view.ready;
+  }, "GUI password enrollment and completed dashboard script");
+  check("GUI enrollment created verifier and initialized every dashboard handler",
+    existsSync(auth) && (await ui()).dashboard && (await ui()).ready);
+  check("First-use desktop has no startup error banner",
+    !(await ui()).startupFailure);
   check("Protected IPC authorized after GUI enrollment",
     (await ipc("ipc_session_check")).state === "resolved");
   const verifier = digest(auth);
@@ -219,9 +232,19 @@ try {
     (await ipc("ipc_session_check")).state === "rejected");
   await enter(".ipc-auth-screen input[autocomplete=current-password]", password);
   await click(".ipc-auth-screen button[type=submit]");
-  await until(async () => (await ui()).dashboard, "persisted password login");
-  check("Native GUI logs into installed release after restart",
-    (await ipc("ipc_session_check")).state === "resolved");
+  await until(async () => {
+    const view = await ui();
+    if (view.startupFailure) {
+      const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
+        ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
+      throw Error("Restarted desktop reported partial dashboard initialization: "+code);
+    }
+    return view.dashboard && view.ready;
+  }, "persisted password login and completed dashboard script");
+  check("Native GUI logs into fully initialized installed release after restart",
+    (await ipc("ipc_session_check")).state === "resolved" && (await ui()).ready);
+  check("Restarted desktop has no startup error banner",
+    !(await ui()).startupFailure);
   check("Password verifier unchanged after native process restart",
     digest(auth) === verifier);
   await click("#logout-button");
