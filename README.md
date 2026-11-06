@@ -73,6 +73,14 @@ Les paquets MSI/NSIS configurent le prérequis officiel WebView2 avec **offlineI
 
 Le programme n'envoie pas le rapport vers un service externe. L'utilisateur doit examiner le JSON avant tout partage ; ne jamais transmettre mot de passe, clé privée, base SQLite ou historique financier.
 
+### 🔁 Agent de diagnostic continu (PR #156 — non livré tant que la CI n'est pas validée)
+
+Le binaire indépendant `pravda-test-center.exe` intègre Doctor, Harness et un bureau Tauri isolé. **Un double-clic démarre l'agent en arrière-plan**, puis il effectue un premier cycle et le répète toutes les 15 minutes. **Un second double-clic demande l'arrêt.** Il fonctionne dans la session Windows courante, sans service, tâche planifiée ou démarrage automatique à la connexion.
+
+Le rapport à copier-coller dans ChatGPT s'appelle `PRAVDA-COPIER-ICI.txt` et se trouve sous `%LOCALAPPDATA%\Pravda-Bot\Diagnostic-Continu` avec les versions JSON/HTML et `PRAVDA-ETAT.txt`. Aucune transmission automatique n'est effectuée. Les contrôles fonctionnels sont hors réseau et utilisent des profils et une base de simulation jetables. Deux contrôles complémentaires examinent **en lecture seule** la santé de la base SQLite installée et la présence du fichier d'authentification, sans lire les identifiants ni exporter les données : **aucun ordre financier, aucune clé API, aucune réparation**. Les véritables parcours interactifs, l'installation sur VM vierge et l'updater signé restent **SKIP**.
+
+Sur le runner Windows uniquement, `pravda-test-center.exe --monitor-once` effectue un cycle borné puis vérifie les fichiers de sortie; `--ci` conserve le test intégré historique. Pour l'utilisateur, il n'y a aucune commande à saisir. **Ce mode est en développement : télécharger uniquement un build dont les contrôles de la PR #156 ont réussi.**
+
 ### 🏗️ Architecture actuelle
 
 | Niveau | Technologies | Contrôles |
