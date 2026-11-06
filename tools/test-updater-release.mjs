@@ -7,6 +7,16 @@ import { buildUpdaterMetadata, writeUpdaterMetadata } from "./prepare-updater-re
 
 const root = mkdtempSync(join(tmpdir(), "pravda-updater-contract-"));
 const version = "0.3.4", tag = "v0.3.4", commit = "c".repeat(40);
+const workflowSource = readFileSync(".github/workflows/windows-package.yml", "utf8");
+assert.match(workflowSource, /Require Tauri signer for tagged Windows updater candidates/,
+  "Signed tagged updater builds require real protected signing prerequisites");
+assert.match(workflowSource, /\$config\.bundle\.createUpdaterArtifacts = \$true/,
+  "Updater artifacts are created only in explicitly signed tagged candidate builds");
+assert.match(workflowSource, /TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/,
+  "Never embed a signing private key in source or plain workflow defaults");
+assert.match(workflowSource, /name: pravda-signed-updater-metadata-candidate/,
+  "Prepared metadata must be archived for review without automatic release publication");
+
 const msi = join(root, "Pravda-Bot_0.3.4_x64_en-US.msi");
 const sig = msi + ".sig";
 const validSignature = "untrusted comment: signature from tauri signer\n" +
