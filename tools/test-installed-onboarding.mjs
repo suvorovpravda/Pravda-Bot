@@ -63,6 +63,7 @@ const ui = () => evaluate(
   "startupFailure:!!document.querySelector('.ipc-startup-recovery,main.shell>.ipc-auth-error')," +
   "startupCode:document.querySelector('.ipc-startup-recovery input')?.value || ''," +
   "startupPhase:document.querySelector('.ipc-bootstrap-phase')?.value || ''," +
+  "startupCause:document.querySelector('.ipc-startup-cause')?.value || ''," +
   "setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
   "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
 );
@@ -207,9 +208,11 @@ try {
     if (view.startupFailure) {
       const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
         ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
-      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|XX)$/.test(view.startupPhase)
+      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|02[A-I]|XX)$/.test(view.startupPhase)
         ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
-      throw Error("Desktop startup reported a partial dashboard initialization: "+code+" "+phase);
+      const cause = /^PRAVDA-UI-CAUSE\|(?:NOT_CLASSIFIED|NOT_RANGE|STACK_OVERFLOW|ARRAY_LENGTH|INVALID_DATE|PRECISION|REPEAT_COUNT|OTHER_RANGE)$/.test(view.startupCause)
+        ? view.startupCause : "PRAVDA-UI-CAUSE|NOT_CLASSIFIED";
+      throw Error("Desktop startup reported a partial dashboard initialization: "+code+" "+phase+" "+cause);
     }
     return view.dashboard && view.ready;
   }, "GUI password enrollment and completed dashboard script");
@@ -240,9 +243,11 @@ try {
     if (view.startupFailure) {
       const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
         ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
-      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|XX)$/.test(view.startupPhase)
+      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|02[A-I]|XX)$/.test(view.startupPhase)
         ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
-      throw Error("Restarted desktop reported partial dashboard initialization: "+code+" "+phase);
+      const cause = /^PRAVDA-UI-CAUSE\|(?:NOT_CLASSIFIED|NOT_RANGE|STACK_OVERFLOW|ARRAY_LENGTH|INVALID_DATE|PRECISION|REPEAT_COUNT|OTHER_RANGE)$/.test(view.startupCause)
+        ? view.startupCause : "PRAVDA-UI-CAUSE|NOT_CLASSIFIED";
+      throw Error("Restarted desktop reported partial dashboard initialization: "+code+" "+phase+" "+cause);
     }
     return view.dashboard && view.ready;
   }, "persisted password login and completed dashboard script");

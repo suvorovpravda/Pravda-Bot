@@ -291,6 +291,16 @@ const translations = {
     let latestMarket = null;
     let latestFx = null;
 
+    // Reductions do not exhaust the JS argument stack on long public feeds.
+    function finiteExtent(values) {
+        let min = Infinity, max = -Infinity;
+        for (const value of values) {
+            if (!Number.isFinite(value)) continue;
+            if (value < min) min = value;
+            if (value > max) max = value;
+        }
+        return { min, max };
+    }
     function drawPriceChart() {
         const canvas = $("price-chart");
         const rect = canvas.getBoundingClientRect();
@@ -318,7 +328,7 @@ const translations = {
             return;
         }
         const prices = convertedHistory.map(point => point.convertedPrice);
-        const min = Math.min(...prices), max = Math.max(...prices);
+        const { min, max } = finiteExtent(prices);
         const padding = 20, range = max - min || Math.max(Math.abs(max) * 0.0001, 0.000001);
         context.strokeStyle = "rgba(158,172,194,.18)";
         context.lineWidth = 1;
@@ -406,6 +416,7 @@ const translations = {
                 state === "stale" ? "Périmé" : "Indisponible";
         }
     }
+    window.pravdaDashboardPhase = "P02A";
     document.querySelectorAll(".watchlist-row").forEach(button => {
         button.addEventListener("click", () => {
             const symbol = button.dataset.watchSymbol;
@@ -690,7 +701,8 @@ const translations = {
             return;
         }
         const xs = points.map(row => row.map_x), ys = points.map(row => row.map_y);
-        const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+        const { min: minX, max: maxX } = finiteExtent(xs);
+        const { min: minY, max: maxY } = finiteExtent(ys);
         for (let i = 0; i <= 4; i++) {
             const line = document.createElementNS(NS, "line");
             line.setAttribute("x1", String(35 + i * 182)); line.setAttribute("x2", String(35 + i * 182));
@@ -826,6 +838,7 @@ const translations = {
     // Auth boundaries invalidate pending IPC results and any cached consent UI.
     let revolutOptIn = false;
     let revolutConsentVersion = 0;
+    window.pravdaDashboardPhase = "P02B";
     const revolutConsentCheckbox = $("revolut-consent");
     const revolutConsentStatus = $("revolut-consent-status");
     const revolutReadButton = $("revolut-refresh");
@@ -869,6 +882,7 @@ const translations = {
     }
     window.refreshRevolutConsent = readRevolutConsent;
 
+    window.pravdaDashboardPhase = "P02C";
     revolutConsentCheckbox.addEventListener("change", async () => {
         if (shell.hidden) {
             lockRevolutConsentUi();
@@ -903,6 +917,7 @@ const translations = {
             }
         }
     });
+    window.pravdaDashboardPhase = "P02D";
     readRevolutConsent();
 
     async function refreshRevolut() {
@@ -954,6 +969,7 @@ const translations = {
     }
     // Never request protected diagnostics in the background after logout.
     // A SQLite quick_check is user-initiated or runs when Security is opened.
+    window.pravdaDashboardPhase = "P02E";
     const securityShell = document.querySelector("main.shell");
     // Only passive diagnostics require a foreground document. Explicit UI
     // clicks must still run on WebView2 if visibilityState is stale or hidden.
@@ -1074,6 +1090,7 @@ const translations = {
     // desktop. No test center executable, shell invocation or HTTP endpoint.
     let acceptanceBusy = false;
     let acceptanceRuns = 0;
+    window.pravdaDashboardPhase = "P02F";
     const expectedAcceptanceChecks = [
         "session", "ipc", "paper", "sqlite", "webview",
         "installer", "persistence", "authenticode", "live"
@@ -1163,6 +1180,7 @@ const translations = {
             $("acceptance-post").disabled = false;
         }
     }
+    window.pravdaDashboardPhase = "P02G";
     $("acceptance-pre").addEventListener("click", () => runAcceptance("preproduction"));
     $("acceptance-post").addEventListener("click", () => runAcceptance("postproduction"));
     $("security-refresh").addEventListener("click", () => {
@@ -1171,12 +1189,14 @@ const translations = {
     });
     window.refreshSecurity = () => refreshSecurity(true);
     window.refreshSecurityEvents = refreshSecurityEvents;
+    window.pravdaDashboardPhase = "P02H";
     refreshSecurity();
     refreshSecurityEvents();
 
     // Update status is an authenticated, local-only Rust declaration. This is
     // NOT an update check: do not access GitHub, download a file, or run an
     // installer until the signed Tauri updater is separately qualified.
+    window.pravdaDashboardPhase = "P02I";
     let updateReadinessBusy = false;
     function clearUpdateReadiness() {
         $("updater-state").textContent = "État local non encore consulté.";
@@ -1552,8 +1572,8 @@ const translations = {
                 if (msgs.length) {
                     const lats = msgs.map(m=>parseFloat(m.lat));
                     const lons = msgs.map(m=>parseFloat(m.lon));
-                    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
-                    const minLon = Math.min(...lons), maxLon = Math.max(...lons);
+                    const { min: minLat, max: maxLat } = finiteExtent(lats);
+                    const { min: minLon, max: maxLon } = finiteExtent(lons);
                     const pad = 40;
                     msgs.forEach(m=>{
                         const lat = parseFloat(m.lat), lon = parseFloat(m.lon);
