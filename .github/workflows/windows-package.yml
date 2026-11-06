@@ -208,6 +208,31 @@ jobs:
             cargo tauri build --ci --bundles nsis,msi -- --locked
           }
           if ($LASTEXITCODE -ne 0) { throw 'Tauri Windows package build failed' }
+      - name: Prove release desktop PE uses GUI subsystem (no terminal lifetime)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exe = (Resolve-Path 'crates/pravda-app/target/release/pravda-app.exe').Path
+          $handle = [IO.File]::OpenRead($exe)
+          try {
+            $reader = [IO.BinaryReader]::new($handle)
+            if ($reader.ReadUInt16() -ne 0x5A4D) { throw 'Desktop is not a Windows MZ executable' }
+            $handle.Position = 0x3C
+            $peOffset = $reader.ReadInt32()
+            if ($peOffset -lt 0x40 -or $peOffset -gt $handle.Length - 96) {
+              throw 'Desktop PE header offset is invalid'
+            }
+            $handle.Position = $peOffset
+            if ($reader.ReadUInt32() -ne 0x00004550) { throw 'Desktop PE signature is invalid' }
+            # Subsystem is at offset 68 within the PE optional header.
+            # 2 = IMAGE_SUBSYSTEM_WINDOWS_GUI, 3 = console application.
+            $handle.Position = $peOffset + 24 + 68
+            $subsystem = $reader.ReadUInt16()
+            if ($subsystem -ne 2) {
+              throw "Desktop has a console subsystem ($subsystem); would bind Windows Terminal to the GUI lifetime"
+            }
+            Write-Host 'PASS: installed Tauri desktop uses IMAGE_SUBSYSTEM_WINDOWS_GUI (2)'
+          } finally { $handle.Dispose() }
       - name: Build and stage Rust Doctor and offline Harness
         shell: pwsh
         run: |
