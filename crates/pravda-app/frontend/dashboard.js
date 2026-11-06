@@ -355,6 +355,44 @@ const translations = {
         context.textAlign = "left";
     }
 
+    // The compact watchlist mirrors the exact observed market snapshot used
+    // for the central chart. No independent feed and never fabricated prices.
+    function clearTerminalWatchlist() {
+        document.querySelectorAll(".watchlist-row").forEach(button => {
+            button.dataset.freshness = "unavailable";
+            button.querySelector(".watch-price").textContent = "—";
+            button.querySelector(".watch-freshness").textContent = "Indisponible";
+        });
+    }
+    window.pravdaClearTerminalWatchlist = clearTerminalWatchlist;
+    function updateTerminalWatchlist(rows) {
+        for (const row of rows) {
+            const button = $("terminal-watchlist")
+                .querySelector('[data-watch-symbol="' + row.symbol + '"]');
+            if (!button) continue;
+            const live = [row.binance, row.kraken].find(
+                quote => quote?.status === "live" && Number.isFinite(quote.price));
+            const observed = live || [row.binance, row.kraken].find(
+                quote => Number.isFinite(quote?.price));
+            const state = live ? "live" : observed ? "stale" : "unavailable";
+            button.dataset.freshness = state;
+            button.querySelector(".watch-price").textContent =
+                observed ? formatMarketValue(observed.price, "USDT") : "—";
+            button.querySelector(".watch-freshness").textContent =
+                state === "live" ? "Récent" :
+                state === "stale" ? "Périmé" : "Indisponible";
+        }
+    }
+    document.querySelectorAll(".watchlist-row").forEach(button => {
+        button.addEventListener("click", () => {
+            const symbol = button.dataset.watchSymbol;
+            if (!["BTC/USDT", "ETH/USDT", "SOL/USDT"].includes(symbol)) return;
+            $("chart-symbol").value = symbol;
+            $("chart-symbol").dispatchEvent(new Event("change", {bubbles: true}));
+            document.querySelector('.tab-btn[data-tab="markets"]')?.click();
+        });
+    });
+
     function renderMarket(payload) {
         latestMarket = payload;
         if (typeof checkLocalAlerts === "function") checkLocalAlerts();
@@ -377,6 +415,7 @@ const translations = {
         } else {
             setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? t("startBot") : t("stalePrices"));
         }
+        updateTerminalWatchlist(rows);
         const tbody = $("crypto-quotes");
         tbody.replaceChildren();
         for (const row of rows) {
@@ -735,6 +774,10 @@ const translations = {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("market-feed-status"), "error", t("unavailableFeed"));
             $("chart-age").textContent = t("unknownError");
+            document.querySelectorAll(".watchlist-row").forEach(button => {
+                button.dataset.freshness = "unavailable";
+                button.querySelector(".watch-freshness").textContent = "Source indisponible";
+            });
         }
     }
     // Auth boundaries invalidate pending IPC results and any cached consent UI.

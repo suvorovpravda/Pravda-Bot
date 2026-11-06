@@ -481,3 +481,55 @@ textarea:focus-visible, input:focus-visible {
     .terminal-cockpit .market-chart { height: 280px; }
     .terminal-pane-label span { white-space: normal; }
 }
+
+
+/* Compact factual watchlist: values come from the main observed snapshot. */
+.terminal-watchlist {
+    padding: 11px;
+    border: 1px solid var(--terminal-stroke);
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(10, 26, 46, .94), rgba(8, 19, 36, .98));
+}
+.watchlist-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 4px 10px;
+}
+.watchlist-title strong { font-size: 13px; }
+.watchlist-title span {
+    font-size: 10px;
+    letter-spacing: .04em;
+    color: var(--muted);
+}
+.watchlist-rows { display: grid; gap: 5px; }
+.watchlist-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: baseline;
+    padding: 10px;
+    text-align: left;
+    border: 1px solid rgba(92, 145, 199, .18);
+    border-radius: 8px;
+    background: rgba(18, 39, 63, .6);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+}
+.watchlist-row:hover { background: rgba(35, 67, 105, .68); }
+.watchlist-row:focus-visible { outline: 2px solid var(--terminal-focus); outline-offset: 2px; }
+.watchlist-row .watch-symbol { font-size: 12px; font-weight: 700; }
+.watchlist-row .watch-price {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+.watchlist-row .watch-freshness { grid-column: 1 / -1; font-size: 10px; color: var(--muted); }
+.watchlist-row[data-freshness="live"] .watch-freshness { color: var(--green); }
+.watchlist-row[data-freshness="stale"] .watch-freshness { color: var(--amber); }
+.watchlist-note { margin: 8px 4px 0; font-size: 10px; }

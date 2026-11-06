@@ -79,6 +79,18 @@ assert.match(html,/id="security-events"/,
   "Maintenance must retain bounded in-memory security event viewer");
 assert.match(html,/class="terminal-cockpit"/,
   "Terminal must group real market, risk and watchlist modules in one cockpit");
+assert.match(html,/id="terminal-watchlist"/,
+  "Market watchlist must have a real data container");
+assert.match(html,/data-watch-symbol="BTC\/USDT"/,
+  "Watchlist must preserve the actual supported market symbols");
+assert.match(js,/updateTerminalWatchlist\(rows\);/,
+  "Watchlist must reuse the observed market snapshot, not a synthetic feed");
+assert.match(js,/button\.dataset\.freshness = state;/,
+  "Watchlist must label actual source freshness instead of claiming all ticks are live");
+assert.match(js,/document\.querySelector\('\.tab-btn\[data-tab="markets"\]'\)\?\.click\(\)/,
+  "Clicking an asset must open its existing market chart");
+assert.match(auth,/window\.pravdaClearTerminalWatchlist\(\)/,
+  "Logout and reauthentication must remove old-session watchlist values");
 assert.match(html,/class="grid terminal-market"/,
   "Market charts must remain a functional central workspace");
 assert.match(html,/class="grid terminal-extras"/,
