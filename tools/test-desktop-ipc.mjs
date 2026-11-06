@@ -81,6 +81,22 @@ assert.match(html,/id="acceptance-center"/,
   "Installed desktop must own a native test center");
 assert.match(html,/id="acceptance-pre"/, "Preproduction button must exist");
 assert.match(html,/id="acceptance-post"/, "Postproduction button must exist");
+assert.doesNotMatch(ipc,/phase\|verified\|/,
+  "Report phase is metadata, not a successful test");
+assert.match(js,/expectedAcceptanceChecks\[index\]/,
+  "Acceptance rows must be ordered and unique before counting PASS");
+assert.match(js,/run_number: runNumber/,
+  "Each test press must carry an individual execution number");
+assert.match(js,/checked_at_utc: finishedAt\.toISOString\(\)/,
+  "Every completed test must publish its actual completion timestamp");
+assert.match(js,/window\.pravdaDashboardReady = true;/,
+  "Dashboard must advertise readiness only after all handlers are bound");
+assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
+  "A failed dashboard initialization must produce a visible local error");
+assert.match(js,/button\.textContent = "↻ Tentative à "/,
+  "Manual refresh must provide visible feedback without inventing fresh market data");
+assert.match(html,/les mêmes contrôles locaux Rust/,
+  "Preproduction and postproduction must describe their current shared scope");
 assert.match(js,/window\.pravdaInvoke\("ipc_acceptance_report", \{phase\}\)/,
   "Pre/postproduction tests must be native authenticated Rust IPC");
 assert.match(auth,/window\.pravdaClearAcceptance\(\)/,
@@ -102,7 +118,7 @@ assert.match(auth,/window\.pravdaClearPaper\(\)/,
   "Logout and reauthentication must erase previous paper values from the DOM");
 assert.match(js,/window\.pravdaClearPaper\s*=\s*clearPaperUi/,
   "Paper UI must expose a local clear method without contacting exchanges");
-assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) refreshPaper\(\);/,
+assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) refreshPaper\(true\);/,
   "Stale paper action completion must refresh after a new login");
 assert.match(js,/window\.pravdaInvoke\(command, args\)/,
   "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
@@ -150,8 +166,16 @@ assert.match(auth,/window\.refreshRevolutConsent\(\)/,
   "Signing back in must re-read permission from native Rust");
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
-assert.match(js,/if \(!securityVisible\(\) \|\| securityCheckInFlight\) return;/,
-  "Security scan must be visibility-gated and single-flight");
+assert.match(js,/const securitySessionReady = \(\) => !!securityShell && !securityShell.hidden;/,
+  "Authenticated UI session must own explicit test interactions");
+assert.match(js,/if \(!explicit && !securityVisible\(\)\) return;/,
+  "Only passive checks may be skipped for hidden WebView2 documents");
+assert.match(js,/if \(securityCheckInFlight\) \{/,
+  "Security tests must be single-flight");
+assert.match(js,/window\.refreshSecurity = \(\) => refreshSecurity\(true\);/,
+  "User-driven security checks must not be silently skipped because of visibilityState");
+assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
+  "Manual acceptance controls must never silently ignore a click for document.hidden");
 assert.match(js,/if \(tab === "security"\)/,
   "Opening Security must refresh its local status");
 

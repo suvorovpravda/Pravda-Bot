@@ -89,7 +89,6 @@ function activateDashboard() {
     const script = document.createElement("script");
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
-        dashboardLoaded = true;
         const logoutForm = document.getElementById("ipc-logout-form");
         logoutForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -100,6 +99,15 @@ function activateDashboard() {
             }
             showLogin();
         });
+        if (window.pravdaDashboardReady !== true) {
+            const banner = document.createElement("p");
+            banner.className = "ipc-auth-error";
+            banner.setAttribute("role", "alert");
+            banner.textContent = "Interface non initialisée. Fermez puis rouvrez Pravda-Bot ; aucun mot de passe ni détail système n'a été enregistré.";
+            shell.prepend(banner);
+            return;
+        }
+        dashboardLoaded = true;
     });
     script.addEventListener("error", () => {
         shell.hidden = true;
