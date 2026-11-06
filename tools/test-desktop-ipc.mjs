@@ -125,6 +125,12 @@ assert.doesNotMatch(auth,/aucun mot de passe ni détail système n'a été enreg
   "A successful first-use password setup may already be persisted before the dashboard fails");
 assert.match(auth,/showDashboardStartupFailure\(dashboardFaultCode\)/,
   "A failed initialization must show a bounded diagnostic rather than leave a partial UI active");
+assert.match(auth,/if \(dashboardLoading\) return;/,
+  "Concurrent login callbacks must not inject dashboard.js twice");
+assert.match(auth,/window\.pravdaDashboardReady = false;/,
+  "Each load must clear stale dashboard readiness before starting a new script");
+assert.match(auth,/dashboardLoading = false;/,
+  "The dashboard script-load guard must release on completion or failure");
 const diagnosticStart=auth.indexOf("// Capture only a closed diagnostic category");
 const diagnosticEnd=auth.indexOf("// UI-only epoch",diagnosticStart);
 assert.ok(diagnosticStart>=0 && diagnosticEnd>diagnosticStart,
