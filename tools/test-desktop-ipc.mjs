@@ -142,6 +142,53 @@ assert.match(js,/window\.pravdaDashboardReady = true;/,
   "Dashboard must advertise readiness only after all handlers are bound");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
   "A failed dashboard initialization must produce a visible local error");
+assert.doesNotMatch(auth,/aucun mot de passe ni détail système n'a été enregistré/,
+  "A successful first-use password setup may already be persisted before the dashboard fails");
+assert.match(auth,/showDashboardStartupFailure\(dashboardFaultCode\)/,
+  "A failed initialization must show a bounded diagnostic rather than leave a partial UI active");
+assert.match(auth,/if \(dashboardLoading\) return;/,
+  "Concurrent login callbacks must not inject dashboard.js twice");
+assert.match(auth,/window\.pravdaDashboardReady = false;/,
+  "Each load must clear stale dashboard readiness before starting a new script");
+assert.match(auth,/dashboardLoading = false;/,
+  "The dashboard script-load guard must release on completion or failure");
+const diagnosticStart=auth.indexOf("// Capture only a closed diagnostic category");
+const diagnosticEnd=auth.indexOf("// UI-only epoch",diagnosticStart);
+assert.ok(diagnosticStart>=0 && diagnosticEnd>diagnosticStart,
+  "Startup diagnostic handler must be extracted from the real auth script");
+const bootNodes=[];
+let bootWindowError;
+const bootUi={
+  window:{addEventListener(type,callback){if(type==="error") bootWindowError=callback;}},
+  shell:{hidden:false},screen:{hidden:true,querySelector(){return null;}},
+  form:{hidden:false},notice:{textContent:""},
+  card:{append(node){bootNodes.push(node);}},
+  document:{createElement(tag){return {
+    tag,children:[],value:"",textContent:"",hidden:false,readOnly:false,
+    setAttribute(){},addEventListener(){},append(...nodes){this.children.push(...nodes);}
+  };}}
+};
+vm.createContext(bootUi);
+vm.runInContext(auth.slice(diagnosticStart,diagnosticEnd),bootUi);
+assert.equal(typeof bootWindowError,"function",
+  "Authentication must observe dashboard runtime errors without collecting raw exceptions");
+bootWindowError({
+  filename:"https://tauri.localhost/dashboard.js",
+  lineno:1234,
+  error:{name:"TypeError",message:"SECRET_DO_NOT_LOG"}
+});
+vm.runInContext("showDashboardStartupFailure(dashboardFaultCode)",bootUi);
+assert.equal(bootUi.shell.hidden,true,
+  "An incompletely initialized dashboard must not remain interactive");
+assert.equal(bootUi.screen.hidden,false);
+assert.equal(bootUi.form.hidden,true,
+  "Failed startup must not ask for the password again");
+assert.equal(bootNodes.length,1);
+const fields=bootNodes[0].children;
+const diagnostic=fields.find(node=>node.tag==="input");
+assert.equal(diagnostic?.value,"PRAVDA-UI-STARTUP|DASHBOARD_TYPE_L1234");
+assert.doesNotMatch(JSON.stringify(fields),/SECRET_DO_NOT_LOG|tauri\.localhost/,
+  "Diagnostics must never contain exception text, source URLs, stack traces or credentials");
 assert.match(js,/button\.textContent = "↻ Tentative à "/,
   "Manual refresh must provide visible feedback without inventing fresh market data");
 assert.match(js,/queuedAuthRefreshGeneration = requestedGeneration;/,
