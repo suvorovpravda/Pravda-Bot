@@ -217,6 +217,20 @@ assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
 assert.match(js,/if \(tab === "security"\)/,
   "Opening Security must refresh its local status");
 
+assert.match(html,/id="updater-center"/,"Signed updater readiness must appear inside authenticated Security settings");
+assert.match(html,/id="updater-readiness"/,"User needs a local config status action, not a fake update installer");
+assert.match(js,/window\.pravdaInvoke\("ipc_update_status"\)/,
+  "Updater status must come from authenticated Rust IPC without direct network or shell permissions");
+assert.match(js,/values\.automatic !== "disabled"/,
+  "Unsigned builds must not be misrepresented as automatically updating");
+assert.match(ipc,/fn update_status_rows\(\) -> Vec<String>/,
+  "Updater status must be a closed, local-only Rust allowlist");
+assert.match(ipc,/automatic\|disabled/,
+  "Auto-updater must remain blocked until a genuine key and verified release exist");
+assert.match(js,/if \(sessionChanged && securitySessionReady\(\)\) \{\s*void refreshUpdateReadiness\(\);/,
+  "An old updater IPC completion must re-query only the current authenticated session");
+assert.match(auth,/window\.pravdaClearUpdateReadiness\(\)/,
+  "Authentication transitions must reset stale update status");
 assert.match(html,/id="security-events"/,"Security events must be visible after login");
 assert.match(ipc,/protonvpn.*https:\/\/protonvpn\.com\/support\//,"Proton documentation must be a fixed official URL");
 assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
@@ -225,7 +239,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,22);
+assert.equal(new Set(handlers).size,23);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -237,7 +251,7 @@ const asyncSessionBound = new Set([
   "ipc_public_feed","ipc_security_report","ipc_acceptance_report"
 ]);
 for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query",
- "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics",
+ "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_update_status",
  "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
@@ -493,5 +507,64 @@ await earlierFxSuccess;
 assert.equal(marketUi.fxRenders.length,fxRendersAfterFailure,
   "An older FX success must not undo a newer failed FX refresh");
 assert.equal(vm.runInContext("latestFx",marketUi),null);
+
+// Execute the *actual* updater readiness UI closure with an old IPC response
+// delayed across logout and reauthentication. The new login must win without
+// displaying old-session data or requiring another manual click.
+const updaterStart = js.indexOf("    let updateReadinessBusy = false;");
+const updaterEnd = js.indexOf("    // Paper Trading is a deterministic",updaterStart);
+assert.ok(updaterStart >= 0 && updaterEnd > updaterStart,
+  "Updater readiness logic must remain extractable for a real deferred IPC regression");
+const updaterNodes = new Map();
+const updaterPending = [];
+let updaterSessionReady = true;
+const updaterVm = {
+  window:{
+    pravdaAuthGeneration: 1,
+    pravdaInvoke: () => new Promise((resolve,reject) => {
+      updaterPending.push({resolve,reject});
+    })
+  },
+  securitySessionReady: () => updaterSessionReady,
+  $: id => {
+    if (!updaterNodes.has(id)) updaterNodes.set(id,{
+      disabled:false, textContent:"",addEventListener() {}
+    });
+    return updaterNodes.get(id);
+  }
+};
+vm.createContext(updaterVm);
+vm.runInContext(js.slice(updaterStart,updaterEnd),updaterVm,{
+  filename:"pravda-updater-readiness-session.js"
+});
+assert.equal(updaterPending.length,1,
+  "Authenticated dashboard initially requests a local Rust updater state");
+updaterSessionReady = false;
+updaterVm.window.pravdaAuthGeneration++;
+updaterVm.window.pravdaClearUpdateReadiness();
+updaterSessionReady = true;
+updaterVm.window.pravdaAuthGeneration++;
+updaterVm.window.refreshUpdateReadiness();
+assert.equal(updaterPending.length,1,
+  "A new session does not create overlapping updater requests");
+updaterPending[0].resolve([
+  "version|0.3.4","channel|not_configured","signature|not_verified",
+  "automatic|disabled","last_check|never"
+]);
+await new Promise(setImmediate);
+assert.equal(updaterPending.length,2,
+  "Old completion automatically rechecks the new session after releasing guard");
+assert.ok(!updaterVm.$("updater-state").textContent.includes("Version 0.3.4"),
+  "Old response must not leak its updater state to the new session");
+updaterPending[1].resolve([
+  "version|0.3.4","channel|not_configured","signature|not_verified",
+  "automatic|disabled","last_check|never"
+]);
+await new Promise(setImmediate);
+assert.match(updaterVm.$("updater-state").textContent,/Version 0\.3\.4/);
+assert.match(updaterVm.$("updater-state").textContent,/non configurées/);
+assert.equal(updaterVm.$("updater-readiness").disabled,false,
+  "Updater configuration action must recover after stale IPC resolves");
+assert.match(updaterVm.$("updater-checked").textContent,/aucun appel réseau/);
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");

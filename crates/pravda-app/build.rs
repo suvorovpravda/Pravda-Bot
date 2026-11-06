@@ -16,6 +16,7 @@ fn main() {
         "ipc_paper_trade",
         "ipc_paper_reset",
         "ipc_runtime_metrics",
+        "ipc_update_status",
         "ipc_security_report",
         "ipc_acceptance_report",
         "ipc_security_events",

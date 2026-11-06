@@ -61,6 +61,7 @@ function showLogin() {
     if (typeof window.pravdaLockRevolutConsent === "function") window.pravdaLockRevolutConsent();
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
+    if (typeof window.pravdaClearUpdateReadiness === "function") window.pravdaClearUpdateReadiness();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
     shell.hidden = true;
     screen.hidden = false;
@@ -77,6 +78,7 @@ function activateDashboard() {
     // Never display prior-session synthetic positions while the new snapshot loads.
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
+    if (typeof window.pravdaClearUpdateReadiness === "function") window.pravdaClearUpdateReadiness();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
     screen.hidden = true;
     shell.hidden = false;
@@ -84,6 +86,7 @@ function activateDashboard() {
         if (typeof window.refreshRevolutConsent === "function") window.refreshRevolutConsent();
         if (typeof window.refreshAll === "function") window.refreshAll();
         if (typeof window.refreshSecurity === "function") window.refreshSecurity();
+        if (typeof window.refreshUpdateReadiness === "function") window.refreshUpdateReadiness();
         if (typeof window.refreshSecurityEvents === "function") window.refreshSecurityEvents();
         if (typeof window.refreshPaper === "function") window.refreshPaper();
         return;
