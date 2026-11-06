@@ -1,126 +1,115 @@
 <div align="center">
 
-# 🛡️ PRAVDA-BOT / SECURITY
-### Frontières de confiance · Protections · Risques · Publication Windows
+# PRAVDA / SECURITY
 
-![Mode](https://img.shields.io/badge/Architecture-Zero%20Trust-2563eb?style=for-the-badge)
-![Secret](https://img.shields.io/badge/Secrets-Hors%20interface-16a34a?style=for-the-badge)
-![Trading](https://img.shields.io/badge/Trading%20réel-OFF-7c3aed?style=for-the-badge)
-![Release](https://img.shields.io/badge/Enterprise%20signé-NON%20VALIDÉ-dc2626?style=for-the-badge)
+### La confiance se démontre.
 
-**[📌 État actuel](#-état-actuel-et-limites)** · **[🔐 Frontières](#-frontières-de-confiance)** · **[🧪 Contrôles](#-contrôles-effectivement-présents)** · **[⚠️ Risques](#-risques-résiduels-et-limites)** · **[📩 Signalement](#-signaler-une-vulnérabilité)**
+**Architecture à permissions minimales · Données locales · Publication vérifiable**
 
-**[⬅️ README](README.md)** · **[🧭 Guide central](docs/PRAVDA-GUIDE.md)** · **[📋 Recette P0 #134](https://github.com/suvorovpravda/Pravda-Bot/issues/134)**
+[État](#état-de-sécurité) &nbsp;·&nbsp; [Frontières](#frontières-de-confiance) &nbsp;·&nbsp; [Menaces](#risques-résiduels) &nbsp;·&nbsp; [Publication](#sécurité-de-la-publication) &nbsp;·&nbsp; [Signaler](#signaler-une-vulnérabilité)
+
+[README](README.md) &nbsp; / &nbsp; [Reviewing](docs/REVIEWING.md) &nbsp; / &nbsp; [Registre P0](https://github.com/suvorovpravda/Pravda-Bot/issues/160)
 
 </div>
 
 ---
 
-## 🇫🇷 État actuel et limites
+## État de sécurité
 
-> **Aucune certification de sécurité indépendante n'est revendiquée.** Les validations CI et CodeQL sont des preuves de contrôles précis sur un commit, pas des garanties générales contre toutes les attaques. L'objectif de livraison est fixé au **30 novembre 2026**, sous réserve des critères de recette.
+**06 novembre 2026 · NO-GO pour une release de production.**
 
-| Domaine | État | Constat |
-| :--- | :---: | :--- |
-| Fenêtre native / ACL Tauri | 🟢 En place | Permissions de la fenêtre principale explicitement définies |
-| Authentification / révocation | 🟢 En place | Vérifications Rust, rejet des résultats de sessions périmées |
-| Stockage / sauvegarde SQLite | 🟢 Tests intégrés | Les restaurations complexes et profils utilisateur demandent une qualification séparée |
-| Doctor et Harness | 🟢 Intégrés | Diagnostic passif et simulation synthétique sans transaction |
-| Centre de test unifié | 🟢 Intégré et testé en CI | [PR #138 fusionnée](https://github.com/suvorovpravda/Pravda-Bot/pull/138), 13/13 contrôles au SHA source ; recette PC physique distincte |
-| MSI / NSIS sur runner Windows | 🟢 Vérifiés en CI | Ne prouvent pas le scénario sans WebView2 ni réseau |
-| VM isolée sans WebView2 | 🟠 Non vérifiée | Critère bloquant [#134](https://github.com/suvorovpravda/Pravda-Bot/issues/134) |
-| Installation réellement modulaire | 🟠 Non validée | Options Standard / Personnalisée non homologuées |
-| Chaîne Authenticode | 🔴 Non attestée | Certificat, identité, signature, horodatage et réputation [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) |
-| Ordres de trading réels | 🔒 Interdits | Aucun ordre, retrait ou accès privé privilégié sans [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89) |
+Aucune certification indépendante ou garantie d'absence de vulnérabilité n'est revendiquée. Un contrôle CI réussi prouve uniquement le scénario testé **sur le SHA mentionné**. Il ne remplace ni une recette sur l'installateur réel ni un contrôle indépendant de la chaîne de confiance.
 
-**Preuve du centre intégré au 5 novembre 2026 :** [workflow Windows #42016900394](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394), réussi sur le commit source **038c9318ca80ba3e6f67ccdc0fe237415f77ec21**, dont l'artefact et le [rapport intégré HTML/JSON](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394/artifacts/13410164620) ont été vérifiés sur un second runner Windows. Fusion dans `main` : **8b87783232b2c118d4e8d1e34c04b2f89dd6de8a**. Les commits suivants exigent leurs propres preuves.
+**Incident d'intégration avéré :** la [CI Windows de la PR #157](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42290188079) a constaté une initialisation partielle du tableau de bord sur un EXE **installé**. La publication reste bloquée. L'intégration des corrections se fait dans la [PR #159](https://github.com/suvorovpravda/Pravda-Bot/pull/159).
 
-### 🔐 Frontières de confiance
-
-| Frontière | Exigence | Comportement interdit |
+| Domaine | État | Preuve ou manque |
 | :--- | :--- | :--- |
-| Interface WebView2 → Rust | Permissions Tauri minimales, session valide, autorisation par commande | Contourner l'auth via JS, popup ou fenêtre non autorisée |
-| Requête asynchrone → résultat | Lier la réponse à la session qui a démarré la requête | Réutiliser une réponse d'une session révoquée après reconnexion |
-| Secret / coffre Windows | Lecture native contrôlée, jamais envoyé à la WebView | Copier clés, jetons ou mots de passe dans HTML, logs, JSON |
-| Flux public / privé | Consentement explicite, destinations limitées et refus sécurisé | Activer les API privées à partir d'un score ou d'un simple indicateur UI |
-| SQLite / WAL | Transactions cohérentes, ne jamais réparer aveuglément | Supprimer les données ou recréer le mot de passe pendant un test |
-| Installateur Windows | Manifeste SHA-256, provenance et signature vérifiée si revendiquée | Déclarer un ZIP unsigned comme Enterprise ou supprimer SmartScreen |
-| Harnais de production | Fixtures synthétiques, isolement réseau OS/VM pour essais air-gapped | Transmettre une opération boursière ou démarrer des ordres live |
+| Isolation Tauri / IPC et authentification Rust | Contrôles implémentés | Revérifier sessions et permissions sur chaque modification |
+| Stockage SQLite et vérificateur d'authentification | Doctor local : contrôles passifs | La disponibilité du fichier ne valide pas le parcours graphique |
+| Build Rust / CodeQL / tests WebView2 | Couverture CI disponible | Les checks doivent passer sur **le même commit** que l'installeur |
+| Installer MSI / NSIS | **NO-GO** | Onboarding GUI installé à valider, un échec confirmé |
+| VM sans WebView2 et sans Internet | **Non attestée** | Isolement hyperviseur et deux snapshots propres requis |
+| Installation Standard / Personnalisée | **Non homologuée** | Les modules masqués doivent aussi être refusés côté Rust |
+| Dépendances desktop RustSec | **Risque ouvert** | Vulnérabilité sur le chemin historique h2 0.3, à vérifier et éliminer |
+| Authenticode / signature Enterprise | **Non attestée** | Certificat, identité, horodatage et vérification indépendante |
+| Updater Tauri signé | **Désactivé** | Chaîne cryptographique et scénarios de restauration non homologués |
+| Ordres réels / retraits | **Interdits dans l'édition test** | Consentement et homologation financière indépendants |
 
-![CSP](https://img.shields.io/badge/CSP-Scripts%20locaux-16a34a)
-![IPC](https://img.shields.io/badge/IPC-Session%20Rust-2563eb)
-![Données](https://img.shields.io/badge/SQLite-WAL-0e7490)
-![Contournement](https://img.shields.io/badge/Bypass-INTERDIT-dc2626)
+Toutes les exigences et preuves à obtenir figurent dans l'[Issue #160 — Security / Déploiement](https://github.com/suvorovpravda/Pravda-Bot/issues/160). La configuration d'installation Tauri utilise `offlineInstaller` pour le prérequis WebView2, **mais l'essai réellement hors réseau sur VM vierge reste NO-GO**. Ne pas clore une vulnérabilité au seul motif que son suivi a été déplacé.
 
-### ✅ Contrôles effectivement présents
+## Frontières de confiance
 
-Le dépôt possède des commandes IPC explicitement nommées, des tests de refus de fenêtres non autorisées, des contrôles Rust de session, une CSP sans scripts distants, un vérificateur d'authentification PBKDF2-SHA256, la persistance SQLite, et des contrôles de non-régression WebView2. Les résultats asynchrones refusés après déconnexion ne doivent pas effacer l'interface de la session suivante.
-
-Le Doctor Windows est **passif** : il ne transmet aucune donnée par DNS, HTTP ou TCP et ne répare rien automatiquement. Il produit les états **PASS**, **WARN**, **FAIL**, **SKIP** ; **SKIP ne vaut jamais PASS**. Le Harness lance des scénarios synthétiques de réussite, refus, crash et timeout. Ni Doctor ni Harness ne constituent une certification de performance financière ou une recette d'installation sur machine vierge.
-
-Le centre de test intégré, [fusionné dans la PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138), regroupe ces contrôles dans **un seul fichier `pravda-test-center.exe`** et génère un rapport HTML et JSON local. Sa compilation et sa recette sur runner Windows sont réussies, mais cela n'atteste **ni le double-clic sur le PC de l'utilisateur, ni la VM sans réseau/WebView2, ni la certification Enterprise**. Aucun rapport n'est envoyé automatiquement ; les identifiants des contrôles sont filtrés pour réduire la divulgation.
-
-### 🪟 Installation et provenance Windows
-
-![WebView2](https://img.shields.io/badge/WebView2-Prérequis%20embarqué-16a34a)
-![Offline](https://img.shields.io/badge/VM%20hors%20réseau-À%20ATTESTER-f59e0b)
-![MSI](https://img.shields.io/badge/MSI%20%2B%20NSIS-Candidats%20de%20test-2563eb)
-
-Le fichier de configuration Tauri utilise **offlineInstaller** avec installation silencieuse de WebView2. Les paquets construits contiennent MSI, NSIS, l'application Rust et les compagnons diagnostiques. Le [workflow Windows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml) contrôle les empreintes SHA-256 et le manifeste de provenance sur le commit de la compilation. Cela ne prouve pas l'installation dans une VM Windows initialement dépourvue de WebView2 et totalement déconnectée d'Internet.
-
-La [recette #134](https://github.com/suvorovpravda/Pravda-Bot/issues/134) exige une VM jetable, isolation réseau réalisée **dans l'hyperviseur**, snapshot propre, installation et suppression MSI puis NSIS, redémarrage, données anonymisées, onboarding natif, conservation SQLite et vérification de l'absence de port HTTP pour l'interface. Il ne faut jamais désinstaller WebView2 sur le PC personnel pour reproduire ce scénario.
-
-Le mode **Standard / Personnalisé** doit désactiver réellement les modules facultatifs dans Rust, pas seulement masquer un bouton. L'authentification, les permissions minimales, SQLite, la vérification du binaire et les protections financières restent obligatoires.
-
-Une distribution **Enterprise signée** requiert la vérification Authenticode de chaque EXE, du MSI, du NSIS, de la chaîne de confiance et de l'horodatage, conformément à [#90](https://github.com/suvorovpravda/Pravda-Bot/issues/90). Aucun fichier non signé ne doit être présenté comme certifié.
-
-### ⚠️ Risques résiduels et limites
-
-| Gravité | Risque | Limite réelle / remédiation |
+| Frontière | Garantie requise | Comportement interdit |
 | :--- | :--- | :--- |
-| 🔴 Critique | Trading ou retrait non autorisé | Trading réel désactivé ; autorisation et audit indépendants exigés |
-| 🔴 Élevée | Exécutable remplacé / binaire sans provenance | SHA-256 exact, signature si revendiquée, aucune exception antivirus |
-| 🟠 Élevée | Installation en VM sans réseau et WebView2 | **NON VÉRIFIÉE** ; test G1 obligatoire |
-| 🟠 Élevée | Choix d'installation purement décoratif | **NON HOMOLOGUÉ** ; désactivation Rust exigée |
-| 🟠 Modérée | Compromission locale du compte Windows | Le coffre natif ne protège pas de tous les malwares sous le même compte |
-| 🟡 Modérée | Interruption WAL, corruption ou migration partielle | Ne pas réparer l'original ; diagnostiquer et restaurer une copie cohérente |
-| 🟡 Modérée | API indisponible, prix périmé ou source inconnue | Afficher une indisponibilité réelle, jamais une cotation inventée |
+| **WebView → Rust** | Allowlist de commandes, session authentifiée, validation stricte des entrées | Accès à une commande protégée par manipulation du DOM |
+| **Session → résultat différé** | Lier chaque réponse à sa session ; révoquer les réponses périmées | Afficher ou réutiliser les données d'une ancienne session |
+| **Coffre → application** | Secrets conservés dans le code natif ; permissions minimales | Mot de passe, clé privée, cookie ou jeton dans IPC, JS ou logs |
+| **Flux publics → données** | Source autorisée, horodatage, état de fraîcheur et refus sécurisé | Prix fictif présenté comme réel ou statut live déduit d'un socket non vérifié |
+| **SQLite → diagnostic** | Lecture seule, WAL cohérent, sauvegarde et restauration contrôlées | Suppression/réinitialisation automatique des données utilisateur |
+| **CI → utilisateur** | SHA exact, artefacts et somme de contrôle, signature vérifiée si revendiquée | Publier un candidat non signé comme édition certifiée |
+| **Trading simulation → live** | Séparation technique et autorisation explicite indépendante | Transformer un contrôle de simulation en ordre réel |
 
-**VPN / Proton :** une application VPN installée ou un abonnement actif ne prouve pas que le tunnel et son kill switch fonctionnent. Aucune vérification non effectuée ne doit apparaître comme « protégé ». L'utilisateur doit conserver la maîtrise des options du VPN officiel, sans transmettre d'identifiants au projet.
+Les permissions de fenêtre Tauri et la CSP doivent demeurer restrictives. Aucun script distant ni serveur HTTP de contrôle local n'est requis pour le fonctionnement de base du bureau.
 
-**Confidentialité :** ne pas partager les fichiers d'authentification, bases SQLite, fichiers WAL/SHM, clés API, PFX, tokens, logs contenant des identités ou exports de comptes. Les rapports de test destinés au dépannage doivent rester expurgés et être vérifiés avant tout partage.
+### Gestion des identifiants et des données
 
-<details>
-<summary><strong>📊 Baseline des neuf indicateurs historiques P0–P2 (ouvrir)</strong></summary>
+Le bureau n'expose pas de clés d'exchange, de secrets du coffre Windows ou de mot de passe au code WebView. Les rapports destinés au support sont **expurgés** et consultables par l'utilisateur avant tout partage.
 
-Ces fractions sont conservées avec le README et le guide central pour la continuité des jalons historiques. **Elles ne sont pas une mesure globale de sécurité.**
+**Ne jamais transmettre** : fichiers d'authentification, clés API ou de signature, fichiers PFX, bases SQLite, fichiers WAL/SHM, identifiants de comptes, journaux bruts, jetons de session ou historiques privés.
 
-| Priorité | Chantier | Jalons | Proportion |
-| :--- | :--- | :--- | :--- |
-| **P0** | Séparation Python / Rust | 6/6 | **100 %** |
-| **P0** | Sécurité IPC Windows | 2/4 | **50 %** |
-| **P0** | Parité fonctionnelle Rust | 3/8 | **38 %** |
-| **P0** | CI / gouvernance | 3/5 | **60 %** |
-| **P1** | Historique SQLite | 3/4 | **75 %** |
-| **P1** | Expérience desktop | 2/4 | **50 %** |
-| **P1** | Signature Enterprise | 0/4 | **0 %** |
-| **P2** | Observabilité / charge | 1/4 | **25 %** |
-| **P2** | Sources et modules optionnels | 0/4 | **0 %** |
+Les diagnostics doivent être non destructifs et explicitement marquer **PASS, WARN, FAIL ou SKIP**. Les scénarios hors réseau ne doivent pas lancer de connexion privée ou financière. Un SKIP n'est ni un PASS ni un échec dissimulé.
 
-</details>
+## Risques résiduels
 
-### 📩 Signaler une vulnérabilité
+| Priorité | Risque | Barrière |
+| :--- | :--- | :--- |
+| **P0** | Dashboard incomplet après création d'un mot de passe | Test du binaire **installé**, initialisation JS complète, première connexion et reconnexion |
+| **P0** | Windows lance une console liée au bureau | Vérifier le sous-système PE GUI=2 sur l'exécutable de la release |
+| **P0** | Flux publics muets, bloqués ou périmés | Délais d'attente, backoff, états distincts ; preuve de ticks réels horodatés |
+| **P0** | Dépendance vulnérable dans le lock desktop | Analyse Cargo et RustSec distincte du workspace ; correction sans allowlist cosmétique |
+| **P0** | Paquet remplacé ou altéré | Manifeste SHA-256, provenance, Authenticode valide pour publication signée |
+| **P0** | Mise à jour cassant SQLite ou abaissant la version | Updater OFF ; E2E refus de downgrade, corruption, interruption et rollback |
+| **P0** | Installation airgap prétendument validée | VM jetable réellement isolée au niveau hyperviseur, sans WebView2 préalable |
+| **P1** | Compromission du compte Windows local | Aucune promesse de protection du coffre contre un malware exécuté sous le même utilisateur |
+| **P1** | Choix d'installation purement décoratif | Capacités de modules désactivées et contrôlées dans Rust, pas seulement cachées |
+| **P1** | Trading ou retrait non autorisé | Ordres réels OFF ; circuit de décision indépendant dans l'Issue #89 |
 
-Privilégier le [signalement de sécurité GitHub](https://github.com/suvorovpravda/Pravda-Bot/security). Décrire le comportement reproductible, le commit concerné et les contrôles déjà réalisés. Ne jamais joindre de mot de passe, clé, base utilisateur ou log brut sensible. Une capture doit masquer toute donnée personnelle et tout jeton.
+### Dépendances et RustSec
 
-Pour un problème de démarrage ou de données locales, préférer le rapport expurgé du Doctor ; un avertissement ne prouve pas automatiquement une compromission. Une anomalie de sécurité ne doit pas être corrigée en désactivant l'antivirus, l'UAC, SmartScreen ou le contrôle de session.
+L'audit de l'arbre **desktop** a identifié le chemin historique **reqwest 0.11.27 → hyper 0.14.32 → h2 0.3.27** et l'avis **RUSTSEC-2026-0258** ; il a également signalé des dépendances non maintenues. Les analyses non bloquantes peuvent afficher un workflow global vert malgré une commande d'audit qui retourne un code d'échec. Ce problème est suivi dans l'[Issue #160](https://github.com/suvorovpravda/Pravda-Bot/issues/160), rubrique RustSec.
+
+Avant toute publication signée : inspecter les dépendances inverses, régénérer Cargo.lock **avec Cargo**, traiter les avis et rendre l'audit desktop bloquant. Ne jamais masquer un avis vulnérable sans justification de sécurité et approbation explicite.
+
+## Sécurité de la publication
+
+Le pipeline ne vaut **GO** que si toutes les vérifications suivantes se rapportent au même SHA et à l'artefact effectivement distribué.
+
+- [ ] Rust fmt, clippy, tests Rust Windows/Linux, MSRV, CodeQL et tests de sécurité IPC.
+- [ ] Audit RustSec du lock desktop et de l'espace de travail, sans vulnérabilité de sécurité non traitée.
+- [ ] Binaire Windows GUI sans console liée au terminal.
+- [ ] Installation MSI et NSIS, création du mot de passe, tableau de bord entièrement initialisé, redémarrage, login/logout/re-login, désinstallation et conservation SQLite.
+- [ ] Test center isolé, une seule instance, arrêt contrôlé, aucun secret dans les rapports.
+- [ ] Provenance, empreintes, signatures/horodatages indépendamment vérifiés **si la distribution est annoncée signée**.
+- [ ] Test d'installation sur VM sans WebView2 ni réseau pour toute promesse d'installation totalement hors ligne.
+- [ ] Déploiement progressif et restauration sans perte ; mécanisme de refus et rollback du signed updater testé.
+- [ ] Consentement réseau public distinct ; aucune clé privée ni capacité d'ordre réel activée.
+
+**Édition unsigned-test :** uniquement identifiée comme telle, non assimilée à une Enterprise. Aucun contournement de Windows Defender, SmartScreen, UAC ou du pare-feu. Une réputation SmartScreen ne s'obtient pas par la seule signature cryptographique.
+
+**Updater :** la [PR #153](https://github.com/suvorovpravda/Pravda-Bot/pull/153) a intégré la vérification de signatures de **candidats** ; elle ne constitue pas un updater automatique opérationnel. Le plugin dormant de la [PR #154](https://github.com/suvorovpravda/Pravda-Bot/pull/154) n'est pas publié comme mécanisme de mise à jour actif. Clé publique épinglée, manifestes authentifiés, contrôles de version, connexion HTTPS autorisée, refus de downgrade, rollback et consentement restent des barrières obligatoires.
+
+### Processus de reviewing
+
+Toute PR modifiant Rust, Tauri, l'authentification, le stockage, les flux, les installateurs ou l'updater suit la grille de [docs/REVIEWING.md](docs/REVIEWING.md). Une revue humaine ou automatisée sans preuve de tests sur le SHA final ne constitue pas une approbation de production. Les commentaires critiques ne doivent pas être résolus avant correctif et vérification.
+
+## Signaler une vulnérabilité
+
+Utiliser de préférence le [centre GitHub Security du dépôt](https://github.com/suvorovpravda/Pravda-Bot/security) et son canal privé de signalement lorsqu'il est activé. **Ne pas publier de preuve d'exploitation contenant un secret dans une Issue publique.**
+
+Un rapport utile précise la version ou le SHA affecté, le comportement reproductible, l'impact et les étapes minimales non destructives, avec une capture expurgée si nécessaire. Aucun accès aux clés API, à la base d'un utilisateur ni à un compte financier n'est nécessaire pour rédiger un signalement.
 
 ---
 
-## 🇬🇧 English
+**EN** — Production release: **NO-GO**. GitHub CI success is scoped to specific checks on a specific commit. Native Windows onboarding, RustSec, provenance and signed updater controls must be verified independently. Live orders are disabled.
 
-Pravda-Bot applies native Rust authorization, a restricted Tauri/WebView2 IPC boundary, local SQLite and Windows-native diagnostics. CI success is not a security certification. Offline-clean-VM installation, true modular installer behavior and Enterprise signatures remain unverified. **Live orders and withdrawals are disabled.** Security concerns should be reported via [GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security), without personal data or credentials.
-
-## 🇷🇺 Русский
-
-Pravda-Bot использует локальную авторизацию Rust, ограниченные IPC-разрешения Tauri и SQLite. Успешная сборка CI не означает независимую сертификацию безопасности. Полная проверка установки без сети и подпись Enterprise ещё не завершены. **Реальная торговля отключена.** Уязвимости следует сообщать через [GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security), без паролей и ключей.
+**RU** — **Продакшен-релиз не разрешён** до проверки установленного приложения, зависимостей RustSec и цепочки подписи. Настоящие ордера отключены. Не публикуйте ключи и токены в открытых Issue.

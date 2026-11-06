@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * CI contract: exactly three documentation pages, valid relative links,
- * synchronized, objective prioritized milestone percentages.
+ * CI contract: explicit allowlist of canonical documentation and review policy,
+ * valid relative links, and objective historical milestone percentages kept
+ * in the central guide. New editorial docs must not forge progress metrics.
  */
 import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
@@ -11,10 +12,17 @@ import {isIP} from "node:net";
 
 const tracked=execFileSync("git",["ls-files","-z"],{encoding:"utf8"})
   .split("\0").filter(Boolean);
-const expected=["README.md","SECURITY.md","docs/PRAVDA-GUIDE.md"];
+const expected=[
+  "README.md",
+  "SECURITY.md",
+  "docs/PRAVDA-GUIDE.md",
+  "docs/REVIEWING.md",
+  ".github/pull_request_template.md"
+];
+const deploymentPages=["README.md","SECURITY.md","docs/PRAVDA-GUIDE.md"];
 const docs=tracked.filter(p=>p.endsWith(".md")).sort();
 assert.deepEqual(docs,expected.slice().sort(),
-  "Exactly three Markdown docs: README, SECURITY, central guide");
+  "Only the canonical README, SECURITY, central guide, reviewing policy and PR template are allowed");
 
 function progressRows(path) {
   const content=readFileSync(path,"utf8"), results=[];
@@ -36,10 +44,26 @@ function progressRows(path) {
       path+": tasks must be ordered P0, P1 then P2");
   return results;
 }
-const reference=progressRows("README.md");
-for(const page of expected.slice(1))
-  assert.deepEqual(progressRows(page),reference,
-    page+": update progress in README, SECURITY and guide together");
+// Historical milestone fractions were never security scores and must not be
+// duplicated across current release-status pages. Keep the nine internally
+// consistent, objectively calculated rows in the central reference guide.
+const historical=progressRows("docs/PRAVDA-GUIDE.md");
+assert.equal(historical.length,9);
+for(const page of ["README.md","SECURITY.md","docs/REVIEWING.md"]) {
+  const content=readFileSync(page,"utf8");
+  const duplicateProgress=content.split(/\r?\n/).filter(line =>
+    /^\|\s*\*\*P[012]\*\*\s*\|/.test(line) &&
+    /\b\d+\s*\/\s*\d+\b/.test(line) &&
+    /\b\d+\s*%/.test(line));
+  assert.equal(duplicateProgress.length,0,
+    page+": historical milestone fractions belong in the central guide, not the live release status");
+  assert.match(content,/(?:NO-GO|NO GO)/,
+    page+": current distribution must be explicitly marked NO-GO");
+}
+assert.match(readFileSync("README.md","utf8"),/Issue #160|#160/, 
+  "README must link to the central unresolved security/deployment register");
+assert.match(readFileSync("SECURITY.md","utf8"),/RUSTSEC-2026-0258|h2 0\.3/,
+  "Security must retain visibility of the known vulnerable desktop dependency");
 
 for(const page of expected) {
   const markdown=readFileSync(page,"utf8");
@@ -124,7 +148,7 @@ if(updater!==undefined) {
   assert.equal(updater.dangerousInsecureTransportProtocol,false,
     "Signed updater must never enable insecure HTTP");
 }
-for(const page of expected) {
+for(const page of deploymentPages) {
   const content=readFileSync(page,"utf8");
   assert.match(content,/offlineInstaller/,
     page+": must describe the actual embedded WebView2 prerequisite");
@@ -133,5 +157,5 @@ for(const page of expected) {
 }
 assert.match(readFileSync(".gitattributes","utf8"),
   /archive\/python-legacy\/\*\* linguist-vendored/);
-console.log("Docs boundary OK: exactly three Markdown pages");
-console.log("Relative links valid, all nine prioritized percentages consistent");
+console.log("Docs boundary OK: canonical docs and PR template only");
+console.log("Relative links valid, release NO-GO visible and historical guide progress consistent");

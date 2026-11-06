@@ -21,6 +21,27 @@ for (const [type, acceptance] of [["MSI",msiAcceptance],["NSIS",nsisAcceptance]]
   assert.match(acceptance,/secondListeners/,
     type+": restarted installed desktop must not expose a TCP listener");
 }
+assert.match(main,/#!\[cfg_attr\(windows, windows_subsystem = "windows"\)\]/,
+  "Windows desktop must be a GUI PE; a console-bound GUI is killed when its terminal closes");
+const desktop=readFileSync(join(process.cwd(),"rust/pravda-server/src/desktop.rs"),"utf8");
+const binance=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/binance.rs"),"utf8");
+const kraken=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/kraken.rs"),"utf8");
+assert.match(desktop,/config\.market_feeds_enabled = false;/,
+  "Diagnostic offline mode must force-disable WebSocket producers");
+assert.match(desktop,/stream_state.*?as_object_mut/s,
+  "A real market snapshot must expose the Rust feed status");
+assert.match(js,/streamStatusMessage\(payload\.stream_state\)/,
+  "UI must distinguish configured-offline feeds from waiting for first quote");
+assert.match(binance,/wss:\/\/stream\.binance\.com:443\/ws/,
+  "Spot market WSS must use the provider's documented 443 endpoint");
+for(const [exchange,source] of [["Binance",binance],["Kraken",kraken]]) {
+  assert.match(source,/timeout\(Duration::from_secs\(15\), connect_async/,
+    exchange+" must bound TLS/WebSocket handshakes");
+  assert.match(source,/timeout\(Duration::from_secs\(60\), read\.next\(\)\)/,
+    exchange+" must not hang forever on silent WebSocket");
+  assert.match(source,/Message::Pong\(payload\)/,
+    exchange+" must respond to server ping");
+}
 assert.equal(cfg.build.frontendDist,"frontend");
 assert.deepEqual([...cfg.bundle.targets].sort(),["msi","nsis"],
   "Both MSI and NSIS must be produced for Windows release");
@@ -121,6 +142,53 @@ assert.match(js,/window\.pravdaDashboardReady = true;/,
   "Dashboard must advertise readiness only after all handlers are bound");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
   "A failed dashboard initialization must produce a visible local error");
+assert.doesNotMatch(auth,/aucun mot de passe ni détail système n'a été enregistré/,
+  "A successful first-use password setup may already be persisted before the dashboard fails");
+assert.match(auth,/showDashboardStartupFailure\(dashboardFaultCode\)/,
+  "A failed initialization must show a bounded diagnostic rather than leave a partial UI active");
+assert.match(auth,/if \(dashboardLoading\) return;/,
+  "Concurrent login callbacks must not inject dashboard.js twice");
+assert.match(auth,/window\.pravdaDashboardReady = false;/,
+  "Each load must clear stale dashboard readiness before starting a new script");
+assert.match(auth,/dashboardLoading = false;/,
+  "The dashboard script-load guard must release on completion or failure");
+const diagnosticStart=auth.indexOf("// Capture only a closed diagnostic category");
+const diagnosticEnd=auth.indexOf("// UI-only epoch",diagnosticStart);
+assert.ok(diagnosticStart>=0 && diagnosticEnd>diagnosticStart,
+  "Startup diagnostic handler must be extracted from the real auth script");
+const bootNodes=[];
+let bootWindowError;
+const bootUi={
+  window:{addEventListener(type,callback){if(type==="error") bootWindowError=callback;}},
+  shell:{hidden:false},screen:{hidden:true,querySelector(){return null;}},
+  form:{hidden:false},notice:{textContent:""},
+  card:{append(node){bootNodes.push(node);}},
+  document:{createElement(tag){return {
+    tag,children:[],value:"",textContent:"",hidden:false,readOnly:false,
+    setAttribute(){},addEventListener(){},append(...nodes){this.children.push(...nodes);}
+  };}}
+};
+vm.createContext(bootUi);
+vm.runInContext(auth.slice(diagnosticStart,diagnosticEnd),bootUi);
+assert.equal(typeof bootWindowError,"function",
+  "Authentication must observe dashboard runtime errors without collecting raw exceptions");
+bootWindowError({
+  filename:"https://tauri.localhost/dashboard.js",
+  lineno:1234,
+  error:{name:"TypeError",message:"SECRET_DO_NOT_LOG"}
+});
+vm.runInContext("showDashboardStartupFailure(dashboardFaultCode)",bootUi);
+assert.equal(bootUi.shell.hidden,true,
+  "An incompletely initialized dashboard must not remain interactive");
+assert.equal(bootUi.screen.hidden,false);
+assert.equal(bootUi.form.hidden,true,
+  "Failed startup must not ask for the password again");
+assert.equal(bootNodes.length,1);
+const fields=bootNodes[0].children;
+const diagnostic=fields.find(node=>node.tag==="input");
+assert.equal(diagnostic?.value,"PRAVDA-UI-STARTUP|DASHBOARD_TYPE_L1234");
+assert.doesNotMatch(JSON.stringify(fields),/SECRET_DO_NOT_LOG|tauri\.localhost/,
+  "Diagnostics must never contain exception text, source URLs, stack traces or credentials");
 assert.match(js,/button\.textContent = "↻ Tentative à "/,
   "Manual refresh must provide visible feedback without inventing fresh market data");
 assert.match(js,/queuedAuthRefreshGeneration = requestedGeneration;/,

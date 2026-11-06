@@ -42,8 +42,56 @@ shell.hidden = true;
 
 let setup = false;
 let dashboardLoaded = false;
+let dashboardLoading = false;
 let working = false;
 let loginVisible = false;
+// Capture only a closed diagnostic category and an in-file line number.
+// Never copy an exception message, stack, full URL, user text or credentials.
+// A script "load" event does not prove dashboard initialization succeeded.
+let dashboardFaultCode = "DASHBOARD_INIT_UNKNOWN";
+const dashboardSource = source =>
+    typeof source === "string" &&
+    /(?:^|\/)dashboard\.js(?:[?#].*)?$/.test(source);
+window.addEventListener("error", event => {
+    if (!dashboardSource(event.filename)) return;
+    const name = event.error?.name;
+    const category = name === "SyntaxError" ? "SYNTAX" :
+        name === "ReferenceError" ? "REFERENCE" :
+        name === "TypeError" ? "TYPE" :
+        name === "RangeError" ? "RANGE" : "RUNTIME";
+    const line = Number.isSafeInteger(event.lineno) && event.lineno > 0 &&
+        event.lineno <= 100000 ? event.lineno : 0;
+    dashboardFaultCode = "DASHBOARD_" + category + "_L" + line;
+}, true);
+
+function showDashboardStartupFailure(code) {
+    // The Rust session and stored password verifier are never modified here.
+    // Do not keep an incompletely initialized dashboard interactive.
+    shell.hidden = true;
+    screen.hidden = false;
+    form.hidden = true;
+    notice.textContent = "Le tableau de bord n'a pas pu démarrer.";
+    screen.querySelector(".ipc-startup-recovery")?.remove();
+
+    const recovery = document.createElement("div");
+    recovery.className = "ipc-startup-recovery";
+    const explanation = document.createElement("p");
+    explanation.setAttribute("role", "alert");
+    explanation.textContent = "Échec de l'interface locale. Le mot de passe peut déjà avoir été configuré ; aucune donnée utilisateur n'a été effacée. Copiez le code ci-dessous pour le diagnostic.";
+    const diagnostic = document.createElement("input");
+    diagnostic.type = "text";
+    diagnostic.readOnly = true;
+    diagnostic.setAttribute("aria-label", "Code de diagnostic du tableau de bord");
+    diagnostic.value = "PRAVDA-UI-STARTUP|" + code;
+    diagnostic.addEventListener("focus", () => diagnostic.select());
+    const reload = document.createElement("button");
+    reload.type = "button";
+    reload.textContent = "Réessayer le chargement local";
+    reload.addEventListener("click", () => window.location.reload());
+    recovery.append(explanation, diagnostic, reload);
+    card.append(recovery);
+}
+
 // UI-only epoch for ignoring stale IPC results after logout or a new login.
 // The real authorization boundary remains the Rust-owned session.
 window.pravdaAuthGeneration = 0;
@@ -91,9 +139,16 @@ function activateDashboard() {
         if (typeof window.refreshPaper === "function") window.refreshPaper();
         return;
     }
+    // Multiple login confirmations must not inject dashboard.js twice.
+    // Duplicate initialization can bind event handlers twice and repeat alerts.
+    if (dashboardLoading) return;
+    dashboardLoading = true;
+    dashboardFaultCode = "DASHBOARD_INIT_UNKNOWN";
+    window.pravdaDashboardReady = false;
     const script = document.createElement("script");
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
+        dashboardLoading = false;
         const logoutForm = document.getElementById("ipc-logout-form");
         logoutForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -105,19 +160,14 @@ function activateDashboard() {
             showLogin();
         });
         if (window.pravdaDashboardReady !== true) {
-            const banner = document.createElement("p");
-            banner.className = "ipc-auth-error";
-            banner.setAttribute("role", "alert");
-            banner.textContent = "Interface non initialisée. Fermez puis rouvrez Pravda-Bot ; aucun mot de passe ni détail système n'a été enregistré.";
-            shell.prepend(banner);
+            showDashboardStartupFailure(dashboardFaultCode);
             return;
         }
         dashboardLoaded = true;
     });
     script.addEventListener("error", () => {
-        shell.hidden = true;
-        screen.hidden = false;
-        errorText.textContent = "Impossible de charger les ressources locales.";
+        dashboardLoading = false;
+        showDashboardStartupFailure("DASHBOARD_RESOURCE_UNAVAILABLE");
     });
     document.body.append(script);
 }
