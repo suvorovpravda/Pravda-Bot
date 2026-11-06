@@ -253,12 +253,42 @@ jobs:
 
       - name: Test desktop storage path selection (Windows)
         run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml
+      - name: Test dormant signed-updater configuration on Windows
+        run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml --features signed-updater-runtime updater_runtime::tests
+      - name: Build desktop with the dormant updater feature
+        run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml --features signed-updater-runtime
+      - name: Launch optional updater build offline without a signing configuration
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PRAVDA_OFFLINE_TEST = 'true'
+          $env:PRAVDA_MARKET_FEEDS_ENABLED = 'false'
+          $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP 'pravda-updater-offline.db'
+          $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP 'pravda-updater-offline-auth.json'
+          $exe = Join-Path (Get-Location).Path 'crates/pravda-app/target/debug/pravda-app.exe'
+          $app = Start-Process -FilePath $exe -PassThru
+          try {
+            $started = $false
+            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+              $app.Refresh()
+              if ($app.HasExited) { throw 'Feature-enabled desktop exited during offline startup' }
+              if (Test-Path $env:PRAVDA_DB_PATH) { $started = $true; break }
+              Start-Sleep -Milliseconds 250
+            }
+            if (-not $started) { throw 'Feature-enabled desktop failed to initialize offline storage' }
+            $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+              Where-Object { $_.OwningProcess -eq $app.Id })
+            if ($listeners.Count -ne 0) { throw 'Offline desktop unexpectedly opened a TCP listener' }
+            if (Test-Path $env:PRAVDA_AUTH_PATH) { throw 'Offline startup unexpectedly enrolled authentication' }
+            Write-Host 'PASS optional updater build starts offline without configured signing keys'
+          } finally {
+            $app.Refresh()
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+          }
       - name: Build native Windows desktop application
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
       - name: Verify opt-in security E2E probe compiles on Windows (not executed in ordinary app)
         run: cargo check --locked --manifest-path crates/pravda-app/Cargo.toml --features security-e2e
-      - name: Test dormant signed-updater configuration on Windows
-        run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml --features signed-updater-runtime updater_runtime::tests
       - name: Launch bundled desktop and assert no local HTTP listener
         shell: pwsh
         run: |

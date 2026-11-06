@@ -1052,3 +1052,18 @@ ou paquets non signés. Un poste hors réseau doit rester opérationnel et
 aucune mise à jour ne doit activer les ordres ou retraits financiers.
 
 Référence technique : https://v2.tauri.app/plugin/updater/
+
+### Intégration Rust facultative (inactive)
+
+La dépendance officielle Tauri updater est disponible uniquement derrière
+`signed-updater-runtime` sur Windows ; cette option n'est pas incluse dans les
+builds habituels. L'enregistrement refuse notamment une configuration absente,
+un mode hors ligne de diagnostic, une clé publique invalide, un canal différent,
+un retour arrière ou une version non liée à la signature. Aucun accès réseau,
+téléchargement ou ordre d'installation n'est déclenché par cet enregistrement.
+
+L'autorisation réseau de l'utilisateur et l'installation n'existent pas encore.
+Avant de les activer, contrôler notamment l'URL réelle de l'installateur et ses
+redirections HTTPS, borner la taille du téléchargement et vérifier le chemin
+du programme système utilisé pour le MSI. Le plugin seul ne constitue pas une
+preuve de recette Windows, de conservation des données ou d'Authenticode.
