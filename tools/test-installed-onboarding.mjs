@@ -61,6 +61,7 @@ const ui = () => evaluate(
   "dashboard:document.querySelector('main.shell')?.hidden===false," +
   "ready:window.pravdaDashboardReady===true," +
   "startupFailure:!!document.querySelector('.ipc-startup-recovery,main.shell>.ipc-auth-error')," +
+  "startupCode:document.querySelector('.ipc-startup-recovery input')?.value || ''," +
   "setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
   "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
 );
@@ -202,7 +203,11 @@ try {
   await click(".ipc-auth-screen button[type=submit]");
   await until(async () => {
     const view = await ui();
-    if (view.startupFailure) throw Error("Desktop startup reported a partial dashboard initialization");
+    if (view.startupFailure) {
+      const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
+        ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
+      throw Error("Desktop startup reported a partial dashboard initialization: "+code);
+    }
     return view.dashboard && view.ready;
   }, "GUI password enrollment and completed dashboard script");
   check("GUI enrollment created verifier and initialized every dashboard handler",
@@ -229,7 +234,11 @@ try {
   await click(".ipc-auth-screen button[type=submit]");
   await until(async () => {
     const view = await ui();
-    if (view.startupFailure) throw Error("Restarted desktop reported partial dashboard initialization");
+    if (view.startupFailure) {
+      const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
+        ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
+      throw Error("Restarted desktop reported partial dashboard initialization: "+code);
+    }
     return view.dashboard && view.ready;
   }, "persisted password login and completed dashboard script");
   check("Native GUI logs into fully initialized installed release after restart",
