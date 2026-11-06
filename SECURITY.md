@@ -18,6 +18,14 @@
 
 ---
 
+## ⚡ Security Live Pulse — métriques GitHub actualisées
+
+![Observatoire sécurité quasi temps réel : workflows au SHA canonique, statut RustSec non bloquant, PR et Issues ouvertes, GO interdit sans preuve](docs/assets/pravda-live-status.svg)
+
+**[Statut brut JSON](docs/assets/pravda-live-status.json)** · **[Actualisations GitHub Actions](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
+
+Les résultats sont récupérés depuis les API GitHub **environ toutes les 10 minutes** et à la clôture des workflows concernés ; le rafraîchissement dépend des délais GitHub Actions et des caches d'images GitHub. L'horodatage indique la **dernière preuve observée**, pas une certification récente. Le tableau vérifie le SHA des runs et marque les tests hors SHA comme périmés. **L'audit RustSec observe-only n'est jamais converti en PASS** ; le statut de diffusion demeure **NO-GO** jusqu'à décision formelle de la chaîne de publication.
+
 ## 🌌 Security cockpit
 
 ![Cockpit de sécurité bleu nuit et néon : jauges historiques IPC 50%, SQLite 75%, CI 60%, signature 0%, frontières de confiance et décision de sécurité NO-GO](docs/assets/pravda-security-cockpit.svg)
