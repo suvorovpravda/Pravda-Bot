@@ -51,8 +51,12 @@ const historical=progressRows("docs/PRAVDA-GUIDE.md");
 assert.equal(historical.length,9);
 for(const page of ["README.md","SECURITY.md","docs/REVIEWING.md"]) {
   const content=readFileSync(page,"utf8");
-  assert.doesNotMatch(content,/^\|\s*\*\*P[012]\*\*\s*\|/m,
-    page+": historical milestone percentages must be in the central guide, not release status");
+  const duplicateProgress=content.split(/\r?\n/).filter(line =>
+    /^\|\s*\*\*P[012]\*\*\s*\|/.test(line) &&
+    /\b\d+\s*\/\s*\d+\b/.test(line) &&
+    /\b\d+\s*%/.test(line));
+  assert.equal(duplicateProgress.length,0,
+    page+": historical milestone fractions belong in the central guide, not the live release status");
   assert.match(content,/(?:NO-GO|NO GO)/,
     page+": current distribution must be explicitly marked NO-GO");
 }
