@@ -247,6 +247,13 @@ async fn main() {
                     .inner_size(680.0, 450.0)
                     .build()?;
             }
+            // Debug-only startup evidence for the optional updater's Windows CI.
+            // Only emit after plugin configuration and main-window construction.
+            // Never compiled into release binaries or ordinary desktop builds.
+            #[cfg(all(windows, debug_assertions, feature = "signed-updater-runtime"))]
+            if let Some(path) = std::env::var_os("PRAVDA_UPDATER_TEST_READY_FILE") {
+                std::fs::write(path, b"tauri-window-created\n")?;
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
