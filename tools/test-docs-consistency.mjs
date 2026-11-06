@@ -60,6 +60,26 @@ const windowsConfig=JSON.parse(readFileSync("crates/pravda-app/tauri.conf.json",
 assert.equal(windowsConfig.bundle?.windows?.webviewInstallMode?.type,"offlineInstaller",
   "The Windows packaging contract requires an embedded WebView2 prerequisite");
 assert.equal(windowsConfig.bundle?.windows?.webviewInstallMode?.silent,true);
+// Signed updater is fail-closed until a release public key and a fixed HTTPS
+// metadata channel are configured. This is a static trust-boundary check,
+// NOT evidence that an updater or a signed release exists.
+const updater=windowsConfig.plugins?.updater;
+if(updater?.active===true) {
+  assert.equal(typeof updater.pubkey,"string","Updater requires a public verification key");
+  assert.ok(updater.pubkey.trim().length>40,"Updater public key must not be empty or a placeholder");
+  assert.ok(Array.isArray(updater.endpoints)&&updater.endpoints.length===1,
+    "Updater must use one fixed release metadata endpoint");
+  const endpoint=updater.endpoints[0];
+  assert.equal(typeof endpoint,"string");
+  assert.match(endpoint,/^https:\/\//,"Updater metadata must use HTTPS");
+  assert.doesNotMatch(endpoint,/\{\{|localhost|127\.0\.0\.1|example\.|\$\{|@/i,
+    "Updater endpoint must not contain substitutions, local hosts or credentials");
+  assert.equal(new URL(endpoint).username,"");
+  assert.equal(new URL(endpoint).password,"");
+} else {
+  assert.ok(updater?.active!==true,
+    "Unsigned update channel must remain disabled");
+}
 for(const page of expected) {
   const content=readFileSync(page,"utf8");
   assert.match(content,/offlineInstaller/,
