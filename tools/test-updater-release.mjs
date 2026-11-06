@@ -22,6 +22,13 @@ assert.match(workflowSource, /pubkey = \$env:TAURI_UPDATER_PUBLIC_KEY\.Trim\(\)/
   "Tauri CLI must get the verification pubkey when producing update signatures");
 assert.match(workflowSource, /endpoints = @\('https:\/\/github\.com\/suvorovpravda\/Pravda-Bot\/releases\/latest\/download\/latest\.json'\)/,
   "The updater channel must remain the fixed GitHub latest.json asset");
+assert.match(workflowSource,/requireSignedVersion = \$true/,
+  "Tauri signer metadata must enforce signed release version binding");
+assert.match(workflowSource,/allowDowngrades = \$false/,
+  "No update path may permit version rollback");
+assert.match(workflowSource,/dangerousInsecureTransportProtocol = \$false/,
+  "Tauri updater must never permit non-HTTPS endpoints");
+
 
 
 const msi = join(root, "Pravda-Bot_0.3.4_x64_en-US.msi");

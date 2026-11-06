@@ -186,6 +186,9 @@ jobs:
               updater = @{
                 pubkey = $env:TAURI_UPDATER_PUBLIC_KEY.Trim()
                 endpoints = @('https://github.com/suvorovpravda/Pravda-Bot/releases/latest/download/latest.json')
+                requireSignedVersion = $true
+                allowDowngrades = $false
+                dangerousInsecureTransportProtocol = $false
               }
             }
           }

@@ -114,6 +114,13 @@ if(updater?.active===true) {
   assert.ok(Array.isArray(updater.endpoints)&&updater.endpoints.length===1,
     "Updater must use one fixed release metadata endpoint");
   validateUpdaterEndpoint(updater.endpoints[0]);
+  assert.equal(updater.requireSignedVersion,true,
+    "A signed update must authenticate the announced version, not only the payload bytes");
+  assert.equal(updater.allowDowngrades,false,
+    "Signed updater must never accept a version rollback");
+  assert.equal(updater.dangerousInsecureTransportProtocol,false,
+    "Signed updater must never enable insecure HTTP");
+
 } else {
   assert.ok(updater?.active!==true,"Unsigned update channel must remain disabled");
 }
