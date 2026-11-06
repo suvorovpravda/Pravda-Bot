@@ -16,6 +16,10 @@ on:
       - 'tools/Test-Pravda-Airgap-Install.ps1'
       - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
       - 'tools/test-airgap-acceptance-contract.mjs'
+      - 'tools/prepare-updater-release.mjs'
+      - 'tools/verify-updater-signature.mjs'
+      - 'tools/test-updater-release.mjs'
+      - 'tools/test-tauri-signer-integration.mjs'
   pull_request:
     paths:
       - '.github/workflows/windows-package.yml'
@@ -30,6 +34,10 @@ on:
       - 'tools/Test-Pravda-Airgap-Install.ps1'
       - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
       - 'tools/test-airgap-acceptance-contract.mjs'
+      - 'tools/prepare-updater-release.mjs'
+      - 'tools/verify-updater-signature.mjs'
+      - 'tools/test-updater-release.mjs'
+      - 'tools/test-tauri-signer-integration.mjs'
   workflow_dispatch:
     inputs:
       signed:
@@ -124,6 +132,11 @@ jobs:
         run: |
           cargo install tauri-cli --version '=2.12.4' --locked
           if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI install failed' }
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - name: Test updater signature verification with the official Tauri signer
+        run: node tools/test-tauri-signer-integration.mjs
       - name: Import code-signing certificate (explicit manual opt-in)
         if: ${{ inputs.signed }}
         shell: pwsh
@@ -373,6 +386,7 @@ jobs:
         shell: pwsh
         env:
           RELEASE_COMMIT_SHA: ${{ github.sha }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
         run: |
           $ErrorActionPreference = 'Stop'
           $bundle = 'crates/pravda-app/target/release/bundle'
@@ -381,6 +395,11 @@ jobs:
           $signature = $msi[0].FullName + '.sig'
           if (-not (Test-Path -LiteralPath $signature -PathType Leaf)) {
             throw 'Tauri updater signature missing from signed release candidate'
+          }
+          $signingConfig = Get-Content 'crates/pravda-app/tauri.signing.ci.json' -Raw | ConvertFrom-Json
+          if ([string]::IsNullOrWhiteSpace($env:TAURI_UPDATER_PUBLIC_KEY) -or
+              $signingConfig.plugins.updater.pubkey -cne $env:TAURI_UPDATER_PUBLIC_KEY.Trim()) {
+            throw 'Verification key does not match the signed build configuration'
           }
           $version = (Get-Content 'crates/pravda-app/tauri.conf.json' -Raw | ConvertFrom-Json).version
           $hash = (Get-FileHash -LiteralPath $msi[0].FullName -Algorithm SHA256).Hash.ToLowerInvariant()
