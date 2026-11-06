@@ -1,6 +1,6 @@
 // CI-only preparation of Tauri's static Windows updater metadata.
-// A .sig file is required but only the installed Tauri updater, configured
-// with the trusted public key, can authenticate the update cryptographically.
+// Verify a Tauri .sig against the protected release public key before preparing
+// metadata. The installed updater must independently verify before installation.
 // This tool NEVER accepts a private key or installs a package.
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyTauriUpdaterSignature } from "./verify-updater-signature.mjs";
 
 const PUBLIC_ORIGIN = "https://github.com/suvorovpravda/Pravda-Bot/releases/download";
 const VERSION = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
@@ -40,14 +41,14 @@ function installerHeader(path, suffix) {
   }
 }
 
-async function sha256OfFile(path) {
-  const hasher = createHash("sha256");
-  for await (const chunk of createReadStream(path)) hasher.update(chunk);
-  return hasher.digest("hex");
+async function hashesOfFile(path) {
+  const sha256 = createHash("sha256"), blake2b = createHash("blake2b512");
+  for await (const chunk of createReadStream(path)) { sha256.update(chunk); blake2b.update(chunk); }
+  return {sha256: sha256.digest("hex"), blake2b: blake2b.digest()};
 }
 
 export async function buildUpdaterMetadata(options) {
-  const { version, commit, tag, installerPath, signaturePath, expectedSha256, expectedAppVersion } = options;
+  const { version, commit, tag, installerPath, signaturePath, expectedSha256, expectedAppVersion, publicKey } = options;
   assert.ok(VERSION.test(version), "Only stable SemVer releases are allowed");
   assert.equal(version, expectedAppVersion, "Release version must match the desktop bundle version");
   assert.equal(tag, "v" + version, "Git tag must match the bundled stable version");
@@ -65,19 +66,14 @@ export async function buildUpdaterMetadata(options) {
   assert.ok(stat.size >= 100000 && stat.size <= 2 * 1024 * 1024 * 1024,
     "Installer has an implausible size");
   installerHeader(installerPath, isMsi ? ".msi" : ".exe");
-  const digest = await sha256OfFile(installerPath);
-  assert.equal(digest, expectedSha256, "Installer SHA-256 does not match the release evidence");
+  const digest = await hashesOfFile(installerPath);
+  assert.equal(digest.sha256, expectedSha256, "Installer SHA-256 does not match the release evidence");
 
   const sigStat = safeFile(signaturePath, "Updater signature");
   assert.ok(sigStat.size >= 64 && sigStat.size <= 4096,
     "Updater signature is missing or has an implausible size");
   const signature = readFileSync(signaturePath, "utf8").trim();
-  assert.ok(signature.length >= 64 && /^[\x20-\x7E\r\n]+$/.test(signature),
-    "Updater signature contains invalid bytes");
-  assert.doesNotMatch(signature, /PRIVATE (?:KEY|CERTIFICATE)|BEGIN [A-Z ]*PRIVATE/i,
-    "A private key must never be published as an updater signature");
-  assert.ok(signature.split(/\r?\n/).some(line => /^[A-Za-z0-9+/=]{64,}$/.test(line)),
-    "Updater signature has no plausible encoded signature line");
+  const verified = verifyTauriUpdaterSignature({publicKey, signature, digest: digest.blake2b, version, filename});
   const signatureHash = createHash("sha256").update(readFileSync(signaturePath)).digest("hex");
 
   // The JSON signature field contains the SIGNATURE CONTENT, never a path/URL.
@@ -90,10 +86,11 @@ export async function buildUpdaterMetadata(options) {
   const provenance = {
     schema_version: 1, version, tag, commit_sha: commit,
     platform: "windows-x86_64", asset: filename,
-    artifact_sha256: digest, signature_sha256: signatureHash,
-    cryptographic_signature_verified: false,
+    artifact_sha256: digest.sha256, signature_sha256: signatureHash,
+    public_key_sha256: verified.publicKeySha256,
+    cryptographic_signature_verified: true,
     authenticode_verified: false,
-    note: "Manifest preparation only. No cryptographic or physical Windows acceptance is asserted."
+    note: "Tauri signature checked against the supplied public key. Authenticode and physical Windows acceptance are not asserted."
   };
   return { manifest, provenance };
 }
@@ -129,11 +126,12 @@ async function main(args) {
   const metadata = await buildUpdaterMetadata({
     version: input.version, commit: input.commit, tag: input.tag,
     installerPath: input.installer, signaturePath: input.signature,
-    expectedSha256: input.sha256, expectedAppVersion: config.version
+    expectedSha256: input.sha256, expectedAppVersion: config.version,
+    publicKey: process.env.TAURI_UPDATER_PUBLIC_KEY
   });
   const written = writeUpdaterMetadata(input["output-dir"], metadata);
   process.stdout.write("Prepared Windows updater metadata: " + written.latest + "\n");
-  process.stdout.write("Updater cryptographic verification and Authenticode: NOT VERIFIED by this tool\n");
+  process.stdout.write("Updater signature and signed version: verified against configured public key; Authenticode: NOT VERIFIED by this tool\n");
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
