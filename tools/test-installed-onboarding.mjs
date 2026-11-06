@@ -62,6 +62,7 @@ const ui = () => evaluate(
   "ready:window.pravdaDashboardReady===true," +
   "startupFailure:!!document.querySelector('.ipc-startup-recovery,main.shell>.ipc-auth-error')," +
   "startupCode:document.querySelector('.ipc-startup-recovery input')?.value || ''," +
+  "startupPhase:document.querySelector('.ipc-bootstrap-phase')?.value || ''," +
   "setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
   "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
 );
@@ -206,7 +207,9 @@ try {
     if (view.startupFailure) {
       const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
         ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
-      throw Error("Desktop startup reported a partial dashboard initialization: "+code);
+      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|XX)$/.test(view.startupPhase)
+        ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
+      throw Error("Desktop startup reported a partial dashboard initialization: "+code+" "+phase);
     }
     return view.dashboard && view.ready;
   }, "GUI password enrollment and completed dashboard script");
@@ -237,7 +240,9 @@ try {
     if (view.startupFailure) {
       const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
         ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
-      throw Error("Restarted desktop reported partial dashboard initialization: "+code);
+      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|XX)$/.test(view.startupPhase)
+        ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
+      throw Error("Restarted desktop reported partial dashboard initialization: "+code+" "+phase);
     }
     return view.dashboard && view.ready;
   }, "persisted password login and completed dashboard script");
