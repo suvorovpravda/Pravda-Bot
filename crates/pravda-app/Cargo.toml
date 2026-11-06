@@ -8,6 +8,7 @@ description = "Pravda-Bot desktop app with Tauri"
 # No probe window is built in release binaries, even with this feature.
 [features]
 security-e2e = []
+signed-updater-runtime = ["dep:tauri-plugin-updater"]
 
 [workspace]
 
@@ -16,6 +17,9 @@ tauri = { version = "2", features = [] }
 tokio = { version = "1", features = ["full"] }
 reqwest = { version = "0.11", features = ["json"] }
 pravda-server = { path = "../../rust/pravda-server" }
+
+[target.'cfg(windows)'.dependencies]
+tauri-plugin-updater = { version = "=2.14.1", optional = true, default-features = false, features = ["rustls-tls"] }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

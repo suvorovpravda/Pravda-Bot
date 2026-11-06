@@ -1,0 +1,24 @@
+name: Prepare updater dependency lock
+on:
+  push:
+    branches: [feat/tauri-updater-runtime-20261106]
+permissions:
+  contents: read
+jobs:
+  resolve:
+    name: Resolve temporary desktop lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate lock for pinned optional updater dependency
+        run: cargo metadata --manifest-path crates/pravda-app/Cargo.toml --format-version 1 > /dev/null
+      - uses: actions/upload-artifact@v7
+        with:
+          name: pravda-updater-desktop-lockfile
+          path: crates/pravda-app/Cargo.lock
+          if-no-files-found: error
+          retention-days: 1
