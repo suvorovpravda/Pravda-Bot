@@ -196,12 +196,12 @@ async fn main() {
             if std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true") {
                 if let Some(path) = std::env::var_os("PRAVDA_DIAGNOSTIC_WEBVIEW_DIR") {
                     main_window = main_window.data_directory(std::path::PathBuf::from(path));
-                    // Only the isolated offline diagnostic may hide its temporary
+                }
+                // Only the isolated offline diagnostic may hide its temporary
                 // window. Never suppress the normal interactive application.
                 if std::env::var("PRAVDA_BACKGROUND_TEST").as_deref() == Ok("true") {
                     main_window = main_window.visible(false);
                 }
-            }
             }
             main_window
                 .title("Pravda-Bot")
