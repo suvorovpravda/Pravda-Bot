@@ -1012,3 +1012,43 @@ Les fournisseurs externes ont une couverture et des révisions de données : exc
 
 **Résumé décisionnel :** retenir *l'architecture événementielle, les types monétaires précis, le journal durable, la simulation réaliste, le risque centralisé et les tests déterministes* ; reporter l'intégration directe de logiciels tiers, le code Python en production et toutes les connexions de trading réel jusqu'à revue de sécurité et licence.
 
+
+## Préparation des futures mises à jour Windows signées (non activée)
+
+**Statut : NO-GO auto-update.** Le desktop ne dispose pas encore d'un plugin Tauri
+updater activé, de la clé publique de validation, ni d'un canal de publication
+authentifié. Aucun téléchargement ou lancement automatique n'est revendiqué.
+
+Le script CI `tools/prepare-updater-release.mjs` produit un `latest.json` Tauri 2
+et un `latest.provenance.json` à partir d'un MSI/NSIS existant, d'un fichier
+`.sig` correspondant, du SHA-256 de l'installateur et du commit exact. Il rejette
+les versions non stables, les tags ou empreintes incohérents, la substitution
+de fichier, un binaire au mauvais format et une signature manquante.
+
+Commande de préparation (exemple de contrat ; aucun paquet signé n'est attesté) :
+
+```powershell
+node tools/prepare-updater-release.mjs `
+  --version 0.3.4 --tag v0.3.4 `
+  --commit <40-caracteres-hexadecimaux> `
+  --installer <installateur-verifie.msi> `
+  --signature <installateur-verifie.msi.sig> `
+  --sha256 <64-caracteres-hexadecimaux> `
+  --output-dir <dossier-vide-existant>
+```
+
+La destination est fixe : les assets versionnés sous GitHub Releases du dépôt.
+Le manifeste utilise `platforms.windows-x86_64` et le **contenu** réel de
+la signature, non un chemin local. Le fichier de provenance déclare explicitement
+`cryptographic_signature_verified: false` et `authenticode_verified: false` :
+**la préparation de métadonnées ne constitue pas une vérification cryptographique.**
+
+Avant toute publication automatique : intégrer le plugin Rust Tauri updater,
+la clé publique réelle et la signature privée protégée en environnement de
+publication ; contrôler indépendamment la signature des bundles ainsi que
+l'Authenticode requis ; valider l'upgrade Windows, le redémarrage et la
+conservation SQLite/auth sur VM isolée, puis refuser toute version rétrograde
+ou paquets non signés. Un poste hors réseau doit rester opérationnel et
+aucune mise à jour ne doit activer les ordres ou retraits financiers.
+
+Référence technique : https://v2.tauri.app/plugin/updater/
