@@ -21,6 +21,27 @@ for (const [type, acceptance] of [["MSI",msiAcceptance],["NSIS",nsisAcceptance]]
   assert.match(acceptance,/secondListeners/,
     type+": restarted installed desktop must not expose a TCP listener");
 }
+assert.match(main,/#!\[cfg_attr\(windows, windows_subsystem = "windows"\)\]/,
+  "Windows desktop must be a GUI PE; a console-bound GUI is killed when its terminal closes");
+const desktop=readFileSync(join(process.cwd(),"rust/pravda-server/src/desktop.rs"),"utf8");
+const binance=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/binance.rs"),"utf8");
+const kraken=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/kraken.rs"),"utf8");
+assert.match(desktop,/config\.market_feeds_enabled = false;/,
+  "Diagnostic offline mode must force-disable WebSocket producers");
+assert.match(desktop,/stream_state.*?as_object_mut/s,
+  "A real market snapshot must expose the Rust feed status");
+assert.match(js,/streamStatusMessage\(payload\.stream_state\)/,
+  "UI must distinguish configured-offline feeds from waiting for first quote");
+assert.match(binance,/wss:\/\/stream\.binance\.com:443\/ws/,
+  "Spot market WSS must use the provider's documented 443 endpoint");
+for(const [exchange,source] of [["Binance",binance],["Kraken",kraken]]) {
+  assert.match(source,/timeout\(Duration::from_secs\(15\), connect_async/,
+    exchange+" must bound TLS/WebSocket handshakes");
+  assert.match(source,/timeout\(Duration::from_secs\(60\), read\.next\(\)\)/,
+    exchange+" must not hang forever on silent WebSocket");
+  assert.match(source,/Message::Pong\(payload\)/,
+    exchange+" must respond to server ping");
+}
 assert.equal(cfg.build.frontendDist,"frontend");
 assert.deepEqual([...cfg.bundle.targets].sort(),["msi","nsis"],
   "Both MSI and NSIS must be produced for Windows release");
