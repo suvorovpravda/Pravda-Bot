@@ -161,6 +161,7 @@ async fn main() {
             ipc::ipc_paper_trade,
             ipc::ipc_paper_reset,
             ipc::ipc_runtime_metrics,
+            ipc::ipc_update_status,
             ipc::ipc_security_report,
             ipc::ipc_acceptance_report,
             ipc::ipc_security_events,

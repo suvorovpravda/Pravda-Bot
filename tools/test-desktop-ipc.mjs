@@ -217,6 +217,18 @@ assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
 assert.match(js,/if \(tab === "security"\)/,
   "Opening Security must refresh its local status");
 
+assert.match(html,/id="updater-center"/,"Signed updater readiness must appear inside authenticated Security settings");
+assert.match(html,/id="updater-readiness"/,"User needs a local config status action, not a fake update installer");
+assert.match(js,/window\.pravdaInvoke\("ipc_update_status"\)/,
+  "Updater status must come from authenticated Rust IPC without direct network or shell permissions");
+assert.match(js,/values\.automatic !== "disabled"/,
+  "Unsigned builds must not be misrepresented as automatically updating");
+assert.match(ipc,/fn update_status_rows\(\) -> Vec<String>/,
+  "Updater status must be a closed, local-only Rust allowlist");
+assert.match(ipc,/automatic\|disabled/,
+  "Auto-updater must remain blocked until a genuine key and verified release exist");
+assert.match(auth,/window\.pravdaClearUpdateReadiness\(\)/,
+  "Authentication transitions must reset stale update status");
 assert.match(html,/id="security-events"/,"Security events must be visible after login");
 assert.match(ipc,/protonvpn.*https:\/\/protonvpn\.com\/support\//,"Proton documentation must be a fixed official URL");
 assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
@@ -225,7 +237,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,22);
+assert.equal(new Set(handlers).size,23);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -237,7 +249,7 @@ const asyncSessionBound = new Set([
   "ipc_public_feed","ipc_security_report","ipc_acceptance_report"
 ]);
 for(const cmd of ["ipc_market_snapshot","ipc_history_recent","ipc_history_query",
- "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics",
+ "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_update_status",
  "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);

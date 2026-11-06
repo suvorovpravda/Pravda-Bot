@@ -1153,6 +1153,64 @@ const translations = {
     refreshSecurity();
     refreshSecurityEvents();
 
+    // Update status is an authenticated, local-only Rust declaration. This is
+    // NOT an update check: do not access GitHub, download a file, or run an
+    // installer until the signed Tauri updater is separately qualified.
+    let updateReadinessBusy = false;
+    function clearUpdateReadiness() {
+        $("updater-state").textContent = "État local non encore consulté.";
+        $("updater-checked").textContent = "Aucune vérification réseau ou installation effectuée.";
+    }
+    window.pravdaClearUpdateReadiness = clearUpdateReadiness;
+    async function refreshUpdateReadiness() {
+        const generation = window.pravdaAuthGeneration;
+        if (!securitySessionReady()) {
+            $("updater-state").textContent = "Connexion locale requise.";
+            return;
+        }
+        if (updateReadinessBusy) {
+            $("updater-checked").textContent = "Lecture déjà en cours.";
+            return;
+        }
+        updateReadinessBusy = true;
+        const button = $("updater-readiness");
+        button.disabled = true;
+        $("updater-state").textContent = "Lecture de la configuration Rust locale…";
+        try {
+            const rows = await window.pravdaInvoke("ipc_update_status");
+            if (generation !== window.pravdaAuthGeneration) return;
+            const fields = ["version", "channel", "signature", "automatic", "last_check"];
+            if (!Array.isArray(rows) || rows.length !== fields.length) throw Error("INVALID_UPDATER_STATUS");
+            const values = {};
+            for (const [index, line] of rows.entries()) {
+                if (typeof line !== "string" || line.length > 80) throw Error("INVALID_UPDATER_STATUS");
+                const parts = line.split("|");
+                if (parts.length !== 2 || parts[0] !== fields[index]) throw Error("INVALID_UPDATER_STATUS");
+                values[parts[0]] = parts[1];
+            }
+            if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(values.version) ||
+                values.channel !== "not_configured" ||
+                values.signature !== "not_verified" ||
+                values.automatic !== "disabled" ||
+                values.last_check !== "never") throw Error("INVALID_UPDATER_STATUS");
+            $("updater-state").textContent = "Version " + values.version +
+                " · mises à jour automatiques non configurées · signature non vérifiée";
+            $("updater-checked").textContent =
+                "Configuration locale lue à " + new Date().toLocaleTimeString("fr-FR") +
+                " ; aucun appel réseau, téléchargement ou installation.";
+        } catch (_error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("updater-state").textContent = "Configuration des mises à jour indisponible.";
+            $("updater-checked").textContent = "Aucun résultat de mise à jour n'a été vérifié.";
+        } finally {
+            updateReadinessBusy = false;
+            button.disabled = false;
+        }
+    }
+    $("updater-readiness").addEventListener("click", refreshUpdateReadiness);
+    window.refreshUpdateReadiness = refreshUpdateReadiness;
+    refreshUpdateReadiness();
+
     // Paper Trading is a deterministic, Rust-owned sandbox and never touches
     // authenticated exchanges, local browser storage, or actual account funds.
     const paperFormat = cents => (cents / 100).toLocaleString("fr-FR", {

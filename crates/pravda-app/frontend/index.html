@@ -212,6 +212,16 @@
                     <textarea id="acceptance-json" class="acceptance-json" rows="5" readonly>Aucun rapport généré.</textarea>
                 </section>
                 <hr>
+                <section id="updater-center" class="maintenance-notice" aria-label="Mises à jour signées de Pravda">
+                    <h3>Mises à jour de Pravda-Bot</h3>
+                    <p class="fine-print">L'installation automatique n'est pas encore activée. La configuration de confiance n'inclut pas encore de clé de vérification de release ni de canal de mise à jour actif. Cette consultation est exclusivement locale : elle ne contacte aucun serveur et ne télécharge aucun fichier.</p>
+                    <div id="updater-state" class="paper-summary" role="status" aria-live="polite">État local non encore consulté.</div>
+                    <div class="feature-actions">
+                        <button class="button" id="updater-readiness" type="button">Vérifier la configuration locale</button>
+                    </div>
+                    <p class="fine-print" id="updater-checked">Aucune vérification réseau ou installation effectuée.</p>
+                </section>
+                <hr>
                 <h3>Proton VPN · option facultative</h3>
                 <p>Si vous avez un compte Proton VPN, ouvrez l’application officielle Windows et connectez-vous dedans. Pravda-Bot ne collecte pas vos identifiants, ne lance aucune commande VPN non documentée et ne prétend pas vérifier votre tunnel.</p>
                 <a class="button" href="https://protonvpn.com/support/protonvpn-windows-vpn-application" data-source-link="protonvpn" rel="noopener noreferrer" target="_blank">Procédure officielle Proton VPN</a>

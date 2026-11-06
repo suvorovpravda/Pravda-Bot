@@ -413,6 +413,29 @@ pub fn ipc_runtime_metrics(
     Ok(desktop.metrics_snapshot())
 }
 
+// Local-only updater readiness: this release does not initialize an updater
+// plugin or ship a public verification key. Never infer auto-update support
+// from the existence of a signed packaging workflow. No network or filesystem
+// access happens in this command, and no raw config/secrets are exposed.
+fn update_status_rows() -> Vec<String> {
+    vec![
+        format!("version|{}", env!("CARGO_PKG_VERSION")),
+        "channel|not_configured".to_owned(),
+        "signature|not_verified".to_owned(),
+        "automatic|disabled".to_owned(),
+        "last_check|never".to_owned(),
+    ]
+}
+
+#[tauri::command]
+pub fn ipc_update_status(
+    window: Window,
+    session: State<'_, IpcAuth>,
+) -> Result<Vec<String>, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(update_status_rows())
+}
+
 // Privacy-preserving status lines. The IPC client sees only code-owned,
 // allowlisted summaries; never paths, OS identifiers, SQL rows, credentials,
 // raw errors or a guessed VPN/installation status.
@@ -800,6 +823,28 @@ mod tests {
         }));
         events.record(SecurityEventCode::LoginAccepted);
         assert!(events.snapshot()[0].ends_with("|login_accepted"));
+    }
+
+    #[test]
+    fn update_readiness_never_implies_network_or_installation() {
+        let rows = update_status_rows();
+        assert_eq!(rows.len(), 5);
+        assert!(rows[0].starts_with("version|"));
+        assert_eq!(
+            &rows[1..],
+            &[
+                "channel|not_configured",
+                "signature|not_verified",
+                "automatic|disabled",
+                "last_check|never",
+            ]
+        );
+        assert!(!rows.iter().any(|row| {
+            row.ends_with("|verified")
+                || row.contains("|available")
+                || row.contains("|installed")
+                || row.contains("https://")
+        }));
     }
 
     #[test]
