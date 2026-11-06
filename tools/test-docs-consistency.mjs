@@ -51,14 +51,14 @@ const historical=progressRows("docs/PRAVDA-GUIDE.md");
 assert.equal(historical.length,9);
 for(const page of ["README.md","SECURITY.md","docs/REVIEWING.md"]) {
   const content=readFileSync(page,"utf8");
-  assert.doesNotMatch(content,/^\\|\\s*\\*\\*P[012]\\*\\*\\s*\\|/m,
+  assert.doesNotMatch(content,/^\|\s*\*\*P[012]\*\*\s*\|/m,
     page+": historical milestone percentages must be in the central guide, not release status");
   assert.match(content,/(?:NO-GO|NO GO)/,
     page+": current distribution must be explicitly marked NO-GO");
 }
 assert.match(readFileSync("README.md","utf8"),/Issue #160|#160/, 
   "README must link to the central unresolved security/deployment register");
-assert.match(readFileSync("SECURITY.md","utf8"),/RUSTSEC-2026-0258|h2 0\\.3/,
+assert.match(readFileSync("SECURITY.md","utf8"),/RUSTSEC-2026-0258|h2 0\.3/,
   "Security must retain visibility of the known vulnerable desktop dependency");
 
 for(const page of expected) {
