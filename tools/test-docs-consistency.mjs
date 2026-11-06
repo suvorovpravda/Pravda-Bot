@@ -108,14 +108,21 @@ for(const bad of [
 assert.doesNotThrow(()=>validateUpdaterEndpoint(
   "https://github.com/example/repository/releases/latest/download/latest.json"));
 const updater=windowsConfig.plugins?.updater;
-if(updater?.active===true) {
+// Tauri 2 enables the updater through Rust plugin initialization, not an
+// "active" configuration field. Validate every configured updater regardless
+// of runtime registration; runtime activation must be checked separately.
+if(updater!==undefined) {
   assert.equal(typeof updater.pubkey,"string","Updater requires a public verification key");
   assert.ok(updater.pubkey.trim().length>40,"Updater public key must not be empty or a placeholder");
   assert.ok(Array.isArray(updater.endpoints)&&updater.endpoints.length===1,
     "Updater must use one fixed release metadata endpoint");
   validateUpdaterEndpoint(updater.endpoints[0]);
-} else {
-  assert.ok(updater?.active!==true,"Unsigned update channel must remain disabled");
+  assert.equal(updater.requireSignedVersion,true,
+    "A signed update must authenticate the announced version, not only payload bytes");
+  assert.equal(updater.allowDowngrades,false,
+    "Signed updater must never accept a version rollback");
+  assert.equal(updater.dangerousInsecureTransportProtocol,false,
+    "Signed updater must never enable insecure HTTP");
 }
 for(const page of expected) {
   const content=readFileSync(page,"utf8");
