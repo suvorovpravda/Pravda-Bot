@@ -265,25 +265,39 @@ jobs:
           $env:PRAVDA_MARKET_FEEDS_ENABLED = 'false'
           $env:PRAVDA_DB_PATH = Join-Path $env:RUNNER_TEMP 'pravda-updater-offline.db'
           $env:PRAVDA_AUTH_PATH = Join-Path $env:RUNNER_TEMP 'pravda-updater-offline-auth.json'
+          $env:PRAVDA_DIAGNOSTIC_WEBVIEW_DIR = Join-Path $env:RUNNER_TEMP ('pravda-updater-webview-' + [guid]::NewGuid().ToString('N'))
+          $env:PRAVDA_UPDATER_TEST_READY_FILE = Join-Path $env:RUNNER_TEMP ('pravda-updater-ready-' + [guid]::NewGuid().ToString('N') + '.txt')
           $exe = Join-Path (Get-Location).Path 'crates/pravda-app/target/debug/pravda-app.exe'
           $app = Start-Process -FilePath $exe -PassThru
           try {
+            # SQLite is initialized before the Tauri builder; it is NOT a UI-ready signal.
             $started = $false
-            for ($attempt = 0; $attempt -lt 60; $attempt++) {
+            for ($attempt = 0; $attempt -lt 120; $attempt++) {
               $app.Refresh()
               if ($app.HasExited) { throw 'Feature-enabled desktop exited during offline startup' }
-              if (Test-Path $env:PRAVDA_DB_PATH) { $started = $true; break }
+              if ((Test-Path $env:PRAVDA_DB_PATH) -and
+                  (Test-Path $env:PRAVDA_UPDATER_TEST_READY_FILE)) {
+                $started = $true
+                break
+              }
               Start-Sleep -Milliseconds 250
             }
-            if (-not $started) { throw 'Feature-enabled desktop failed to initialize offline storage' }
+            if (-not $started) { throw 'Feature-enabled Tauri main window did not initialize offline' }
+            if ((Get-Content -Raw $env:PRAVDA_UPDATER_TEST_READY_FILE).Trim() -cne 'tauri-window-created') {
+              throw 'Invalid Tauri startup readiness marker'
+            }
+            Start-Sleep -Milliseconds 500
+            $app.Refresh()
+            if ($app.HasExited) { throw 'Feature-enabled Tauri desktop exited after main-window creation' }
             $listeners = @(Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
               Where-Object { $_.OwningProcess -eq $app.Id })
             if ($listeners.Count -ne 0) { throw 'Offline desktop unexpectedly opened a TCP listener' }
             if (Test-Path $env:PRAVDA_AUTH_PATH) { throw 'Offline startup unexpectedly enrolled authentication' }
-            Write-Host 'PASS optional updater build starts offline without configured signing keys'
+            Write-Host 'PASS optional updater build constructed its Tauri window offline without signing keys or TCP listeners'
           } finally {
             $app.Refresh()
             if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force }
+            Remove-Item $env:PRAVDA_UPDATER_TEST_READY_FILE -Force -ErrorAction SilentlyContinue
           }
       - name: Build native Windows desktop application
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
