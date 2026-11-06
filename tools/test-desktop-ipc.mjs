@@ -200,16 +200,16 @@ const refined=bootNodes.at(-1).children.filter(n=>n.tag==="input");
 assert.equal(refined[0].value,"PRAVDA-UI-STARTUP|DASHBOARD_RANGE_L1");
 assert.equal(refined[1].value,"PRAVDA-UI-PHASE|P02C");
 assert.equal(refined[2].value,"PRAVDA-UI-CAUSE|STACK_OVERFLOW");
-assert.doesNotMatch(JSON.stringify(refined),/SECRET_DO_NOT_LOG|tauri\\.localhost/,
+assert.doesNotMatch(JSON.stringify(refined),/SECRET_DO_NOT_LOG|tauri\.localhost/,
   "Only an allowlisted static cause and substage may be printed for native failures");
-assert.equal((js.match(/window\\.pravdaDashboardPhase = "P02[A-I]";/g)||[]).length,9,
+assert.equal((js.match(/window\.pravdaDashboardPhase = "P02[A-I]";/g)||[]).length,9,
   "RangeError diagnostic must isolate each early bootstrap stage");
-assert.doesNotMatch(js,/Math\\.(?:min|max)\\(\\.\\.\\./,
+assert.doesNotMatch(js,/Math\.(?:min|max)\(\.\.\./,
   "Large public market, energy or AIS observations must not be spread into Math calls");
 const extentStart=js.indexOf("    function finiteExtent(values) {");
 const extentEnd=js.indexOf("    function drawPriceChart()",extentStart);
 assert.ok(extentStart>=0 && extentEnd>extentStart);
-const extent = vm.runInNewContext(js.slice(extentStart,extentEnd) + "\\nfiniteExtent;", {});
+const extent = vm.runInNewContext(js.slice(extentStart,extentEnd) + "\nfiniteExtent;", {});
 const largeSeries=Array.from({length:250000},(_,i)=>i);
 assert.equal(extent(largeSeries).min,0);
 assert.equal(extent(largeSeries).max,249999);
