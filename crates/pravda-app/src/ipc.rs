@@ -2,6 +2,7 @@
 //! The current External WebView is NOT granted remote Tauri IPC permissions.
 //! The frontend transport switch is a separate, reviewed PR.
 use crate::consent::RevolutPublicConsent;
+use crate::paper::PaperSandbox;
 use pravda_server::{Auth, AuthError};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -86,10 +87,15 @@ impl IpcAuth {
             .unwrap_or_else(|poison| poison.into_inner())
     }
 
-    fn accept_token(&self, token: String) {
-        if let Some(previous) = self.token().replace(token) {
+    fn accept_token(&self, token: String, paper: &PaperSandbox) {
+        // Match paper_session_guard and logout: session lock, then portfolio lock.
+        // The next session is not visible until its portfolio is reset.
+        let mut current = self.token();
+        if let Some(previous) = current.take() {
             self.authority.logout(&previous);
         }
+        paper.reset();
+        *current = Some(token);
     }
 
     fn logout(&self) {
@@ -181,6 +187,7 @@ pub async fn ipc_auth_setup(
     window: Window,
     session: State<'_, IpcAuth>,
     events: State<'_, SecurityEvents>,
+    paper: State<'_, PaperSandbox>,
     password: String,
     confirm: String,
 ) -> Result<(), String> {
@@ -197,7 +204,7 @@ pub async fn ipc_auth_setup(
     .await;
     match result {
         Ok(Ok(token)) => {
-            session.accept_token(token);
+            session.accept_token(token, &paper);
             events.record(SecurityEventCode::SetupAccepted);
             Ok(())
         }
@@ -218,6 +225,7 @@ pub async fn ipc_auth_login(
     window: Window,
     session: State<'_, IpcAuth>,
     events: State<'_, SecurityEvents>,
+    paper: State<'_, PaperSandbox>,
     password: String,
 ) -> Result<(), String> {
     require_main(window.label()).map_err(str::to_string)?;
@@ -225,7 +233,7 @@ pub async fn ipc_auth_login(
     let result = tauri::async_runtime::spawn_blocking(move || authority.login(&password)).await;
     match result {
         Ok(Ok(token)) => {
-            session.accept_token(token);
+            session.accept_token(token, &paper);
             events.record(SecurityEventCode::LoginAccepted);
             Ok(())
         }
@@ -251,9 +259,15 @@ pub fn ipc_auth_logout(
     window: Window,
     session: State<'_, IpcAuth>,
     events: State<'_, SecurityEvents>,
+    paper: State<'_, PaperSandbox>,
 ) -> Result<(), String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
-    session.logout();
+    // Serialize logout with every synchronous paper portfolio mutation.
+    let mut current = session.token();
+    if let Some(token) = current.take() {
+        session.authority.logout(&token);
+    }
+    paper.reset();
     events.record(SecurityEventCode::SessionEnded);
     Ok(())
 }
@@ -334,6 +348,59 @@ pub async fn ipc_paper_alerts_snapshot(
 ) -> Result<pravda_server::DesktopPayload, String> {
     let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
     finish_authorized_read(&session, &issued_to, Ok(desktop.alerts_snapshot().await))
+}
+
+/// Every paper action holds the Rust session lock during the synchronous
+/// mutation. Logout cannot interleave with a simulated trade.
+fn paper_session_guard<'a>(
+    session: &'a IpcAuth,
+    label: &str,
+) -> Result<MutexGuard<'a, Option<String>>, String> {
+    require_main(label).map_err(str::to_string)?;
+    let token = session.token();
+    if !token
+        .as_deref()
+        .is_some_and(|current| session.authority.session_valid(current))
+    {
+        return Err("UNAUTHORIZED".to_owned());
+    }
+    Ok(token)
+}
+
+/// Only synthetic fixed-price quotes. No exchange, secret or network access.
+#[tauri::command]
+pub fn ipc_paper_snapshot(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+) -> Result<Vec<String>, String> {
+    let _session_guard = paper_session_guard(&session, window.label())?;
+    Ok(paper.snapshot())
+}
+
+#[tauri::command]
+pub fn ipc_paper_trade(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+    symbol: String,
+    side: String,
+    quantity_milli: u32,
+) -> Result<Vec<String>, String> {
+    let _session_guard = paper_session_guard(&session, window.label())?;
+    paper
+        .trade(&symbol, &side, quantity_milli)
+        .map_err(str::to_string)
+}
+
+#[tauri::command]
+pub fn ipc_paper_reset(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+) -> Result<Vec<String>, String> {
+    let _session_guard = paper_session_guard(&session, window.label())?;
+    Ok(paper.reset())
 }
 
 #[tauri::command]
@@ -436,6 +503,75 @@ pub async fn ipc_security_report(
         _ => "sqlite|unknown|Base indisponible ou occupee; aucune reparation automatique",
     }
     .to_string();
+    finish_authorized_read(&session, &issued_to, Ok(rows))
+}
+
+// Acceptance tests are requested from the installed desktop UI, not a separate
+// diagnostic app. All results are allowlisted. No shell, broker API, network,
+// user-profile enumeration, backup mutation or installation action is performed.
+fn acceptance_report_rows(phase: &str) -> Result<Vec<String>, &'static str> {
+    if phase != "preproduction" && phase != "postproduction" {
+        return Err("INVALID_ACCEPTANCE_PHASE");
+    }
+    let synthetic = PaperSandbox::default();
+    let original = synthetic.snapshot();
+    let verified = synthetic.trade("SOL", "BUY", 1).is_ok()
+        && synthetic.trade("DOGE", "BUY", 1).is_err()
+        && synthetic.reset() == original;
+    let paper_status = if verified { "verified" } else { "blocked" };
+    let paper_detail = if verified {
+        "Achat fictif, instrument interdit et reinitialisation testes en memoire"
+    } else {
+        "Echec d'un test de simulation fictive; operations reelles interdites"
+    };
+    // The phase is report metadata, not a tested condition or a PASS.
+    // Both modes deliberately run the same bounded, local acceptance checks.
+    Ok(vec![
+        "session|verified|Session Rust requise pour demander et lire ce rapport".to_owned(),
+        "ipc|verified|Commande IPC de la fenetre principale autorisee".to_owned(),
+        format!("paper|{paper_status}|{paper_detail}"),
+        "sqlite|unknown|Controle SQLite en cours; restauration non verifiee".to_owned(),
+        "webview|verified|Cette fenetre Tauri peut communiquer par IPC Rust".to_owned(),
+        "installer|unknown|Installation hors reseau sur VM sans WebView2 non verifiee ici"
+            .to_owned(),
+        "persistence|unknown|Redemarrage, mise a niveau et sauvegarde non verifies ici".to_owned(),
+        "authenticode|unknown|Signature et horodatage non verifies ici".to_owned(),
+        "live|unknown|Aucune verification d'une autorisation de trading reel; ne pas l'activer"
+            .to_owned(),
+    ])
+}
+
+/// Read-only, local pre/postproduction acceptance directly inside Pravda-Bot.
+/// Unrelated diagnostic suites and physical installation tests remain separate
+/// gates; a local PASS must never replace a host-level VM/installer acceptance.
+#[tauri::command]
+pub async fn ipc_acceptance_report(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    phase: String,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let mut rows = acceptance_report_rows(&phase).map_err(str::to_string)?;
+    rows[3] = match desktop.security_database_health_code().await {
+        "database_ok" => {
+            "sqlite|verified|SQLite quick_check OK; sauvegarde et restauration non verifiees"
+        }
+        "database_missing" => {
+            "sqlite|blocked|Base SQLite absente; aucune reinitialisation automatique"
+        }
+        "database_invalid_path" => {
+            "sqlite|blocked|Chemin de base invalide; aucune reinitialisation automatique"
+        }
+        "database_integrity_failed" => {
+            "sqlite|blocked|SQLite quick_check en echec; aucune reparation automatique"
+        }
+        "database_schema_missing" => {
+            "sqlite|blocked|Schema SQLite attendu manquant; aucune reparation automatique"
+        }
+        _ => "sqlite|unknown|SQLite indisponible ou occupee; aucune action automatique",
+    }
+    .to_owned();
     finish_authorized_read(&session, &issued_to, Ok(rows))
 }
 
@@ -608,6 +744,44 @@ mod tests {
     }
 
     #[test]
+    fn acceptance_report_keeps_physical_and_financial_gates_unverified() {
+        for phase in ["preproduction", "postproduction"] {
+            let rows = acceptance_report_rows(phase).unwrap();
+            assert_eq!(rows.len(), 9);
+            assert!(rows.iter().all(|line| line.split('|').count() == 3));
+            assert_eq!(
+                rows.iter()
+                    .map(|row| row.split('|').next().unwrap())
+                    .collect::<Vec<_>>(),
+                [
+                    "session",
+                    "ipc",
+                    "paper",
+                    "sqlite",
+                    "webview",
+                    "installer",
+                    "persistence",
+                    "authenticode",
+                    "live"
+                ]
+            );
+            assert!(rows[2].starts_with("paper|verified|"));
+            assert_eq!(
+                rows.iter()
+                    .filter(|row| row.split('|').nth(1) == Some("verified"))
+                    .count(),
+                4
+            );
+            for row in &rows[5..] {
+                assert_eq!(row.split('|').nth(1), Some("unknown"));
+            }
+            assert!(!rows.join(" ").contains("API_KEY"));
+        }
+        assert!(acceptance_report_rows("production").is_err());
+        assert!(acceptance_report_rows("../install").is_err());
+    }
+
+    #[test]
     fn security_events_are_bounded_constant_only_and_newest_first() {
         let events = SecurityEvents::default();
         events.record(SecurityEventCode::StorageFailure);
@@ -675,7 +849,7 @@ mod tests {
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
 
         let token = session.authority.login(&password).unwrap();
-        session.accept_token(token);
+        session.accept_token(token, &PaperSandbox::default());
         assert_eq!(require_authenticated(&session, "main"), Ok(()));
         assert_eq!(
             require_authenticated(&session, "other"),
@@ -695,7 +869,7 @@ mod tests {
         let password = format!("TestOnlySecret-{}-concurrent", std::process::id());
         session.authority.set_password(&password).unwrap();
         let token = session.authority.login(&password).unwrap();
-        session.accept_token(token);
+        session.accept_token(token, &PaperSandbox::default());
         let issued_to = authorized_read_token(&session, "main").unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         let (release_tx, release_rx) = tokio::sync::oneshot::channel();
@@ -708,7 +882,7 @@ mod tests {
         ready_rx.await.unwrap();
         session.logout();
         let new_token = session.authority.login(&password).unwrap();
-        session.accept_token(new_token);
+        session.accept_token(new_token, &PaperSandbox::default());
         release_tx.send(()).unwrap();
         assert_eq!(pending.await.unwrap(), Err("UNAUTHORIZED".to_owned()));
 
@@ -730,12 +904,45 @@ mod tests {
     }
 
     #[test]
+    fn replacing_session_resets_synthetic_portfolio_before_authorizing_new_trades() {
+        let (session, path) = new_session();
+        let paper = PaperSandbox::default();
+        let password = format!("TestOnlySecret-{}-paper-reset", std::process::id());
+        session.authority.set_password(&password).unwrap();
+
+        let first = session.authority.login(&password).unwrap();
+        session.accept_token(first, &paper);
+        {
+            let _guard = paper_session_guard(&session, "main").unwrap();
+            paper.trade("SOL", "BUY", 10).unwrap();
+        }
+        assert!(paper
+            .snapshot()
+            .iter()
+            .any(|row| row == "position_milli|SOL|10"));
+
+        let second = session.authority.login(&password).unwrap();
+        session.accept_token(second, &paper);
+        {
+            let _guard = paper_session_guard(&session, "main").unwrap();
+            assert_eq!(paper.snapshot(), PaperSandbox::default().snapshot());
+            paper.trade("SOL", "BUY", 1).unwrap();
+        }
+        assert!(paper
+            .snapshot()
+            .iter()
+            .any(|row| row == "position_milli|SOL|1"));
+        session.logout();
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
     fn expired_or_revoked_session_fails_closed() {
         let (session, path) = new_session();
         let password = format!("TestOnlySecret-{}-uvwxyz", std::process::id());
         session.authority.set_password(&password).unwrap();
         let token = session.authority.login(&password).unwrap();
-        session.accept_token(token.clone());
+        session.accept_token(token.clone(), &PaperSandbox::default());
         session.authority.logout(&token);
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
         assert_eq!(safe_auth_error(AuthError::Invalid), "INVALID_CREDENTIALS");

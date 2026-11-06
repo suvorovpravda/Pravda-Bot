@@ -355,6 +355,62 @@ const translations = {
         context.textAlign = "left";
     }
 
+    // The compact watchlist mirrors the exact observed market snapshot used
+    // for the central chart. No independent feed and never fabricated prices.
+    function clearMarketSnapshot() {
+        // A failed request or an authentication transition must also clear
+        // the cached payload: applyLanguage() can otherwise replay its old
+        // freshness flags and make an unavailable quote look recent again.
+        latestMarket = null;
+        document.querySelectorAll(".watchlist-row").forEach(button => {
+            button.dataset.freshness = "unavailable";
+            button.querySelector(".watch-price").textContent = "—";
+            button.querySelector(".watch-freshness").textContent = "Indisponible";
+        });
+        $("crypto-quotes").replaceChildren();
+        $("chart-price").textContent = "—";
+        $("chart-age").textContent = t("unavailableFeed");
+        setStatus($("market-feed-status"), "error", t("unavailableFeed"));
+    }
+    function clearMarketSession() {
+        clearMarketSnapshot();
+        latestFx = null;
+        historicalPoints = [];
+        $("fx-rates").textContent = t("fxFailure");
+        $("fx-asof").textContent = "—";
+        $("history-status").textContent = t("unavailableFeed");
+        setStatus($("fx-status"), "error", t("fxUnavailable"));
+        drawPriceChart();
+    }
+    window.pravdaClearMarketSession = clearMarketSession;
+    function updateTerminalWatchlist(rows) {
+        for (const row of rows) {
+            const button = $("terminal-watchlist")
+                .querySelector('[data-watch-symbol="' + row.symbol + '"]');
+            if (!button) continue;
+            const live = [row.binance, row.kraken].find(
+                quote => quote?.status === "live" && Number.isFinite(quote.price));
+            const observed = live || [row.binance, row.kraken].find(
+                quote => Number.isFinite(quote?.price));
+            const state = live ? "live" : observed ? "stale" : "unavailable";
+            button.dataset.freshness = state;
+            button.querySelector(".watch-price").textContent =
+                observed ? formatMarketValue(observed.price, "USDT") : "—";
+            button.querySelector(".watch-freshness").textContent =
+                state === "live" ? "Récent" :
+                state === "stale" ? "Périmé" : "Indisponible";
+        }
+    }
+    document.querySelectorAll(".watchlist-row").forEach(button => {
+        button.addEventListener("click", () => {
+            const symbol = button.dataset.watchSymbol;
+            if (!["BTC/USDT", "ETH/USDT", "SOL/USDT"].includes(symbol)) return;
+            $("chart-symbol").value = symbol;
+            $("chart-symbol").dispatchEvent(new Event("change", {bubbles: true}));
+            document.querySelector('.tab-btn[data-tab="markets"]')?.click();
+        });
+    });
+
     function renderMarket(payload) {
         latestMarket = payload;
         if (typeof checkLocalAlerts === "function") checkLocalAlerts();
@@ -377,6 +433,7 @@ const translations = {
         } else {
             setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? t("startBot") : t("stalePrices"));
         }
+        updateTerminalWatchlist(rows);
         const tbody = $("crypto-quotes");
         tbody.replaceChildren();
         for (const row of rows) {
@@ -725,16 +782,24 @@ const translations = {
             throw error;
         }
     }
+    let marketRequestNumber = 0;
+    let lastSettledMarketRequest = 0;
     async function refreshMarket() {
         const requestGeneration = window.pravdaAuthGeneration;
+        const requestNumber = ++marketRequestNumber;
         try {
-            renderMarket(await fetchJson("/api/market"));
+            const payload = await fetchJson("/api/market");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestNumber < lastSettledMarketRequest) return;
+            lastSettledMarketRequest = requestNumber;
+            renderMarket(payload);
             // History has a separate, slower polling cadence to avoid repeated SQLite reads.
         }
         catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
-            setStatus($("market-feed-status"), "error", t("unavailableFeed"));
-            $("chart-age").textContent = t("unknownError");
+            if (requestNumber < lastSettledMarketRequest) return;
+            lastSettledMarketRequest = requestNumber;
+            clearMarketSnapshot();
         }
     }
     // Auth boundaries invalidate pending IPC results and any cached consent UI.
@@ -869,7 +934,11 @@ const translations = {
     // Never request protected diagnostics in the background after logout.
     // A SQLite quick_check is user-initiated or runs when Security is opened.
     const securityShell = document.querySelector("main.shell");
-    const securityVisible = () => !document.hidden && securityShell && !securityShell.hidden;
+    // Only passive diagnostics require a foreground document. Explicit UI
+    // clicks must still run on WebView2 if visibilityState is stale or hidden.
+    // The Rust session/window check is the real authorization boundary.
+    const securitySessionReady = () => !!securityShell && !securityShell.hidden;
+    const securityVisible = () => securitySessionReady() && !document.hidden;
     let securityCheckInFlight = false;
     async function refreshSecurityEvents() {
         const requestGeneration = window.pravdaAuthGeneration;
@@ -912,11 +981,20 @@ const translations = {
             panel.textContent = "Historique de sécurité non disponible. Réauthentification nécessaire.";
         }
     }
-    async function refreshSecurity() {
+    async function refreshSecurity(explicit = false) {
         const requestGeneration = window.pravdaAuthGeneration;
-        if (!securityVisible() || securityCheckInFlight) return;
+        if (!securitySessionReady()) {
+            if (explicit) setStatus($("security-status"), "error", "Connexion locale requise");
+            return;
+        }
+        if (!explicit && !securityVisible()) return;
+        if (securityCheckInFlight) {
+            if (explicit) setStatus($("security-status"), "pending", "Vérification déjà en cours…");
+            return;
+        }
         securityCheckInFlight = true;
         const panel = $("security-checks");
+        if (explicit) setStatus($("security-status"), "pending", "Vérification locale en cours…");
         try {
             const rows = await window.pravdaInvoke("ipc_security_report");
             if (requestGeneration !== window.pravdaAuthGeneration) return;
@@ -959,7 +1037,10 @@ const translations = {
             }
             panel.replaceChildren(...nodes);
             setStatus($("security-status"), blocked ? "error" : "pending",
-                blocked ? blocked + " blocage(s) de sécurité" : verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet");
+                blocked ? blocked + " blocage(s) de sécurité" :
+                    verified + " / " + rows.length + " contrôles vérifiés ; audit incomplet" +
+                    " · " + new Date().toLocaleTimeString("fr-FR"));
+            $("security-status").title = "Dernière vérification locale : " + new Date().toLocaleString("fr-FR");
         } catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
             panel.textContent = "État de sécurité non disponible. Vérifiez votre session locale.";
@@ -968,12 +1049,263 @@ const translations = {
             securityCheckInFlight = false;
         }
     }
-    $("security-refresh").addEventListener("click", refreshSecurity);
-    $("security-refresh").addEventListener("click", refreshSecurityEvents);
-    window.refreshSecurity = refreshSecurity;
+    // Native, authenticated pre/postproduction tests belong to the installed
+    // desktop. No test center executable, shell invocation or HTTP endpoint.
+    let acceptanceBusy = false;
+    let acceptanceRuns = 0;
+    const expectedAcceptanceChecks = [
+        "session", "ipc", "paper", "sqlite", "webview",
+        "installer", "persistence", "authenticode", "live"
+    ];
+    const acceptanceLabels = {
+        session: "Authentification Rust", ipc: "IPC de la fenêtre",
+        paper: "Simulation fictive", sqlite: "Intégrité SQLite",
+        webview: "Tauri / WebView2", installer: "Installation hors réseau",
+        persistence: "Redémarrage et restauration", authenticode: "Signature",
+        live: "Trading réel"
+    };
+    function clearAcceptanceUi() {
+        acceptanceRuns = 0;
+        $("acceptance-results").textContent = "Aucun résultat disponible.";
+        $("acceptance-status").textContent = "Aucune campagne lancée.";
+        $("acceptance-json").value = "Aucun rapport généré.";
+    }
+    window.pravdaClearAcceptance = clearAcceptanceUi;
+    async function runAcceptance(phase) {
+        const requestGeneration = window.pravdaAuthGeneration;
+        if (!["preproduction", "postproduction"].includes(phase)) return;
+        if (!securitySessionReady()) {
+            $("acceptance-status").textContent = "Connectez-vous pour exécuter ces contrôles.";
+            return;
+        }
+        if (acceptanceBusy) {
+            $("acceptance-status").textContent = "Campagne précédente encore en cours.";
+            return;
+        }
+        acceptanceBusy = true;
+        const runNumber = ++acceptanceRuns;
+        $("acceptance-pre").disabled = true;
+        $("acceptance-post").disabled = true;
+        $("acceptance-status").textContent =
+            "Campagne n°" + runNumber + " : contrôles Rust locaux en cours…";
+        try {
+            const rows = await window.pravdaInvoke("ipc_acceptance_report", {phase});
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (!Array.isArray(rows) || rows.length !== expectedAcceptanceChecks.length)
+                throw new Error("INVALID_ACCEPTANCE_REPORT");
+            let verified = 0, blocked = 0, unknown = 0;
+            const nodes = [];
+            for (const [index, line] of rows.entries()) {
+                if (typeof line !== "string" || line.length > 250) throw new Error("INVALID_ACCEPTANCE_ROW");
+                const parts = line.split("|");
+                if (parts.length !== 3 || parts[0] !== expectedAcceptanceChecks[index] ||
+                    !Object.hasOwn(acceptanceLabels, parts[0]) ||
+                    !["verified", "blocked", "unknown"].includes(parts[1])) {
+                    throw new Error("INVALID_ACCEPTANCE_ROW");
+                }
+                if (parts[1] === "verified") verified++;
+                if (parts[1] === "blocked") blocked++;
+                if (parts[1] === "unknown") unknown++;
+                const item = document.createElement("div");
+                item.className = "security-check";
+                item.setAttribute("role", "listitem");
+                const header = document.createElement("strong");
+                header.textContent = acceptanceLabels[parts[0]] + " · " +
+                    {verified: "Vérifié", blocked: "Échec", unknown: "Non vérifié"}[parts[1]];
+                const detail = document.createElement("p");
+                detail.textContent = parts[2];
+                item.append(header, detail);
+                nodes.push(item);
+            }
+            $("acceptance-results").replaceChildren(...nodes);
+            const finishedAt = new Date();
+            $("acceptance-status").textContent =
+                (phase === "preproduction" ? "Préproduction" : "Postproduction") +
+                " · exécution n°" + runNumber + " à " +
+                finishedAt.toLocaleTimeString("fr-FR") + " : " +
+                verified + " contrôles locaux vérifiés sur " + rows.length +
+                ", " + blocked + " échec(s), " + unknown +
+                " non vérifiés. Ne constitue pas une homologation.";
+            $("acceptance-json").value = JSON.stringify({
+                schema_version: 1, phase, run_number: runNumber,
+                checked_at_utc: finishedAt.toISOString(),
+                verified, blocked, unknown, findings: rows
+            }, null, 2);
+        } catch (_error) {
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            $("acceptance-results").textContent = "Rapport non disponible.";
+            $("acceptance-status").textContent = "Échec de contrôle. Aucun PASS déduit.";
+            $("acceptance-json").value = "Aucun rapport valide généré.";
+        } finally {
+            acceptanceBusy = false;
+            $("acceptance-pre").disabled = false;
+            $("acceptance-post").disabled = false;
+        }
+    }
+    $("acceptance-pre").addEventListener("click", () => runAcceptance("preproduction"));
+    $("acceptance-post").addEventListener("click", () => runAcceptance("postproduction"));
+    $("security-refresh").addEventListener("click", () => {
+        refreshSecurity(true);
+        refreshSecurityEvents();
+    });
+    window.refreshSecurity = () => refreshSecurity(true);
     window.refreshSecurityEvents = refreshSecurityEvents;
     refreshSecurity();
     refreshSecurityEvents();
+
+    // Paper Trading is a deterministic, Rust-owned sandbox and never touches
+    // authenticated exchanges, local browser storage, or actual account funds.
+    const paperFormat = cents => (cents / 100).toLocaleString("fr-FR", {
+        minimumFractionDigits: 2, maximumFractionDigits: 2
+    }) + " USDT fictifs";
+    const paperNumber = value => {
+        if (!/^\d{1,15}$/.test(value)) throw new Error("INVALID_PAPER_RESULT");
+        const number = Number(value);
+        if (!Number.isSafeInteger(number)) throw new Error("INVALID_PAPER_RESULT");
+        return number;
+    };
+    function renderPaper(rows) {
+        if (!Array.isArray(rows) || rows.length > 40) throw new Error("INVALID_PAPER_RESULT");
+        const state = {mode:"", cash:null, equity:null, fee:null, priceType:"",
+            prices:{}, positions:{}, events:[]};
+        for (const raw of rows) {
+            if (typeof raw !== "string" || raw.length > 120) throw new Error("INVALID_PAPER_RESULT");
+            const parts = raw.split("|");
+            switch (parts[0]) {
+                case "mode":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.mode = parts[1]; break;
+                case "cash_cents":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.cash = paperNumber(parts[1]); break;
+                case "equity_cents":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.equity = paperNumber(parts[1]); break;
+                case "fee_bps":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.fee = paperNumber(parts[1]); break;
+                case "price_type":
+                    if (parts.length !== 2) throw new Error("INVALID_PAPER_RESULT");
+                    state.priceType = parts[1]; break;
+                case "price_cents":
+                    if (parts.length !== 3 || !["BTC","ETH","SOL"].includes(parts[1]))
+                        throw new Error("INVALID_PAPER_RESULT");
+                    state.prices[parts[1]] = paperNumber(parts[2]); break;
+                case "position_milli":
+                    if (parts.length !== 3 || !["BTC","ETH","SOL"].includes(parts[1]))
+                        throw new Error("INVALID_PAPER_RESULT");
+                    state.positions[parts[1]] = paperNumber(parts[2]); break;
+                case "event":
+                    if (parts.length !== 7 || !["BUY","SELL"].includes(parts[2]) ||
+                        !["BTC","ETH","SOL"].includes(parts[3]))
+                        throw new Error("INVALID_PAPER_RESULT");
+                    state.events.push({seq:paperNumber(parts[1]),side:parts[2],symbol:parts[3],
+                        quantity:paperNumber(parts[4]),gross:paperNumber(parts[5]),
+                        fee:paperNumber(parts[6])});
+                    break;
+                default: throw new Error("INVALID_PAPER_RESULT");
+            }
+        }
+        if (state.mode !== "PAPER_ONLY" || state.priceType !== "SYNTHETIC_FIXED" ||
+            state.cash === null || state.equity === null || state.fee !== 36 ||
+            ["BTC","ETH","SOL"].some(symbol =>
+                !Number.isSafeInteger(state.prices[symbol]) ||
+                !Number.isSafeInteger(state.positions[symbol])) ||
+            state.events.length > 20) throw new Error("INVALID_PAPER_RESULT");
+        $("paper-summary").textContent =
+            "Solde : " + paperFormat(state.cash) + " · Équité : " + paperFormat(state.equity);
+        const positions = ["BTC","ETH","SOL"].map(symbol => {
+            const node = document.createElement("div");
+            node.textContent = symbol + " · " + (state.positions[symbol] / 1000).toFixed(3)
+                + " unité fictive · cotation fixe " + paperFormat(state.prices[symbol]);
+            return node;
+        });
+        $("paper-positions").replaceChildren(...positions);
+        const events = state.events.map(item => {
+            const node = document.createElement("div");
+            node.setAttribute("role","listitem");
+            node.textContent = "#" + item.seq + " " +
+                (item.side === "BUY" ? "Achat" : "Vente") + " simulé · "
+                + (item.quantity / 1000).toFixed(3) + " " + item.symbol
+                + " · montant " + paperFormat(item.gross)
+                + " · frais " + paperFormat(item.fee);
+            return node;
+        });
+        if (events.length) $("paper-events").replaceChildren(...events);
+        else $("paper-events").textContent = "Aucune transaction simulée.";
+    }
+    function clearPaperUi() {
+        $("paper-summary").textContent = "Portefeuille fictif non chargé.";
+        $("paper-positions").textContent = "Positions fictives non chargées.";
+        $("paper-events").textContent = "Aucune transaction simulée chargée.";
+        $("paper-notice").textContent = "Simulation disponible après authentification.";
+    }
+    window.pravdaClearPaper = clearPaperUi;
+    let paperBusy = false;
+    function paperMessage(error) {
+        const messages = {
+            INVALID_PAPER_INSTRUMENT:"Instrument fictif non autorisé.",
+            INVALID_PAPER_SIDE:"Action non autorisée.",
+            INVALID_PAPER_QUANTITY:"Quantité simulée incorrecte.",
+            PAPER_RISK_LIMIT:"Limite de risque : 2 500 USDT fictifs par opération.",
+            PAPER_INSUFFICIENT_FUNDS:"Solde fictif insuffisant.",
+            PAPER_INSUFFICIENT_POSITION:"Position fictive insuffisante.",
+            PAPER_ARITHMETIC_ERROR:"Opération bloquée : contrôle arithmétique.",
+            UNAUTHORIZED:"Session expirée : reconnectez-vous."
+        };
+        return messages[String(error)] || "Simulation locale indisponible.";
+    }
+    async function refreshPaper(explicit = false) {
+        const generation = window.pravdaAuthGeneration;
+        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy) return;
+        try {
+            const rows = await window.pravdaInvoke("ipc_paper_snapshot");
+            if (generation !== window.pravdaAuthGeneration) return;
+            renderPaper(rows);
+            $("paper-notice").textContent =
+                "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("paper-notice").textContent = paperMessage(error);
+        }
+    }
+    async function paperAction(command, args = {}) {
+        if (paperBusy) return;
+        const generation = window.pravdaAuthGeneration;
+        paperBusy = true;
+        $("paper-trade").disabled = true;
+        $("paper-reset").disabled = true;
+        try {
+            const rows = await window.pravdaInvoke(command, args);
+            if (generation !== window.pravdaAuthGeneration) return;
+            renderPaper(rows);
+            $("paper-notice").textContent = command === "ipc_paper_reset"
+                ? "Portefeuille fictif remis à zéro. Aucun compte réel affecté."
+                : "Opération PAPER simulée en mémoire. Aucun ordre réel envoyé.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("paper-notice").textContent = paperMessage(error);
+        } finally {
+            paperBusy = false;
+            $("paper-trade").disabled = false;
+            $("paper-reset").disabled = false;
+            // An old response may finish after a new Rust login reset the portfolio.
+            // Fetch the current session snapshot instead of leaving a blank/stale view.
+            if (generation !== window.pravdaAuthGeneration) refreshPaper(true);
+        }
+    }
+    $("paper-order-form").addEventListener("submit", event => {
+        event.preventDefault();
+        paperAction("ipc_paper_trade", {
+            symbol:$("paper-symbol").value,
+            side:$("paper-side").value,
+            quantityMilli:Number($("paper-quantity").value)
+        });
+    });
+    $("paper-reset").addEventListener("click", () => paperAction("ipc_paper_reset"));
+    window.refreshPaper = () => refreshPaper(true);
+    refreshPaper(true);
+
     // No unconditional security polling: SQLite diagnostics are only requested
     // on login, an explicit refresh or when the Security tab is opened.
     document.addEventListener("click",async event => {
@@ -991,13 +1323,32 @@ const translations = {
         }catch{msg.textContent="Impossible d’ouvrir la source officielle. Vérifiez votre navigateur par défaut.";}
     });
     $("revolut-refresh").addEventListener("click",refreshRevolut);
+    let fxRequestNumber = 0;
+    let lastSettledFxRequest = 0;
     async function refreshFx() {
         const requestGeneration = window.pravdaAuthGeneration;
-        try { renderFx(await fetchJson("/api/fx")); }
+        const requestNumber = ++fxRequestNumber;
+        try {
+            const payload = await fetchJson("/api/fx");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestNumber < lastSettledFxRequest) return;
+            lastSettledFxRequest = requestNumber;
+            renderFx(payload);
+        }
         catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestNumber < lastSettledFxRequest) return;
+            lastSettledFxRequest = requestNumber;
+            // Old FX rates must not be reused for conversions or replayed by
+            // a later language change when the current request has failed.
+            latestFx = null;
             setStatus($("fx-status"), "error", t("fxUnavailable"));
             $("fx-rates").textContent = t("fxFailure");
+            $("fx-asof").textContent = "—";
+            // USDT observations do not depend on FX. Keep the latest market
+            // snapshot, but redraw it without any EUR/CHF conversion.
+            if (latestMarket) renderMarket(latestMarket);
+            else drawPriceChart();
         }
     }
     async function refreshFlows() {
@@ -1156,12 +1507,51 @@ const translations = {
         }
     }
     function updateClock() { $("clock").textContent = new Date().toLocaleTimeString(languageLocales[currentLanguage]); }
+    let refreshInFlight = false;
+    let refreshGenerationInFlight = null;
+    let queuedAuthRefreshGeneration = null;
     async function refreshAll() {
+        const button = $("refresh-button");
+        const requestedGeneration = window.pravdaAuthGeneration;
+        if (refreshInFlight) {
+            // A login changes the Rust session generation. Do not discard its
+            // refresh just because a previous session still has IPC in flight.
+            if (requestedGeneration !== refreshGenerationInFlight) {
+                queuedAuthRefreshGeneration = requestedGeneration;
+                button.title = "Nouvelle session : actualisation en attente";
+            } else {
+                button.title = "Actualisation déjà en cours";
+            }
+            return;
+        }
+        refreshInFlight = true;
+        refreshGenerationInFlight = requestedGeneration;
+        button.disabled = true;
+        button.textContent = "↻ Actualisation en cours…";
         $("daily-report").removeAttribute("href");
-        await Promise.all([
-            refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto(),
-            refreshHistory(), refreshAlerts(), refreshSources(), refreshAIS()
-        ]);
+        try {
+            const results = await Promise.allSettled([
+                refreshMarket(), refreshFx(), refreshFlows(), refreshNews(), refreshCrypto(),
+                refreshHistory(), refreshAlerts(), refreshSources(), refreshAIS()
+            ]);
+            const rejected = results.filter(result => result.status === "rejected").length;
+            button.textContent = "↻ Tentative à " + new Date().toLocaleTimeString("fr-FR");
+            button.title = rejected ? "Certaines sources sont indisponibles" :
+                "Dernière tentative d'actualisation locale (les sources peuvent rester périmées)";
+        } finally {
+            refreshInFlight = false;
+            refreshGenerationInFlight = null;
+            button.disabled = false;
+            const nextGeneration = queuedAuthRefreshGeneration;
+            queuedAuthRefreshGeneration = null;
+            if (nextGeneration !== null &&
+                nextGeneration === window.pravdaAuthGeneration &&
+                securityShell && !securityShell.hidden) {
+                // Re-run after releasing the guard. Old generation results are
+                // already ignored individually by their IPC response guards.
+                void refreshAll();
+            }
+        }
     }
     $("refresh-button").addEventListener("click", refreshAll);
     $("language-select").addEventListener("change", () => {
@@ -1287,6 +1677,8 @@ const translations = {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const allCards = () => Array.from(document.querySelectorAll('.card[data-category]'));
     function applyTab(tab){
+        // Let CSS widen the chosen module instead of keeping empty sidebars.
+        document.querySelector(".shell").dataset.activeTab = tab;
         tabButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.tab===tab));
         const cards = allCards();
         if(tab==='all'){
@@ -1300,9 +1692,13 @@ const translations = {
         }
         // Keep general cards visible
         document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
+        if (tab === "markets" || tab === "all") {
+            requestAnimationFrame(drawPriceChart);
+        }
         if (tab === "security") {
-            refreshSecurity();
+            refreshSecurity(true);
             refreshSecurityEvents();
+            refreshPaper(true);
         }
     }
     const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
@@ -1318,4 +1714,5 @@ const translations = {
     applyTab(tabFromHash());
 
     // The existing one-second IPC snapshot poll replaces the WebSocket transport.
-
+    // A script load event alone does not prove the event handlers initialized.
+    window.pravdaDashboardReady = true;

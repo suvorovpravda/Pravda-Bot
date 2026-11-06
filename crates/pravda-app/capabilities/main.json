@@ -1,6 +1,6 @@
 {
   "identifier": "main-ipc",
-  "description": "Bundled main window only: local auth bootstrap plus authenticated read-only desktop commands.",
+  "description": "Bundled main window: authenticated read-only diagnostics and a synthetic-only in-memory paper sandbox.",
   "windows": [
     "main"
   ],
@@ -15,8 +15,12 @@
     "allow-ipc-history-query",
     "allow-ipc-history-export-csv",
     "allow-ipc-paper-alerts-snapshot",
+    "allow-ipc-paper-snapshot",
+    "allow-ipc-paper-trade",
+    "allow-ipc-paper-reset",
     "allow-ipc-runtime-metrics",
     "allow-ipc-security-report",
+    "allow-ipc-acceptance-report",
     "allow-ipc-security-events",
     "allow-ipc-fx-status",
     "allow-ipc-public-feed",

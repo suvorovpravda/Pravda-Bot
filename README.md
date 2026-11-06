@@ -28,7 +28,8 @@
 | Rust / tests / CodeQL | 🟢 CI disponible | [Workflows GitHub](https://github.com/suvorovpravda/Pravda-Bot/actions) ; vérifier le SHA |
 | Installation MSI + NSIS | 🟢 Testée sur runner | Contrôles de démarrage, désinstallation et persistance |
 | Diagnostic Doctor et simulation Harness | 🟢 Compilés | Compagnons autonomes, sans ordres réels |
-| **Un seul EXE qui lance les trois tests** | 🟢 Compilé et testé en CI | [PR #138 fusionnée](https://github.com/suvorovpravda/Pravda-Bot/pull/138) ; double-clic sur PC utilisateur encore à confirmer |
+| **Pravda-Setup.exe — un seul installateur utilisateur** | 🟠 En validation | [PR #145](https://github.com/suvorovpravda/Pravda-Bot/pull/145) ; embarque MSI et WebView2 offline, GUI physique non homologuée |
+| **Tests pré/postproduction dans l'application** | 🟠 En validation | Commandes Rust IPC authentifiées depuis Paramètres ; VM, signature et restauration restent non vérifiées |
 | Installation totalement hors réseau sans WebView2 initial | 🟠 Non prouvée | Recette VM indépendante requise |
 | Installation Standard / Personnalisée | 🟠 À valider | Retrait des modules facultatifs côté Rust |
 | Enterprise signée / horodatée | 🔴 Non livrée | [Issue #90](https://github.com/suvorovpravda/Pravda-Bot/issues/90) |
@@ -49,7 +50,8 @@
 | **pravda-windows-unsigned-candidate-installers** | MSI, NSIS, EXE, sommes SHA-256 | Installation Windows de test |
 | **pravda-windows-troubleshooting** | Doctor Windows | Double-clic, diagnostic passif |
 | **pravda-windows-production-test** | Harness Rust | Scénarios de simulation synthétiques |
-| **pravda-windows-one-click-test-center** | `pravda-test-center.exe` : Doctor + Harness + Desktop intégrés | [Artefact du run réussi #42016900394](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394/artifacts/13410339411) : extraire le ZIP, double-cliquer l'EXE |
+| **pravda-windows-one-click-test-center** | Doctor + Harness + démarrage temporaire du Desktop | **Outil de CI / diagnostic isolé uniquement**, pas un installateur ni une session interactive |
+| **pravda-windows-single-file-setup** | `pravda-setup.exe` — MSI hors ligne intégré | **Livrable utilisateur cible**, en construction et validation dans [PR #145](https://github.com/suvorovpravda/Pravda-Bot/pull/145) |
 
 Pour récupérer une version, ouvrir [Windows installer packaging](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml), choisir un run **réussi sur le SHA souhaité**, descendre à **Artifacts**, puis extraire l'archive.
 
@@ -63,7 +65,9 @@ Les paquets MSI/NSIS configurent le prérequis officiel WebView2 avec **offlineI
 ![Confidentialité](https://img.shields.io/badge/Diagnostic-Local-16a34a)
 ![Exécution](https://img.shields.io/badge/Utilisateur-Un%20double--clic-2563eb)
 
-Le centre unifié, [fusionné via la PR #138](https://github.com/suvorovpravda/Pravda-Bot/pull/138), embarque les trois composants natifs (desktop, Doctor et Harness) dans **un seul fichier `pravda-test-center.exe`**. Après extraction de l'archive, un double-clic lance les vérifications synthétiques en profils isolés, ouvre un rapport HTML coloré et crée un JSON détaillé. Le rapport de CI a été [archivé](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42016900394/artifacts/13410164620). L'exécution du double-clic sur ton propre PC reste un test utilisateur distinct.
+**Parcours utilisateur cible :** ouvrir `pravda-setup.exe` une seule fois, installer Pravda-Bot, puis démarrer le **vrai bureau Tauri**, sans limite artificielle de six secondes. Après authentification, ouvrir **Paramètres → Sécurité & dépannage** pour lancer les tests Rust **préproduction** ou **postproduction**, et copier leur rapport JSON expurgé. L'outil indépendant `pravda-test-center.exe` reste réservé aux contrôles de CI ; son ouverture temporaire du bureau ne permet pas une connexion interactive et ne doit pas être proposé comme installateur.
+
+**Ne pas confondre :** les résultats locaux du centre intégré ne qualifient ni les installations sur deux VM sans réseau ni la signature Authenticode ni les mises à niveau. [PR #145](https://github.com/suvorovpravda/Pravda-Bot/pull/145) et [#134](https://github.com/suvorovpravda/Pravda-Bot/issues/134) restent soumis aux preuves au SHA final.
 
 **Statut actuel : candidat de test non signé, validé sur runner Windows et par Codex (13/13 contrôles).** Ce n'est **pas** une publication Enterprise. Les tests qui exigent une VM réellement hors réseau, un installateur personnalisé ou une signature Enterprise restent **NON VÉRIFIÉS**, et le rapport conserve `SKIP` pour ces scénarios.
 
@@ -85,7 +89,7 @@ Les sources Python historiques sont archivées hors du périmètre de production
 
 ### 🪟 Démarrage rapide — Windows
 
-Pour un **utilisateur final**, télécharger le MSI ou le NSIS du run validé, l'ouvrir normalement, puis créer le mot de passe local requis. Il n'est pas nécessaire de compiler le projet ni d'installer une chaîne de développement.
+Pour un **utilisateur final**, le livrable visé est **un seul `pravda-setup.exe`** (PR #145), qui installe le bureau Windows via son MSI intégré et le prérequis WebView2 hors ligne. L'application reste ensuite ouverte normalement et contient les tests pré/postproduction dans les paramètres. Pendant la validation, les anciens MSI/NSIS constituent des candidats techniques, non une livraison Enterprise homologuée. Il n'est pas nécessaire d'installer Rust, Python ou Node sur le poste utilisateur.
 
 Pour un **développeur**, les commandes Cargo, les tests Windows, les profils et les procédures de reprise sont décrits dans le [guide technique](docs/PRAVDA-GUIDE.md).
 

@@ -48,11 +48,31 @@
         <button class="tab-btn" data-tab="revolut" type="button">Revolut X</button>
         <button class="tab-btn" data-tab="sources" type="button">Sources</button>
         <button class="tab-btn" data-tab="system" type="button">Système</button>
-        <button class="tab-btn" data-tab="security" type="button">Sécurité</button>
+        <button class="tab-btn" data-tab="security" type="button">Paramètres · Sécurité &amp; dépannage</button>
     </nav>
 
 
+    <section class="terminal-cockpit" aria-label="Terminal de marché, surveillance et sécurité">
     <section class="feature-grid" aria-label="Accès rapides et connexions">
+        <h2 class="terminal-pane-label">Surveillance <span>01 / WATCHLIST & SOURCES</span></h2>
+        <section class="terminal-watchlist" aria-label="Liste de surveillance des cours observés">
+            <div class="watchlist-title"><strong>Cours observés</strong><span>BTC / ETH / SOL</span></div>
+            <div id="terminal-watchlist" class="watchlist-rows" role="group" aria-label="Sélection de l'actif observé">
+                <button class="watchlist-row" type="button" data-watch-symbol="BTC/USDT">
+                    <span class="watch-symbol">BTC/USDT</span><strong class="watch-price">—</strong>
+                    <small class="watch-freshness">Indisponible</small>
+                </button>
+                <button class="watchlist-row" type="button" data-watch-symbol="ETH/USDT">
+                    <span class="watch-symbol">ETH/USDT</span><strong class="watch-price">—</strong>
+                    <small class="watch-freshness">Indisponible</small>
+                </button>
+                <button class="watchlist-row" type="button" data-watch-symbol="SOL/USDT">
+                    <span class="watch-symbol">SOL/USDT</span><strong class="watch-price">—</strong>
+                    <small class="watch-freshness">Indisponible</small>
+                </button>
+            </div>
+            <p class="fine-print watchlist-note">Prix publics indicatifs en USDT · aucune garantie d'exécution.</p>
+        </section>
         <article class="feature-tile">
             <span class="feature-kicker">01 / PUBLIC MARKET DATA</span>
             <h2>Revolut X</h2>
@@ -79,6 +99,7 @@
     </section>
 
     <section class="grid terminal-extras" aria-label="Modules connectés">
+        <h2 class="terminal-pane-label">Contrôle &amp; risques <span>03 / SYSTEM & SAFETY</span></h2>
         <article class="card secondary-card" data-category="revolut">
             <div class="card-head"><div><h2>Revolut X · carnet public</h2><p>BTC-USD · aucune clé privée nécessaire</p></div>
                 <span class="status pending" id="revolut-status">En attente</span></div>
@@ -117,24 +138,79 @@
         </article>
         <article class="card secondary-card" data-category="security">
             <div class="card-head">
-                <div><h2>Centre de sécurité · états vérifiables</h2>
-                    <p>Lecture locale après connexion, sans télémétrie ni récupération de secrets</p></div>
+                <div><h2>Sécurité &amp; dépannage · centre de contrôle</h2>
+                    <p>Contrôles locaux depuis la session Rust ; aucun ordre réel ni transmission automatique</p></div>
                 <span class="status pending" id="security-status" role="status" aria-live="polite">Non vérifié</span>
             </div>
             <div class="card-body">
-                <p class="fine-print">Un résultat non testé reste « Non vérifié ». Aucun indicateur vert global ni certification implicite.</p>
+                <div class="maintenance-notice"><strong>Tests de sécurité</strong><span>Vérifications de session et SQLite en lecture seule. Les autres états non contrôlés restent « Non vérifié ».</span></div>
                 <div id="security-checks" class="security-checks" role="list" aria-live="polite">
                     <p class="fine-print">Contrôles en attente de la session Rust.</p>
                 </div>
                 <div class="feature-actions">
-                    <button class="button button-primary" id="security-refresh" type="button">Recontrôler les états locaux</button>
+                    <button class="button button-primary" id="security-refresh" type="button">Relancer les tests locaux</button>
                 </div>
                 <hr>
-                <h3>Événements de sécurité locaux</h3>
-                <p class="fine-print">64 événements maximum en mémoire, depuis le démarrage actuel. Pas de transfert réseau, pas de conservation après fermeture.</p>
+                <section id="paper-sandbox" class="paper-sandbox" aria-label="Paper Trading sans risque">
+                    <h3>Paper Trading · portefeuille de simulation</h3>
+                    <p class="fine-print"><strong>SIMULATION UNIQUEMENT.</strong> Capital virtuel initial : 10 000 USDT. Cotations fixes et fictives, frais simulés de 0,36 %. Aucune connexion aux exchanges, aucun ordre réel, aucune clé API.</p>
+                    <div class="paper-summary" id="paper-summary" role="status" aria-live="polite">Simulation en attente de la connexion Rust.</div>
+                    <div class="paper-positions" id="paper-positions">Positions fictives non chargées.</div>
+                    <form id="paper-order-form" class="paper-order-form">
+                        <label for="paper-symbol">Actif fictif
+                            <select id="paper-symbol" name="symbol">
+                                <option value="BTC">BTC · prix fictif 65 000 USDT</option>
+                                <option value="ETH">ETH · prix fictif 3 000 USDT</option>
+                                <option value="SOL">SOL · prix fictif 150 USDT</option>
+                            </select>
+                        </label>
+                        <label for="paper-side">Action simulée
+                            <select id="paper-side" name="side">
+                                <option value="BUY">Acheter (papier)</option>
+                                <option value="SELL">Vendre (papier)</option>
+                            </select>
+                        </label>
+                        <label for="paper-quantity">Quantité fictive
+                            <select id="paper-quantity" name="quantityMilli">
+                                <option value="1">0,001 unité</option>
+                                <option value="10" selected>0,010 unité</option>
+                                <option value="100">0,100 unité</option>
+                            </select>
+                        </label>
+                        <div class="feature-actions paper-actions">
+                            <button class="button button-primary" type="submit" id="paper-trade">Simuler l'ordre</button>
+                            <button class="button" type="button" id="paper-reset">Réinitialiser le portefeuille fictif</button>
+                        </div>
+                    </form>
+                    <p class="fine-print" id="paper-notice" role="status" aria-live="polite">Les transactions restent en mémoire pendant cette session uniquement.</p>
+                    <h4>Journal des 20 dernières opérations fictives</h4>
+                    <div id="paper-events" class="paper-events" role="list">Aucune transaction simulée.</div>
+                </section>
+                <hr>
+                <h3>Dépannage · journal de sécurité local</h3>
+                <p class="fine-print">64 événements maximum, en mémoire et depuis ce démarrage. Ces codes ne sont pas un journal d'ordres financier persistant. Aucun transfert automatique.</p>
                 <div id="security-events" class="security-events" role="list" aria-live="polite">
                     <p class="fine-print">Historique non chargé.</p>
                 </div>
+                <hr>
+                <h3>Outils embarqués et rapports</h3>
+                <div class="maintenance-notice">
+                    <strong>Moniteur de performance · disponible</strong>
+                    <span>CPU, RAM et durée du processus depuis les métriques Rust de l'application.</span>
+                    <div class="feature-actions"><button class="button" type="button" data-go-tab="system">Consulter les métriques</button></div>
+                </div>
+                <section id="acceptance-center" class="maintenance-notice" aria-label="Centre de tests intégré">
+                    <h3>Préproduction et postproduction · centre de tests intégré</h3>
+                    <p class="fine-print">Les deux campagnes exécutent actuellement les mêmes contrôles locaux Rust, depuis Pravda-Bot. La phase choisie sert à identifier le rapport, pas à ajouter un succès. Simulation fictive indépendante et aucune connexion à une plateforme financière. Les essais VM hors réseau, la signature et la restauration restent non vérifiés ici.</p>
+                    <div class="feature-actions">
+                        <button class="button button-primary" id="acceptance-pre" type="button">Lancer les tests préproduction</button>
+                        <button class="button" id="acceptance-post" type="button">Lancer les tests postproduction</button>
+                    </div>
+                    <p class="fine-print" id="acceptance-status" role="status" aria-live="polite">Aucune campagne lancée.</p>
+                    <div id="acceptance-results" class="security-checks" role="list" aria-live="polite">Aucun résultat disponible.</div>
+                    <label for="acceptance-json">Rapport JSON à copier après relecture</label>
+                    <textarea id="acceptance-json" class="acceptance-json" rows="5" readonly>Aucun rapport généré.</textarea>
+                </section>
                 <hr>
                 <h3>Proton VPN · option facultative</h3>
                 <p>Si vous avez un compte Proton VPN, ouvrez l’application officielle Windows et connectez-vous dedans. Pravda-Bot ne collecte pas vos identifiants, ne lance aucune commande VPN non documentée et ne prétend pas vérifier votre tunnel.</p>
@@ -144,7 +220,8 @@
         </article>
     </section>
 
-    <section class="grid" aria-label="Marchés en direct" data-i18n-aria="marketsAria">
+    <section class="grid terminal-market" aria-label="Marchés en direct" data-i18n-aria="marketsAria">
+        <h2 class="terminal-pane-label">Marchés &amp; graphiques <span>02 / LIVE MARKET & CHARTS</span></h2>
         <article class="card crypto-live-card" data-category="markets">
             <div class="card-head">
                 <div><h2 data-i18n="cryptoTitle">Marchés crypto · cotations live</h2><p data-i18n="cryptoSubtitle">Ticks Kraken et Binance · conversions indicatives en EUR et CHF</p></div>
@@ -200,6 +277,7 @@
             </div>
         </article>
     </section>
+    </section><!-- terminal-cockpit -->
     <article class="card secondary-card desktop-style-2">
         <div class="card-head"><div><h2 data-i18n="sourceStatusTitle">État des sources</h2><p data-i18n="sourceStatusSubtitle">Disponibilité et dernier événement observé</p></div><span class="status pending" id="sources-status"><i class="dot"></i><span data-i18n="loading">Chargement</span></span></div>
         <div class="card-body source-grid" id="source-status-list"><div class="empty" data-i18n="loadingSources">Chargement des sources…</div></div>
