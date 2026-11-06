@@ -34,4 +34,4 @@
 - [ ] APPROVED FOR MERGE
 - [ ] NO-GO DISTRIBUTION
 
-**Release policy:** See [REVIEWING](../docs/REVIEWING.md), [SECURITY](../SECURITY.md) and [Security / Deployment issue #160](https://github.com/suvorovpravda/Pravda-Bot/issues/160). Closing this PR does not imply shipping approval.
+**Release policy:** See [REVIEWING](https://github.com/suvorovpravda/Pravda-Bot/blob/main/docs/REVIEWING.md), [SECURITY](https://github.com/suvorovpravda/Pravda-Bot/blob/main/SECURITY.md) and [Security / Deployment issue #160](https://github.com/suvorovpravda/Pravda-Bot/issues/160). Closing this PR does not imply shipping approval.
