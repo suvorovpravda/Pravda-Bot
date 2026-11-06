@@ -284,22 +284,35 @@ fn installed_profile_checks() -> Vec<Finding> {
     };
     let root = PathBuf::from(local).join("Pravda-Bot");
     let (database_state, database_detail) = match inspect_database(&root.join("pravda.db")) {
-        DatabaseHealth::Healthy => ("PASS", "Installed SQLite passed read-only integrity and schema checks"),
+        DatabaseHealth::Healthy => (
+            "PASS",
+            "Installed SQLite passed read-only integrity and schema checks",
+        ),
         DatabaseHealth::Missing => ("SKIP", "No installed SQLite database found yet"),
         DatabaseHealth::NotAFile => ("FAIL", "Installed SQLite path is not a regular file"),
-        DatabaseHealth::Unavailable => ("WARN", "Installed SQLite could not be inspected read-only"),
+        DatabaseHealth::Unavailable => {
+            ("WARN", "Installed SQLite could not be inspected read-only")
+        }
         DatabaseHealth::Corrupt => ("FAIL", "Installed SQLite integrity check failed"),
         DatabaseHealth::SchemaMissing => ("FAIL", "Installed SQLite lacks expected ticks schema"),
     };
     let (auth_state, auth_detail) = match fs::symlink_metadata(root.join("pravda_auth.json")) {
-        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => {
-            ("PASS", "Installed authentication record exists; credentials not read")
-        }
-        Ok(_) => ("WARN", "Installed authentication record is not a regular file"),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            ("SKIP", "Authentication has not been configured in the installed app")
-        }
-        Err(_) => ("WARN", "Installed authentication record metadata unavailable"),
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => (
+            "PASS",
+            "Installed authentication record exists; credentials not read",
+        ),
+        Ok(_) => (
+            "WARN",
+            "Installed authentication record is not a regular file",
+        ),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => (
+            "SKIP",
+            "Authentication has not been configured in the installed app",
+        ),
+        Err(_) => (
+            "WARN",
+            "Installed authentication record metadata unavailable",
+        ),
     };
     vec![
         finding("installed_sqlite_readonly", database_state, database_detail),
