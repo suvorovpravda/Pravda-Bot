@@ -1,3 +1,6 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+// Windows GUI release: do not allocate a lifetime-bound console window.
+// CLI/diagnostic tools remain separate Rust executables.
 mod consent;
 mod ipc;
 mod paper;
