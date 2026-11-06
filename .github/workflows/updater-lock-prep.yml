@@ -4,6 +4,9 @@ on:
     branches: [feat/tauri-updater-runtime-20261106]
 permissions:
   contents: read
+concurrency:
+  group: updater-lock-prep-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   resolve:
     name: Resolve temporary desktop lockfile

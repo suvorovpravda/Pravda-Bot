@@ -34,6 +34,17 @@ fn safe_config(config: &Config) -> bool {
     let Ok(text) = std::str::from_utf8(&decoded) else {
         return false;
     };
+    let mut lines = text.lines();
+    let Some(comment) = lines.next() else {
+        return false;
+    };
+    if !comment.starts_with("untrusted comment: ")
+        || comment.to_ascii_lowercase().contains("private")
+        || lines.next().is_none()
+        || lines.next().is_some()
+    {
+        return false;
+    }
     minisign_verify::PublicKey::decode(text).is_ok()
 }
 
@@ -115,6 +126,11 @@ mod tests {
         assert!(!configured_updater(Some(&value), false));
         value = valid_config();
         value["pubkey"] = json!("invalid-or-missing");
+        assert!(!configured_updater(Some(&value), false));
+        value = valid_config();
+        let mut decoded = STANDARD.decode(test_public_key()).unwrap();
+        decoded.extend_from_slice(b"unexpected-extra-line\n");
+        value["pubkey"] = json!(STANDARD.encode(decoded));
         assert!(!configured_updater(Some(&value), false));
     }
 
