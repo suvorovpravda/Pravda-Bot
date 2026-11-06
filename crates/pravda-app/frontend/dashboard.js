@@ -411,6 +411,18 @@ const translations = {
         });
     });
 
+    // Native Rust only reports the policy and observation state, not a
+    // fictitious WebSocket connection success. Do not infer reachability from
+    // empty quote maps or replace missing observations with sample prices.
+    function streamStatusMessage(state) {
+        const states = {
+            diagnostic_offline: "Diagnostic hors réseau : flux volontairement désactivés",
+            disabled_by_configuration: "Flux désactivés par la configuration Windows",
+            awaiting_first_observation: "Flux autorisés ; aucune cotation observée (connexion à vérifier)",
+            observations_stale: "Cotations reçues mais actuellement périmées"
+        };
+        return Object.hasOwn(states, state) ? states[state] : null;
+    }
     function renderMarket(payload) {
         latestMarket = payload;
         if (typeof checkLocalAlerts === "function") checkLocalAlerts();
@@ -431,7 +443,11 @@ const translations = {
             const label = liveQuoteCount === allQuotes.length ? t("allPricesFresh") : t("partialPrices");
             setStatus($("market-feed-status"), "live", label);
         } else {
-            setStatus($("market-feed-status"), "stale", payload.status === "waiting" ? t("startBot") : t("stalePrices"));
+            const reason = streamStatusMessage(payload.stream_state);
+            setStatus($("market-feed-status"),
+                payload.stream_state === "disabled_by_configuration" ||
+                payload.stream_state === "diagnostic_offline" ? "pending" : "stale",
+                reason || (allQuotes.length ? t("stalePrices") : t("unavailableFeed")));
         }
         updateTerminalWatchlist(rows);
         const tbody = $("crypto-quotes");
@@ -1480,9 +1496,14 @@ const translations = {
                 Object.entries(exchanges).map(([exchange,quote])=>({symbol,exchange,quote})));
             const live=rows.filter(row=>row.quote?.status==="live");
             setStatus($("bot-status"),live.length?"live":"stale",
-                live.length?`${live.length} cotation(s) fraîche(s)`:"Aucune cotation récente");
+                live.length?`${live.length} cotation(s) fraîche(s)`:
+                    streamStatusMessage(payload.stream_state) || "Aucune cotation récente");
             const container=$("crypto-data");container.replaceChildren();
-            if(!rows.length){container.textContent="Aucune cotation observée. Le mode hors ligne reste disponible.";return;}
+            if(!rows.length){
+                container.textContent = streamStatusMessage(payload.stream_state) ||
+                    "Aucune cotation observée. Le mode hors ligne reste disponible.";
+                return;
+            }
             const table=document.createElement("table");table.className="quote-table";
             const head=table.createTHead().insertRow();
             for(const label of ["Actif","Plateforme","Prix USDT","Fraîcheur"]){
