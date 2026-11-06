@@ -89,8 +89,8 @@ assert.match(js,/button\.dataset\.freshness = state;/,
   "Watchlist must label actual source freshness instead of claiming all ticks are live");
 assert.match(js,/document\.querySelector\('\.tab-btn\[data-tab="markets"\]'\)\?\.click\(\)/,
   "Clicking an asset must open its existing market chart");
-assert.match(auth,/window\.pravdaClearTerminalWatchlist\(\)/,
-  "Logout and reauthentication must remove old-session watchlist values");
+assert.equal((auth.match(/window\.pravdaClearMarketSession\(\)/g)||[]).length, 2,
+  "Both logout and reauthentication must clear the previous market session");
 assert.match(html,/class="grid terminal-market"/,
   "Market charts must remain a functional central workspace");
 assert.match(html,/class="grid terminal-extras"/,
@@ -368,5 +368,97 @@ for (const [name,url,target,good,bad,payload] of [
 }
 assert.equal(relocks,1,
   "No stale refresh completion may revoke or visually lock the active session");
+
+// Run the actual market-session clearing and language-change code. In
+// particular, a language change must not replay an older session's quotes.
+const marketNodes = new Map();
+const watchRows = ["BTC/USDT", "ETH/USDT", "SOL/USDT"].map(symbol => {
+  const parts = {".watch-price": {textContent:"session-A price"},
+    ".watch-freshness": {textContent:"Récent"}};
+  return {dataset:{watchSymbol:symbol,freshness:"live"},
+    querySelector: selector => parts[selector]};
+});
+const marketUi = {
+  window:{pravdaAuthGeneration:4},
+  document:{documentElement:{lang:"fr"},title:"",
+    querySelectorAll: selector => selector === ".watchlist-row" ? watchRows : []},
+  $: id => {
+    if (!marketNodes.has(id)) marketNodes.set(id,{value:"",textContent:"session-A",
+      replaceChildren(){this.textContent="";}});
+    return marketNodes.get(id);
+  },
+  t:key=>key,
+  setStatus:(target,state,label)=>{target.state=state;target.textContent=label;},
+  updateClock(){}, refreshAlerts(){}, refreshSources(){}, drawPriceChart(){},
+  marketRenders:[], fxRenders:[],
+  renderMarket(payload){this.marketRenders.push(payload);},
+  renderFx(payload){this.fxRenders.push(payload);},
+  fetchJson:async()=>{throw new Error("offline");}
+};
+// Function calls in the isolated VM are unbound; keep their observations in
+// the shared fixture, rather than depending on `this`.
+marketUi.renderMarket = payload => {
+  marketUi.marketRenders.push(payload);
+  marketUi.lastPayload = payload;
+  vm.runInContext("latestMarket=lastPayload",marketUi);
+};
+marketUi.renderFx = payload => marketUi.fxRenders.push(payload);
+vm.createContext(marketUi);
+vm.runInContext('let currentLanguage="fr", latestMarket={session:"A"}, ' +
+  'latestFx={session:"A"}, historicalPoints=[{price:123}];',marketUi);
+function runRealSection(startMarker,endMarker) {
+  const start=js.indexOf(startMarker), end=js.indexOf(endMarker,start+1);
+  assert.ok(start>=0 && end>start,"Missing actual frontend section: "+startMarker);
+  vm.runInContext(js.slice(start,end),marketUi,{filename:"desktop-market-session.js"});
+}
+runRealSection("    function applyLanguage()", "    const $ =");
+runRealSection("    function clearMarketSnapshot()", "    function updateTerminalWatchlist(");
+runRealSection("    let marketRequestNumber = 0;", "    // Auth boundaries invalidate");
+runRealSection("    async function refreshFx()", "    async function refreshFlows()");
+marketUi.window.pravdaClearMarketSession();
+marketUi.applyLanguage();
+assert.equal(marketUi.marketRenders.length,0,"Language change must not replay session A quotes");
+assert.equal(marketUi.fxRenders.length,0,"Language change must not replay session A FX");
+assert.equal(vm.runInContext("latestMarket",marketUi),null);
+assert.equal(vm.runInContext("latestFx",marketUi),null);
+assert.equal(vm.runInContext("historicalPoints.length",marketUi),0);
+assert.equal(marketUi.$("chart-price").textContent,"—");
+assert.equal(marketUi.$("crypto-quotes").textContent,"");
+for (const row of watchRows) {
+  assert.equal(row.dataset.freshness,"unavailable");
+  assert.equal(row.querySelector(".watch-price").textContent,"—");
+}
+vm.runInContext('latestMarket={session:"B"}; latestFx={session:"B"};',marketUi);
+marketUi.applyLanguage();
+assert.equal(marketUi.marketRenders.at(-1).session,"B","Current session quotes remain usable");
+assert.equal(marketUi.fxRenders.at(-1).session,"B","Current session FX remains usable");
+await marketUi.refreshMarket();
+const rendersAfterFailure=marketUi.marketRenders.length;
+marketUi.applyLanguage();
+assert.equal(marketUi.marketRenders.length,rendersAfterFailure,
+  "Language change must not relabel a failed market refresh as live");
+vm.runInContext('latestFx={session:"B"};',marketUi);
+await marketUi.refreshFx();
+assert.equal(vm.runInContext("latestFx",marketUi),null,
+  "A failed FX refresh must not leave old rates usable for conversions");
+const marketPending=[];
+marketUi.fetchJson=()=>new Promise((resolve,reject)=>marketPending.push({resolve,reject}));
+const oldMarket=marketUi.refreshMarket();
+const newMarket=marketUi.refreshMarket();
+marketPending[1].reject(new Error("offline"));
+await newMarket;
+const rendersBeforeOldSuccess=marketUi.marketRenders.length;
+marketPending[0].resolve({session:"older-success"});
+await oldMarket;
+assert.equal(marketUi.marketRenders.length,rendersBeforeOldSuccess,
+  "An older successful request must not undo a newer failed market refresh");
+const oldFailure=marketUi.refreshMarket();
+const newSuccess=marketUi.refreshMarket();
+marketPending[3].resolve({session:"newest"});
+await newSuccess;
+marketPending[2].reject(new Error("offline"));
+await oldFailure;
+assert.equal(vm.runInContext("latestMarket.session",marketUi),"newest",
+  "An older failure must not erase a newer successful market refresh");
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");

@@ -357,14 +357,32 @@ const translations = {
 
     // The compact watchlist mirrors the exact observed market snapshot used
     // for the central chart. No independent feed and never fabricated prices.
-    function clearTerminalWatchlist() {
+    function clearMarketSnapshot() {
+        // A failed request or an authentication transition must also clear
+        // the cached payload: applyLanguage() can otherwise replay its old
+        // freshness flags and make an unavailable quote look recent again.
+        latestMarket = null;
         document.querySelectorAll(".watchlist-row").forEach(button => {
             button.dataset.freshness = "unavailable";
             button.querySelector(".watch-price").textContent = "—";
             button.querySelector(".watch-freshness").textContent = "Indisponible";
         });
+        $("crypto-quotes").replaceChildren();
+        $("chart-price").textContent = "—";
+        $("chart-age").textContent = t("unavailableFeed");
+        setStatus($("market-feed-status"), "error", t("unavailableFeed"));
     }
-    window.pravdaClearTerminalWatchlist = clearTerminalWatchlist;
+    function clearMarketSession() {
+        clearMarketSnapshot();
+        latestFx = null;
+        historicalPoints = [];
+        $("fx-rates").textContent = t("fxFailure");
+        $("fx-asof").textContent = "—";
+        $("history-status").textContent = t("unavailableFeed");
+        setStatus($("fx-status"), "error", t("fxUnavailable"));
+        drawPriceChart();
+    }
+    window.pravdaClearMarketSession = clearMarketSession;
     function updateTerminalWatchlist(rows) {
         for (const row of rows) {
             const button = $("terminal-watchlist")
@@ -764,20 +782,24 @@ const translations = {
             throw error;
         }
     }
+    let marketRequestNumber = 0;
+    let lastSettledMarketRequest = 0;
     async function refreshMarket() {
         const requestGeneration = window.pravdaAuthGeneration;
+        const requestNumber = ++marketRequestNumber;
         try {
-            renderMarket(await fetchJson("/api/market"));
+            const payload = await fetchJson("/api/market");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestNumber < lastSettledMarketRequest) return;
+            lastSettledMarketRequest = requestNumber;
+            renderMarket(payload);
             // History has a separate, slower polling cadence to avoid repeated SQLite reads.
         }
         catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
-            setStatus($("market-feed-status"), "error", t("unavailableFeed"));
-            $("chart-age").textContent = t("unknownError");
-            document.querySelectorAll(".watchlist-row").forEach(button => {
-                button.dataset.freshness = "unavailable";
-                button.querySelector(".watch-freshness").textContent = "Source indisponible";
-            });
+            if (requestNumber < lastSettledMarketRequest) return;
+            lastSettledMarketRequest = requestNumber;
+            clearMarketSnapshot();
         }
     }
     // Auth boundaries invalidate pending IPC results and any cached consent UI.
@@ -1306,8 +1328,14 @@ const translations = {
         try { renderFx(await fetchJson("/api/fx")); }
         catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
+            // Old FX rates must not be reused for conversions or replayed by
+            // a later language change when the current request has failed.
+            latestFx = null;
             setStatus($("fx-status"), "error", t("fxUnavailable"));
             $("fx-rates").textContent = t("fxFailure");
+            $("fx-asof").textContent = "—";
+            clearMarketSnapshot();
+            drawPriceChart();
         }
     }
     async function refreshFlows() {
