@@ -4,7 +4,7 @@ use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::time::Duration;
 use tokio::sync::broadcast;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
 use tracing::{error, info, warn};
 
@@ -17,14 +17,16 @@ pub struct BinanceClient {
 impl BinanceClient {
     pub fn new(symbols: Vec<Symbol>, tx: broadcast::Sender<Tick>) -> Self {
         Self {
-            url: "wss://stream.binance.com:9443/ws".to_string(),
+            url: "wss://stream.binance.com:443/ws".to_string(),
             symbols,
             tx,
         }
     }
 
     pub async fn connect(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let (ws_stream, _) = connect_async(&self.url).await?;
+        // Bound DNS/TLS/WebSocket handshake; a stalled network must never
+        // silently pin the initial connection attempt forever.
+        let (ws_stream, _) = timeout(Duration::from_secs(15), connect_async(&self.url)).await??;
         info!("Connected to Binance WebSocket");
 
         let (mut write, mut read) = ws_stream.split();
@@ -46,7 +48,14 @@ impl BinanceClient {
             info!("Subscribed to {} ticker", symbol);
         }
 
-        while let Some(msg) = read.next().await {
+        loop {
+            // A half-open socket must reconnect rather than leaving the
+            // dashboard forever in an unobservable "waiting" state.
+            let msg = match timeout(Duration::from_secs(60), read.next()).await {
+                Ok(Some(message)) => message,
+                Ok(None) => break,
+                Err(_) => return Err("public_market_websocket_idle_timeout".into()),
+            };
             match msg {
                 Ok(Message::Text(text)) => {
                     if let Ok(tick) = self.parse_ticker_message(&text) {
@@ -54,10 +63,13 @@ impl BinanceClient {
                         let _ = self.tx.send(tick);
                     }
                 }
-                Ok(Message::Ping(_)) => {}
+                Ok(Message::Ping(payload)) => {
+                    write.send(Message::Pong(payload)).await?;
+                }
+                Ok(Message::Close(_)) => break,
                 Err(e) => {
                     error!("WebSocket error: {}", e);
-                    break;
+                    return Err(e.into());
                 }
                 _ => {}
             }
@@ -113,7 +125,6 @@ impl BinanceClient {
             match self.connect().await {
                 Ok(()) => {
                     warn!("Binance WebSocket disconnected");
-                    delay = Duration::from_secs(1);
                 }
                 Err(e) => {
                     error!("Binance connection failed: {}", e);
