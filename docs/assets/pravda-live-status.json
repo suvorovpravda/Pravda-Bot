@@ -1,0 +1,18 @@
+{
+  "schema": "PRAVDA-STATUS-v1",
+  "initial_state": "AWAITING_FIRST_SYNC",
+  "source_sha": null,
+  "latest_evidence_at": null,
+  "historical": null,
+  "required_checks": {
+    "passed": 0,
+    "total": 3
+  },
+  "workflows": [],
+  "open_prs": null,
+  "open_issues": null,
+  "production": "NO-GO",
+  "trading_live": "OFF",
+  "signed_updater": "OFF",
+  "note": "Preview only; the scheduled refresh is not active until merged to the default branch."
+}

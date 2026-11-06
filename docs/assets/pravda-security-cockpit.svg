@@ -1,0 +1,113 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+<title id="title">Pravda Security — centre de contrôle des risques et frontières de confiance</title><desc id="desc">Dashboard de sécurité violet et rose avec indicateurs historiques 50% IPC, 75% SQLite, 60% CI et 0% signature, risque RustSec et décision de déploiement NO-GO.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#121A35"/><stop offset=".53" stop-color="#090E23"/><stop offset="1" stop-color="#120D29"/></linearGradient>
+<radialGradient id="aura" cx=".35" cy=".3" r=".8"><stop stop-color="#8251CC" stop-opacity=".24"/><stop offset="1" stop-color="#8251CC" stop-opacity="0"/></radialGradient>
+<linearGradient id="linegrad" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#47DCFB"/><stop offset=".45" stop-color="#AF78FD"/><stop offset="1" stop-color="#FF5196"/></linearGradient>
+<linearGradient id="pinkgrad" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#8B78FF"/><stop offset="1" stop-color="#FF558C"/></linearGradient>
+<filter id="glowSubtle" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur in="SourceGraphic" stdDeviation="1.7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<clipPath id="chartclip"><rect x="600" y="594" width="565" height="173"/></clipPath>
+</defs>
+<rect x="0" y="0" width="1600" height="900" fill="url(#bg)"/>
+<rect x="0" y="0" width="1600" height="900" fill="url(#aura)"/>
+<path d="M0 140H1600 M0 840H1600" stroke="#33395D" stroke-width="1" opacity=".8"/>
+<g opacity=".25"><line x1="0" y1="95" x2="1600" y2="95" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="150" x2="1600" y2="150" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="205" x2="1600" y2="205" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="260" x2="1600" y2="260" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="315" x2="1600" y2="315" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="370" x2="1600" y2="370" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="425" x2="1600" y2="425" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="480" x2="1600" y2="480" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="535" x2="1600" y2="535" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="590" x2="1600" y2="590" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="645" x2="1600" y2="645" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="700" x2="1600" y2="700" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="755" x2="1600" y2="755" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="810" x2="1600" y2="810" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/></g>
+
+<rect x="44" y="32" width="55" height="55" rx="17" fill="#1E2545" stroke="#8474F0" stroke-width="1.7"/><circle cx="71" cy="60" r="17" fill="none" stroke="#9F83FF" stroke-width="3"/><circle cx="71" cy="60" r="6" fill="#FF4B95" stroke="none" stroke-width="0"/>
+<text x="115" y="60" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="36" font-weight="800" letter-spacing="2">PRAVDA</text><text x="292" y="60" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="23" font-weight="700" letter-spacing="2.7"> / SECURITY</text>
+<text x="116" y="89" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" letter-spacing="0">TRUST BOUNDARIES  •  RELEASE INTEGRITY  •  ZERO TRUST</text>
+<rect x="1229" y="42" width="134" height="32" rx="13" fill="#132E3E" stroke="#49DFFA" stroke-width="1"/><circle cx="1243" cy="58" r="4" fill="#49DFFA" stroke="#49DFFA" stroke-width="0"/><text x="1256" y="64" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">WINDOWS X64</text><rect x="1375" y="42" width="181" height="32" rx="13" fill="#292047" stroke="#9F83FF" stroke-width="1"/><circle cx="1389" cy="58" r="4" fill="#9F83FF" stroke="#9F83FF" stroke-width="0"/><text x="1402" y="64" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">RUST + TAURI 2</text>
+<line x1="44" y1="119" x2="1556" y2="119" stroke="#3A4269" stroke-width="1" />
+
+<rect x="44" y="153" width="505" height="345" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="71" y="191" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">SIGNING / ENTERPRISE</text>
+<circle cx="204" cy="327" r="92" fill="none" stroke="#273052" stroke-width="20"/>
+<circle cx="204" cy="327" r="62" fill="#121830" stroke="#576087" stroke-width="1"/>
+<text x="150" y="339" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="66" font-weight="800" letter-spacing="0">0%</text>
+<text x="139" y="371" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">0 / 4 JALONS</text>
+<text x="340" y="252" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="0">CHAÎNE DE CONFIANCE</text>
+<text x="340" y="288" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="700" letter-spacing="0">Authenticode</text>
+<text x="340" y="322" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" letter-spacing="0">Horodatage</text>
+<text x="340" y="356" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" letter-spacing="0">Vérification</text>
+<text x="340" y="390" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="400" letter-spacing="0">Rollback</text>
+<line x1="338" y1="410" x2="513" y2="410" stroke="#434C77" stroke-width="1" />
+<rect x="71" y="448" width="215" height="32" rx="13" fill="#35233D" stroke="#FF607C" stroke-width="1"/><circle cx="85" cy="464" r="4" fill="#FF607C" stroke="#FF607C" stroke-width="0"/><text x="97" y="470" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">HISTORIQUE / NON CERTIFIÉ</text>
+<rect x="569" y="153" width="643" height="345" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="598" y="191" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">CONTROL SURFACES / BASELINE HISTORIQUE</text>
+<text x="1040" y="191" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="0">PAS UN SCORE GLOBAL</text>
+<circle cx="653" cy="327" r="53" fill="none" stroke="#273052" stroke-width="14"/><circle cx="653" cy="327" r="53" fill="none" stroke="#9F83FF" stroke-width="14" stroke-linecap="round" stroke-dasharray="166.50 166.50" transform="rotate(-90 653 327)" filter="url(#glowSubtle)"/>
+<text x="629" y="336" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800" letter-spacing="0">50%</text>
+<text x="615" y="427" fill="#9F83FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="750" letter-spacing="0">IPC</text>
+<text x="629" y="456" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" letter-spacing="0">2 / 4</text>
+<circle cx="808" cy="327" r="53" fill="none" stroke="#273052" stroke-width="14"/><circle cx="808" cy="327" r="53" fill="none" stroke="#49DFFA" stroke-width="14" stroke-linecap="round" stroke-dasharray="249.76 83.25" transform="rotate(-90 808 327)" filter="url(#glowSubtle)"/>
+<text x="784" y="336" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800" letter-spacing="0">75%</text>
+<text x="770" y="427" fill="#49DFFA" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="750" letter-spacing="0">SQLITE</text>
+<text x="784" y="456" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" letter-spacing="0">3 / 4</text>
+<circle cx="965" cy="327" r="53" fill="none" stroke="#273052" stroke-width="14"/><circle cx="965" cy="327" r="53" fill="none" stroke="#FF4B95" stroke-width="14" stroke-linecap="round" stroke-dasharray="199.81 133.20" transform="rotate(-90 965 327)" filter="url(#glowSubtle)"/>
+<text x="941" y="336" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800" letter-spacing="0">60%</text>
+<text x="927" y="427" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="750" letter-spacing="0">CI</text>
+<text x="941" y="456" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" letter-spacing="0">3 / 5</text>
+<circle cx="1120" cy="327" r="53" fill="none" stroke="#273052" stroke-width="14"/>
+<text x="1096" y="336" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="30" font-weight="800" letter-spacing="0">0%</text>
+<text x="1082" y="427" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="750" letter-spacing="0">SIGNING</text>
+<text x="1096" y="456" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" letter-spacing="0">0 / 4</text>
+<text x="601" y="485" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="550" letter-spacing="0">PROGRESSION DE JALONS — PAS VALIDATION SÉCURITÉ</text>
+<rect x="1231" y="153" width="325" height="345" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="1255" y="190" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">SECURITY / DECISION</text>
+<rect x="1255" y="209" width="277" height="99" rx="19" fill="#361B3B" stroke="#FF607C" stroke-width="1.6"/>
+<text x="1272" y="261" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="45" font-weight="850" letter-spacing="1.4">NO-GO</text>
+<text x="1277" y="288" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="720" letter-spacing="1">RELEASE PRODUCTION</text>
+<circle cx="1264" cy="342" r="5" fill="#FF607C" stroke="#FF607C" stroke-width="0"/>
+<text x="1279" y="347" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">GUI installée</text>
+<text x="1279" y="366" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="750" letter-spacing="0">BLOQUÉ</text>
+<circle cx="1264" cy="391" r="5" fill="#FFCC79" stroke="#FFCC79" stroke-width="0"/>
+<text x="1279" y="396" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">RUSTSEC / DESKTOP</text>
+<text x="1279" y="415" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="750" letter-spacing="0">À TRAITER</text>
+<circle cx="1264" cy="440" r="5" fill="#FF4B95" stroke="#FF4B95" stroke-width="0"/>
+<text x="1279" y="445" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">UPDATER SIGNÉ</text>
+<text x="1279" y="464" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="750" letter-spacing="0">OFF</text>
+<rect x="44" y="520" width="505" height="313" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="71" y="560" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">TRUST BOUNDARIES / FLUX AUTORISÉS</text>
+<rect x="70" y="595" width="190" height="66" rx="15" fill="#1B2441" stroke="#9F83FF" stroke-width="1.5"/><rect x="81" y="607" width="6" height="26" rx="3" fill="#9F83FF" stroke="none" stroke-width="0"/><text x="97" y="619" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="0">WEBVIEW2</text><text x="97" y="641" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="550" letter-spacing="0">UI locale</text>
+<rect x="332" y="595" width="190" height="66" rx="15" fill="#1B2441" stroke="#49DFFA" stroke-width="1.5"/><rect x="343" y="607" width="6" height="26" rx="3" fill="#49DFFA" stroke="none" stroke-width="0"/><text x="359" y="619" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="0">RUST IPC</text><text x="359" y="641" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="550" letter-spacing="0">Session validée</text>
+<rect x="70" y="732" width="190" height="66" rx="15" fill="#1B2441" stroke="#FF4B95" stroke-width="1.5"/><rect x="81" y="744" width="6" height="26" rx="3" fill="#FF4B95" stroke="none" stroke-width="0"/><text x="97" y="756" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="0">PUBLIC WSS</text><text x="97" y="778" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="550" letter-spacing="0">Flux observés</text>
+<rect x="332" y="732" width="190" height="66" rx="15" fill="#1B2441" stroke="#65DEBB" stroke-width="1.5"/><rect x="343" y="744" width="6" height="26" rx="3" fill="#65DEBB" stroke="none" stroke-width="0"/><text x="359" y="756" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="700" letter-spacing="0">SQLITE / WAL</text><text x="359" y="778" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="550" letter-spacing="0">Stockage local</text>
+<path d="M260 628 H331 M425 661 V731 M165 661 V731 M260 766 H331" stroke="url(#linegrad)" stroke-width="3" stroke-dasharray="6 9" fill="none"/>
+<circle cx="295" cy="628" r="5" fill="#49DFFA" stroke="none" stroke-width="0"/>
+<circle cx="425" cy="694" r="5" fill="#9F83FF" stroke="none" stroke-width="0"/>
+<text x="73" y="692" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="500" letter-spacing="0">Accès refusé sans autorisation native</text>
+<rect x="569" y="520" width="643" height="313" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="598" y="560" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">GO / NO-GO  ·  TESTS BLOQUANTS</text>
+<rect x="596" y="578" width="587" height="47" rx="12" fill="#1A203B" stroke="#343B61" stroke-width="1"/>
+<circle cx="613" cy="602" r="5" fill="#FF607C" stroke="#FF607C" stroke-width="0"/>
+<text x="628" y="606" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">01  Dashboard Windows / première session</text>
+<text x="1032" y="606" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="750" letter-spacing="0">ÉCHEC E2E INSTALLÉ</text>
+<rect x="596" y="632" width="587" height="47" rx="12" fill="#171D37" stroke="#343B61" stroke-width="1"/>
+<circle cx="613" cy="656" r="5" fill="#FFCC79" stroke="#FFCC79" stroke-width="0"/>
+<text x="628" y="660" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">02  Dépendances desktop / h2 0.3</text>
+<text x="1032" y="660" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="750" letter-spacing="0">AVIS RUSTSEC</text>
+<rect x="596" y="686" width="587" height="47" rx="12" fill="#1A203B" stroke="#343B61" stroke-width="1"/>
+<circle cx="613" cy="710" r="5" fill="#9F83FF" stroke="#9F83FF" stroke-width="0"/>
+<text x="628" y="714" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">03  Installation hors réseau vierge</text>
+<text x="1032" y="714" fill="#9F83FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="750" letter-spacing="0">NON PROUVÉ</text>
+<rect x="596" y="740" width="587" height="47" rx="12" fill="#171D37" stroke="#343B61" stroke-width="1"/>
+<circle cx="613" cy="764" r="5" fill="#FF4B95" stroke="#FF4B95" stroke-width="0"/>
+<text x="628" y="768" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">04  Signature et mise à jour</text>
+<text x="1032" y="768" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="750" letter-spacing="0">NON HOMOLOGUÉ</text>
+<text x="599" y="811" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="500" letter-spacing="0">Un check PASS ≠ une distribution certifiée.</text>
+<rect x="1231" y="520" width="325" height="313" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="1255" y="560" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">INVARIANTS / SAFETY</text>
+<text x="1257" y="608" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="680" letter-spacing="0">TRADING RÉEL</text>
+<text x="1257" y="630" fill="#65DEBB" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="0">DÉSACTIVÉ</text>
+<line x1="1255" y1="639" x2="1530" y2="639" stroke="#343B61" stroke-width="1" />
+<text x="1257" y="659" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="680" letter-spacing="0">AUTO-UPDATER</text>
+<text x="1257" y="681" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="0">DÉSACTIVÉ</text>
+<line x1="1255" y1="690" x2="1530" y2="690" stroke="#343B61" stroke-width="1" />
+<text x="1257" y="710" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="680" letter-spacing="0">RAPPORTS DOCTOR</text>
+<text x="1257" y="732" fill="#49DFFA" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="0">LOCAUX</text>
+<line x1="1255" y1="741" x2="1530" y2="741" stroke="#343B61" stroke-width="1" />
+<text x="1257" y="761" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="680" letter-spacing="0">DONNÉES FACTICES</text>
+<text x="1257" y="783" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="800" letter-spacing="0">MARQUÉES TEST</text>
+<text x="48" y="871" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="500" letter-spacing="0">SOURCE : GUIDE CENTRAL + ISSUE #160  ·  JALONS HISTORIQUES / DÉCISION NO-GO</text>
+<text x="1360" y="871" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="1.2">PRAVDA / 2026</text>
+</svg>

@@ -1,0 +1,138 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+<title id="title">Pravda Bot — centre de contrôle et progression historique</title><desc id="desc">Dashboard bleu nuit avec anneaux P0 61%, P1 42%, P2 13%, neuf barres de progression historiques, décision de publication NO-GO, aucun cours de marché simulé.</desc>
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#121A35"/><stop offset=".53" stop-color="#090E23"/><stop offset="1" stop-color="#120D29"/></linearGradient>
+<radialGradient id="aura" cx=".35" cy=".3" r=".8"><stop stop-color="#8251CC" stop-opacity=".24"/><stop offset="1" stop-color="#8251CC" stop-opacity="0"/></radialGradient>
+<linearGradient id="linegrad" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#47DCFB"/><stop offset=".45" stop-color="#AF78FD"/><stop offset="1" stop-color="#FF5196"/></linearGradient>
+<linearGradient id="pinkgrad" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#8B78FF"/><stop offset="1" stop-color="#FF558C"/></linearGradient>
+<filter id="glowSubtle" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur in="SourceGraphic" stdDeviation="1.7" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<clipPath id="chartclip"><rect x="600" y="594" width="565" height="173"/></clipPath>
+</defs>
+<rect x="0" y="0" width="1600" height="900" fill="url(#bg)"/>
+<rect x="0" y="0" width="1600" height="900" fill="url(#aura)"/>
+<path d="M0 140H1600 M0 840H1600" stroke="#33395D" stroke-width="1" opacity=".8"/>
+<g opacity=".25"><line x1="0" y1="95" x2="1600" y2="95" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="150" x2="1600" y2="150" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="205" x2="1600" y2="205" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="260" x2="1600" y2="260" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="315" x2="1600" y2="315" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="370" x2="1600" y2="370" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="425" x2="1600" y2="425" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="480" x2="1600" y2="480" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="535" x2="1600" y2="535" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="590" x2="1600" y2="590" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="645" x2="1600" y2="645" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="700" x2="1600" y2="700" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="755" x2="1600" y2="755" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/><line x1="0" y1="810" x2="1600" y2="810" stroke="#24294A" stroke-width="1" stroke-dasharray="2 11"/></g>
+
+<rect x="44" y="32" width="55" height="55" rx="17" fill="#1E2545" stroke="#8474F0" stroke-width="1.7"/><circle cx="71" cy="60" r="17" fill="none" stroke="#9F83FF" stroke-width="3"/><circle cx="71" cy="60" r="6" fill="#FF4B95" stroke="none" stroke-width="0"/>
+<text x="115" y="60" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="36" font-weight="800" letter-spacing="2">PRAVDA</text><text x="292" y="60" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="23" font-weight="700" letter-spacing="2.7"> / CONTROL</text>
+<text x="116" y="89" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="500" letter-spacing="0">MARKET INTELLIGENCE  •  SYSTEM OBSERVABILITY  •  RISK</text>
+<rect x="1229" y="42" width="134" height="32" rx="13" fill="#132E3E" stroke="#49DFFA" stroke-width="1"/><circle cx="1243" cy="58" r="4" fill="#49DFFA" stroke="#49DFFA" stroke-width="0"/><text x="1256" y="64" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">WINDOWS X64</text><rect x="1375" y="42" width="181" height="32" rx="13" fill="#292047" stroke="#9F83FF" stroke-width="1"/><circle cx="1389" cy="58" r="4" fill="#9F83FF" stroke="#9F83FF" stroke-width="0"/><text x="1402" y="64" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">RUST + TAURI 2</text>
+<line x1="44" y1="119" x2="1556" y2="119" stroke="#3A4269" stroke-width="1" />
+<rect x="44" y="153" width="505" height="345" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="71" y="191" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">OVERVIEW / JALONS HISTORIQUES</text>
+<circle cx="205" cy="333" r="93" fill="none" stroke="#282F51" stroke-width="22"/><circle cx="205" cy="333" r="93" fill="none" stroke="#9F83FF" stroke-width="22" stroke-linecap="round" stroke-dasharray="274.64 309.70" transform="rotate(-90 205 333)" filter="url(#glowSubtle)"/>
+<circle cx="205" cy="333" r="66" fill="#141B36" stroke="#59618E" stroke-width="1"/>
+<text x="153" y="339" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="55" font-weight="800" letter-spacing="0">47%</text>
+<text x="154" y="370" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650" letter-spacing="0">20 / 43 JALONS</text>
+<text x="338" y="271" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="19" font-weight="750" letter-spacing="0">BASELINE TECHNIQUE</text>
+<text x="338" y="310" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="400" letter-spacing="0">9 domaines P0–P2</text>
+<line x1="338" y1="331" x2="515" y2="331" stroke="#343B61" stroke-width="1" />
+<text x="338" y="356" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="17" font-weight="750" letter-spacing="0">47% ≠ version finie</text>
+<text x="338" y="386" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" letter-spacing="0">Progression historique</text>
+<text x="338" y="411" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="400" letter-spacing="0">Pas une note de sécurité</text>
+<rect x="72" y="447" width="212" height="32" rx="13" fill="#142C40" stroke="#49DFFA" stroke-width="1"/><circle cx="86" cy="463" r="4" fill="#49DFFA" stroke="#49DFFA" stroke-width="0"/><text x="99" y="469" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">SOURCE : GUIDE CENTRAL</text>
+<rect x="569" y="153" width="643" height="345" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="598" y="191" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">PROGRESSION / DOMAINES</text>
+<text x="1056" y="191" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="700" letter-spacing="1.7">HISTORIQUE</text>
+<text x="598" y="227" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Python → Rust</text>
+<rect x="834" y="218" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="218" width="279" height="8" rx="4" fill="#65DEBB" stroke="none" stroke-width="0"/>
+<text x="1131" y="227" fill="#65DEBB" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">100%</text>
+<text x="598" y="256.5" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Sécurité IPC</text>
+<rect x="834" y="247.5" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="247.5" width="139.5" height="8" rx="4" fill="#5A7BFF" stroke="none" stroke-width="0"/>
+<text x="1131" y="256.5" fill="#5A7BFF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">50%</text>
+<text x="598" y="286" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Parité Rust</text>
+<rect x="834" y="277" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="277" width="106.02" height="8" rx="4" fill="#9F83FF" stroke="none" stroke-width="0"/>
+<text x="1131" y="286" fill="#9F83FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">38%</text>
+<text x="598" y="315.5" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">CI / gouvernance</text>
+<rect x="834" y="306.5" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="306.5" width="167.4" height="8" rx="4" fill="#49DFFA" stroke="none" stroke-width="0"/>
+<text x="1131" y="315.5" fill="#49DFFA" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">60%</text>
+<text x="598" y="345" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">SQLite</text>
+<rect x="834" y="336" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="336" width="209.25" height="8" rx="4" fill="#65DEBB" stroke="none" stroke-width="0"/>
+<text x="1131" y="345" fill="#65DEBB" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">75%</text>
+<text x="598" y="374.5" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Interface desktop</text>
+<rect x="834" y="365.5" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="365.5" width="139.5" height="8" rx="4" fill="#FF4B95" stroke="none" stroke-width="0"/>
+<text x="1131" y="374.5" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">50%</text>
+<text x="598" y="404" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Enterprise</text>
+<rect x="834" y="395" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/>
+<text x="1131" y="404" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">0%</text>
+<text x="598" y="433.5" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Observabilité</text>
+<rect x="834" y="424.5" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/><rect x="834" y="424.5" width="69.75" height="8" rx="4" fill="#FFCC79" stroke="none" stroke-width="0"/>
+<text x="1131" y="433.5" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">25%</text>
+<text x="598" y="463" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" letter-spacing="0">Modules futurs</text>
+<rect x="834" y="454" width="279" height="8" rx="4" fill="#283052" stroke="none" stroke-width="0"/>
+<text x="1131" y="463" fill="#7380A8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" letter-spacing="0">0%</text>
+<rect x="1231" y="153" width="325" height="345" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="1255" y="190" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">RELEASE / DECISION</text>
+<rect x="1255" y="211" width="277" height="95" rx="19" fill="#331A38" stroke="#FF607C" stroke-width="1.5"/>
+<text x="1276" y="261" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="46" font-weight="800" letter-spacing="1.4">NO-GO</text>
+<text x="1279" y="288" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" letter-spacing="2">PRODUCTION</text>
+<text x="1255" y="334" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">Interface installée</text>
+<rect x="1416" y="316" width="117" height="32" rx="13" fill="#352B33" stroke="#FFCC79" stroke-width="1"/><circle cx="1430" cy="332" r="4" fill="#FFCC79" stroke="#FFCC79" stroke-width="0"/><text x="1443" y="338" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">À VALIDER</text>
+<text x="1255" y="385" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">Flux publics réels</text>
+<rect x="1416" y="367" width="117" height="32" rx="13" fill="#33243C" stroke="#FF4B95" stroke-width="1"/><circle cx="1430" cy="383" r="4" fill="#FF4B95" stroke="#FF4B95" stroke-width="0"/><text x="1443" y="389" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">NON PROUVÉ</text>
+<text x="1255" y="436" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="16" font-weight="650" letter-spacing="0">Trading réel</text>
+<rect x="1416" y="418" width="117" height="32" rx="13" fill="#17383A" stroke="#65DEBB" stroke-width="1"/><circle cx="1430" cy="434" r="4" fill="#65DEBB" stroke="#65DEBB" stroke-width="0"/><text x="1443" y="440" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="0">DÉSACTIVÉ</text>
+<rect x="44" y="520" width="505" height="313" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="71" y="560" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">PRIORITÉS / MOYENNE PONDÉRÉE</text>
+<circle cx="146" cy="694" r="58" fill="none" stroke="#282F51" stroke-width="13"/><circle cx="146" cy="694" r="58" fill="none" stroke="#49DFFA" stroke-width="13" stroke-linecap="round" stroke-dasharray="222.30 142.13" transform="rotate(-90 146 694)" filter="url(#glowSubtle)"/>
+<text x="112" y="705" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="29" font-weight="800" letter-spacing="0">61%</text>
+<text x="133" y="790" fill="#49DFFA" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="750" letter-spacing="0">P0</text>
+<text x="118" y="814" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="600" letter-spacing="0">14 / 23</text>
+<circle cx="297" cy="694" r="58" fill="none" stroke="#282F51" stroke-width="13"/><circle cx="297" cy="694" r="58" fill="none" stroke="#FF4B95" stroke-width="13" stroke-linecap="round" stroke-dasharray="153.06 211.37" transform="rotate(-90 297 694)" filter="url(#glowSubtle)"/>
+<text x="263" y="705" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="29" font-weight="800" letter-spacing="0">42%</text>
+<text x="284" y="790" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="750" letter-spacing="0">P1</text>
+<text x="269" y="814" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="600" letter-spacing="0">5 / 12</text>
+<circle cx="448" cy="694" r="58" fill="none" stroke="#282F51" stroke-width="13"/><circle cx="448" cy="694" r="58" fill="none" stroke="#9F83FF" stroke-width="13" stroke-linecap="round" stroke-dasharray="47.38 317.05" transform="rotate(-90 448 694)" filter="url(#glowSubtle)"/>
+<text x="414" y="705" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="29" font-weight="800" letter-spacing="0">13%</text>
+<text x="435" y="790" fill="#9F83FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="18" font-weight="750" letter-spacing="0">P2</text>
+<text x="420" y="814" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="600" letter-spacing="0">1 / 8</text>
+<rect x="569" y="520" width="643" height="313" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="598" y="560" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">JALONS PAR DOMAINE / 0–100%</text>
+<text x="997" y="560" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="0">PAS DES PRIX LIVE</text>
+<line x1="608" y1="769" x2="1178" y2="769" stroke="#343B62" stroke-width="1" stroke-dasharray="3 10"/>
+<text x="573" y="773" fill="#7380A8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="500" letter-spacing="0">0</text>
+<line x1="608" y1="727.75" x2="1178" y2="727.75" stroke="#343B62" stroke-width="1" stroke-dasharray="3 10"/>
+<text x="573" y="731.75" fill="#7380A8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="500" letter-spacing="0">25</text>
+<line x1="608" y1="686.5" x2="1178" y2="686.5" stroke="#343B62" stroke-width="1" stroke-dasharray="3 10"/>
+<text x="573" y="690.5" fill="#7380A8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="500" letter-spacing="0">50</text>
+<line x1="608" y1="645.25" x2="1178" y2="645.25" stroke="#343B62" stroke-width="1" stroke-dasharray="3 10"/>
+<text x="573" y="649.25" fill="#7380A8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="500" letter-spacing="0">75</text>
+<line x1="608" y1="604" x2="1178" y2="604" stroke="#343B62" stroke-width="1" stroke-dasharray="3 10"/>
+<text x="573" y="608" fill="#7380A8" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="500" letter-spacing="0">100</text>
+<path d="M620,604 L689.5,686.5 L759,706.3 L828.5,670 L898,645.25 L967.5,686.5 L1037,769 L1106.5,727.75 L1176,769" stroke="url(#linegrad)" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round" filter="url(#glowSubtle)"/>
+<circle cx="620" cy="604" r="6" fill="#65DEBB" stroke="#080C1D" stroke-width="2.5"/>
+<text x="610" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">01</text>
+<circle cx="689.5" cy="686.5" r="6" fill="#5A7BFF" stroke="#080C1D" stroke-width="2.5"/>
+<text x="679.5" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">02</text>
+<circle cx="759" cy="706.3" r="6" fill="#9F83FF" stroke="#080C1D" stroke-width="2.5"/>
+<text x="749" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">03</text>
+<circle cx="828.5" cy="670" r="6" fill="#49DFFA" stroke="#080C1D" stroke-width="2.5"/>
+<text x="818.5" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">04</text>
+<circle cx="898" cy="645.25" r="6" fill="#65DEBB" stroke="#080C1D" stroke-width="2.5"/>
+<text x="888" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">05</text>
+<circle cx="967.5" cy="686.5" r="6" fill="#FF4B95" stroke="#080C1D" stroke-width="2.5"/>
+<text x="957.5" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">06</text>
+<circle cx="1037" cy="769" r="6" fill="#FF607C" stroke="#080C1D" stroke-width="2.5"/>
+<text x="1027" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">07</text>
+<circle cx="1106.5" cy="727.75" r="6" fill="#FFCC79" stroke="#080C1D" stroke-width="2.5"/>
+<text x="1096.5" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">08</text>
+<circle cx="1176" cy="769" r="6" fill="#7380A8" stroke="#080C1D" stroke-width="2.5"/>
+<text x="1166" y="805" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="12" font-weight="600" letter-spacing="0">09</text>
+<rect x="1231" y="520" width="325" height="313" rx="22" fill="#12182D" stroke="#343B61" stroke-width="1"/>
+<text x="1255" y="560" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="14" font-weight="700" letter-spacing="1.7">PROCESS / BARRIÈRES</text>
+<circle cx="1263" cy="591" r="5" fill="#FFCC79" stroke="#FFCC79" stroke-width="0"/>
+<text x="1278" y="597" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650" letter-spacing="0">Authentification GUI</text>
+<text x="1278" y="617" fill="#FFCC79" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="0">TEST E2E</text>
+<line x1="1255" y1="627" x2="1532" y2="627" stroke="#343B61" stroke-width="1" />
+<circle cx="1263" cy="645" r="5" fill="#FF607C" stroke="#FF607C" stroke-width="0"/>
+<text x="1278" y="651" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650" letter-spacing="0">Signature Enterprise</text>
+<text x="1278" y="671" fill="#FF607C" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="0">NO-GO</text>
+<line x1="1255" y1="681" x2="1532" y2="681" stroke="#343B61" stroke-width="1" />
+<circle cx="1263" cy="699" r="5" fill="#FF4B95" stroke="#FF4B95" stroke-width="0"/>
+<text x="1278" y="705" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650" letter-spacing="0">Auto-update signé</text>
+<text x="1278" y="725" fill="#FF4B95" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="0">OFF</text>
+<line x1="1255" y1="735" x2="1532" y2="735" stroke="#343B61" stroke-width="1" />
+<circle cx="1263" cy="753" r="5" fill="#49DFFA" stroke="#49DFFA" stroke-width="0"/>
+<text x="1278" y="759" fill="#F4F6FF" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="15" font-weight="650" letter-spacing="0">Diagnostic local</text>
+<text x="1278" y="779" fill="#49DFFA" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="700" letter-spacing="0">EN TEST</text>
+<text x="48" y="871" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="500" letter-spacing="0">SOURCE : docs/PRAVDA-GUIDE.md · 9 domaines historiques · AUCUN CHIFFRE DE MARCHÉ SIMULÉ</text><text x="1360" y="871" fill="#9FAACE" font-family="Inter,Segoe UI,Arial,sans-serif" font-size="13" font-weight="650" letter-spacing="1.2">PRAVDA / 2026</text></svg>

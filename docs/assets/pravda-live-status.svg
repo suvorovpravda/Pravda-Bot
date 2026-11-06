@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="485" viewBox="0 0 1600 485" role="img">
+<title>Pravda Live Pulse — synchronisation non activée sur main</title>
+<desc>Le tableau de suivi est prêt ; les données GitHub ne sont pas encore synchronisées. Production NO-GO.</desc>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#181C3E"/><stop offset=".6" stop-color="#0C1328"/><stop offset="1" stop-color="#18132E"/></linearGradient></defs>
+<rect width="1600" height="485" rx="24" fill="url(#bg)"/>
+<rect x="34" y="27" width="1532" height="435" rx="20" fill="#0E1530" stroke="#455078"/>
+<text x="68" y="78" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="33" font-weight="800">● PRAVDA / LIVE PULSE</text>
+<text x="70" y="115" fill="#A6B3D4" font-family="Segoe UI,Arial,sans-serif" font-size="17">Synchronisation automatique : GitHub Actions toutes les 10 minutes (best effort)</text>
+<rect x="68" y="151" width="1460" height="218" rx="20" fill="#191E3E" stroke="#51456F"/>
+<text x="109" y="220" fill="#FFCC79" font-family="Segoe UI,Arial,sans-serif" font-size="38" font-weight="800">EN ATTENTE DE PREMIÈRE SYNCHRONISATION</text>
+<text x="111" y="267" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="20">Après fusion, les workflows, PR, Issues et jalons du guide alimenteront ce panneau.</text>
+<text x="111" y="302" fill="#9FAACE" font-family="Segoe UI,Arial,sans-serif" font-size="18">Aucun résultat de CI n'est encore affirmé par cet aperçu.</text>
+<text x="1247" y="430" fill="#FF668D" font-family="Segoe UI,Arial,sans-serif" font-size="33" font-weight="800">NO-GO</text>
+</svg>
