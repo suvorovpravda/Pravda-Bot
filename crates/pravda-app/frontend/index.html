@@ -212,6 +212,13 @@
                     <textarea id="acceptance-json" class="acceptance-json" rows="5" readonly>Aucun rapport généré.</textarea>
                 </section>
                 <hr>
+                <section id="signed-updates" class="maintenance-notice" aria-label="Mises à jour Windows">
+                  <h3>Mises à jour Windows</h3>
+                  <p class="fine-print">Contrôle local via Rust. Aucun téléchargement ni installation avant validation de la signature et du paquet.</p>
+                  <label for="update-auto-check"><input id="update-auto-check" type="checkbox"> Vérifier automatiquement lorsque le réseau est autorisé</label>
+                  <div class="feature-actions"><button id="update-check" type="button" class="button">Rechercher une mise à jour</button><span id="update-status" role="status" aria-live="polite">Non vérifié</span></div>
+                </section>
+                <hr>
                 <h3>Proton VPN · option facultative</h3>
                 <p>Si vous avez un compte Proton VPN, ouvrez l’application officielle Windows et connectez-vous dedans. Pravda-Bot ne collecte pas vos identifiants, ne lance aucune commande VPN non documentée et ne prétend pas vérifier votre tunnel.</p>
                 <a class="button" href="https://protonvpn.com/support/protonvpn-windows-vpn-application" data-source-link="protonvpn" rel="noopener noreferrer" target="_blank">Procédure officielle Proton VPN</a>

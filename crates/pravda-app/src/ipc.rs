@@ -174,6 +174,26 @@ fn safe_auth_error(error: AuthError) -> String {
 
 /// Public bootstrap exception: the login screen needs to know whether setup
 /// is required before a session exists. No secrets are returned.
+/// Only explicitly provisioned signed Windows builds may contact the
+/// trusted release metadata endpoint. This check never installs anything,
+/// and the response is a bounded status code, not untrusted release content.
+#[tauri::command]
+pub async fn ipc_updater_check(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    app: tauri::AppHandle,
+) -> Result<String, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    #[cfg(all(windows, feature = "signed-updater"))]
+    let result = crate::updater::check(app).await;
+    #[cfg(not(all(windows, feature = "signed-updater")))]
+    let result = {
+        let _ = app;
+        Ok("disabled".to_string())
+    };
+    finish_authorized_read(&session, &issued_to, result)
+}
+
 #[tauri::command]
 pub fn ipc_auth_status(window: Window, session: State<'_, IpcAuth>) -> Result<bool, String> {
     require_main(window.label()).map_err(str::to_string)?;

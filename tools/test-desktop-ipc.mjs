@@ -45,6 +45,21 @@ assert.match(installerWorkflow,/Smoke-test NSIS installation and uninstall on pr
 assert.match(installerWorkflow,/Test-Pravda-Nsis-Install\.ps1/,
   "Release gate must execute the actual NSIS installer in a disposable Windows environment");
 
+assert.match(main,/#\[cfg\(all\(windows, feature = "signed-updater"\)\)\]/,
+  "Updater module must not be part of normal/offline builds");
+assert.match(ipc,/pub async fn ipc_updater_check/,
+  "Signed updater status must remain an authenticated Rust IPC request");
+assert.match(ipc,/finish_authorized_read\(&session, &issued_to, result\)/,
+  "Update checks must discard results from a revoked Rust login");
+assert.match(html,/id="update-check"/,"Update check must be accessible in Security");
+assert.match(js,/pravdaInvoke\("ipc_updater_check"\)/,
+  "WebView2 must call the native restricted updater check");
+assert.match(js,/if \(!explicit && \(!updateAuto\.checked \|\| document\.hidden\)\) return;/,
+  "Background update network checks require explicit opt-in and visible app");
+assert.match(auth,/window\.pravdaClearUpdate\(\)/,
+  "Signed updater UI must clear old-session state");
+assert.doesNotMatch(js,/updater:allow|updater:default|download_and_install|https:\/\/github\.com\/suvorovpravda\/Pravda-Bot\/releases\/download/,
+  "Frontend must not receive updater capabilities or arbitrary install URLs");
 assert.equal(cfg.app.withGlobalTauri,true);
 assert.deepEqual(cfg.app.security.capabilities,["main-ipc"]);
 assert.match(cfg.app.security.csp["connect-src"],/ipc:/);
@@ -225,7 +240,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,22);
+assert.equal(new Set(handlers).size,23);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);

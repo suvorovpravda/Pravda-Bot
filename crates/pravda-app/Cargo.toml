@@ -8,6 +8,9 @@ description = "Pravda-Bot desktop app with Tauri"
 # No probe window is built in release binaries, even with this feature.
 [features]
 security-e2e = []
+# Official signed update checks are opt-in at COMPILE TIME.
+# Normal unsigned/offline builds do not load the updater or contact the network.
+signed-updater = ["dep:tauri-plugin-updater"]
 
 [workspace]
 
@@ -19,3 +22,6 @@ pravda-server = { path = "../../rust/pravda-server" }
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
+
+[target.'cfg(windows)'.dependencies]
+tauri-plugin-updater = { version = "=2.14.1", optional = true }

@@ -1,6 +1,8 @@
 mod consent;
 mod ipc;
 mod paper;
+#[cfg(all(windows, feature = "signed-updater"))]
+mod updater;
 
 use std::sync::Arc;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -168,7 +170,8 @@ async fn main() {
             ipc::ipc_public_feed,
             ipc::ipc_revolut_consent_get,
             ipc::ipc_revolut_consent_set,
-            ipc::ipc_open_source
+            ipc::ipc_open_source,
+            ipc::ipc_updater_check
         ])
         .setup(|app| {
             // WebDriver's Windows Edge adapter may only enumerate the primary
@@ -184,6 +187,8 @@ async fn main() {
                     .build()?;
                 return Ok(());
             }
+            #[cfg(all(windows, feature = "signed-updater"))]
+            updater::register(app)?;
             // Production-center mode must never reuse the installed app's
             // WebView2 cache, cookies or localStorage during a diagnostic.
             let mut main_window =

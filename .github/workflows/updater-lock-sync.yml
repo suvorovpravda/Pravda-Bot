@@ -1,0 +1,36 @@
+name: Resolve desktop updater lockfile candidate
+on:
+  push:
+    branches: [feat/tauri-signed-updater-runtime-20261106]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  lockfile:
+    name: Resolve Windows updater dependencies without repository writes
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Resolve isolated Tauri desktop Cargo.lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fetch --manifest-path crates/pravda-app/Cargo.toml
+          cargo fmt --all --manifest-path crates/pravda-app/Cargo.toml
+          cargo tree --manifest-path crates/pravda-app/Cargo.toml --target x86_64-pc-windows-msvc -e features | grep -F tauri-plugin-updater >/dev/null
+      - name: Export candidate lockfile (untrusted until CI checks it)
+        uses: actions/upload-artifact@v7
+        with:
+          name: pravda-desktop-updater-lockfile-candidate
+          path: |
+            crates/pravda-app/Cargo.lock
+            crates/pravda-app/src/main.rs
+            crates/pravda-app/src/ipc.rs
+            crates/pravda-app/src/updater.rs
+            crates/pravda-app/build.rs
+          if-no-files-found: error
+          retention-days: 1

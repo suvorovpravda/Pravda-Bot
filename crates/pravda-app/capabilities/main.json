@@ -26,6 +26,7 @@
     "allow-ipc-public-feed",
     "allow-ipc-revolut-consent-get",
     "allow-ipc-revolut-consent-set",
-    "allow-ipc-open-source"
+    "allow-ipc-open-source",
+    "allow-ipc-updater-check"
   ]
 }

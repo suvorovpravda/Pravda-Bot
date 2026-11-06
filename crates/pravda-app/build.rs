@@ -24,6 +24,7 @@ fn main() {
         "ipc_revolut_consent_get",
         "ipc_revolut_consent_set",
         "ipc_open_source",
+        "ipc_updater_check",
     ];
     tauri_build::try_build(
         tauri_build::Attributes::new()

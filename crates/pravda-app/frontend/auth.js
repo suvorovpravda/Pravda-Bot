@@ -62,6 +62,7 @@ function showLogin() {
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
+    if (typeof window.pravdaClearUpdate === "function") window.pravdaClearUpdate();
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -78,6 +79,7 @@ function activateDashboard() {
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
+    if (typeof window.pravdaClearUpdate === "function") window.pravdaClearUpdate();
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {

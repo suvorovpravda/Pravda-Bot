@@ -1713,6 +1713,51 @@ const translations = {
     window.addEventListener("hashchange",()=>applyTab(tabFromHash()));
     applyTab(tabFromHash());
 
+    // Optional update checks are Rust-only. The browser never receives a URL,
+    // package, signing key or a general shell/install permission.
+    const updateStatus = $("update-status");
+    const updateButton = $("update-check");
+    const updateAuto = $("update-auto-check");
+    const updateSetting = "pravda-allow-signed-update-check";
+    let updateCheckBusy = false;
+    try { updateAuto.checked = window.localStorage.getItem(updateSetting) === "1"; } catch {}
+    window.pravdaClearUpdate = () => {
+        updateStatus.textContent = "Non vérifié (session fermée)";
+    };
+    async function checkSignedUpdate(explicit) {
+        const generation = window.pravdaAuthGeneration;
+        if (!securitySessionReady() || updateCheckBusy) return;
+        if (!explicit && (!updateAuto.checked || document.hidden)) return;
+        updateCheckBusy = true;
+        updateButton.disabled = true;
+        updateStatus.textContent = "Vérification de version en cours…";
+        try {
+            const result = await window.pravdaInvoke("ipc_updater_check");
+            if (generation !== window.pravdaAuthGeneration) return;
+            if (result === "disabled") {
+                updateStatus.textContent = "Indisponible : aucune clé de mise à jour intégrée";
+            } else if (result === "current") {
+                updateStatus.textContent = "Aucune version plus récente signalée";
+            } else if (typeof result === "string" && /^available\|[0-9]+\.[0-9]+\.[0-9]+$/.test(result)) {
+                updateStatus.textContent = "Version signée détectée : " + result.slice(10) + " · installation non activée";
+            } else {
+                updateStatus.textContent = "État de mise à jour invalide";
+            }
+        } catch {
+            if (generation === window.pravdaAuthGeneration)
+                updateStatus.textContent = "Vérification indisponible (hors réseau ou erreur)";
+        } finally {
+            updateCheckBusy = false;
+            updateButton.disabled = false;
+        }
+    }
+    updateButton.addEventListener("click", () => { void checkSignedUpdate(true); });
+    updateAuto.addEventListener("change", () => {
+        try { window.localStorage.setItem(updateSetting, updateAuto.checked ? "1" : "0"); } catch {}
+        if (updateAuto.checked) void checkSignedUpdate(false);
+    });
+    if (updateAuto.checked) void checkSignedUpdate(false);
+    window.setInterval(() => { if (updateAuto.checked) void checkSignedUpdate(false); }, 6 * 60 * 60 * 1000);
     // The existing one-second IPC snapshot poll replaces the WebSocket transport.
     // A script load event alone does not prove the event handlers initialized.
     window.pravdaDashboardReady = true;
