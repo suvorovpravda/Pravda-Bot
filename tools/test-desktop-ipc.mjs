@@ -437,10 +437,15 @@ const rendersAfterFailure=marketUi.marketRenders.length;
 marketUi.applyLanguage();
 assert.equal(marketUi.marketRenders.length,rendersAfterFailure,
   "Language change must not relabel a failed market refresh as live");
-vm.runInContext('latestFx={session:"B"};',marketUi);
+vm.runInContext('latestMarket={session:"market-still-healthy"}; latestFx={session:"B"};',marketUi);
+const rendersBeforeFxFailure=marketUi.marketRenders.length;
 await marketUi.refreshFx();
 assert.equal(vm.runInContext("latestFx",marketUi),null,
   "A failed FX refresh must not leave old rates usable for conversions");
+assert.equal(vm.runInContext("latestMarket.session",marketUi),"market-still-healthy",
+  "An FX-only failure must preserve the independent market snapshot");
+assert.equal(marketUi.marketRenders.length,rendersBeforeFxFailure+1,
+  "An FX-only failure must redraw market observations without stale conversions");
 const marketPending=[];
 marketUi.fetchJson=()=>new Promise((resolve,reject)=>marketPending.push({resolve,reject}));
 const oldMarket=marketUi.refreshMarket();

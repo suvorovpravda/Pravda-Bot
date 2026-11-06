@@ -1334,8 +1334,10 @@ const translations = {
             setStatus($("fx-status"), "error", t("fxUnavailable"));
             $("fx-rates").textContent = t("fxFailure");
             $("fx-asof").textContent = "—";
-            clearMarketSnapshot();
-            drawPriceChart();
+            // USDT observations do not depend on FX. Keep the latest market
+            // snapshot, but redraw it without any EUR/CHF conversion.
+            if (latestMarket) renderMarket(latestMarket);
+            else drawPriceChart();
         }
     }
     async function refreshFlows() {
