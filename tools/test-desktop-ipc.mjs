@@ -77,10 +77,64 @@ assert.match(html,/data-go-tab="system">Consulter les métriques<\//,
   "Maintenance must reuse the existing Rust runtime metrics, not spawn a shell");
 assert.match(html,/id="security-events"/,
   "Maintenance must retain bounded in-memory security event viewer");
+assert.match(html,/class="terminal-cockpit"/,
+  "Terminal must group real market, risk and watchlist modules in one cockpit");
+assert.match(html,/id="terminal-watchlist"/,
+  "Market watchlist must have a real data container");
+assert.match(html,/data-watch-symbol="BTC\/USDT"/,
+  "Watchlist must preserve the actual supported market symbols");
+assert.match(js,/updateTerminalWatchlist\(rows\);/,
+  "Watchlist must reuse the observed market snapshot, not a synthetic feed");
+assert.match(js,/button\.dataset\.freshness = state;/,
+  "Watchlist must label actual source freshness instead of claiming all ticks are live");
+assert.match(js,/document\.querySelector\('\.tab-btn\[data-tab="markets"\]'\)\?\.click\(\)/,
+  "Clicking an asset must open its existing market chart");
+assert.equal((auth.match(/window\.pravdaClearMarketSession\(\)/g)||[]).length, 2,
+  "Both logout and reauthentication must clear the previous market session");
+assert.match(html,/class="grid terminal-market"/,
+  "Market charts must remain a functional central workspace");
+assert.match(html,/class="grid terminal-extras"/,
+  "Security and runtime modules must remain visible in the same application");
+assert.match(css,/grid-template-areas:\s*"watch market risk"/,
+  "Large screens must use a three-pane institutional terminal grid");
+assert.match(css,/grid-template-areas:\s*"market"\s*"watch"\s*"risk"/,
+  "Narrow screens must prioritize the live chart");
+assert.match(js,/document\.querySelector\("\.shell"\)\.dataset\.activeTab = tab;/,
+  "Filtered navigation must expand its active functional module");
+assert.match(js,/requestAnimationFrame\(drawPriceChart\)/,
+  "Chart must redraw after switching from a hidden tab into the central workspace");
+assert.match(css,/prefers-reduced-motion:\s*reduce/,
+  "Visual transitions must respect system accessibility settings");
 assert.match(html,/id="acceptance-center"/,
   "Installed desktop must own a native test center");
 assert.match(html,/id="acceptance-pre"/, "Preproduction button must exist");
 assert.match(html,/id="acceptance-post"/, "Postproduction button must exist");
+assert.doesNotMatch(ipc,/phase\|verified\|/,
+  "Report phase is metadata, not a successful test");
+assert.match(js,/expectedAcceptanceChecks\[index\]/,
+  "Acceptance rows must be ordered and unique before counting PASS");
+assert.match(js,/run_number: runNumber/,
+  "Each test press must carry an individual execution number");
+assert.match(js,/checked_at_utc: finishedAt\.toISOString\(\)/,
+  "Every completed test must publish its actual completion timestamp");
+assert.match(js,/window\.pravdaDashboardReady = true;/,
+  "Dashboard must advertise readiness only after all handlers are bound");
+assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
+  "A failed dashboard initialization must produce a visible local error");
+assert.match(js,/button\.textContent = "↻ Tentative à "/,
+  "Manual refresh must provide visible feedback without inventing fresh market data");
+assert.match(js,/queuedAuthRefreshGeneration = requestedGeneration;/,
+  "Reauthentication refresh must queue behind a prior in-flight session batch");
+assert.match(js,/nextGeneration === window\.pravdaAuthGeneration/,
+  "Queued refresh must be bound to the current authenticated Rust session");
+assert.match(js,/void refreshAll\(\);/,
+  "Queued refresh must execute once the old in-flight operation releases");
+assert.match(js,/nextGeneration === window\.pravdaAuthGeneration &&\s*securityShell && !securityShell\.hidden/,
+  "Queued refresh must use the existing main shell reference after reauthentication");
+assert.doesNotMatch(js,/\$\("shell"\)/,
+  "Queued refresh must not dereference an element ID absent from the desktop HTML");
+assert.match(html,/les mêmes contrôles locaux Rust/,
+  "Preproduction and postproduction must describe their current shared scope");
 assert.match(js,/window\.pravdaInvoke\("ipc_acceptance_report", \{phase\}\)/,
   "Pre/postproduction tests must be native authenticated Rust IPC");
 assert.match(auth,/window\.pravdaClearAcceptance\(\)/,
@@ -102,7 +156,7 @@ assert.match(auth,/window\.pravdaClearPaper\(\)/,
   "Logout and reauthentication must erase previous paper values from the DOM");
 assert.match(js,/window\.pravdaClearPaper\s*=\s*clearPaperUi/,
   "Paper UI must expose a local clear method without contacting exchanges");
-assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) refreshPaper\(\);/,
+assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) refreshPaper\(true\);/,
   "Stale paper action completion must refresh after a new login");
 assert.match(js,/window\.pravdaInvoke\(command, args\)/,
   "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
@@ -150,8 +204,16 @@ assert.match(auth,/window\.refreshRevolutConsent\(\)/,
   "Signing back in must re-read permission from native Rust");
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
-assert.match(js,/if \(!securityVisible\(\) \|\| securityCheckInFlight\) return;/,
-  "Security scan must be visibility-gated and single-flight");
+assert.match(js,/const securitySessionReady = \(\) => !!securityShell && !securityShell.hidden;/,
+  "Authenticated UI session must own explicit test interactions");
+assert.match(js,/if \(!explicit && !securityVisible\(\)\) return;/,
+  "Only passive checks may be skipped for hidden WebView2 documents");
+assert.match(js,/if \(securityCheckInFlight\) \{/,
+  "Security tests must be single-flight");
+assert.match(js,/window\.refreshSecurity = \(\) => refreshSecurity\(true\);/,
+  "User-driven security checks must not be silently skipped because of visibilityState");
+assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
+  "Manual acceptance controls must never silently ignore a click for document.hidden");
 assert.match(js,/if \(tab === "security"\)/,
   "Opening Security must refresh its local status");
 
@@ -264,7 +326,7 @@ ui.renderFx = payload => {ui.$("fx-rates").textContent=payload.identity;};
 ui.URLSearchParams = URLSearchParams;
 ui.drawPriceChart = () => {};
 ui.formatDate = String;
-vm.runInContext("let historicalPoints=[];",ui);
+vm.runInContext("let historicalPoints=[], fxRequestNumber=0, lastSettledFxRequest=0;",ui);
 function actualFrontend(name,next) {
   const start = js.indexOf("    async function "+name+"(");
   const end = js.indexOf("    async function "+next+"(",start+1);
@@ -310,5 +372,126 @@ for (const [name,url,target,good,bad,payload] of [
 }
 assert.equal(relocks,1,
   "No stale refresh completion may revoke or visually lock the active session");
+
+// Run the actual market-session clearing and language-change code. In
+// particular, a language change must not replay an older session's quotes.
+const marketNodes = new Map();
+const watchRows = ["BTC/USDT", "ETH/USDT", "SOL/USDT"].map(symbol => {
+  const parts = {".watch-price": {textContent:"session-A price"},
+    ".watch-freshness": {textContent:"Récent"}};
+  return {dataset:{watchSymbol:symbol,freshness:"live"},
+    querySelector: selector => parts[selector]};
+});
+const marketUi = {
+  window:{pravdaAuthGeneration:4},
+  document:{documentElement:{lang:"fr"},title:"",
+    querySelectorAll: selector => selector === ".watchlist-row" ? watchRows : []},
+  $: id => {
+    if (!marketNodes.has(id)) marketNodes.set(id,{value:"",textContent:"session-A",
+      replaceChildren(){this.textContent="";}});
+    return marketNodes.get(id);
+  },
+  t:key=>key,
+  setStatus:(target,state,label)=>{target.state=state;target.textContent=label;},
+  updateClock(){}, refreshAlerts(){}, refreshSources(){}, drawPriceChart(){},
+  marketRenders:[], fxRenders:[],
+  renderMarket(payload){this.marketRenders.push(payload);},
+  renderFx(payload){this.fxRenders.push(payload);},
+  fetchJson:async()=>{throw new Error("offline");}
+};
+// Function calls in the isolated VM are unbound; keep their observations in
+// the shared fixture, rather than depending on `this`.
+marketUi.renderMarket = payload => {
+  marketUi.marketRenders.push(payload);
+  marketUi.lastPayload = payload;
+  vm.runInContext("latestMarket=lastPayload",marketUi);
+};
+marketUi.renderFx = payload => {
+  marketUi.fxRenders.push(payload);
+  marketUi.lastFxPayload = payload;
+  vm.runInContext("latestFx=lastFxPayload",marketUi);
+};
+vm.createContext(marketUi);
+vm.runInContext('let currentLanguage="fr", latestMarket={session:"A"}, ' +
+  'latestFx={session:"A"}, historicalPoints=[{price:123}];',marketUi);
+function runRealSection(startMarker,endMarker) {
+  const start=js.indexOf(startMarker), end=js.indexOf(endMarker,start+1);
+  assert.ok(start>=0 && end>start,"Missing actual frontend section: "+startMarker);
+  vm.runInContext(js.slice(start,end),marketUi,{filename:"desktop-market-session.js"});
+}
+runRealSection("    function applyLanguage()", "    const $ =");
+runRealSection("    function clearMarketSnapshot()", "    function updateTerminalWatchlist(");
+runRealSection("    let marketRequestNumber = 0;", "    // Auth boundaries invalidate");
+runRealSection("    let fxRequestNumber = 0;", "    async function refreshFlows()");
+marketUi.window.pravdaClearMarketSession();
+marketUi.applyLanguage();
+assert.equal(marketUi.marketRenders.length,0,"Language change must not replay session A quotes");
+assert.equal(marketUi.fxRenders.length,0,"Language change must not replay session A FX");
+assert.equal(vm.runInContext("latestMarket",marketUi),null);
+assert.equal(vm.runInContext("latestFx",marketUi),null);
+assert.equal(vm.runInContext("historicalPoints.length",marketUi),0);
+assert.equal(marketUi.$("chart-price").textContent,"—");
+assert.equal(marketUi.$("crypto-quotes").textContent,"");
+for (const row of watchRows) {
+  assert.equal(row.dataset.freshness,"unavailable");
+  assert.equal(row.querySelector(".watch-price").textContent,"—");
+}
+vm.runInContext('latestMarket={session:"B"}; latestFx={session:"B"};',marketUi);
+marketUi.applyLanguage();
+assert.equal(marketUi.marketRenders.at(-1).session,"B","Current session quotes remain usable");
+assert.equal(marketUi.fxRenders.at(-1).session,"B","Current session FX remains usable");
+await marketUi.refreshMarket();
+const rendersAfterFailure=marketUi.marketRenders.length;
+marketUi.applyLanguage();
+assert.equal(marketUi.marketRenders.length,rendersAfterFailure,
+  "Language change must not relabel a failed market refresh as live");
+vm.runInContext('latestMarket={session:"market-still-healthy"}; latestFx={session:"B"};',marketUi);
+const rendersBeforeFxFailure=marketUi.marketRenders.length;
+await marketUi.refreshFx();
+assert.equal(vm.runInContext("latestFx",marketUi),null,
+  "A failed FX refresh must not leave old rates usable for conversions");
+assert.equal(vm.runInContext("latestMarket.session",marketUi),"market-still-healthy",
+  "An FX-only failure must preserve the independent market snapshot");
+assert.equal(marketUi.marketRenders.length,rendersBeforeFxFailure+1,
+  "An FX-only failure must redraw market observations without stale conversions");
+const marketPending=[];
+marketUi.fetchJson=()=>new Promise((resolve,reject)=>marketPending.push({resolve,reject}));
+const oldMarket=marketUi.refreshMarket();
+const newMarket=marketUi.refreshMarket();
+marketPending[1].reject(new Error("offline"));
+await newMarket;
+const rendersBeforeOldSuccess=marketUi.marketRenders.length;
+marketPending[0].resolve({session:"older-success"});
+await oldMarket;
+assert.equal(marketUi.marketRenders.length,rendersBeforeOldSuccess,
+  "An older successful request must not undo a newer failed market refresh");
+const oldFailure=marketUi.refreshMarket();
+const newSuccess=marketUi.refreshMarket();
+marketPending[3].resolve({session:"newest"});
+await newSuccess;
+marketPending[2].reject(new Error("offline"));
+await oldFailure;
+assert.equal(vm.runInContext("latestMarket.session",marketUi),"newest",
+  "An older failure must not erase a newer successful market refresh");
+const fxPending=[];
+marketUi.fetchJson=()=>new Promise((resolve,reject)=>fxPending.push({resolve,reject}));
+const oldFxRequest=marketUi.refreshFx();
+const newFxRequest=marketUi.refreshFx();
+fxPending[1].resolve({session:"newest-FX"});
+await newFxRequest;
+fxPending[0].reject(new Error("offline"));
+await oldFxRequest;
+assert.equal(vm.runInContext("latestFx.session",marketUi),"newest-FX",
+  "An older FX failure must not erase a newer successful FX refresh");
+const earlierFxSuccess=marketUi.refreshFx();
+const laterFxFailure=marketUi.refreshFx();
+fxPending[3].reject(new Error("offline"));
+await laterFxFailure;
+const fxRendersAfterFailure=marketUi.fxRenders.length;
+fxPending[2].resolve({session:"obsolete-FX"});
+await earlierFxSuccess;
+assert.equal(marketUi.fxRenders.length,fxRendersAfterFailure,
+  "An older FX success must not undo a newer failed FX refresh");
+assert.equal(vm.runInContext("latestFx",marketUi),null);
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");

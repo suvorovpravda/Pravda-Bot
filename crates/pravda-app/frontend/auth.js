@@ -61,6 +61,7 @@ function showLogin() {
     if (typeof window.pravdaLockRevolutConsent === "function") window.pravdaLockRevolutConsent();
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
+    if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -76,6 +77,7 @@ function activateDashboard() {
     // Never display prior-session synthetic positions while the new snapshot loads.
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
+    if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {
@@ -89,7 +91,6 @@ function activateDashboard() {
     const script = document.createElement("script");
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
-        dashboardLoaded = true;
         const logoutForm = document.getElementById("ipc-logout-form");
         logoutForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -100,6 +101,15 @@ function activateDashboard() {
             }
             showLogin();
         });
+        if (window.pravdaDashboardReady !== true) {
+            const banner = document.createElement("p");
+            banner.className = "ipc-auth-error";
+            banner.setAttribute("role", "alert");
+            banner.textContent = "Interface non initialisée. Fermez puis rouvrez Pravda-Bot ; aucun mot de passe ni détail système n'a été enregistré.";
+            shell.prepend(banner);
+            return;
+        }
+        dashboardLoaded = true;
     });
     script.addEventListener("error", () => {
         shell.hidden = true;

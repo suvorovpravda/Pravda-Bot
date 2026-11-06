@@ -524,13 +524,9 @@ fn acceptance_report_rows(phase: &str) -> Result<Vec<String>, &'static str> {
     } else {
         "Echec d'un test de simulation fictive; operations reelles interdites"
     };
-    let phase_detail = if phase == "preproduction" {
-        "Preproduction : tests locaux, pas une qualification de publication"
-    } else {
-        "Postproduction : tests dans l'application installee; recette VM distincte"
-    };
+    // The phase is report metadata, not a tested condition or a PASS.
+    // Both modes deliberately run the same bounded, local acceptance checks.
     Ok(vec![
-        format!("phase|verified|{phase_detail}"),
         "session|verified|Session Rust requise pour demander et lire ce rapport".to_owned(),
         "ipc|verified|Commande IPC de la fenetre principale autorisee".to_owned(),
         format!("paper|{paper_status}|{paper_detail}"),
@@ -557,7 +553,7 @@ pub async fn ipc_acceptance_report(
 ) -> Result<Vec<String>, String> {
     let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
     let mut rows = acceptance_report_rows(&phase).map_err(str::to_string)?;
-    rows[4] = match desktop.security_database_health_code().await {
+    rows[3] = match desktop.security_database_health_code().await {
         "database_ok" => {
             "sqlite|verified|SQLite quick_check OK; sauvegarde et restauration non verifiees"
         }
@@ -751,10 +747,32 @@ mod tests {
     fn acceptance_report_keeps_physical_and_financial_gates_unverified() {
         for phase in ["preproduction", "postproduction"] {
             let rows = acceptance_report_rows(phase).unwrap();
-            assert_eq!(rows.len(), 10);
+            assert_eq!(rows.len(), 9);
             assert!(rows.iter().all(|line| line.split('|').count() == 3));
-            assert!(rows[3].starts_with("paper|verified|"));
-            for row in &rows[6..] {
+            assert_eq!(
+                rows.iter()
+                    .map(|row| row.split('|').next().unwrap())
+                    .collect::<Vec<_>>(),
+                [
+                    "session",
+                    "ipc",
+                    "paper",
+                    "sqlite",
+                    "webview",
+                    "installer",
+                    "persistence",
+                    "authenticode",
+                    "live"
+                ]
+            );
+            assert!(rows[2].starts_with("paper|verified|"));
+            assert_eq!(
+                rows.iter()
+                    .filter(|row| row.split('|').nth(1) == Some("verified"))
+                    .count(),
+                4
+            );
+            for row in &rows[5..] {
                 assert_eq!(row.split('|').nth(1), Some("unknown"));
             }
             assert!(!rows.join(" ").contains("API_KEY"));

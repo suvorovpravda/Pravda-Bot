@@ -263,3 +263,273 @@ body{background:radial-gradient(ellipse at 16% 0%,rgba(42,101,170,.19),transpare
 
         .acceptance-json { display:block; width:100%; min-height:100px; padding:11px; margin-top:9px; border:1px solid var(--line); border-radius:9px; background:var(--panel); color:var(--text); resize:vertical; font:12px/1.5 Consolas,monospace; }
         #acceptance-center .feature-actions { margin:12px 0; }
+
+
+/* Terminal x fintech: keep the information density, add restrained depth.
+   Pure CSS: no new runtime, remote assets, or data dependencies. */
+:root {
+    --terminal-ink: #07101f;
+    --terminal-stroke: rgba(110, 162, 221, .24);
+    --terminal-blue-glow: rgba(58, 149, 245, .13);
+    --terminal-focus: #8dd7ff;
+}
+body {
+    background:
+        radial-gradient(ellipse at 12% -12%, rgba(41, 103, 187, .21), transparent 48%),
+        radial-gradient(ellipse at 92% 12%, rgba(28, 115, 132, .12), transparent 38%),
+        var(--bg);
+}
+.shell { max-width: 1740px; }
+.topbar {
+    border: 1px solid rgba(123, 176, 226, .12);
+    border-radius: 16px;
+    padding: 12px 17px;
+    background: rgba(10, 24, 42, .85);
+    box-shadow: 0 12px 36px rgba(0, 0, 0, .12);
+}
+@supports (backdrop-filter: blur(12px)) {
+    .topbar { backdrop-filter: blur(12px); }
+}
+.card, .feature-tile, .provider-link, .button, .tab-btn {
+    transition: border-color 180ms ease, background-color 180ms ease,
+                box-shadow 180ms ease, transform 180ms ease;
+}
+.card:hover, .feature-tile:hover {
+    border-color: var(--terminal-stroke);
+    box-shadow: 0 16px 42px rgba(0, 0, 0, .22), 0 0 0 1px var(--terminal-blue-glow);
+}
+.feature-tile:hover { transform: translateY(-1px); }
+.metric-value, .runtime-tiles strong {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -.035em;
+}
+.tab-btn.active {
+    box-shadow: inset 0 -2px 0 var(--cyan), 0 8px 18px rgba(33, 110, 212, .09);
+    color: var(--text);
+}
+.button-primary:not(:disabled):hover {
+    box-shadow: 0 4px 18px rgba(47, 132, 244, .18);
+}
+button:disabled { opacity: .72; cursor: not-allowed; }
+button:focus-visible, select:focus-visible, a:focus-visible,
+textarea:focus-visible, input:focus-visible {
+    outline: 2px solid var(--terminal-focus);
+    outline-offset: 3px;
+}
+#acceptance-center {
+    border-color: var(--terminal-stroke);
+    background: linear-gradient(125deg, rgba(21, 64, 91, .23), rgba(9, 25, 47, .69));
+}
+#acceptance-status[role="status"] { min-height: 1.5em; }
+@media (max-width: 700px) {
+    .topbar { padding: 12px; border-radius: 11px; }
+    .shell { padding-inline: 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .card, .feature-tile, .provider-link, .button, .tab-btn {
+        transition: none;
+        animation: none;
+    }
+    .feature-tile:hover { transform: none; }
+}
+
+
+/* Institutional market workspace + modern data visualization.
+   Three real panels reuse existing functional controls; no fake quotes or
+   network fonts. Filtered tabs expand to full width for accessibility. */
+.terminal-cockpit {
+    display: grid;
+    grid-template-columns: minmax(225px, .77fr) minmax(0, 2.45fr) minmax(300px, 1.08fr);
+    grid-template-areas: "watch market risk";
+    gap: 13px;
+    align-items: start;
+    margin: 12px 0 22px;
+}
+.terminal-pane-label {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    margin: 0;
+    padding: 10px 5px 7px;
+    border-bottom: 1px solid var(--terminal-stroke);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 750;
+    letter-spacing: .025em;
+    grid-column: 1 / -1;
+}
+.terminal-pane-label span {
+    font-size: 9px;
+    color: var(--cyan);
+    letter-spacing: .12em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.terminal-cockpit .feature-grid {
+    grid-area: watch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 10px;
+    margin: 0;
+}
+.terminal-cockpit .feature-tile {
+    min-height: 0;
+    padding: 16px;
+    border-radius: 12px;
+}
+.terminal-cockpit .feature-tile h2 { font-size: 17px; }
+.terminal-cockpit .feature-tile .feature-actions { gap: 6px; }
+.terminal-cockpit .feature-tile .button { font-size: 12px; padding: 7px 9px; }
+.terminal-cockpit .terminal-market {
+    grid-area: market;
+    min-width: 0;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-content: start;
+    gap: 10px;
+}
+.terminal-cockpit .terminal-market .crypto-live-card,
+.terminal-cockpit .terminal-market .fx-live-card {
+    grid-column: span 12;
+}
+.terminal-cockpit .market-grid { grid-template-columns: minmax(0, 1fr); }
+.terminal-cockpit .market-chart { height: clamp(260px, 25vw, 410px); }
+.terminal-cockpit .terminal-extras {
+    grid-area: risk;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 10px;
+    margin: 0;
+    max-height: max(540px, calc(100vh - 215px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--line) transparent;
+    scrollbar-width: thin;
+}
+.terminal-cockpit .terminal-extras .secondary-card {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+.terminal-cockpit .terminal-extras .card-head,
+.terminal-cockpit .terminal-market .card-head { padding: 15px 16px 12px; }
+.terminal-cockpit .terminal-extras .card-body,
+.terminal-cockpit .terminal-market .card-body { padding: 0 16px 16px; }
+.terminal-cockpit .terminal-extras .provider-grid,
+.terminal-cockpit .terminal-extras .runtime-tiles,
+.terminal-cockpit .terminal-extras .security-checks {
+    grid-template-columns: minmax(0, 1fr);
+}
+.terminal-cockpit .terminal-extras .connector-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+.terminal-cockpit .terminal-extras .paper-order-form {
+    grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+}
+.terminal-cockpit .terminal-extras .card { box-shadow: none; }
+/* Navigation is functional: a single selected module gets the full workspace,
+   instead of rendering two or three empty terminal columns around it. */
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit {
+    display: block;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .feature-grid {
+    display: none;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-extras {
+    max-height: none;
+    overflow: visible;
+    display: grid;
+    margin-top: 12px;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-market {
+    margin-top: 12px;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-pane-label {
+    display: none;
+}
+@media (max-width: 1450px) {
+    .terminal-cockpit {
+        grid-template-columns: minmax(220px, .72fr) minmax(0, 2fr);
+        grid-template-areas: "watch market" "risk risk";
+    }
+    .terminal-cockpit .terminal-extras {
+        max-height: none;
+        overflow: visible;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .terminal-cockpit .terminal-extras .terminal-pane-label { grid-column: 1 / -1; }
+    .terminal-cockpit .terminal-extras .secondary-card { grid-column: auto; }
+    .terminal-cockpit .terminal-extras [data-category="security"] { grid-column: 1 / -1; }
+}
+@media (max-width: 1000px) {
+    .terminal-cockpit {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "market" "watch" "risk";
+    }
+    .terminal-cockpit .feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .terminal-cockpit .terminal-extras { grid-template-columns: minmax(0, 1fr); }
+    .terminal-cockpit .terminal-extras .secondary-card { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+    .terminal-cockpit .feature-grid { grid-template-columns: minmax(0, 1fr); }
+    .terminal-cockpit .market-chart { height: 280px; }
+    .terminal-pane-label span { white-space: normal; }
+}
+
+
+/* Compact factual watchlist: values come from the main observed snapshot. */
+.terminal-watchlist {
+    padding: 11px;
+    border: 1px solid var(--terminal-stroke);
+    border-radius: 12px;
+    background: linear-gradient(145deg, rgba(10, 26, 46, .94), rgba(8, 19, 36, .98));
+}
+.watchlist-title {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 4px 10px;
+}
+.watchlist-title strong { font-size: 13px; }
+.watchlist-title span {
+    font-size: 10px;
+    letter-spacing: .04em;
+    color: var(--muted);
+}
+.watchlist-rows { display: grid; gap: 5px; }
+.watchlist-row {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
+    align-items: baseline;
+    padding: 10px;
+    text-align: left;
+    border: 1px solid rgba(92, 145, 199, .18);
+    border-radius: 8px;
+    background: rgba(18, 39, 63, .6);
+    color: var(--text);
+    cursor: pointer;
+    font: inherit;
+}
+.watchlist-row:hover { background: rgba(35, 67, 105, .68); }
+.watchlist-row:focus-visible { outline: 2px solid var(--terminal-focus); outline-offset: 2px; }
+.watchlist-row .watch-symbol { font-size: 12px; font-weight: 700; }
+.watchlist-row .watch-price {
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+.watchlist-row .watch-freshness { grid-column: 1 / -1; font-size: 10px; color: var(--muted); }
+.watchlist-row[data-freshness="live"] .watch-freshness { color: var(--green); }
+.watchlist-row[data-freshness="stale"] .watch-freshness { color: var(--amber); }
+.watchlist-note { margin: 8px 4px 0; font-size: 10px; }
