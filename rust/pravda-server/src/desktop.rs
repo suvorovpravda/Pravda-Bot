@@ -268,8 +268,14 @@ mod tests {
     fn feed_state_never_confuses_disabled_streams_with_missing_network_data() {
         let empty = json!({"symbols": {"BTC/USDT":{}, "ETH/USDT":{}}});
         assert_eq!(stream_state(true, true, &empty), "diagnostic_offline");
-        assert_eq!(stream_state(false, false, &empty), "disabled_by_configuration");
-        assert_eq!(stream_state(false, true, &empty), "awaiting_first_observation");
+        assert_eq!(
+            stream_state(false, false, &empty),
+            "disabled_by_configuration"
+        );
+        assert_eq!(
+            stream_state(false, true, &empty),
+            "awaiting_first_observation"
+        );
         let stale = json!({"symbols":{"BTC/USDT":{"Kraken":{"price":100.0,"status":"stale"}}}});
         assert_eq!(stream_state(false, true, &stale), "observations_stale");
         let live = json!({"symbols":{"BTC/USDT":{"Kraken":{"price":100.0,"status":"live"}}}});
