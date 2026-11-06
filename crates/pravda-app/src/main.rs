@@ -1,6 +1,8 @@
 mod consent;
 mod ipc;
 mod paper;
+#[cfg(all(windows, feature = "signed-updater-runtime"))]
+mod updater_runtime;
 
 use std::sync::Arc;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -172,6 +174,11 @@ async fn main() {
             ipc::ipc_open_source
         ])
         .setup(|app| {
+            #[cfg(all(windows, feature = "signed-updater-runtime"))]
+            updater_runtime::register_if_safe(
+                app,
+                std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true"),
+            );
             // WebDriver's Windows Edge adapter may only enumerate the primary
             // WebView. A debug-only test mode starts the unauthorized local
             // window ALONE, with no new capability or JS command permissions.

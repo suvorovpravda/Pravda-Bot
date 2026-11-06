@@ -257,6 +257,8 @@ jobs:
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
       - name: Verify opt-in security E2E probe compiles on Windows (not executed in ordinary app)
         run: cargo check --locked --manifest-path crates/pravda-app/Cargo.toml --features security-e2e
+      - name: Test dormant signed-updater configuration on Windows
+        run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml --features signed-updater-runtime updater_runtime::tests
       - name: Launch bundled desktop and assert no local HTTP listener
         shell: pwsh
         run: |
