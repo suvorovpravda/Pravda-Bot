@@ -1021,9 +1021,12 @@ authentifié. Aucun téléchargement ou lancement automatique n'est revendiqué.
 
 Le script CI `tools/prepare-updater-release.mjs` produit un `latest.json` Tauri 2
 et un `latest.provenance.json` à partir d'un MSI/NSIS existant, d'un fichier
-`.sig` correspondant, du SHA-256 de l'installateur et du commit exact. Il rejette
-les versions non stables, les tags ou empreintes incohérents, la substitution
-de fichier, un binaire au mauvais format et une signature manquante.
+`.sig`, du SHA-256 de l'installateur et du commit exact. Le contrôle CI exige la
+clé publique de l'environnement protégé via `TAURI_UPDATER_PUBLIC_KEY`, la
+compare à la configuration transmise à la compilation signée, puis vérifie
+la signature Tauri de l'installateur ainsi que la version et le nom liés au
+commentaire signé. Il refuse notamment une clé absente ou incorrecte, une
+signature invalide, un fichier altéré ou une version signée différente.
 
 Commande de préparation (exemple de contrat ; aucun paquet signé n'est attesté) :
 
@@ -1039,9 +1042,11 @@ node tools/prepare-updater-release.mjs `
 
 La destination est fixe : les assets versionnés sous GitHub Releases du dépôt.
 Le manifeste utilise `platforms.windows-x86_64` et le **contenu** réel de
-la signature, non un chemin local. Le fichier de provenance déclare explicitement
-`cryptographic_signature_verified: false` et `authenticode_verified: false` :
-**la préparation de métadonnées ne constitue pas une vérification cryptographique.**
+la signature, non un chemin local. La provenance indique l'empreinte SHA-256
+des 32 octets de la clé publique Ed25519 et `cryptographic_signature_verified: true` après ce contrôle ;
+elle maintient `authenticode_verified: false`. Ce fichier de provenance n'est
+pas lui-même signé et ne démontre ni l'exécution de l'updater installé ni la
+réussite d'une recette Windows ou d'une vérification Authenticode indépendante.
 
 Avant toute publication automatique : intégrer le plugin Rust Tauri updater,
 la clé publique réelle et la signature privée protégée en environnement de
