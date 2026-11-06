@@ -84,11 +84,22 @@ function showDashboardStartupFailure(code) {
     diagnostic.setAttribute("aria-label", "Code de diagnostic du tableau de bord");
     diagnostic.value = "PRAVDA-UI-STARTUP|" + code;
     diagnostic.addEventListener("focus", () => diagnostic.select());
+    // Only an allowlisted static boot phase is exposed, not error text, stack,
+    // URLs, system paths or saved credentials.
+    const bootPhase = document.createElement("input");
+    bootPhase.className = "ipc-bootstrap-phase";
+    bootPhase.type = "text";
+    bootPhase.readOnly = true;
+    bootPhase.setAttribute("aria-label", "Phase de démarrage du tableau de bord");
+    const phase = window.pravdaDashboardPhase;
+    bootPhase.value = "PRAVDA-UI-PHASE|" +
+        (typeof phase === "string" && /^P(?:0[0-9]|1[0-5])$/.test(phase) ? phase : "PXX");
+    bootPhase.addEventListener("focus", () => bootPhase.select());
     const reload = document.createElement("button");
     reload.type = "button";
     reload.textContent = "Réessayer le chargement local";
     reload.addEventListener("click", () => window.location.reload());
-    recovery.append(explanation, diagnostic, reload);
+    recovery.append(explanation, diagnostic, bootPhase, reload);
     card.append(recovery);
 }
 
