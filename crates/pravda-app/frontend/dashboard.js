@@ -1203,8 +1203,15 @@ const translations = {
             $("updater-state").textContent = "Configuration des mises à jour indisponible.";
             $("updater-checked").textContent = "Aucun résultat de mise à jour n'a été vérifié.";
         } finally {
+            const sessionChanged = generation !== window.pravdaAuthGeneration;
             updateReadinessBusy = false;
             button.disabled = false;
+            // A pending IPC from a previous login must not suppress the new
+            // session's initial configuration read. Retry only after the old
+            // request releases the single-flight guard and a session exists.
+            if (sessionChanged && securitySessionReady()) {
+                void refreshUpdateReadiness();
+            }
         }
     }
     $("updater-readiness").addEventListener("click", refreshUpdateReadiness);
