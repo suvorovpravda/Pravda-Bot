@@ -1546,7 +1546,7 @@ const translations = {
             queuedAuthRefreshGeneration = null;
             if (nextGeneration !== null &&
                 nextGeneration === window.pravdaAuthGeneration &&
-                !$("shell").hidden) {
+                securityShell && !securityShell.hidden) {
                 // Re-run after releasing the guard. Old generation results are
                 // already ignored individually by their IPC response guards.
                 void refreshAll();
