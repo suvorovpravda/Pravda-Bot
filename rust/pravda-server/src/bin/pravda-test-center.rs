@@ -601,7 +601,9 @@ fn run() -> Result<PathBuf, String> {
     )
     .map_err(|_| "Cannot save report JSON")?;
     fs::write(&html, render_html(&report)).map_err(|_| "Cannot save report HTML")?;
-    if !std::env::args().any(|arg| arg == "--ci" || arg == "--monitor-once" || arg == "--monitor-worker") {
+    if !std::env::args()
+        .any(|arg| arg == "--ci" || arg == "--monitor-once" || arg == "--monitor-worker")
+    {
         let _ = Command::new("explorer.exe").arg(&html).spawn();
     }
     Ok(folder)
