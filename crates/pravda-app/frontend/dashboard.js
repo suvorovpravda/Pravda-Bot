@@ -1,3 +1,6 @@
+// Bounded, non-sensitive bootstrap stage for the installed Windows GUI test.
+// Never contains credentials, filesystem details or exception text.
+window.pravdaDashboardPhase = "P00";
 const translations = {
         fr: {
             language: "Langue",
@@ -205,6 +208,7 @@ const translations = {
             aisUnavailable: "AIS unavailable"
         }
     };
+    window.pravdaDashboardPhase = "P01";
     const supportedLanguages = Object.keys(translations);
     const languageLocales = { fr: "fr-FR", ru: "ru-RU", en: "en-GB" };
     let currentLanguage = "fr";
@@ -282,6 +286,7 @@ const translations = {
         const parsed = Number(String(value ?? "").trim().replace(",", "."));
         return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
     };
+    window.pravdaDashboardPhase = "P02";
     let historicalPoints = [];
     let latestMarket = null;
     let latestFx = null;
@@ -1178,6 +1183,7 @@ const translations = {
         $("updater-checked").textContent = "Aucune vérification réseau ou installation effectuée.";
     }
     window.pravdaClearUpdateReadiness = clearUpdateReadiness;
+    window.pravdaDashboardPhase = "P04";
     async function refreshUpdateReadiness() {
         const generation = window.pravdaAuthGeneration;
         if (!securitySessionReady()) {
@@ -1375,6 +1381,7 @@ const translations = {
             if (generation !== window.pravdaAuthGeneration) refreshPaper(true);
         }
     }
+    window.pravdaDashboardPhase = "P03";
     $("paper-order-form").addEventListener("submit", event => {
         event.preventDefault();
         paperAction("ipc_paper_trade", {
@@ -1406,6 +1413,7 @@ const translations = {
     $("revolut-refresh").addEventListener("click",refreshRevolut);
     let fxRequestNumber = 0;
     let lastSettledFxRequest = 0;
+    window.pravdaDashboardPhase = "P05";
     async function refreshFx() {
         const requestGeneration = window.pravdaAuthGeneration;
         const requestNumber = ++fxRequestNumber;
@@ -1487,6 +1495,7 @@ const translations = {
             list.textContent = t("newsFailure");
         }
     }
+    window.pravdaDashboardPhase = "P06";
     async function refreshCrypto() {
         const requestGeneration = window.pravdaAuthGeneration;
         try {
@@ -1592,6 +1601,7 @@ const translations = {
             $("ais-data").textContent = t("aisUnavailable");
         }
     }
+    window.pravdaDashboardPhase = "P07";
     function updateClock() { $("clock").textContent = new Date().toLocaleTimeString(languageLocales[currentLanguage]); }
     let refreshInFlight = false;
     let refreshGenerationInFlight = null;
@@ -1639,6 +1649,7 @@ const translations = {
             }
         }
     }
+    window.pravdaDashboardPhase = "P08";
     $("refresh-button").addEventListener("click", refreshAll);
     $("language-select").addEventListener("change", () => {
         currentLanguage = supportedLanguages.includes($("language-select").value) ? $("language-select").value : "fr";
@@ -1699,6 +1710,7 @@ const translations = {
         }
         if(changed){storeLocalAlerts();showLocalAlerts();}
     }
+    window.pravdaDashboardPhase = "P09";
     showLocalAlerts();
     $("alert-notice").textContent="Alertes locales actives tant que Pravda-Bot est ouvert, sans ordre de trading ni notification distante.";
     $("price-alert-form").addEventListener("submit", event => {
@@ -1743,7 +1755,9 @@ const translations = {
         link.addEventListener("click", event => event.preventDefault());
     }
     window.addEventListener("resize", drawPriceChart);
+    window.pravdaDashboardPhase = "P10";
     applyLanguage();
+    window.pravdaDashboardPhase = "P11";
     refreshAll();
     function startPolling() {
         setInterval(updateClock, 1000);
@@ -1755,7 +1769,9 @@ const translations = {
         setInterval(refreshCrypto, 5000);
         setInterval(refreshSources, 60000);
     }
+    window.pravdaDashboardPhase = "P12";
     startPolling();
+    window.pravdaDashboardPhase = "P13";
     refreshSystem();
     setInterval(refreshSystem, 10000);
     
@@ -1797,8 +1813,10 @@ const translations = {
         if(route==="revolut")refreshRevolut();
     }));
     window.addEventListener("hashchange",()=>applyTab(tabFromHash()));
+    window.pravdaDashboardPhase = "P14";
     applyTab(tabFromHash());
 
     // The existing one-second IPC snapshot poll replaces the WebSocket transport.
     // A script load event alone does not prove the event handlers initialized.
+    window.pravdaDashboardPhase = "P15";
     window.pravdaDashboardReady = true;
