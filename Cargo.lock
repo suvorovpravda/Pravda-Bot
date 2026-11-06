@@ -1137,7 +1137,7 @@ dependencies = [
 name = "pravda-fetchers"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "futures-util",
  "quick-xml",
@@ -1164,7 +1164,7 @@ name = "pravda-server"
 version = "0.3.4"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "futures-util",
  "getrandom 0.4.3",

@@ -31,5 +31,5 @@ windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_
 zeroize = "1.9"
 
 [dev-dependencies]
-base64 = "0.22"
+base64 = "0.23"
 ring = "0.17"
