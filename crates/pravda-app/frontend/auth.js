@@ -49,6 +49,7 @@ let loginVisible = false;
 // Never copy an exception message, stack, full URL, user text or credentials.
 // A script "load" event does not prove dashboard initialization succeeded.
 let dashboardFaultCode = "DASHBOARD_INIT_UNKNOWN";
+let dashboardFaultCause = "NOT_CLASSIFIED";
 const dashboardSource = source =>
     typeof source === "string" &&
     /(?:^|\/)dashboard\.js(?:[?#].*)?$/.test(source);
@@ -62,6 +63,15 @@ window.addEventListener("error", event => {
     const line = Number.isSafeInteger(event.lineno) && event.lineno > 0 &&
         event.lineno <= 100000 ? event.lineno : 0;
     dashboardFaultCode = "DASHBOARD_" + category + "_L" + line;
+    // Only emit a closed, non-sensitive category. Never persist exception text
+    // or a stack trace: runtime messages may embed user/system details.
+    const reason = typeof event.error?.message === "string" ? event.error.message : "";
+    dashboardFaultCause = category !== "RANGE" ? "NOT_RANGE" :
+        /maximum call stack|too much recursion|stack overflow/i.test(reason) ? "STACK_OVERFLOW" :
+        /invalid array length/i.test(reason) ? "ARRAY_LENGTH" :
+        /invalid time value|invalid date/i.test(reason) ? "INVALID_DATE" :
+        /fraction digits|precision/i.test(reason) ? "PRECISION" :
+        /invalid count value|repeat count/i.test(reason) ? "REPEAT_COUNT" : "OTHER_RANGE";
 }, true);
 
 function showDashboardStartupFailure(code) {
@@ -93,13 +103,20 @@ function showDashboardStartupFailure(code) {
     bootPhase.setAttribute("aria-label", "Phase de démarrage du tableau de bord");
     const phase = window.pravdaDashboardPhase;
     bootPhase.value = "PRAVDA-UI-PHASE|" +
-        (typeof phase === "string" && /^P(?:0[0-9]|1[0-5])$/.test(phase) ? phase : "PXX");
+        (typeof phase === "string" && /^P(?:0[0-9]|1[0-5]|02[A-I])$/.test(phase) ? phase : "PXX");
     bootPhase.addEventListener("focus", () => bootPhase.select());
+    const safeCause = document.createElement("input");
+    safeCause.className = "ipc-startup-cause";
+    safeCause.type = "text";
+    safeCause.readOnly = true;
+    safeCause.setAttribute("aria-label", "Catégorie de l'erreur de démarrage");
+    safeCause.value = "PRAVDA-UI-CAUSE|" + dashboardFaultCause;
+    safeCause.addEventListener("focus", () => safeCause.select());
     const reload = document.createElement("button");
     reload.type = "button";
     reload.textContent = "Réessayer le chargement local";
     reload.addEventListener("click", () => window.location.reload());
-    recovery.append(explanation, diagnostic, bootPhase, reload);
+    recovery.append(explanation, diagnostic, bootPhase, safeCause, reload);
     card.append(recovery);
 }
 
@@ -155,6 +172,7 @@ function activateDashboard() {
     if (dashboardLoading) return;
     dashboardLoading = true;
     dashboardFaultCode = "DASHBOARD_INIT_UNKNOWN";
+    dashboardFaultCause = "NOT_CLASSIFIED";
     window.pravdaDashboardReady = false;
     const script = document.createElement("script");
     script.src = "./dashboard.js";
