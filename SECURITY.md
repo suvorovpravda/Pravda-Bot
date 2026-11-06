@@ -35,7 +35,7 @@ Aucune certification indépendante ou garantie d'absence de vulnérabilité n'es
 | Updater Tauri signé | **Désactivé** | Chaîne cryptographique et scénarios de restauration non homologués |
 | Ordres réels / retraits | **Interdits dans l'édition test** | Consentement et homologation financière indépendants |
 
-Toutes les exigences et preuves à obtenir figurent dans l'[Issue #160 — Security / Déploiement](https://github.com/suvorovpravda/Pravda-Bot/issues/160). Ne pas clore une vulnérabilité au seul motif que son suivi a été déplacé.
+Toutes les exigences et preuves à obtenir figurent dans l'[Issue #160 — Security / Déploiement](https://github.com/suvorovpravda/Pravda-Bot/issues/160). La configuration d'installation Tauri utilise `offlineInstaller` pour le prérequis WebView2, **mais l'essai réellement hors réseau sur VM vierge reste NO-GO**. Ne pas clore une vulnérabilité au seul motif que son suivi a été déplacé.
 
 ## Frontières de confiance
 
