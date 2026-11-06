@@ -18,6 +18,16 @@
 
 ---
 
+## ⚡ Live Pulse — progression quasi en temps réel
+
+![Suivi automatique GitHub : progression historique, CI au SHA de référence, PR et Issues ouvertes, publication NO-GO](docs/assets/pravda-live-status.svg)
+
+**[Voir le statut JSON vérifiable](docs/assets/pravda-live-status.json)** · **[Historique des actualisations GitHub](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
+
+Ce panneau se **synchronisera automatiquement toutes les 10 minutes environ**, et après la fin des workflows CI surveillés, une fois la PR documentaire fusionnée sur `main`. GitHub Actions fonctionne en *best effort* : les exécutions peuvent être décalées ou ponctuellement absentes. Les changements sont enregistrés uniquement si les valeurs GitHub évoluent, afin d'éviter des centaines de commits de simple horodatage.
+
+**Source de vérité :** derniers runs CI sur `main` et leur SHA, nombre de PR/Issues ouvertes, et jalons chiffrés du guide central. Les audits RustSec **non bloquants** affichent `OBSERVE ONLY`, jamais un feu vert de sécurité. **Un workflow PASS n'est pas un GO production.** La dernière preuve affichée est horodatée ; si la synchronisation échoue, les données restent celles de la dernière réussite et ne doivent pas être considérées comme instantanées.
+
 ## 🌌 Control dashboard
 
 ![Cockpit néon Pravda-Bot : jauges techniques historiques, neuf domaines de progression, décision de publication NO-GO et barrières de release](docs/assets/pravda-progress-cockpit.svg)
