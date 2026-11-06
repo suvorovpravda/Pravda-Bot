@@ -249,6 +249,39 @@ jobs:
           $exe = Get-Item -LiteralPath 'target/release/pravda-test-center.exe' -ErrorAction Stop
           if ($exe.Length -lt 1000000) { throw 'Single-click test center did not embed the release payloads' }
           Copy-Item -LiteralPath $exe.FullName -Destination 'crates/pravda-app/target/release/pravda-test-center.exe' -Force
+      - name: Verify continuous offline diagnostic agent in a single bounded cycle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PRAVDA_TEST_CENTER_REPORT_DIR = Join-Path $env:RUNNER_TEMP ('pravda-agent-ci-' + [guid]::NewGuid().ToString('N'))
+          $env:PRAVDA_API_TOKEN = 'DO_NOT_LEAK_MONITOR_SENTINEL'
+          New-Item -ItemType Directory -Force -Path $env:PRAVDA_TEST_CENTER_REPORT_DIR | Out-Null
+          $exe = (Resolve-Path 'target/release/pravda-test-center.exe').Path
+          $job = Start-Process -FilePath $exe -ArgumentList '--monitor-once' -Wait -PassThru
+          if ($job.ExitCode -ne 0) { throw 'Offline diagnostic agent first cycle failed' }
+          $reportPath = Join-Path $env:PRAVDA_TEST_CENTER_REPORT_DIR 'PRAVDA-COPIER-ICI.txt'
+          $jsonPath = Join-Path $env:PRAVDA_TEST_CENTER_REPORT_DIR 'PRAVDA-DERNIERS-TESTS.json'
+          $htmlPath = Join-Path $env:PRAVDA_TEST_CENTER_REPORT_DIR 'PRAVDA-RESULTATS.html'
+          $statusPath = Join-Path $env:PRAVDA_TEST_CENTER_REPORT_DIR 'PRAVDA-ETAT.txt'
+          foreach ($path in @($reportPath, $jsonPath, $htmlPath, $statusPath)) {
+            if (-not (Test-Path -LiteralPath $path)) { throw "Monitor output missing: $([IO.Path]::GetFileName($path))" }
+          }
+          $body = Get-Content -LiteralPath $reportPath -Raw
+          if ($body.Contains($env:PRAVDA_API_TOKEN)) { throw 'Monitor report disclosed environment credential' }
+          $report = $body | ConvertFrom-Json
+          if ($report.product -ne 'Pravda-Bot' -or $report.signed_release -ne $false) {
+            throw 'Monitor report has an unexpected product or signature claim'
+          }
+          foreach ($name in @('doctor_startup', 'harness_smoke', 'desktop_process', 'synthetic_sqlite_health')) {
+            $entry = @($report.findings | Where-Object { $_.check -eq $name })
+            if ($entry.Count -ne 1 -or $entry[0].status -ne 'PASS') {
+              throw "Monitor missing required offline test: $name"
+            }
+          }
+          if ($body -ne (Get-Content -LiteralPath $jsonPath -Raw)) {
+            throw 'Copy-paste and machine-readable monitor reports differ'
+          }
+          Write-Host 'PASS: single-cycle background agent report, privacy, synthetic tests and stable copyable output'
       - name: Sign embedded one-click test center with Authenticode
         if: ${{ inputs.signed }}
         shell: pwsh
