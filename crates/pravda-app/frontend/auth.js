@@ -42,6 +42,7 @@ shell.hidden = true;
 
 let setup = false;
 let dashboardLoaded = false;
+let dashboardLoading = false;
 let working = false;
 let loginVisible = false;
 // Capture only a closed diagnostic category and an in-file line number.
@@ -138,9 +139,16 @@ function activateDashboard() {
         if (typeof window.refreshPaper === "function") window.refreshPaper();
         return;
     }
+    // Multiple login confirmations must not inject dashboard.js twice.
+    // Duplicate initialization can bind event handlers twice and repeat alerts.
+    if (dashboardLoading) return;
+    dashboardLoading = true;
+    dashboardFaultCode = "DASHBOARD_INIT_UNKNOWN";
+    window.pravdaDashboardReady = false;
     const script = document.createElement("script");
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
+        dashboardLoading = false;
         const logoutForm = document.getElementById("ipc-logout-form");
         logoutForm.addEventListener("submit", async event => {
             event.preventDefault();
@@ -158,6 +166,7 @@ function activateDashboard() {
         dashboardLoaded = true;
     });
     script.addEventListener("error", () => {
+        dashboardLoading = false;
         showDashboardStartupFailure("DASHBOARD_RESOURCE_UNAVAILABLE");
     });
     document.body.append(script);
