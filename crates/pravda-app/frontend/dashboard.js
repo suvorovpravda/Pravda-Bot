@@ -1424,13 +1424,24 @@ const translations = {
     }
     function updateClock() { $("clock").textContent = new Date().toLocaleTimeString(languageLocales[currentLanguage]); }
     let refreshInFlight = false;
+    let refreshGenerationInFlight = null;
+    let queuedAuthRefreshGeneration = null;
     async function refreshAll() {
         const button = $("refresh-button");
+        const requestedGeneration = window.pravdaAuthGeneration;
         if (refreshInFlight) {
-            button.title = "Actualisation déjà en cours";
+            // A login changes the Rust session generation. Do not discard its
+            // refresh just because a previous session still has IPC in flight.
+            if (requestedGeneration !== refreshGenerationInFlight) {
+                queuedAuthRefreshGeneration = requestedGeneration;
+                button.title = "Nouvelle session : actualisation en attente";
+            } else {
+                button.title = "Actualisation déjà en cours";
+            }
             return;
         }
         refreshInFlight = true;
+        refreshGenerationInFlight = requestedGeneration;
         button.disabled = true;
         button.textContent = "↻ Actualisation en cours…";
         $("daily-report").removeAttribute("href");
@@ -1445,7 +1456,17 @@ const translations = {
                 "Dernière tentative d'actualisation locale (les sources peuvent rester périmées)";
         } finally {
             refreshInFlight = false;
+            refreshGenerationInFlight = null;
             button.disabled = false;
+            const nextGeneration = queuedAuthRefreshGeneration;
+            queuedAuthRefreshGeneration = null;
+            if (nextGeneration !== null &&
+                nextGeneration === window.pravdaAuthGeneration &&
+                !$("shell").hidden) {
+                // Re-run after releasing the guard. Old generation results are
+                // already ignored individually by their IPC response guards.
+                void refreshAll();
+            }
         }
     }
     $("refresh-button").addEventListener("click", refreshAll);

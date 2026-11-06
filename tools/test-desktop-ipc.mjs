@@ -95,6 +95,12 @@ assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
   "A failed dashboard initialization must produce a visible local error");
 assert.match(js,/button\.textContent = "↻ Tentative à "/,
   "Manual refresh must provide visible feedback without inventing fresh market data");
+assert.match(js,/queuedAuthRefreshGeneration = requestedGeneration;/,
+  "Reauthentication refresh must queue behind a prior in-flight session batch");
+assert.match(js,/nextGeneration === window\.pravdaAuthGeneration/,
+  "Queued refresh must be bound to the current authenticated Rust session");
+assert.match(js,/void refreshAll\(\);/,
+  "Queued refresh must execute once the old in-flight operation releases");
 assert.match(html,/les mêmes contrôles locaux Rust/,
   "Preproduction and postproduction must describe their current shared scope");
 assert.match(js,/window\.pravdaInvoke\("ipc_acceptance_report", \{phase\}\)/,
