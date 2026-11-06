@@ -129,6 +129,10 @@ assert.match(js,/nextGeneration === window\.pravdaAuthGeneration/,
   "Queued refresh must be bound to the current authenticated Rust session");
 assert.match(js,/void refreshAll\(\);/,
   "Queued refresh must execute once the old in-flight operation releases");
+assert.match(js,/nextGeneration === window\.pravdaAuthGeneration &&\s*securityShell && !securityShell\.hidden/,
+  "Queued refresh must use the existing main shell reference after reauthentication");
+assert.doesNotMatch(js,/\$\("shell"\)/,
+  "Queued refresh must not dereference an element ID absent from the desktop HTML");
 assert.match(html,/les mêmes contrôles locaux Rust/,
   "Preproduction and postproduction must describe their current shared scope");
 assert.match(js,/window\.pravdaInvoke\("ipc_acceptance_report", \{phase\}\)/,
