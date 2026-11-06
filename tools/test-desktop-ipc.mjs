@@ -187,6 +187,11 @@ assert.equal(bootNodes.length,1);
 const fields=bootNodes[0].children;
 const diagnostic=fields.find(node=>node.tag==="input");
 assert.equal(diagnostic?.value,"PRAVDA-UI-STARTUP|DASHBOARD_TYPE_L1234");
+const bootPhase = fields.find(node=>node.tag==="input" && node !== diagnostic);
+assert.equal(bootPhase?.value,"PRAVDA-UI-PHASE|PXX",
+  "No user data or exception stack may appear in the bounded bootstrap phase");
+assert.equal((js.match(/window\\.pravdaDashboardPhase = "P[0-9]{2}";/g)||[]).length,16,
+  "Installed GUI must expose static startup phases for regression diagnosis");
 assert.doesNotMatch(JSON.stringify(fields),/SECRET_DO_NOT_LOG|tauri\.localhost/,
   "Diagnostics must never contain exception text, source URLs, stack traces or credentials");
 assert.match(js,/button\.textContent = "↻ Tentative à "/,
