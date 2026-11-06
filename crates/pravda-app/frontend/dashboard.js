@@ -1593,6 +1593,8 @@ const translations = {
     const tabButtons = document.querySelectorAll('.tab-btn');
     const allCards = () => Array.from(document.querySelectorAll('.card[data-category]'));
     function applyTab(tab){
+        // Let CSS widen the chosen module instead of keeping empty sidebars.
+        document.querySelector(".shell").dataset.activeTab = tab;
         tabButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.tab===tab));
         const cards = allCards();
         if(tab==='all'){
@@ -1606,6 +1608,9 @@ const translations = {
         }
         // Keep general cards visible
         document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
+        if (tab === "markets" || tab === "all") {
+            requestAnimationFrame(drawPriceChart);
+        }
         if (tab === "security") {
             refreshSecurity(true);
             refreshSecurityEvents();

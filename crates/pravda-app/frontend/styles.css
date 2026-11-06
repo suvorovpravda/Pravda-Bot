@@ -333,3 +333,151 @@ textarea:focus-visible, input:focus-visible {
     }
     .feature-tile:hover { transform: none; }
 }
+
+
+/* Institutional market workspace + modern data visualization.
+   Three real panels reuse existing functional controls; no fake quotes or
+   network fonts. Filtered tabs expand to full width for accessibility. */
+.terminal-cockpit {
+    display: grid;
+    grid-template-columns: minmax(225px, .77fr) minmax(0, 2.45fr) minmax(300px, 1.08fr);
+    grid-template-areas: "watch market risk";
+    gap: 13px;
+    align-items: start;
+    margin: 12px 0 22px;
+}
+.terminal-pane-label {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    margin: 0;
+    padding: 10px 5px 7px;
+    border-bottom: 1px solid var(--terminal-stroke);
+    color: var(--text);
+    font-size: 13px;
+    line-height: 1.25;
+    font-weight: 750;
+    letter-spacing: .025em;
+    grid-column: 1 / -1;
+}
+.terminal-pane-label span {
+    font-size: 9px;
+    color: var(--cyan);
+    letter-spacing: .12em;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.terminal-cockpit .feature-grid {
+    grid-area: watch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 10px;
+    margin: 0;
+}
+.terminal-cockpit .feature-tile {
+    min-height: 0;
+    padding: 16px;
+    border-radius: 12px;
+}
+.terminal-cockpit .feature-tile h2 { font-size: 17px; }
+.terminal-cockpit .feature-tile .feature-actions { gap: 6px; }
+.terminal-cockpit .feature-tile .button { font-size: 12px; padding: 7px 9px; }
+.terminal-cockpit .terminal-market {
+    grid-area: market;
+    min-width: 0;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    align-content: start;
+    gap: 10px;
+}
+.terminal-cockpit .terminal-market .crypto-live-card,
+.terminal-cockpit .terminal-market .fx-live-card {
+    grid-column: span 12;
+}
+.terminal-cockpit .market-grid { grid-template-columns: minmax(0, 1fr); }
+.terminal-cockpit .market-chart { height: clamp(260px, 25vw, 410px); }
+.terminal-cockpit .terminal-extras {
+    grid-area: risk;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: start;
+    gap: 10px;
+    margin: 0;
+    max-height: max(540px, calc(100vh - 215px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--line) transparent;
+    scrollbar-width: thin;
+}
+.terminal-cockpit .terminal-extras .secondary-card {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+.terminal-cockpit .terminal-extras .card-head,
+.terminal-cockpit .terminal-market .card-head { padding: 15px 16px 12px; }
+.terminal-cockpit .terminal-extras .card-body,
+.terminal-cockpit .terminal-market .card-body { padding: 0 16px 16px; }
+.terminal-cockpit .terminal-extras .provider-grid,
+.terminal-cockpit .terminal-extras .runtime-tiles,
+.terminal-cockpit .terminal-extras .security-checks {
+    grid-template-columns: minmax(0, 1fr);
+}
+.terminal-cockpit .terminal-extras .connector-grid {
+    grid-template-columns: minmax(0, 1fr);
+}
+.terminal-cockpit .terminal-extras .paper-order-form {
+    grid-template-columns: repeat(auto-fit, minmax(125px, 1fr));
+}
+.terminal-cockpit .terminal-extras .card { box-shadow: none; }
+/* Navigation is functional: a single selected module gets the full workspace,
+   instead of rendering two or three empty terminal columns around it. */
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit {
+    display: block;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .feature-grid {
+    display: none;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-extras {
+    max-height: none;
+    overflow: visible;
+    display: grid;
+    margin-top: 12px;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-market {
+    margin-top: 12px;
+}
+.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-pane-label {
+    display: none;
+}
+@media (max-width: 1450px) {
+    .terminal-cockpit {
+        grid-template-columns: minmax(220px, .72fr) minmax(0, 2fr);
+        grid-template-areas: "watch market" "risk risk";
+    }
+    .terminal-cockpit .terminal-extras {
+        max-height: none;
+        overflow: visible;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .terminal-cockpit .terminal-extras .terminal-pane-label { grid-column: 1 / -1; }
+    .terminal-cockpit .terminal-extras .secondary-card { grid-column: auto; }
+    .terminal-cockpit .terminal-extras [data-category="security"] { grid-column: 1 / -1; }
+}
+@media (max-width: 1000px) {
+    .terminal-cockpit {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-areas: "market" "watch" "risk";
+    }
+    .terminal-cockpit .feature-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .terminal-cockpit .terminal-extras { grid-template-columns: minmax(0, 1fr); }
+    .terminal-cockpit .terminal-extras .secondary-card { grid-column: 1 / -1; }
+}
+@media (max-width: 700px) {
+    .terminal-cockpit .feature-grid { grid-template-columns: minmax(0, 1fr); }
+    .terminal-cockpit .market-chart { height: 280px; }
+    .terminal-pane-label span { white-space: normal; }
+}

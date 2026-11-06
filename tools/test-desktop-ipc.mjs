@@ -77,6 +77,22 @@ assert.match(html,/data-go-tab="system">Consulter les métriques<\//,
   "Maintenance must reuse the existing Rust runtime metrics, not spawn a shell");
 assert.match(html,/id="security-events"/,
   "Maintenance must retain bounded in-memory security event viewer");
+assert.match(html,/class="terminal-cockpit"/,
+  "Terminal must group real market, risk and watchlist modules in one cockpit");
+assert.match(html,/class="grid terminal-market"/,
+  "Market charts must remain a functional central workspace");
+assert.match(html,/class="grid terminal-extras"/,
+  "Security and runtime modules must remain visible in the same application");
+assert.match(css,/grid-template-areas:\s*"watch market risk"/,
+  "Large screens must use a three-pane institutional terminal grid");
+assert.match(css,/grid-template-areas:\s*"market"\s*"watch"\s*"risk"/,
+  "Narrow screens must prioritize the live chart");
+assert.match(js,/document\.querySelector\("\.shell"\)\.dataset\.activeTab = tab;/,
+  "Filtered navigation must expand its active functional module");
+assert.match(js,/requestAnimationFrame\(drawPriceChart\)/,
+  "Chart must redraw after switching from a hidden tab into the central workspace");
+assert.match(css,/prefers-reduced-motion:\s*reduce/,
+  "Visual transitions must respect system accessibility settings");
 assert.match(html,/id="acceptance-center"/,
   "Installed desktop must own a native test center");
 assert.match(html,/id="acceptance-pre"/, "Preproduction button must exist");
