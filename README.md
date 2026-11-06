@@ -61,7 +61,7 @@ Les trois extensions P1 [trading réel #89](https://github.com/suvorovpravda/Pra
 
 **Aucun nouvel installeur ne doit être présenté comme terminé** tant que la PR #159 n'a pas passé les tests nécessaires au même SHA : installation MSI/NSIS, création du mot de passe, tableau de bord initialisé, redémarrage, reconnexion, diagnostic et conservation des données.
 
-Les archives GitHub Actions sont des candidats temporaires ; une archive non signée n'est pas une release Enterprise. Ne jamais désactiver Windows Defender, SmartScreen ou l'UAC pour contourner une alerte.
+Les archives GitHub Actions sont des candidats temporaires ; une archive non signée n'est pas une release Enterprise. La configuration MSI/NSIS prévoit le prérequis WebView2 embarqué en mode `offlineInstaller`, **sans constituer une preuve de recette VM sans réseau**. Ne jamais désactiver Windows Defender, SmartScreen ou l'UAC pour contourner une alerte.
 
 ## Utilisation visée
 
