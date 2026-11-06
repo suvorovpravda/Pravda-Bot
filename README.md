@@ -1,120 +1,154 @@
 <div align="center">
 
-# PRAVDA / BOT
+# 🛰️ PRAVDA-BOT
+### MARKET INTELLIGENCE · WINDOWS CONTROL CENTER
 
-### Le marché, sans le bruit.
+**Surveillance des marchés · Simulation maîtrisée · Diagnostics natifs**
 
-**Observatoire de marchés · Simulation sécurisée · Diagnostics Windows**
+![Windows](https://img.shields.io/badge/WINDOWS-x64-4F85FF?style=for-the-badge&logo=windows)
+![Rust](https://img.shields.io/badge/ENGINE-RUST-8B7CFF?style=for-the-badge&logo=rust)
+![Tauri](https://img.shields.io/badge/DESKTOP-TAURI%202-705CF4?style=for-the-badge)
+![SQLite](https://img.shields.io/badge/STORAGE-SQLITE-28A8E9?style=for-the-badge)
+![Release](https://img.shields.io/badge/RELEASE-NO--GO-FF507F?style=for-the-badge)
+![Live](https://img.shields.io/badge/LIVE%20ORDERS-OFF-3DC7AD?style=for-the-badge)
 
-Windows x64 &nbsp; / &nbsp; Rust + Tauri 2 &nbsp; / &nbsp; SQLite local
-
-[Le produit](#le-produit) &nbsp;·&nbsp; [Livraison](#état-de-livraison) &nbsp;·&nbsp; [Architecture](#architecture) &nbsp;·&nbsp; [Sécurité](SECURITY.md) &nbsp;·&nbsp; [Reviewing](docs/REVIEWING.md)
+[**Dashboard**](#-control-dashboard) · [**Progression**](#-progression-historique) · [**Modules**](#-modules--état-réel) · [**Architecture**](#-architecture) · [**Security**](SECURITY.md) · [**Reviewing**](docs/REVIEWING.md)
 
 </div>
 
 ---
 
-## Le produit
+## 🌌 Control dashboard
 
-**Un seul espace pour observer les marchés, interpréter les données et maîtriser les risques.**
+![Cockpit néon Pravda-Bot : jauges techniques historiques, neuf domaines de progression, décision de publication NO-GO et barrières de release](docs/assets/pravda-progress-cockpit.svg)
 
-Pravda-Bot réunit cotations publiques, graphiques, provenance des sources, alertes, simulation et outils de contrôle. Une valeur absente n'est jamais remplacée par un prix inventé. La fraîcheur et la disponibilité doivent être visibles.
+> **Lecture des chiffres.** Les jauges représentent la **baseline historique du guide technique**, et non un taux de disponibilité du produit. L'indicateur global **47 %** correspond à **20 jalons sur 43** dans les neuf domaines historiques. Il **ne signifie pas que Pravda-Bot fonctionne à 47 %**.
 
-| Espace | Fonction | Limite |
-| :--- | :--- | :--- |
-| **Marchés** | Cotations Kraken/Binance, graphiques et historique | Connexions et prix réels à confirmer, jamais simulés comme réels |
-| **Sources** | Références publiques, macroéconomie et actualité | Provenance, fraîcheur et consentement |
-| **Simulation** | Paper trading et scénarios de risque | Aucun ordre financier réel |
-| **Système** | CPU, mémoire, disque, état SQLite | Diagnostics locaux, aucun secret vers la WebView |
-| **Sécurité** | Sessions Rust, contrôles IPC, rapports | FAIL/WARN/SKIP explicites ; aucun succès fictif |
+<div align="center">
 
-L'application Windows repose sur **Tauri 2 / WebView2**, avec un cœur **Rust** et une base locale **SQLite/WAL**. Les anciennes sources Python sont archivées : elles ne font pas partie du runtime Windows.
+[![Rust CI](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml)
+[![CodeQL](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml)
+[![Windows Packaging](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml/badge.svg?branch=main)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/windows-package.yml)
 
-## État de livraison
+![Monitoring](https://img.shields.io/badge/MARKET%20DATA-VALIDATION%20REQUIRED-FFB656?style=flat-square)
+![Diagnostics](https://img.shields.io/badge/DIAGNOSTICS-LOCAL-32D5F6?style=flat-square)
+![Paper](https://img.shields.io/badge/PAPER%20TRADING-ISOLATED-A28EFF?style=flat-square)
+![Updater](https://img.shields.io/badge/AUTO%20UPDATER-OFF-FF4D8F?style=flat-square)
+![Signing](https://img.shields.io/badge/ENTERPRISE%20SIGNING-NOT%20QUALIFIED-FF6B82?style=flat-square)
 
-**06 novembre 2026 · NO-GO production.** L'objectif reste le **30 novembre 2026**, mais la publication dépend des preuves de recette.
+</div>
 
-> **Défaut réel :** lors du test de l'application installée, la création du mot de passe réussit puis le tableau de bord ne finit pas son initialisation. Le job Windows de la [PR #157](https://github.com/suvorovpravda/Pravda-Bot/pull/157) a échoué avec le diagnostic « Desktop startup reported a partial dashboard initialization » ([run 42290188079](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42290188079)). Une compilation verte n'est pas une validation de cette interface.
+Les badges CI reflètent les workflows de **main** au moment de l'affichage. Ils ne prouvent **ni** que l'installation Windows marche sur le PC cible, **ni** une certification de sécurité.
 
-| Capacité | Situation actuelle |
-| :--- | :--- |
-| Rust, Tauri et stockage SQLite | Fondations présentes ; tests de composants |
-| Installeurs Windows MSI / NSIS | Construits en CI ; **recette intégrée finale non acquise** |
-| Authentification et GUI installée | **Blocage confirmé** sur le parcours de première connexion |
-| Bureau sans terminal attaché | Correction intégrée à la PR #159 ; package final à valider |
-| Flux publics Binance/Kraken | Reconnexion et état des flux retravaillés ; observations réelles sur PC non vérifiées |
-| Doctor, Harness, diagnostic continu | Diagnostics locaux et essais isolés ; ne prouvent pas la connectivité publique |
-| VM vierge sans réseau / WebView2 | Non homologuée |
-| Installation personnalisée | Non homologuée |
-| Signature Enterprise et auto-updater | Non déployés en production |
-| Trading réel Revolut X et retraits | **Désactivés** |
+## 📊 Progression historique
 
-### Un seul chantier P0
+**Neuf domaines P0–P2, chiffres du [guide central](docs/PRAVDA-GUIDE.md), non assimilables à un score de sécurité ou à une préparation à la production.**
 
-**[PR #159 — intégration Windows, marchés et diagnostics](https://github.com/suvorovpravda/Pravda-Bot/pull/159)** : branche unique regroupant les anciennes PR #156, #157 et #158. Elles ont été fermées sans fusion séparée afin d'éviter des validations contradictoires. La PR #153 de vérification cryptographique des candidats a été fusionnée, mais **n'active pas** les mises à jour automatiques.
-
-**[Issue #160 — Security / Déploiement : GO / NO-GO](https://github.com/suvorovpravda/Pravda-Bot/issues/160)** : registre des obstacles restants, des preuves et des vérifications préalables à toute diffusion.
-
-Les trois extensions P1 [trading réel #89](https://github.com/suvorovpravda/Pravda-Bot/issues/89), [on-chain #121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) et [moteur événementiel #123](https://github.com/suvorovpravda/Pravda-Bot/issues/123) restent ouvertes parce qu'elles ne sont **pas** achevées.
-
-### Distribution
-
-**Aucun nouvel installeur ne doit être présenté comme terminé** tant que la PR #159 n'a pas passé les tests nécessaires au même SHA : installation MSI/NSIS, création du mot de passe, tableau de bord initialisé, redémarrage, reconnexion, diagnostic et conservation des données.
-
-Les archives GitHub Actions sont des candidats temporaires ; une archive non signée n'est pas une release Enterprise. La configuration MSI/NSIS prévoit le prérequis WebView2 embarqué en mode `offlineInstaller`, **sans constituer une preuve de recette VM sans réseau**. Ne jamais désactiver Windows Defender, SmartScreen ou l'UAC pour contourner une alerte.
-
-## Utilisation visée
-
-1. **Installer** : un programme Windows autonome, sans exiger Python, Node ou Rust sur le poste.
-2. **Ouvrir** : une vraie fenêtre graphique, sans console PowerShell dont la fermeture tue l'application.
-3. **S'authentifier** : vérification locale par Rust ; la WebView ne reçoit aucun secret du coffre.
-4. **Observer** : flux autorisés, valeurs réellement reçues, source et fraîcheur.
-5. **Diagnostiquer** : lancer un test sûr et copier le résultat expurgé.
-
-**Ce parcours est un critère de validation, pas une fonction entièrement homologuée à ce jour.**
-
-Le Doctor inspecte passivement l'environnement et l'intégrité du stockage. Le Harness utilise des données **synthétiques**, clairement distinctes des vrais flux. Le centre de test continu en cours de validation écrit des rapports locaux dans le dossier utilisateur Windows et ne les envoie pas automatiquement. Ni Doctor ni Harness ne prouvent à eux seuls le bon fonctionnement du tableau de bord ou des exchanges.
-
-## Architecture
-
-| Couche | Technologie | Frontière de responsabilité |
-| :--- | :--- | :--- |
-| Interface | Tauri 2, WebView2, HTML/CSS/JS locaux | Affichage, consentement et contrôle visuel |
-| Autorisation | IPC Tauri + sessions Rust | Permissions par commande et révocation |
-| Données | Collecteurs WebSocket Rust, Tokio | Provenance, fraîcheur, reconnexion, refus |
-| Exécution | Moteur Rust | Simulation isolée et règles de risque |
-| Persistance | SQLite/WAL | Historique, cohérence transactionnelle |
-| Tests | Doctor, Harness et WebDriver Windows | Contrôles passifs, fixtures et E2E du binaire installé |
-| Livraison | MSI / NSIS et bootstrapper | Empreintes, vérification et signature si applicable |
-
-Aucun serveur HTTP local n'est nécessaire au bureau Tauri. La lecture publique de données financières ne confère pas le droit d'émettre des ordres.
-
-## Barrières de validation
-
-- [ ] Compilation et formatage Rust, clippy, tests Windows/Linux, CodeQL au SHA exact.
-- [ ] Audit RustSec **du Cargo.lock desktop** traité et signaux de vulnérabilité résolus ou formellement bloquants.
-- [ ] Sous-système Windows GUI vérifié sur le binaire effectivement distribué.
-- [ ] MSI **et** NSIS installés, première authentification, initialisation totale du dashboard et redémarrage validés en E2E.
-- [ ] Diagnostic continu, arrêt explicite et rapports sans données personnelles vérifiés.
-- [ ] SHA-256/provenance établis ; Authenticode vérifié pour toute release qui se prétend signée.
-- [ ] Flux publics réels contrôlés séparément et **avec consentement**, sans accès privé.
-- [ ] Absence de trading réel et d'updater actif non validé.
-
-Un test SKIP ne vaut pas PASS. Voir les règles de [reviewing](docs/REVIEWING.md) et le [registre #160](https://github.com/suvorovpravda/Pravda-Bot/issues/160).
-
-## Documentation
-
-[Security — modèle de menace, risques et signalement](SECURITY.md) &nbsp;·&nbsp; [Reviewing — exigences de revue et de publication](docs/REVIEWING.md) &nbsp;·&nbsp; [Guide central — architecture et historique](docs/PRAVDA-GUIDE.md) &nbsp;·&nbsp; [Workflows CI](https://github.com/suvorovpravda/Pravda-Bot/actions)
+| Priorité / domaine | Progression | Barres visuelles | Limite |
+| :--- | ---: | :--- | :--- |
+| 🟣 P0 · Séparation Python → Rust | **100 %** | 🟪🟪🟪🟪🟪🟪🟪🟪🟪🟪 | Migration du périmètre actif |
+| 🔵 P0 · Sécurité IPC | **50 %** | 🟦🟦🟦🟦🟦⬛⬛⬛⬛⬛ | Contrôles restants |
+| 🟣 P0 · Parité des fonctions Rust | **38 %** | 🟪🟪🟪🟪⬛⬛⬛⬛⬛⬛ | Fonctions à compléter |
+| 🔵 P0 · CI et gouvernance | **60 %** | 🟦🟦🟦🟦🟦🟦⬛⬛⬛⬛ | Recette release distincte |
+| 🟢 P1 · SQLite / historique | **75 %** | 🟩🟩🟩🟩🟩🟩🟩🟩⬛⬛ | Restauration à qualifier |
+| 🌸 P1 · Interface desktop | **50 %** | 🟪🟪🟪🟪🟪⬛⬛⬛⬛⬛ | Parcours Windows bloquant |
+| 🔴 P1 · Packaging Enterprise | **0 %** | ⬛⬛⬛⬛⬛⬛⬛⬛⬛⬛ | Signature non livrée |
+| 🟠 P2 · Observabilité / charge | **25 %** | 🟧🟧🟧⬛⬛⬛⬛⬛⬛⬛ | Extension à faire |
+| ⚪ P2 · Sources et modules futurs | **0 %** | ⬛⬛⬛⬛⬛⬛⬛⬛⬛⬛ | Hors chemin critique |
 
 <details>
-<summary>Indicateurs historiques P0–P2</summary>
+<summary><strong>📈 Déplier le graphique de progression des neuf domaines</strong></summary>
 
-Les pourcentages historiques de migration sont conservés dans le [guide central](docs/PRAVDA-GUIDE.md) uniquement à titre de référence. Ils ne constituent pas un score actuel de sécurité ni une preuve de livraison.
+~~~mermaid
+xychart-beta
+    title "Jalons historiques — non assimilables à la readiness"
+    x-axis ["Rust","IPC","Parite","CI","SQLite","Desktop","Signing","Observ.","Extras"]
+    y-axis "Jalons (%)" 0 --> 100
+    bar [100,50,38,60,75,50,0,25,0]
+~~~
 
 </details>
 
+**Agrégation pondérée des jalons historiques :** P0 **61 %** (14/23), P1 **42 %** (5/12), P2 **13 %** (1/8). La décision de publication dépend **exclusivement** des critères GO / NO-GO ci-dessous.
+
+## 🚦 Release gate — état actuel
+
+| Vérification | État | Preuve manquante |
+| :--- | :---: | :--- |
+| 🖥️ Bureau Windows installé | 🔴 **NO-GO** | Première connexion, chargement JS complet, redémarrage |
+| 📦 MSI / NSIS | 🟠 **À QUALIFIER** | Installation, désinstallation et préservation des données |
+| 📡 Flux Kraken / Binance | 🟠 **NON PROUVÉS SUR PC** | Cotations réelles horodatées, provenance et reconnexion |
+| 🧪 Doctor / Harness | 🔵 **OUTILS DE TEST** | Les scénarios synthétiques ne prouvent pas les cours live |
+| 🛡️ RustSec desktop | 🔴 **À TRAITER** | Vulnérabilités et dépendances historiques |
+| 🔏 Signature Enterprise | 🔴 **NON LIVRÉE** | Authenticode, identité, timestamp |
+| 🔄 Updater automatique | ⚪ **OFF** | Signature, anti-downgrade, rollback |
+| 💳 Ordres réels | 🟢 **OFF** | Aucun trading live activé |
+
+**Incident documenté :** le test Windows de l'application installée a échoué après la création du mot de passe avec une initialisation partielle du dashboard ([run 42290188079](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42290188079)). Les correctifs GUI / flux / diagnostics ont été réunis et fusionnés via la [PR #159](https://github.com/suvorovpravda/Pravda-Bot/pull/159) ; **cela ne valide pas le fonctionnement sur le poste utilisateur**.
+
+L'installation Tauri utilise la configuration WebView2 **offlineInstaller**, mais son fonctionnement sur une VM vierge réellement isolée du réseau n'est **pas encore attesté**.
+
+**Échéance cible : 30 novembre 2026**, sous réserve des preuves de l'[Issue #160 — Security / Déploiement](https://github.com/suvorovpravda/Pravda-Bot/issues/160).
+
+## 🧩 Modules & état réel
+
+| Composant | Situation | Rôle |
+| :--- | :--- | :--- |
+| **Market Radar** | 🟠 Validation | Prix publics observés, historique, graphiques |
+| **Data Sources** | 🟠 Validation | Provenance et fraîcheur |
+| **Paper Trading** | 🟣 Simulation | Exécution fictive isolée des comptes réels |
+| **Risk Engine** | 🟠 Progressif | Contrôles et refus des données périmées |
+| **Local Storage** | 🟢 Fondations | SQLite / WAL, intégrité locale |
+| **System Doctor** | 🔵 Diagnostic | Contrôles Windows passifs sans extraction de secrets |
+| **Continuous Test Agent** | 🟠 Recette | Contrôles périodiques isolés, rapport local |
+| **Signed Updater** | 🔴 Désactivé | Aucune mise à jour signée homologuée |
+
+**Aucun prix fictif ne doit apparaître comme une observation réelle.** Doctor et Harness ne prétendent pas tester la connectivité externe.
+
+## 🧬 Architecture
+
+~~~mermaid
+flowchart LR
+    UI["🖥️ Tauri / WebView2"]
+    IPC["🔐 IPC session Rust"]
+    CORE["⚙️ Rust Runtime"]
+    WSS["📡 Kraken / Binance"]
+    SQL[("🗄️ SQLite / WAL")]
+    PAPER["🧪 Paper Simulation"]
+    DIAG["🛡️ Doctor / Harness"]
+    UI --> IPC --> CORE
+    WSS --> CORE
+    CORE --> SQL
+    CORE --> PAPER
+    CORE --> DIAG
+~~~
+
+L'interface ne reçoit pas les secrets, ne peut pas soumettre des ordres réels et n'exige pas de serveur HTTP local. Les modules optionnels sont contrôlés côté Rust.
+
+## 🗺️ Roadmap
+
+- [x] **P0** · Runtime Windows Rust / Tauri.
+- [x] **P0** · Intégration des correctifs GUI, marché et diagnostics via #159.
+- [ ] **P0** · Recette graphique complète sur le binaire Windows installé.
+- [ ] **P0** · Flux publics réellement observés et diagnostic des pannes réseau.
+- [ ] **P0** · RustSec desktop et barrières de provenance.
+- [ ] **P1** · Tests airgap sur VM vierge et installation réellement personnalisée.
+- [ ] **P1** · Chaîne Authenticode et mises à jour signées qualifiées.
+- [ ] **P2** · Extensions on-chain, simulation avancée et observabilité.
+
+Le trading réel [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89), l'on-chain [#121](https://github.com/suvorovpravda/Pravda-Bot/issues/121) et le moteur événementiel [#123](https://github.com/suvorovpravda/Pravda-Bot/issues/123) restent des chantiers indépendants, non déclarés livrés.
+
+## 📚 Documentation
+
+[![SECURITY](https://img.shields.io/badge/SECURITY-TRUST%20CONTROL-FF4D8F?style=for-the-badge)](SECURITY.md)
+[![REVIEWING](https://img.shields.io/badge/REVIEWING-EVIDENCE--FIRST-967CFF?style=for-the-badge)](docs/REVIEWING.md)
+[![GUIDE](https://img.shields.io/badge/TECHNICAL%20GUIDE-RUST-37BFEF?style=for-the-badge)](docs/PRAVDA-GUIDE.md)
+[![RELEASE](https://img.shields.io/badge/RELEASE%20GATE-ISSUE%20%23160-FB696B?style=for-the-badge)](https://github.com/suvorovpravda/Pravda-Bot/issues/160)
+
+Le projet reste **NO-GO** pour une production complète ; pas de demande de téléchargement avant une recette Windows suffisamment probante.
+
 ---
 
-**EN** — Pravda-Bot is a Windows-native Rust/Tauri 2 market monitoring and paper-simulation application. **Release: NO-GO** pending installed-GUI, MSI/NSIS, security and genuine feed validation. Live trading is disabled. [Security](SECURITY.md) / [Reviewing](docs/REVIEWING.md).
+**EN** — Windows market monitoring and paper simulation on Rust/Tauri 2. Progress percentages are **historical engineering milestones**, not release readiness. Production NO-GO; live trading OFF.
 
-**RU** — Pravda-Bot — приложение для Windows на Rust/Tauri 2 для наблюдения за рынком и симуляции. **Релиз пока не разрешён** до успешной проверки установленного интерфейса, MSI/NSIS и безопасности. Реальная торговля отключена.
+**RU** — Мониторинг рынков и симуляция для Windows на Rust/Tauri 2. Проценты — **исторические этапы разработки**, не готовность к релизу. Продакшен NO-GO, реальные ордера отключены.
