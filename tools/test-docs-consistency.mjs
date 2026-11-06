@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
 import {existsSync, readFileSync} from "node:fs";
 import {dirname, resolve} from "node:path";
+import {isIP} from "node:net";
 
 const tracked=execFileSync("git",["ls-files","-z"],{encoding:"utf8"})
   .split("\0").filter(Boolean);
@@ -63,22 +64,48 @@ assert.equal(windowsConfig.bundle?.windows?.webviewInstallMode?.silent,true);
 // Signed updater is fail-closed until a release public key and a fixed HTTPS
 // metadata channel are configured. This is a static trust-boundary check,
 // NOT evidence that an updater or a signed release exists.
+function validateUpdaterEndpoint(endpoint) {
+  assert.equal(typeof endpoint,"string","Updater endpoint must be a string");
+  assert.doesNotMatch(endpoint,/\{\{|\$\{/,"Updater endpoint must not contain substitutions");
+  const url=new URL(endpoint);
+  assert.equal(url.protocol,"https:","Updater metadata must use HTTPS");
+  assert.equal(url.username,"","Updater metadata must not contain credentials");
+  assert.equal(url.password,"","Updater metadata must not contain credentials");
+  assert.equal(url.port,"","Updater metadata must use default HTTPS port");
+  assert.equal(url.hash,"","Updater metadata must not contain a fragment");
+  const host=url.hostname.replace(/^\[|\]$/g,"").toLowerCase();
+  assert.ok(host && !isIP(host) && host!=="localhost" &&
+    !host.endsWith(".localhost") && !host.endsWith(".local") &&
+    !host.endsWith(".internal") && !host.endsWith(".test") &&
+    !host.endsWith(".example") && !host.endsWith(".invalid") &&
+    !["example.com","example.org","example.net"].includes(host),
+    "Updater endpoint must use a public DNS hostname, not a local address or placeholder");
+}
+for(const bad of [
+  "https://[::1]/metadata.json",
+  "https://127.1/metadata.json",
+  "https://2130706433/metadata.json",
+  "https://127.0.0.1/metadata.json",
+  "https://localhost/metadata.json",
+  "https://service.local/metadata.json",
+  "https://user:pass@github.com/latest.json",
+  "http://github.com/latest.json",
+  "https://github.com:8443/latest.json",
+  "https://example.com/latest.json",
+  "https://github.com/{{version}}/latest.json"
+]) assert.throws(()=>validateUpdaterEndpoint(bad),
+  "Updater trust gate must reject unsafe endpoint: "+bad);
+assert.doesNotThrow(()=>validateUpdaterEndpoint(
+  "https://github.com/example/repository/releases/latest/download/latest.json"));
 const updater=windowsConfig.plugins?.updater;
 if(updater?.active===true) {
   assert.equal(typeof updater.pubkey,"string","Updater requires a public verification key");
   assert.ok(updater.pubkey.trim().length>40,"Updater public key must not be empty or a placeholder");
   assert.ok(Array.isArray(updater.endpoints)&&updater.endpoints.length===1,
     "Updater must use one fixed release metadata endpoint");
-  const endpoint=updater.endpoints[0];
-  assert.equal(typeof endpoint,"string");
-  assert.match(endpoint,/^https:\/\//,"Updater metadata must use HTTPS");
-  assert.doesNotMatch(endpoint,/\{\{|localhost|127\.0\.0\.1|example\.|\$\{|@/i,
-    "Updater endpoint must not contain substitutions, local hosts or credentials");
-  assert.equal(new URL(endpoint).username,"");
-  assert.equal(new URL(endpoint).password,"");
+  validateUpdaterEndpoint(updater.endpoints[0]);
 } else {
-  assert.ok(updater?.active!==true,
-    "Unsigned update channel must remain disabled");
+  assert.ok(updater?.active!==true,"Unsigned update channel must remain disabled");
 }
 for(const page of expected) {
   const content=readFileSync(page,"utf8");
