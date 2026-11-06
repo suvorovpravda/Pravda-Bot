@@ -15,9 +15,40 @@ use std::sync::Arc;
 #[serde(transparent)]
 pub struct DesktopPayload(pub Value);
 
+/// Coarse status for data provenance. No probe is implied: a receiver that
+/// has not observed ticks cannot claim its WebSocket connection succeeded.
+fn stream_state(offline: bool, enabled: bool, snapshot: &Value) -> &'static str {
+    if offline {
+        return "diagnostic_offline";
+    }
+    if !enabled {
+        return "disabled_by_configuration";
+    }
+    let sources = snapshot["symbols"].as_object();
+    let mut saw_observation = false;
+    if let Some(sources) = sources {
+        for source in sources.values().filter_map(Value::as_object) {
+            for quote in source.values() {
+                if quote["status"] == "live" {
+                    return "observations_recent";
+                }
+                if quote.get("price").and_then(Value::as_f64).is_some() {
+                    saw_observation = true;
+                }
+            }
+        }
+    }
+    if saw_observation {
+        "observations_stale"
+    } else {
+        "awaiting_first_observation"
+    }
+}
+
 pub struct DesktopRuntime {
     runtime: Arc<PravdaRuntime>,
     stale_after: std::time::Duration,
+    market_feeds_enabled: bool,
     database_path: String,
     // One client per runtime preserves the shared 1 req/s public-feed throttle.
     revolut_public: Option<pravda_fetchers::revolut_x::RevolutXPublicClient>,
@@ -29,8 +60,13 @@ impl DesktopRuntime {
     /// Initialize on startup, before opening the WebView. Always operate on
     /// the same PRAVDA_DB_PATH and legacy migration contract as the HTTP CLI.
     pub async fn start(auth: Arc<Auth>) -> Result<Self, Box<dyn std::error::Error>> {
-        let config = ServerConfig::from_env()?;
+        let mut config = ServerConfig::from_env()?;
         let diagnostic_offline = std::env::var("PRAVDA_OFFLINE_TEST").as_deref() == Ok("true");
+        // A diagnostic flag must override *all* inherited online settings.
+        // Never start Kraken/Binance background tasks on an isolated test run.
+        if diagnostic_offline {
+            config.market_feeds_enabled = false;
+        }
         if !auth.is_configured() {
             if let Ok(initial) = std::env::var("PRAVDA_ADMIN_PASSWORD") {
                 let authority = auth.clone();
@@ -65,6 +101,7 @@ impl DesktopRuntime {
         Ok(Self {
             runtime,
             stale_after: config.stale_after,
+            market_feeds_enabled: config.market_feeds_enabled,
             database_path: config.database_path.clone(),
             revolut_public: if diagnostic_offline {
                 None
@@ -76,7 +113,12 @@ impl DesktopRuntime {
     }
 
     pub async fn market_snapshot(&self) -> DesktopPayload {
-        DesktopPayload(self.runtime.market_snapshot(self.stale_after).await)
+        let mut payload = self.runtime.market_snapshot(self.stale_after).await;
+        let state = stream_state(self.diagnostic_offline, self.market_feeds_enabled, &payload);
+        if let Some(fields) = payload.as_object_mut() {
+            fields.insert("stream_state".to_string(), json!(state));
+        }
+        DesktopPayload(payload)
     }
 
     pub async fn alerts_snapshot(&self) -> DesktopPayload {
@@ -221,6 +263,18 @@ impl DesktopRuntime {
 mod tests {
     use super::*;
     use crate::history::{HistoryExchange, HistoryPeriod, HistorySymbol};
+
+    #[test]
+    fn feed_state_never_confuses_disabled_streams_with_missing_network_data() {
+        let empty = json!({"symbols": {"BTC/USDT":{}, "ETH/USDT":{}}});
+        assert_eq!(stream_state(true, true, &empty), "diagnostic_offline");
+        assert_eq!(stream_state(false, false, &empty), "disabled_by_configuration");
+        assert_eq!(stream_state(false, true, &empty), "awaiting_first_observation");
+        let stale = json!({"symbols":{"BTC/USDT":{"Kraken":{"price":100.0,"status":"stale"}}}});
+        assert_eq!(stream_state(false, true, &stale), "observations_stale");
+        let live = json!({"symbols":{"BTC/USDT":{"Kraken":{"price":100.0,"status":"live"}}}});
+        assert_eq!(stream_state(false, true, &live), "observations_recent");
+    }
 
     #[test]
     fn typed_history_query_is_deny_unknown_and_strictly_enumerated() {
