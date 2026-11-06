@@ -22,6 +22,22 @@ jobs:
           cargo fetch --manifest-path crates/pravda-app/Cargo.toml
           cargo fmt --all --manifest-path crates/pravda-app/Cargo.toml
           cargo tree --manifest-path crates/pravda-app/Cargo.toml --target x86_64-pc-windows-msvc --features signed-updater -e features | grep -F tauri-plugin-updater >/dev/null
+      - name: Emit public lockfile and rustfmt results for verified Git commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            'lock|crates/pravda-app/Cargo.lock' \
+            'main|crates/pravda-app/src/main.rs' \
+            'ipc|crates/pravda-app/src/ipc.rs' \
+            'updater|crates/pravda-app/src/updater.rs' \
+            'build|crates/pravda-app/build.rs'; do
+            key="${spec%%|*}"
+            file="${spec#*|}"
+            echo "PRAVDA_PUBLIC_EXPORT_BEGIN:${key}"
+            base64 -w0 "$file" | fold -w 2000
+            echo "PRAVDA_PUBLIC_EXPORT_END:${key}"
+          done
       - name: Export candidate lockfile (untrusted until CI checks it)
         uses: actions/upload-artifact@v7
         with:
