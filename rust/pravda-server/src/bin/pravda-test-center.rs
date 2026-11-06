@@ -268,6 +268,58 @@ fn safe_doctor_results(output: &str) -> Vec<Finding> {
         .take(100)
         .collect()
 }
+/// The continuous monitor reads *only* safe status from the actual installed
+/// profile. SQLite uses the existing read-only quick_check helper; no rows,
+/// passwords, paths, raw errors, network credentials or other local data leave
+/// the user's computer. The isolated functional tests above remain separate.
+#[cfg(windows)]
+fn installed_profile_checks() -> Vec<Finding> {
+    use pravda_store::doctor::{inspect_database, DatabaseHealth};
+    let Some(local) = std::env::var_os("LOCALAPPDATA") else {
+        return vec![finding(
+            "installed_user_profile",
+            "SKIP",
+            "Windows local application directory is unavailable",
+        )];
+    };
+    let root = PathBuf::from(local).join("Pravda-Bot");
+    let (database_state, database_detail) = match inspect_database(&root.join("pravda.db")) {
+        DatabaseHealth::Healthy => (
+            "PASS",
+            "Installed SQLite passed read-only integrity and schema checks",
+        ),
+        DatabaseHealth::Missing => ("SKIP", "No installed SQLite database found yet"),
+        DatabaseHealth::NotAFile => ("FAIL", "Installed SQLite path is not a regular file"),
+        DatabaseHealth::Unavailable => {
+            ("WARN", "Installed SQLite could not be inspected read-only")
+        }
+        DatabaseHealth::Corrupt => ("FAIL", "Installed SQLite integrity check failed"),
+        DatabaseHealth::SchemaMissing => ("FAIL", "Installed SQLite lacks expected ticks schema"),
+    };
+    let (auth_state, auth_detail) = match fs::symlink_metadata(root.join("pravda_auth.json")) {
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => (
+            "PASS",
+            "Installed authentication record exists; credentials not read",
+        ),
+        Ok(_) => (
+            "WARN",
+            "Installed authentication record is not a regular file",
+        ),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => (
+            "SKIP",
+            "Authentication has not been configured in the installed app",
+        ),
+        Err(_) => (
+            "WARN",
+            "Installed authentication record metadata unavailable",
+        ),
+    };
+    vec![
+        finding("installed_sqlite_readonly", database_state, database_detail),
+        finding("installed_auth_presence", auth_state, auth_detail),
+    ]
+}
+
 #[cfg(windows)]
 fn render_html(report: &Report) -> String {
     let mut rows = String::new();
@@ -331,7 +383,7 @@ fn run() -> Result<PathBuf, String> {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs();
-    let base = if std::env::args().any(|arg| arg == "--ci") {
+    let base = if std::env::args().any(|arg| arg == "--ci" || arg == "--monitor-once") {
         std::env::var_os("PRAVDA_TEST_CENTER_REPORT_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(std::env::temp_dir)
@@ -505,6 +557,7 @@ fn run() -> Result<PathBuf, String> {
                 .env("PRAVDA_AUTH_PATH", &auth)
                 .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
                 .env("PRAVDA_OFFLINE_TEST", "true")
+                .env("PRAVDA_BACKGROUND_TEST", "true")
                 .env("PRAVDA_DIAGNOSTIC_WEBVIEW_DIR", &webview)
                 .env("PRAVDA_LIVE_TRADING_ENABLED", "false")
                 .stdout(Stdio::null())
@@ -592,6 +645,9 @@ fn run() -> Result<PathBuf, String> {
         "SKIP",
         "Unsigned test build; no code-signing certificate assumed",
     ));
+    if std::env::args().any(|arg| arg == "--monitor-worker" || arg == "--monitor-once") {
+        report.findings.extend(installed_profile_checks());
+    }
     let json = folder.join("PRAVDA-TEST-REPORT.json");
     let html = folder.join("PRAVDA-TEST-REPORT.html");
     fs::write(
@@ -600,7 +656,9 @@ fn run() -> Result<PathBuf, String> {
     )
     .map_err(|_| "Cannot save report JSON")?;
     fs::write(&html, render_html(&report)).map_err(|_| "Cannot save report HTML")?;
-    if !std::env::args().any(|arg| arg == "--ci") {
+    if !std::env::args()
+        .any(|arg| arg == "--ci" || arg == "--monitor-once" || arg == "--monitor-worker")
+    {
         let _ = Command::new("explorer.exe").arg(&html).spawn();
     }
     Ok(folder)
@@ -610,7 +668,222 @@ fn run() -> Result<PathBuf, String> {
     Err("Windows x64 only".into())
 }
 
+// The monitoring agent is user-started, not a Windows service or a scheduled task.
+// Its single instance is protected by a named OS mutex; no stale PID or lock
+// file is left after a crash. The mutex never contains user/account identifiers.
+#[cfg(windows)]
+struct AgentGuard(windows_sys::Win32::Foundation::HANDLE);
+
+#[cfg(windows)]
+impl Drop for AgentGuard {
+    fn drop(&mut self) {
+        unsafe {
+            windows_sys::Win32::Foundation::CloseHandle(self.0);
+        }
+    }
+}
+
+#[cfg(windows)]
+fn acquire_agent_mutex() -> Result<Option<AgentGuard>, &'static str> {
+    use windows_sys::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS};
+    use windows_sys::Win32::System::Threading::CreateMutexW;
+    let name: Vec<u16> = "Local\\PravdaBotOfflineDiagnosticAgent"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let handle = unsafe { CreateMutexW(std::ptr::null(), 0, name.as_ptr()) };
+    if handle.is_null() {
+        return Err("monitor_mutex_unavailable");
+    }
+    let already_running = unsafe { GetLastError() == ERROR_ALREADY_EXISTS };
+    let guard = AgentGuard(handle);
+    if already_running {
+        Ok(None)
+    } else {
+        Ok(Some(guard))
+    }
+}
+
+#[cfg(windows)]
+fn monitor_directory() -> Result<PathBuf, &'static str> {
+    // CI-only override for the smoke test: normal users always receive a
+    // stable, per-user report directory. No arbitrary output folder in daemon mode.
+    let base = if std::env::args().any(|arg| arg == "--monitor-once") {
+        std::env::var_os("PRAVDA_TEST_CENTER_REPORT_DIR")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("LOCALAPPDATA").map(PathBuf::from))
+    } else {
+        std::env::var_os("LOCALAPPDATA").map(PathBuf::from)
+    }
+    .ok_or("monitor_local_appdata_unavailable")?;
+    let dir = if std::env::args().any(|arg| arg == "--monitor-once")
+        && std::env::var_os("PRAVDA_TEST_CENTER_REPORT_DIR").is_some()
+    {
+        base
+    } else {
+        base.join("Pravda-Bot").join("Diagnostic-Continu")
+    };
+    fs::create_dir_all(&dir).map_err(|_| "monitor_report_directory_unavailable")?;
+    Ok(dir)
+}
+
+#[cfg(windows)]
+fn copy_monitor_report(source: &Path, destination: &Path) -> Result<bool, &'static str> {
+    let json = fs::read(source.join("PRAVDA-TEST-REPORT.json"))
+        .map_err(|_| "monitor_source_report_missing")?;
+    // Only accept the report generated by our Rust monitor, never arbitrary
+    // text from children, desktop logs, environment variables or the network.
+    let value: serde_json::Value =
+        serde_json::from_slice(&json).map_err(|_| "monitor_report_invalid")?;
+    if value["product"] != "Pravda-Bot"
+        || !value["findings"].is_array()
+        || value["signed_release"] != false
+    {
+        return Err("monitor_report_invalid");
+    }
+    let failed = value["findings"]
+        .as_array()
+        .is_some_and(|entries| entries.iter().any(|entry| entry["status"] == "FAIL"));
+    fs::write(destination.join("PRAVDA-COPIER-ICI.txt"), &json)
+        .map_err(|_| "monitor_report_write_failed")?;
+    fs::write(destination.join("PRAVDA-DERNIERS-TESTS.json"), &json)
+        .map_err(|_| "monitor_report_write_failed")?;
+    fs::copy(
+        source.join("PRAVDA-TEST-REPORT.html"),
+        destination.join("PRAVDA-RESULTATS.html"),
+    )
+    .map_err(|_| "monitor_html_write_failed")?;
+    Ok(failed)
+}
+
+#[cfg(windows)]
+fn run_monitor(single_cycle: bool) -> Result<(), &'static str> {
+    let Some(_single_instance) = acquire_agent_mutex()? else {
+        // A second process must never run a concurrent desktop/Doctor/Harness.
+        return if single_cycle {
+            Err("monitor_already_running")
+        } else {
+            Ok(())
+        };
+    };
+    let reports = monitor_directory()?;
+    let stop_file = reports.join("PRAVDA-ARRET-DEMANDE");
+    // Clear a stop marker left by a previous clean or interrupted session.
+    if !single_cycle {
+        let _ = fs::remove_file(&stop_file);
+    }
+    loop {
+        let outcome = run();
+        let failed = match outcome {
+            Ok(folder) => {
+                let published = copy_monitor_report(&folder, &reports);
+                // Never retain extracted EXEs or isolated temporary credentials
+                // beyond this cycle. Cleanup failures do not erase the report.
+                let _ = fs::remove_dir_all(&folder);
+                published
+            }
+            Err(_) => Err("monitor_cycle_unavailable"),
+        };
+        if let Err(code) = failed {
+            // A short allowlisted failure marker, no OS paths or raw errors.
+            let _ = fs::write(
+                reports.join("PRAVDA-ETAT.txt"),
+                format!("FAIL | {code}\nNo financial operations or remote reporting.\n"),
+            );
+            if single_cycle {
+                return Err(code);
+            }
+        } else {
+            let epoch = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let summary = if failed == Ok(true) {
+                "FAIL | One or more offline diagnostic checks failed."
+            } else {
+                "PASS | Offline diagnostic cycle completed; inspect SKIP/WARN items."
+            };
+            let _ = fs::write(
+                reports.join("PRAVDA-ETAT.txt"),
+                format!(
+                    "{summary}\nUTC epoch={epoch}\nPeriod=15 minutes\nNo automatic repair, network probe or live trades.\n"
+                ),
+            );
+            if single_cycle && failed == Ok(true) {
+                return Err("monitor_checks_failed");
+            }
+        }
+        if single_cycle {
+            return Ok(());
+        }
+        // The agent remains running in the user's Windows session until
+        // the user explicitly stops it or the session ends. No persistence
+        // at Windows startup and no external background task is registered.
+        for _ in 0..180 {
+            if stop_file.exists() {
+                let _ = fs::remove_file(&stop_file);
+                return Ok(());
+            }
+            std::thread::sleep(Duration::from_secs(5));
+        }
+    }
+}
+
+#[cfg(windows)]
+fn start_or_stop_monitor() -> Result<String, &'static str> {
+    let reports = monitor_directory()?;
+    if acquire_agent_mutex()?.is_none() {
+        fs::write(reports.join("PRAVDA-ARRET-DEMANDE"), b"stop")
+            .map_err(|_| "monitor_stop_request_failed")?;
+        return Ok(String::from(
+            "Arrêt demandé. Le diagnostic se terminera après le cycle en cours.",
+        ));
+    }
+    let _ = fs::remove_file(reports.join("PRAVDA-ARRET-DEMANDE"));
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    Command::new(std::env::current_exe().map_err(|_| "monitor_executable_unavailable")?)
+        .arg("--monitor-worker")
+        .creation_flags(CREATE_NO_WINDOW)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|_| "monitor_spawn_failed")?;
+    Ok(format!(
+        "Diagnostic automatique démarré en arrière-plan.\n\
+         Premier rapport après le premier cycle, puis toutes les 15 minutes.\n\
+         Pour copier les résultats, ouvrez :\n{}\n\
+         et copiez PRAVDA-COPIER-ICI.txt dans ChatGPT.\n\
+         Double-cliquez une seconde fois sur cet exécutable pour arrêter.",
+        reports.display()
+    ))
+}
+
 fn main() {
+    #[cfg(windows)]
+    {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        if args.len() == 1 && args[0] == "--monitor-worker" {
+            // A worker is not interactive and cannot open the report viewer.
+            let _ = run_monitor(false);
+            return;
+        }
+        if args.len() == 1 && args[0] == "--monitor-once" {
+            if let Err(error) = run_monitor(true) {
+                eprintln!("PRAVDA_MONITOR_TEST_FAILED:{error}");
+                std::process::exit(2);
+            }
+            return;
+        }
+        if args.is_empty() {
+            match start_or_stop_monitor() {
+                Ok(message_text) => message(&message_text),
+                Err(code) => message(&format!("Diagnostic non démarré : {code}")),
+            }
+            return;
+        }
+    }
     let ci = std::env::args().any(|arg| arg == "--ci");
     match run() {
         Ok(folder) => {
@@ -685,6 +958,15 @@ mod tests {
         );
         assert!(!r[0].detail.contains("Private"));
     }
+    #[test]
+    fn reports_do_not_include_untrusted_process_details() {
+        let input = "FAIL | sqlite_health | C:\\Users\\Somebody\\secret.db";
+        let rows = safe_doctor_results(input);
+        assert_eq!(rows.len(), 1);
+        assert!(rows[0].detail.contains("raw details withheld"));
+        assert!(!rows[0].detail.contains("Somebody"));
+    }
+
     #[test]
     fn rejects_incomplete_portable_payloads() {
         assert!(!is_pe(b""));
