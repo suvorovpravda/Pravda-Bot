@@ -211,6 +211,25 @@ function runTests(){
     "Matching the branch name alone does not authenticate the source repository");
   assert.match(updateJob,/^    permissions:\n      contents: write$/m,
     "The write scope belongs to the trusted update job only");
+  // The protected main branch MUST NOT be a destination for generated status commits.
+  // The read-only README/SECURITY embeds display the separately refreshed status branch.
+  assert.doesNotMatch(updateJob,/git push origin HEAD:main|git push origin "HEAD:refs\/heads\/main"/,
+    "Direct status pushes to protected main violate the mandatory PR ruleset");
+  assert.match(updateJob,/branch="status\/live"/,
+    "Live evidence must be published only to the non-release status branch");
+  assert.match(updateJob,/git push origin "HEAD:refs\/heads\/\$branch"/,
+    "The publisher must push the dedicated status ref");
+  assert.match(updateJob,/s\.production!=="NO-GO"/,
+    "Publication must explicitly refuse a forged production GO status");
+  const remoteImage="https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg";
+  const remoteJson="https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json";
+  for(const doc of ["README.md","SECURITY.md"]) {
+    const markdown=readFileSync(doc,"utf8");
+    assert.ok(markdown.includes(remoteImage),doc+" must render the updated status image");
+    assert.ok(markdown.includes(remoteJson),doc+" must link the published JSON");
+    assert.ok(!markdown.includes("](docs/assets/pravda-live-status.svg)"),
+      doc+" must not display the never-updated legacy main-branch image");
+  }
   const guide=readFileSync(guidePath,"utf8"), h=parseHistorical(guide);
   assert.equal(h.rows.length,9);
   const sampleRun={head_branch:"main",head_sha:"a".repeat(40),status:"completed",conclusion:"success",
