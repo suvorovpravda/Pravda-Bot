@@ -20,11 +20,11 @@
 
 ## ⚡ Security Live Pulse — métriques GitHub actualisées
 
-![Observatoire sécurité quasi temps réel : workflows au SHA canonique, statut RustSec non bloquant, PR et Issues ouvertes, GO interdit sans preuve](docs/assets/pravda-live-status.svg)
+![Observatoire sécurité quasi temps réel : workflows au SHA canonique, statut RustSec non bloquant, PR et Issues ouvertes, GO interdit sans preuve](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
 
-**[Statut brut JSON](docs/assets/pravda-live-status.json)** · **[Actualisations GitHub Actions](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
+**[Statut brut JSON](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json)** · **[Actualisations GitHub Actions](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
 
-Les résultats sont récupérés depuis les API GitHub **environ toutes les 10 minutes** et à la clôture des workflows concernés ; le rafraîchissement dépend des délais GitHub Actions et des caches d'images GitHub. L'horodatage indique la **dernière preuve observée**, pas une certification récente. Le tableau vérifie le SHA des runs et marque les tests hors SHA comme périmés. **L'audit RustSec observe-only n'est jamais converti en PASS** ; le statut de diffusion demeure **NO-GO** jusqu'à décision formelle de la chaîne de publication.
+Les résultats sont publiés dans la **branche distincte `status/live`** depuis les API GitHub, environ toutes les 10 minutes et après les workflows surveillés (horaires non garantis). GitHub peut conserver temporairement en cache l'image. Le contenu statique de `main` reste soumis aux Pull Requests obligatoires : **aucune écriture directe ne contourne la protection de branche**. L'horodatage marque la dernière preuve observée, pas une certification. Les tests dont le SHA diffère sont indiqués comme périmés ; **RustSec observe-only n'est jamais converti en PASS** et la publication reste **NO-GO**.
 
 ## 🌌 Security cockpit
 
@@ -74,16 +74,16 @@ xychart-beta
 
 | Gravité | Surface | Situation | Action requise |
 | :--- | :--- | :--- | :--- |
-| 🔴 P0 | Interface Windows réellement installée | **Non homologuée** | Première configuration, JS initialisé, redémarrage et reconnexion |
+| 🔵 Recette CI | Interface Windows réellement installée | **MSI/NSIS E2E réussis** | Maintenir les tests sur le SHA de publication ; le poste utilisateur n'est pas homologué |
 | 🔴 P0 | Desktop RustSec | **Avis non levés** | Auditer Cargo.lock desktop, traiter h2 et les dépendances héritées |
 | 🟠 P0 | Flux publics | **Sur poste non prouvés** | Observation horodatée, provenance, reconnexion et contrôle des données périmées |
 | 🔴 P0 | Authenticode | **Non qualifié** | Signature, identité et timestamp sur tous les artefacts déclarés signés |
 | 🔴 P0 | Mise à jour signée | **OFF** | Vérification cryptographique, anti-downgrade, rollback |
-| 🟠 P0 | MSI / NSIS | **Recette finale manquante** | Onboarding graphique réel, désinstallation et conservation SQLite |
+| 🔵 Recette CI | MSI / NSIS | **Onboarding, désinstallation et SQLite vérifiés en CI** | Authenticode, VM airgap et environnement utilisateur restent non qualifiés |
 | 🔴 P0 | VM sans WebView2 et sans réseau | **Non testée entièrement** | Isolation niveau hyperviseur et snapshots jetables |
 | 🟢 Contrôle | Trading live | **OFF** | Maintenir l'absence de capacités d'ordre jusqu'à homologation indépendante |
 
-**Preuve d'incident connu :** un test MSI installé a constaté une initialisation partielle du tableau de bord après la création du mot de passe ([run 42290188079](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42290188079)). La [PR d'intégration #159](https://github.com/suvorovpravda/Pravda-Bot/pull/159) a été fusionnée ; cela ne suffit pas à certifier un déploiement sur poste cible.
+**Correctif graphique vérifié dans la CI Windows :** les incidents `DASHBOARD_RANGE_L1 / P02H / P03` sont historiques. La [PR #168](https://github.com/suvorovpravda/Pravda-Bot/pull/168) est fusionnée ; le [run indépendant 42349767279](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42349767279), au SHA `1021115e`, valide sur installateurs **MSI et NSIS** : premier mot de passe, protection IPC, tableau de bord entièrement initialisé, redémarrage, reconnexion, déconnexion et conservation SQLite. **Aucune certification de la version finale ou des environnements utilisateur n'en découle.**
 
 **Registre principal : [Issue #160 — Security / Déploiement, GO / NO-GO](https://github.com/suvorovpravda/Pravda-Bot/issues/160).** Les difficultés reportées dans cette issue restent **ouvertes sur le fond** jusqu'à une preuve contraire.
 
@@ -144,8 +144,8 @@ Aucune release de production ne reçoit le statut GO sans des **preuves cohéren
 - [ ] Rust fmt, clippy, tests Linux/Windows, tests IPC et CodeQL validés.
 - [ ] RustSec desktop examiné, vulnérabilités bloquantes traitées.
 - [ ] Bureau Windows en sous-système graphique, sans console dépendante de l'application.
-- [ ] MSI et NSIS réellement installés, mot de passe, initialisation complète, reconnexion et désinstallation testés.
-- [ ] SQLite et ses données préservés à l'installation, au redémarrage et à la mise à niveau.
+- [x] MSI et NSIS réellement installés en **CI indépendante** : mot de passe, initialisation complète, reconnexion et désinstallation testés ([run 42349767279](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42349767279)) ; à répéter sur le futur artefact de publication.
+- [ ] SQLite et ses données préservés au redémarrage, à la désinstallation et à la réinstallation **en CI** ; la **mise à niveau signée** reste à qualifier (pas de case cochée avant cette preuve).
 - [ ] Rapport de diagnostic local et expurgé ; une seule instance et arrêt propre.
 - [ ] SHA-256 et provenance des binaires vérifiés ; Authenticode et timestamp vérifiés pour toute édition prétendue signée.
 - [ ] Installation VM sans WebView2 ni réseau confirmée si revendiquée.
