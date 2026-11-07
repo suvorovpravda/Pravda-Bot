@@ -140,6 +140,46 @@ assert.match(js,/checked_at_utc: finishedAt\.toISOString\(\)/,
   "Every completed test must publish its actual completion timestamp");
 assert.match(js,/window\.pravdaDashboardReady = true;/,
   "Dashboard must advertise readiness only after all handlers are bound");
+const bootDiagnosticStart=js.indexOf('window.pravdaDashboardPhase = "P02H";');
+const bootDiagnosticEnd=js.indexOf('window.pravdaDashboardPhase = "P02I";',bootDiagnosticStart);
+assert.ok(bootDiagnosticStart>=0 && bootDiagnosticEnd>bootDiagnosticStart,
+  "First-use boot must still have bounded security initialization phase markers");
+const bootDiagnosticScript=js.slice(bootDiagnosticStart,bootDiagnosticEnd);
+const unsolicited=[];
+vm.runInNewContext(bootDiagnosticScript,{
+  window:{pravdaDashboardPhase:""},
+  refreshSecurity(){unsolicited.push("security_report");},
+  refreshSecurityEvents(){unsolicited.push("security_events");}
+});
+assert.deepEqual(unsolicited,[],
+  "First-use dashboard must NOT invoke optional protected diagnostics during JS bootstrap");
+assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshSecurity\(true\);[\s\S]*?refreshSecurityEvents\(\);/,
+  "Security panel must retain user-initiated diagnostics");
+assert.match(js, /\$\("security-refresh"\)\.addEventListener\("click"/,
+  "Manual security refresh button must remain connected");
+const paperBootStart=js.indexOf('window.pravdaDashboardPhase = "P03";');
+const paperBootEnd=js.indexOf('window.pravdaDashboardPhase = "P03B";',paperBootStart);
+assert.ok(paperBootStart>=0 && paperBootEnd>paperBootStart,
+  "P03 paper initialization must be bounded by exact phase markers");
+const initialPaperCalls=[];
+const paperListeners=[];
+const paperBoot={
+  window:{pravdaDashboardPhase:""},
+  $:id=>({addEventListener(name,fn){paperListeners.push({id,name,fn});}}),
+  refreshPaper:explicit=>initialPaperCalls.push(explicit),
+  paperAction(){throw Error("Boot must never execute a paper trade");}
+};
+vm.runInNewContext(js.slice(paperBootStart,paperBootEnd+
+  'window.pravdaDashboardPhase = "P03B";'.length),paperBoot);
+assert.deepEqual(initialPaperCalls,[],
+  "First-use bootstrap must not initiate a protected paper portfolio IPC");
+assert.ok(paperListeners.some(x=>x.id==="paper-order-form"&&x.name==="submit"));
+assert.ok(paperListeners.some(x=>x.id==="paper-reset"&&x.name==="click"));
+paperBoot.window.refreshPaper();
+assert.deepEqual(initialPaperCalls,[true],
+  "Paper snapshot must remain manually callable after successful onboarding");
+assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
+  "Authenticated security tab must still fetch paper state on demand");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
   "A failed dashboard initialization must produce a visible local error");
 assert.doesNotMatch(auth,/aucun mot de passe ni détail système n'a été enregistré/,

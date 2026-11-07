@@ -1190,8 +1190,10 @@ const translations = {
     window.refreshSecurity = () => refreshSecurity(true);
     window.refreshSecurityEvents = refreshSecurityEvents;
     window.pravdaDashboardPhase = "P02H";
-    refreshSecurity();
-    refreshSecurityEvents();
+    // These authenticated IPC diagnostics are deliberately optional at boot.
+    // The Security tab and its explicit refresh button invoke both checks.
+    // Starting them during initial script evaluation can prevent the first-use
+    // dashboard from completing and must not block normal market views.
 
     // Update status is an authenticated, local-only Rust declaration. This is
     // NOT an update check: do not access GitHub, download a file, or run an
@@ -1402,6 +1404,9 @@ const translations = {
         }
     }
     window.pravdaDashboardPhase = "P03";
+    // A paper snapshot is optional until its authenticated tab is opened.
+    // Avoid starting a native IPC request before the dashboard script is ready.
+    window.pravdaDashboardPhase = "P03A";
     $("paper-order-form").addEventListener("submit", event => {
         event.preventDefault();
         paperAction("ipc_paper_trade", {
@@ -1412,7 +1417,7 @@ const translations = {
     });
     $("paper-reset").addEventListener("click", () => paperAction("ipc_paper_reset"));
     window.refreshPaper = () => refreshPaper(true);
-    refreshPaper(true);
+    window.pravdaDashboardPhase = "P03B";
 
     // No unconditional security polling: SQLite diagnostics are only requested
     // on login, an explicit refresh or when the Security tab is opened.
@@ -1431,6 +1436,7 @@ const translations = {
         }catch{msg.textContent="Impossible d’ouvrir la source officielle. Vérifiez votre navigateur par défaut.";}
     });
     $("revolut-refresh").addEventListener("click",refreshRevolut);
+    window.pravdaDashboardPhase = "P03C";
     let fxRequestNumber = 0;
     let lastSettledFxRequest = 0;
     window.pravdaDashboardPhase = "P05";
