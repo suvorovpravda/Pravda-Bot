@@ -1,14 +1,47 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="485" viewBox="0 0 1600 485" role="img">
-<title>Pravda Live Pulse — synchronisation non activée sur main</title>
-<desc>Le tableau de suivi est prêt ; les données GitHub ne sont pas encore synchronisées. Production NO-GO.</desc>
-<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#181C3E"/><stop offset=".6" stop-color="#0C1328"/><stop offset="1" stop-color="#18132E"/></linearGradient></defs>
-<rect width="1600" height="485" rx="24" fill="url(#bg)"/>
+<title>Pravda-Bot Live Pulse - verified CI evidence, historic milestones, release NO-GO</title>
+<desc>Source SHA 761ef31325. Latest required CI outcomes 2/3. Production NO-GO.</desc>
+<defs><linearGradient id="livebg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#181C3E"/><stop offset=".58" stop-color="#0C1328"/><stop offset="1" stop-color="#18132E"/></linearGradient></defs>
+<rect width="1600" height="485" rx="24" fill="url(#livebg)"/>
 <rect x="34" y="27" width="1532" height="435" rx="20" fill="#0E1530" stroke="#455078"/>
-<text x="68" y="78" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="33" font-weight="800">● PRAVDA / LIVE PULSE</text>
-<text x="70" y="115" fill="#A6B3D4" font-family="Segoe UI,Arial,sans-serif" font-size="17">Synchronisation automatique : GitHub Actions toutes les 10 minutes (best effort)</text>
-<rect x="68" y="151" width="1460" height="218" rx="20" fill="#191E3E" stroke="#51456F"/>
-<text x="109" y="220" fill="#FFCC79" font-family="Segoe UI,Arial,sans-serif" font-size="38" font-weight="800">EN ATTENTE DE PREMIÈRE SYNCHRONISATION</text>
-<text x="111" y="267" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="20">Après fusion, les workflows, PR, Issues et jalons du guide alimenteront ce panneau.</text>
-<text x="111" y="302" fill="#9FAACE" font-family="Segoe UI,Arial,sans-serif" font-size="18">Aucun résultat de CI n'est encore affirmé par cet aperçu.</text>
-<text x="1247" y="430" fill="#FF668D" font-family="Segoe UI,Arial,sans-serif" font-size="33" font-weight="800">NO-GO</text>
+<text x="68" y="70" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="29" font-weight="800">●  PRAVDA / LIVE PULSE</text>
+<text x="69" y="99" fill="#A6B3D4" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="500">Suivi GitHub sur branche status/live · actualisation planifiée toutes les 10 minutes</text>
+<text x="1278" y="73" fill="#FF668D" font-family="Segoe UI,Arial,sans-serif" font-size="33" font-weight="800">NO-GO</text>
+<text x="1280" y="101" fill="#B8BDD6" font-family="Segoe UI,Arial,sans-serif" font-size="13" font-weight="650">PRODUCTION / MANUAL GATE</text>
+<rect x="66" y="128" width="348" height="169" rx="20" fill="#151B36" stroke="#363F65"/>
+<rect x="429" y="128" width="348" height="169" rx="20" fill="#151B36" stroke="#363F65"/>
+<rect x="792" y="128" width="345" height="169" rx="20" fill="#151B36" stroke="#363F65"/>
+<rect x="1152" y="128" width="378" height="169" rx="20" fill="#151B36" stroke="#363F65"/>
+<circle cx="152" cy="216" r="47" fill="none" stroke="#303956" stroke-width="14"/><circle cx="152" cy="216" r="47" fill="none" stroke="#A88BFF" stroke-width="14" stroke-linecap="round" stroke-dasharray="138.80 156.51" transform="rotate(-90 152 216)"/>
+<text x="120" y="224" fill="#FFFFFF" font-family="Segoe UI,Arial,sans-serif" font-size="27" font-weight="800">47%</text>
+<text x="221" y="186" fill="#9DAFFF" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">HISTORICAL</text>
+<text x="221" y="215" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="750">20 / 43 jalons</text>
+<text x="221" y="242" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="500">Guide P0–P2</text>
+<circle cx="513" cy="216" r="47" fill="none" stroke="#303956" stroke-width="14"/><circle cx="513" cy="216" r="47" fill="none" stroke="#51D9FB" stroke-width="14" stroke-linecap="round" stroke-dasharray="197.86 97.45" transform="rotate(-90 513 216)"/>
+<text x="486" y="224" fill="#FFFFFF" font-family="Segoe UI,Arial,sans-serif" font-size="26" font-weight="800">2/3</text>
+<text x="584" y="185" fill="#9DAFFF" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">WORKFLOWS CI</text>
+<text x="584" y="213" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600">au SHA source</text>
+<text x="584" y="239" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="500">Pas un score release</text>
+<text x="818" y="186" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">PULL REQUESTS</text>
+<text x="818" y="253" fill="#FF579C" font-family="Segoe UI,Arial,sans-serif" font-size="73" font-weight="800">3</text>
+<text x="1175" y="186" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700">ISSUES OUVERTES</text>
+<text x="1175" y="253" fill="#6BDDFC" font-family="Segoe UI,Arial,sans-serif" font-size="73" font-weight="800">5</text>
+<rect x="73" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
+<circle cx="91" cy="352" r="5" fill="#54DFC0"/>
+<text x="106" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750">RUST / WINDOWS + LINUX</text>
+<text x="90" y="385" fill="#54DFC0" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700">PASS · 761ef31325</text>
+<rect x="450" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
+<circle cx="468" cy="352" r="5" fill="#51D9FB"/>
+<text x="483" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750">MSI / NSIS INSTALLER</text>
+<text x="467" y="385" fill="#51D9FB" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700">RUNNING · 761ef31325</text>
+<rect x="827" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
+<circle cx="845" cy="352" r="5" fill="#54DFC0"/>
+<text x="860" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750">CODEQL / ANALYSE</text>
+<text x="844" y="385" fill="#54DFC0" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700">PASS · 761ef31325</text>
+<rect x="1204" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
+<circle cx="1222" cy="352" r="5" fill="#F9AB70"/>
+<text x="1237" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750">RUSTSEC / OBSERVATION</text>
+<text x="1221" y="385" fill="#F9AB70" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700">NOT RUN · —</text>
+<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650">LATEST EVIDENCE  2026-11-07 10:19 UTC   ·   SOURCE SHA  761ef31325</text>
+<text x="1316" y="448" fill="#65DDBA" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="730">LIVE ORDERS  OFF</text>
 </svg>
