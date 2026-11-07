@@ -14,7 +14,11 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze Rust
+    name: Analyze ${{ matrix.language }}
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [rust, javascript-typescript]
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -29,7 +33,7 @@ jobs:
     - name: Initialize CodeQL
       uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4
       with:
-        languages: rust
+        languages: ${{ matrix.language }}
         build-mode: none
         config-file: ./.github/codeql-config.yml
         queries: security-extended,security-and-quality
@@ -37,4 +41,4 @@ jobs:
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066  # v4
       with:
-        category: "/language:rust"
+        category: "/language:${{ matrix.language }}"
