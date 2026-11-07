@@ -20,11 +20,11 @@
 
 ## ⚡ Live Pulse — progression quasi en temps réel
 
-![Suivi automatique GitHub : progression historique, CI au SHA de référence, PR et Issues ouvertes, publication NO-GO](docs/assets/pravda-live-status.svg)
+![Suivi automatique GitHub : progression historique, CI au SHA de référence, PR et Issues ouvertes, publication NO-GO](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
 
-**[Voir le statut JSON vérifiable](docs/assets/pravda-live-status.json)** · **[Historique des actualisations GitHub](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
+**[Voir le statut JSON vérifiable](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json)** · **[Historique des actualisations GitHub](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
 
-Ce panneau se **synchronisera automatiquement toutes les 10 minutes environ**, et après la fin des workflows CI surveillés, une fois la PR documentaire fusionnée sur `main`. GitHub Actions fonctionne en *best effort* : les exécutions peuvent être décalées ou ponctuellement absentes. Les changements sont enregistrés uniquement si les valeurs GitHub évoluent, afin d'éviter des centaines de commits de simple horodatage.
+Ce panneau est **alimenté par la branche dédiée `status/live`** environ toutes les 10 minutes et après les workflows CI surveillés, selon la disponibilité de GitHub Actions. **La branche `main` reste protégée** : aucune mise à jour automatique ne la contourne. Les textes permanents du README et de SECURITY sont modifiés via Pull Request, tandis que ce panneau et son JSON reflètent les dernières preuves GitHub publiées. Le cache des images GitHub peut retarder leur affichage. Aucune exécution CI ne vaut certification de production.
 
 **Source de vérité :** derniers runs CI sur `main` et leur SHA, nombre de PR/Issues ouvertes, et jalons chiffrés du guide central. Les audits RustSec **non bloquants** affichent `OBSERVE ONLY`, jamais un feu vert de sécurité. **Un workflow PASS n'est pas un GO production.** La dernière preuve affichée est horodatée ; si la synchronisation échoue, les données restent celles de la dernière réussite et ne doivent pas être considérées comme instantanées.
 
@@ -61,7 +61,7 @@ Les badges CI reflètent les workflows de **main** au moment de l'affichage. Ils
 | 🟣 P0 · Parité des fonctions Rust | **38 %** | 🟪🟪🟪🟪⬛⬛⬛⬛⬛⬛ | Fonctions à compléter |
 | 🔵 P0 · CI et gouvernance | **60 %** | 🟦🟦🟦🟦🟦🟦⬛⬛⬛⬛ | Recette release distincte |
 | 🟢 P1 · SQLite / historique | **75 %** | 🟩🟩🟩🟩🟩🟩🟩🟩⬛⬛ | Restauration à qualifier |
-| 🌸 P1 · Interface desktop | **50 %** | 🟪🟪🟪🟪🟪⬛⬛⬛⬛⬛ | Parcours Windows bloquant |
+| 🌸 P1 · Interface desktop | **50 %** | 🟪🟪🟪🟪🟪⬛⬛⬛⬛⬛ | Jalon historique ; MSI/NSIS E2E validés depuis, voir #168 |
 | 🔴 P1 · Packaging Enterprise | **0 %** | ⬛⬛⬛⬛⬛⬛⬛⬛⬛⬛ | Signature non livrée |
 | 🟠 P2 · Observabilité / charge | **25 %** | 🟧🟧🟧⬛⬛⬛⬛⬛⬛⬛ | Extension à faire |
 | ⚪ P2 · Sources et modules futurs | **0 %** | ⬛⬛⬛⬛⬛⬛⬛⬛⬛⬛ | Hors chemin critique |
@@ -85,8 +85,8 @@ xychart-beta
 
 | Vérification | État | Preuve manquante |
 | :--- | :---: | :--- |
-| 🖥️ Bureau Windows installé | 🔴 **NO-GO** | Première connexion, chargement JS complet, redémarrage |
-| 📦 MSI / NSIS | 🟠 **À QUALIFIER** | Installation, désinstallation et préservation des données |
+| 🖥️ Bureau Windows installé | ✅ **E2E CI VALIDÉ** | MSI et NSIS : inscription, JS complet, reconnexion, déconnexion ; qualification poste utilisateur distincte |
+| 📦 MSI / NSIS | ✅ **INSTALLATION CI VALIDÉE** | Installation, suppression et conservation SQLite en runner Windows ; signature et VM airgap non qualifiées |
 | 📡 Flux Kraken / Binance | 🟠 **NON PROUVÉS SUR PC** | Cotations réelles horodatées, provenance et reconnexion |
 | 🧪 Doctor / Harness | 🔵 **OUTILS DE TEST** | Les scénarios synthétiques ne prouvent pas les cours live |
 | 🛡️ RustSec desktop | 🔴 **À TRAITER** | Vulnérabilités et dépendances historiques |
@@ -94,7 +94,7 @@ xychart-beta
 | 🔄 Updater automatique | ⚪ **OFF** | Signature, anti-downgrade, rollback |
 | 💳 Ordres réels | 🟢 **OFF** | Aucun trading live activé |
 
-**Incident documenté :** le test Windows de l'application installée a échoué après la création du mot de passe avec une initialisation partielle du dashboard ([run 42290188079](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42290188079)). Les correctifs GUI / flux / diagnostics ont été réunis et fusionnés via la [PR #159](https://github.com/suvorovpravda/Pravda-Bot/pull/159) ; **cela ne valide pas le fonctionnement sur le poste utilisateur**.
+**Incident Windows résolu en recette CI :** les précédents débordements JavaScript `P02H/P03 · STACK_OVERFLOW` empêchaient l'initialisation du tableau de bord. La [PR #168](https://github.com/suvorovpravda/Pravda-Bot/pull/168) a été fusionnée sur `main` ; le [run Windows indépendant 42349767279](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42349767279), sur le commit `1021115e`, confirme l'initialisation graphique MSI **et** NSIS, le mot de passe, la session Rust, le redémarrage, la reconnexion, la déconnexion, la désinstallation et la conservation des données. **Cette recette ne prouve ni la compatibilité avec tous les postes utilisateurs, ni la signature Enterprise, ni des ordres live.**
 
 L'installation Tauri utilise la configuration WebView2 **offlineInstaller**, mais son fonctionnement sur une VM vierge réellement isolée du réseau n'est **pas encore attesté**.
 
@@ -139,7 +139,7 @@ L'interface ne reçoit pas les secrets, ne peut pas soumettre des ordres réels 
 
 - [x] **P0** · Runtime Windows Rust / Tauri.
 - [x] **P0** · Intégration des correctifs GUI, marché et diagnostics via #159.
-- [ ] **P0** · Recette graphique complète sur le binaire Windows installé.
+- [x] **P0** · Recette graphique MSI et NSIS sur un runner Windows indépendant ([run 42349767279](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42349767279)).
 - [ ] **P0** · Flux publics réellement observés et diagnostic des pannes réseau.
 - [ ] **P0** · RustSec desktop et barrières de provenance.
 - [ ] **P1** · Tests airgap sur VM vierge et installation réellement personnalisée.
@@ -155,7 +155,7 @@ Le trading réel [#89](https://github.com/suvorovpravda/Pravda-Bot/issues/89), l
 [![GUIDE](https://img.shields.io/badge/TECHNICAL%20GUIDE-RUST-37BFEF?style=for-the-badge)](docs/PRAVDA-GUIDE.md)
 [![RELEASE](https://img.shields.io/badge/RELEASE%20GATE-ISSUE%20%23160-FB696B?style=for-the-badge)](https://github.com/suvorovpravda/Pravda-Bot/issues/160)
 
-Le projet reste **NO-GO** pour une production complète ; pas de demande de téléchargement avant une recette Windows suffisamment probante.
+Le projet reste **NO-GO** pour une production complète : la recette d'installation Windows de la PR #168 est réussie, mais la signature, l'audit des dépendances, les sources réelles, l'updater et la qualification de publication restent des barrières indépendantes.
 
 ---
 
