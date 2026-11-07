@@ -140,6 +140,23 @@ assert.match(js,/checked_at_utc: finishedAt\.toISOString\(\)/,
   "Every completed test must publish its actual completion timestamp");
 assert.match(js,/window\.pravdaDashboardReady = true;/,
   "Dashboard must advertise readiness only after all handlers are bound");
+const bootDiagnosticStart=js.indexOf('window.pravdaDashboardPhase = "P02H";');
+const bootDiagnosticEnd=js.indexOf('window.pravdaDashboardPhase = "P02I";',bootDiagnosticStart);
+assert.ok(bootDiagnosticStart>=0 && bootDiagnosticEnd>bootDiagnosticStart,
+  "First-use boot must still have bounded security initialization phase markers");
+const bootDiagnosticScript=js.slice(bootDiagnosticStart,bootDiagnosticEnd);
+const unsolicited=[];
+vm.runInNewContext(bootDiagnosticScript,{
+  window:{pravdaDashboardPhase:""},
+  refreshSecurity(){unsolicited.push("security_report");},
+  refreshSecurityEvents(){unsolicited.push("security_events");}
+});
+assert.deepEqual(unsolicited,[],
+  "First-use dashboard must NOT invoke optional protected diagnostics during JS bootstrap");
+assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshSecurity\(true\);[\s\S]*?refreshSecurityEvents\(\);/,
+  "Security panel must retain user-initiated diagnostics");
+assert.match(js, /\$\("security-refresh"\)\.addEventListener\("click"/,
+  "Manual security refresh button must remain connected");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
   "A failed dashboard initialization must produce a visible local error");
 assert.doesNotMatch(auth,/aucun mot de passe ni détail système n'a été enregistré/,
