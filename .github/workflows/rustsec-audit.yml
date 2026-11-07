@@ -1,10 +1,11 @@
-name: RustSec dependency audit (observe only)
+name: RustSec dependency audit (blocking)
 
 on:
   push:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'crates/pravda-app/Cargo.lock'
       - 'Cargo.toml'
       - '**/Cargo.toml'
       - '.cargo/audit.toml'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'crates/pravda-app/Cargo.lock'
       - 'Cargo.toml'
       - '**/Cargo.toml'
       - '.cargo/audit.toml'
@@ -30,9 +32,17 @@ concurrency:
 
 jobs:
   audit:
-    name: RustSec advisory scan (non-blocking)
+    name: RustSec / ${{ matrix.component }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: core
+            lockfile: Cargo.lock
+          - component: desktop
+            lockfile: crates/pravda-app/Cargo.lock
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
@@ -57,37 +67,20 @@ jobs:
             cargo install cargo-audit --version 0.22.2 --locked --force
           fi
           cargo audit --version
-      - name: Audit locked Rust dependencies
-        id: audit
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo audit --file Cargo.lock --format sarif > rustsec.sarif
-      - name: Explain audit outcome
-        if: always()
+      - name: Audit ${{ matrix.component }} locked dependencies (blocking)
         shell: bash
         env:
-          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          LOCKFILE: ${{ matrix.lockfile }}
         run: |
-          {
-            echo '### RustSec Cargo.lock audit — observation phase'
-            if [ "$AUDIT_OUTCOME" = 'success' ]; then
-              echo 'The RustSec audit exited successfully; inspect the SARIF artifact for details.'
-            elif [ "$AUDIT_OUTCOME" = 'failure' ]; then
-              echo 'The audit returned a nonzero exit code. This may indicate an advisory or an execution/database failure: inspect the job logs and SARIF artifact.'
-              echo '::warning::RustSec audit returned a nonzero status; review advisories or tool/database failures before release.'
-            else
-              echo 'The audit did not complete. No claim of a clean dependency set is permitted.'
-              echo '::warning::RustSec audit was not completed.'
-            fi
-            echo 'This check is advisory during the rollout; it does not validate signed Windows packages or the physical offline VM acceptance.'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Preserve SARIF findings for review
+          set -euo pipefail
+          test -f "$LOCKFILE"
+          cargo audit --file "$LOCKFILE" --format sarif > rustsec.sarif
+          echo "RustSec ${LOCKFILE}: all advisories accepted by cargo-audit" >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve SARIF findings even on blocking failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
-          name: rustsec-dependency-scan-${{ github.sha }}
+          name: rustsec-${{ matrix.component }}-${{ github.sha }}
           path: rustsec.sarif
           if-no-files-found: warn
           retention-days: 30
