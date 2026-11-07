@@ -73,17 +73,46 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_REF_NAME: main
         run: node tools/update-live-dashboard.mjs
-      - name: Commit only changed status evidence (not a new build)
+      # GitHub rulesets require all main changes to arrive via reviewed PRs.
+      # The live SVG/JSON feed is published to a dedicated branch, leaving main
+      # protected. README.md and SECURITY.md display this feed by URL.
+      - name: Publish observable evidence to status/live (never push main)
         shell: bash
         run: |
           set -euo pipefail
-          git add docs/assets/pravda-live-status.svg docs/assets/pravda-live-status.json
-          if git diff --cached --quiet; then
-            echo "No observable change; no unnecessary 10-minute heartbeat commit."
-            exit 0
+          branch="status/live"
+          test -s docs/assets/pravda-live-status.svg
+          test -s docs/assets/pravda-live-status.json
+          node --input-type=module -e '
+            import {readFileSync} from "node:fs";
+            const s=JSON.parse(readFileSync("docs/assets/pravda-live-status.json","utf8"));
+            if(s.schema!=="PRAVDA-STATUS-v1" || !/^[a-f0-9]{40}$/.test(s.source_sha||"")
+              || s.production!=="NO-GO" || s.trading_live!=="OFF"
+              || s.signed_updater!=="OFF") {
+              throw Error("Reject invalid or unsafe live status payload");
+            }
+          '
+          target="$(mktemp -d)"
+          cleanup() { git worktree remove --force "$target" >/dev/null 2>&1 || true; rmdir "$target" >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null 2>&1; then
+            git fetch --no-tags origin "+refs/heads/$branch:refs/remotes/origin/$branch"
+            git worktree add --detach "$target" "refs/remotes/origin/$branch"
+          else
+            git worktree add --detach "$target" HEAD
           fi
-          git -c user.name="github-actions[bot]" \
-              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -m "docs(live): refresh GitHub cockpit evidence [skip ci]"
-          git push origin HEAD:main
-          echo "Updated source evidence and SVG on main."
+          mkdir -p "$target/docs/assets"
+          cp docs/assets/pravda-live-status.{json,svg} "$target/docs/assets/"
+          (
+            cd "$target"
+            git add docs/assets/pravda-live-status.json docs/assets/pravda-live-status.svg
+            if git diff --cached --quiet; then
+              echo "Live feed unchanged; no heartbeat commit."
+              exit 0
+            fi
+            git -c user.name="github-actions[bot]" \
+                -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+                commit -m "docs(live): refresh verifiable main-branch evidence [skip ci]"
+            git push origin "HEAD:refs/heads/$branch"
+            echo "Published status/live; main branch protection remains enabled."
+          )
