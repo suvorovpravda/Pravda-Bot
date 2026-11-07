@@ -68,6 +68,8 @@ jobs:
         shell: pwsh
         run: ./tools/test-windows-installer-verifier.ps1
 
+      - name: Validate SonarCloud Python version and source/test analysis scope
+        run: node tools/test-sonarcloud-analysis.mjs
       - name: Enforce Rust-only production boundary
         run: node tools/test-rust-production-boundary.mjs
 
