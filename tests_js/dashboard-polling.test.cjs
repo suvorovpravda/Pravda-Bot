@@ -22,7 +22,7 @@ test('Actual polling code registers each timer exactly once, including alerts', 
   assert.ok(source, 'The real polling function must exist');
   const registered = [];
   const periods = {
-    updateClock: 1000, refreshMarket: 1000, refreshFx: 21600000,
+    updateClock: 1000, refreshMarket: 1000, refreshHistory: 30000, refreshFx: 21600000,
     refreshFlows: 300000, refreshNews: 900000, refreshCrypto: 5000,
     refreshSources: 60000, checkPriceAlerts: 5000,
   };
