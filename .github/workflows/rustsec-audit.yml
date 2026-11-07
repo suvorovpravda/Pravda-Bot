@@ -110,15 +110,6 @@ jobs:
           if test ! -s desktop-lock-cargo.patch; then
             echo 'Desktop lockfile unchanged after Cargo metadata'
           fi
-      - name: Export Cargo-generated lock bytes for exact SHA verification
-        # Temporary transfer of public lockfile text; this job has read-only token.
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256sum crates/pravda-app/Cargo.lock
-          echo PRAVDA_CARGO_LOCK_BEGIN
-          base64 -w 512 crates/pravda-app/Cargo.lock
-          echo PRAVDA_CARGO_LOCK_END
       - name: Preserve Cargo-generated lock and review diff
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
