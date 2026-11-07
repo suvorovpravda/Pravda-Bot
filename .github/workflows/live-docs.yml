@@ -24,7 +24,7 @@ on:
       - "docs/PRAVDA-GUIDE.md"
 
 permissions:
-  contents: write
+  contents: read
   actions: read
   issues: read
   pull-requests: read
@@ -51,7 +51,7 @@ jobs:
 
   update:
     # Privileged updates must NEVER execute a PR's untrusted code.
-    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || github.event.workflow_run.head_branch == 'main')
+    if: github.event_name != 'pull_request' && (github.event_name != 'workflow_run' || (github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: ubuntu-latest
     permissions:
       contents: write

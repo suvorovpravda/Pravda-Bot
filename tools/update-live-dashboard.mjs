@@ -195,6 +195,22 @@ function put(path,content) {
   return true;
 }
 function runTests(){
+  // Regression for SonarCloud workflow_run trust boundary: a workflow run from
+  // a fork whose branch is also "main" must not activate the write-capable job.
+  const workflow=readFileSync(".github/workflows/live-docs.yml","utf8");
+  const rootPermissions=workflow.split("\npermissions:\n")[1]?.split("\nconcurrency:\n")[0];
+  assert.ok(rootPermissions,"Expected explicit top-level GitHub Actions permissions");
+  assert.match(rootPermissions,/^  contents: read$/m,
+    "Untrusted triggers must not inherit a write-capable GITHUB_TOKEN");
+  assert.doesNotMatch(rootPermissions,/^  contents: write$/m);
+  const updateJob=workflow.split("\n  update:\n")[1];
+  assert.ok(updateJob,"Expected a separate privileged update job");
+  const gate=updateJob.split("\n").find(line=>line.startsWith("    if: "))||"";
+  assert.match(gate,/github\.event\.workflow_run\.head_branch\s*==\s*'main'/);
+  assert.match(gate,/github\.event\.workflow_run\.head_repository\.full_name\s*==\s*github\.repository/,
+    "Matching the branch name alone does not authenticate the source repository");
+  assert.match(updateJob,/^    permissions:\n      contents: write$/m,
+    "The write scope belongs to the trusted update job only");
   const guide=readFileSync(guidePath,"utf8"), h=parseHistorical(guide);
   assert.equal(h.rows.length,9);
   const sampleRun={head_branch:"main",head_sha:"a".repeat(40),status:"completed",conclusion:"success",
