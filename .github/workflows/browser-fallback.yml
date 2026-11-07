@@ -24,8 +24,8 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec  # stable
       - name: Build native Windows Rust server executable
         run: cargo build --locked --release -p pravda-server
       - name: Stage standalone browser-mode package
@@ -51,7 +51,7 @@ jobs:
           Compress-Archive -Path tools/release-stage/* -DestinationPath release-dist/Pravda-Bot-Windows-Navigateur.zip -Force
           $hash = (Get-FileHash -Algorithm SHA256 release-dist/Pravda-Bot-Windows-Navigateur.zip).Hash.ToLowerInvariant()
           "$hash  Pravda-Bot-Windows-Navigateur.zip" | Set-Content -Encoding ascii release-dist/SHA256SUMS.txt
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
           name: pravda-bot-windows-browser-fallback
           path: release-dist/*
