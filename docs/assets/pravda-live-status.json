@@ -1,18 +1,137 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "initial_state": "AWAITING_FIRST_SYNC",
-  "source_sha": null,
-  "latest_evidence_at": null,
-  "historical": null,
+  "source_sha": "761ef313250c0958f0c7a84acf824bb2c8a17b5b",
+  "latest_evidence_at": "2026-11-07T10:19:44Z",
+  "historical": {
+    "rows": [
+      {
+        "priority": "P0",
+        "done": 6,
+        "total": 6,
+        "percentage": 100
+      },
+      {
+        "priority": "P0",
+        "done": 2,
+        "total": 4,
+        "percentage": 50
+      },
+      {
+        "priority": "P0",
+        "done": 3,
+        "total": 8,
+        "percentage": 38
+      },
+      {
+        "priority": "P0",
+        "done": 3,
+        "total": 5,
+        "percentage": 60
+      },
+      {
+        "priority": "P1",
+        "done": 3,
+        "total": 4,
+        "percentage": 75
+      },
+      {
+        "priority": "P1",
+        "done": 2,
+        "total": 4,
+        "percentage": 50
+      },
+      {
+        "priority": "P1",
+        "done": 0,
+        "total": 4,
+        "percentage": 0
+      },
+      {
+        "priority": "P2",
+        "done": 1,
+        "total": 4,
+        "percentage": 25
+      },
+      {
+        "priority": "P2",
+        "done": 0,
+        "total": 4,
+        "percentage": 0
+      }
+    ],
+    "groups": [
+      {
+        "priority": "P0",
+        "done": 14,
+        "total": 23,
+        "percentage": 61
+      },
+      {
+        "priority": "P1",
+        "done": 5,
+        "total": 12,
+        "percentage": 42
+      },
+      {
+        "priority": "P2",
+        "done": 1,
+        "total": 8,
+        "percentage": 13
+      }
+    ],
+    "done": 20,
+    "total": 43,
+    "percentage": 47,
+    "origin": "docs/PRAVDA-GUIDE.md"
+  },
   "required_checks": {
-    "passed": 0,
+    "passed": 2,
     "total": 3
   },
-  "workflows": [],
-  "open_prs": null,
-  "open_issues": null,
+  "workflows": [
+    {
+      "id": "rust.yml",
+      "name": "RUST / WINDOWS + LINUX",
+      "kind": "required",
+      "state": "PASS",
+      "sha": "761ef31325",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42362826275",
+      "observedAt": "2026-11-07T10:17:49Z"
+    },
+    {
+      "id": "windows-package.yml",
+      "name": "MSI / NSIS INSTALLER",
+      "kind": "required",
+      "state": "RUNNING",
+      "sha": "761ef31325",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42362826262",
+      "observedAt": "2026-11-07T10:10:38Z"
+    },
+    {
+      "id": "codeql.yml",
+      "name": "CODEQL / ANALYSE",
+      "kind": "required",
+      "state": "PASS",
+      "sha": "761ef31325",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42362826352",
+      "observedAt": "2026-11-07T10:19:44Z"
+    },
+    {
+      "id": "rustsec-audit.yml",
+      "name": "RUSTSEC / OBSERVATION",
+      "kind": "observe",
+      "state": "NOT_RUN",
+      "sha": null,
+      "url": null,
+      "observedAt": null
+    }
+  ],
+  "open_prs": 3,
+  "open_issues": 5,
   "production": "NO-GO",
   "trading_live": "OFF",
   "signed_updater": "OFF",
-  "note": "Preview only; the scheduled refresh is not active until merged to the default branch."
+  "security_note": "RustSec observe-only is never treated as PASS",
+  "data_source": "GitHub Actions API + GitHub Issues/PR API + central guide",
+  "polling": "GitHub scheduled best effort / 10 min + selected completed workflows"
 }
