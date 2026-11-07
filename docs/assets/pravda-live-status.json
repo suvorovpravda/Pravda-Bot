@@ -1,7 +1,7 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "8d79af4e5f2a842f884a791e9f01313aa92954ee",
-  "latest_evidence_at": "2026-11-07T10:49:50Z",
+  "source_sha": "aac737e8c6c1d8ae559c42507651e924052d3b41",
+  "latest_evidence_at": "2026-11-07T11:00:00Z",
   "historical": {
     "rows": [
       {
@@ -85,7 +85,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 2,
+    "passed": 0,
     "total": 3
   },
   "workflows": [
@@ -93,41 +93,41 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "PASS",
-      "sha": "8d79af4e5f",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42364983397",
-      "observedAt": "2026-11-07T10:49:50Z"
+      "state": "RUNNING",
+      "sha": "aac737e8c6",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255053",
+      "observedAt": "2026-11-07T10:59:48Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "STALE_SHA",
-      "sha": "761ef31325",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42362826262",
-      "observedAt": "2026-11-07T10:37:43Z"
+      "state": "RUNNING",
+      "sha": "aac737e8c6",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255019",
+      "observedAt": "2026-11-07T10:59:49Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "8d79af4e5f",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42364983396",
-      "observedAt": "2026-11-07T10:46:42Z"
+      "state": "RUNNING",
+      "sha": "aac737e8c6",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255150",
+      "observedAt": "2026-11-07T10:59:48Z"
     },
     {
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / OBSERVATION",
       "kind": "observe",
-      "state": "STALE_SHA",
-      "sha": "f59330d7b8",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42301630391",
-      "observedAt": "2026-11-06T22:03:13Z",
+      "state": "OBSERVE_ONLY",
+      "sha": "aac737e8c6",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255076",
+      "observedAt": "2026-11-07T11:00:00Z",
       "auditMode": "nonblocking"
     }
   ],
-  "open_prs": 3,
+  "open_prs": 2,
   "open_issues": 5,
   "production": "NO-GO",
   "trading_live": "OFF",
