@@ -1,7 +1,7 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "0c63692555a51b7af29260f59dfe16291751f0a2",
-  "latest_evidence_at": "2026-11-07T11:09:30Z",
+  "latest_evidence_at": "2026-11-07T11:18:28Z",
   "historical": {
     "rows": [
       {
@@ -105,7 +105,7 @@
       "state": "STALE_SHA",
       "sha": "aac737e8c6",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255019",
-      "observedAt": "2026-11-07T10:59:49Z"
+      "observedAt": "2026-11-07T11:18:28Z"
     },
     {
       "id": "codeql.yml",
