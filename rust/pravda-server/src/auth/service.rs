@@ -268,7 +268,10 @@ mod crypto_compatibility_tests {
             .mode()
             & 0o777;
         let _ = std::fs::remove_file(&path);
-        assert_eq!(permissions, 0o600, "password verifier must reject group and world access");
+        assert_eq!(
+            permissions, 0o600,
+            "password verifier must reject group and world access"
+        );
     }
 
     #[test]
