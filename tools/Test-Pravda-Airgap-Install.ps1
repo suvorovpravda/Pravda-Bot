@@ -208,6 +208,11 @@ try {
     New-Item -ItemType Directory -Path $proofRoot -ErrorAction Stop | Out-Null
     $proofCopy = Join-Path $proofRoot 'installed-gui-report.json'
     Copy-Item -LiteralPath $reportPath -Destination $proofCopy -ErrorAction Stop
+    $signatureScope = if ($installerSignatureVerified) {
+        'signed_installer_only'
+    } else {
+        'unsigned_or_unverified_functional_qa'
+    }
     $proofMeta = [ordered]@{
         version = 1
         kind = $Kind
@@ -216,7 +221,7 @@ try {
         installer_authenticode_verified = $installerSignatureVerified
         # A single VM acceptance is NEVER a complete production GO.
         release_ready = $false
-        signature_scope = if ($installerSignatureVerified) { 'signed_installer_only' } else { 'unsigned_or_unverified_functional_qa' }
+        signature_scope = $signatureScope
         installed_gui_report_sha256 = (Get-FileHash -LiteralPath $proofCopy -Algorithm SHA256).Hash.ToLowerInvariant()
         webview2_version = $after
         passed = $true
