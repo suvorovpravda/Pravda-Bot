@@ -99,7 +99,7 @@ export function buildSnapshot({guide,runs,prs,issues,sourceSha}) {
     historical:history,required_checks:{passed,total:required.length},
     workflows:statuses,open_prs:openPrs,active_pr:activePr,open_issues:openIssues,
     production:"NO-GO",trading_live:"OFF",signed_updater:"OFF",
-    security_note:"RustSec observe-only is never treated as PASS",
+    security_note:"RustSec CI is blocking but SHA-scoped; signed release and offline VM QA remain unverified",
     data_source:"GitHub Actions API + GitHub Issues/PR API + central guide",
     polling:"GitHub scheduled best effort / 10 min + selected completed workflows",
   };
@@ -258,6 +258,8 @@ function runTests(){
   assert.equal(model.required_checks.passed,3);
   assert.equal(model.workflows[3].state,"OBSERVE_ONLY");
   assert.equal(model.open_issues,1);
+  assert.match(model.security_note,/RustSec CI is blocking but SHA-scoped/);
+  assert.match(model.security_note,/offline VM QA remain unverified/);
   // One current PR shows its exact candidate commit, never as a main PASS.
   const candidateModel=buildSnapshot({guide,sourceSha:"a".repeat(40),
     runs:Object.fromEntries(WORKFLOWS.map(w=>[w.id,[sampleRun]])),
@@ -276,7 +278,7 @@ function runTests(){
   assert.match(svg,/NO-GO/);
   assert.match(svg,/OBSERVE ONLY/);
   assert.ok(svg.endsWith("</svg>\n"));
-  console.log("PASS: live board percentages, SHA equality, RustSec observe-only, redaction and SVG layout");
+  console.log("PASS: live board percentages, SHA equality, SHA-scoped RustSec, redaction and SVG layout");
 }
 async function main(){
   const args=process.argv.slice(2);
