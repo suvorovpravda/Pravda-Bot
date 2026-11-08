@@ -36,6 +36,19 @@ for (const required of ["pravda-airgap-evidence-", "installed-gui-report.json",
   assert.ok(offline.includes(required),
     "Offline run must preserve separately hashed GUI evidence: "+required);
 }
+// A functional offline VM PASS must never silently become a signed-release PASS.
+for (const required of ["RequireSigned", "ExpectedSignerThumbprint",
+  "Get-AuthenticodeSignature", "SignerCertificate.Thumbprint",
+  "TimeStamperCertificate", "installer_authenticode_verified",
+  "release_ready = $false", "unsigned_or_unverified_functional_qa",
+  "FUNCTIONAL QA ONLY", "REFUSED: installer Authenticode"]) {
+  assert.ok(offline.includes(required),
+    "Offline QA must distinguish signed and unsigned release evidence: "+required);
+}
+const signatureCheck = offline.indexOf("if ($RequireSigned) {");
+const beforeInstall = offline.indexOf("// Test-only toolchain must be staged");
+assert.ok(signatureCheck >= 0 && signatureCheck < beforeInstall,
+  "Signature must be checked before executing the offline installer");
 assert.ok(workflow.includes("Initialize-Pravda-Airgap-Gui.ps1"),
   "Windows CI must parse the offline GUI helper");
 assert.ok(workflow.includes("-ExpectedCommitSha ('0' * 40)"),
