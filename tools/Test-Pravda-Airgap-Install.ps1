@@ -9,6 +9,10 @@
   This script never changes firewall, UAC, SmartScreen or network configuration.
 .EXAMPLE
   ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath ./Pravda-Bot_x64.msi -Kind MSI -ExpectedSha256 HASH_FROM_TRUSTED_MANIFEST -ExpectedCommitSha 40_CHAR_SHA -DisposableVm
+  This example is FUNCTIONAL QA ONLY and does not attest a signed release.
+.EXAMPLE
+  ./tools/Test-Pravda-Airgap-Install.ps1 -InstallerPath ./Pravda-Bot_x64.msi -Kind MSI -ExpectedSha256 HASH_FROM_TRUSTED_MANIFEST -ExpectedCommitSha 40_CHAR_SHA -DisposableVm -RequireSigned -ExpectedSignerThumbprint TRUSTED_CERTIFICATE_THUMBPRINT
+  Supply the out-of-band, independently verified signing certificate fingerprint.
 #>
 [CmdletBinding()]
 param(
@@ -23,7 +27,9 @@ param(
     [Parameter(Mandatory = $true)]
     [ValidatePattern('^[a-fA-F0-9]{40}$')]
     [string]$ExpectedCommitSha,
-    [switch]$DisposableVm
+    [switch]$DisposableVm,
+    [switch]$RequireSigned,
+    [string]$ExpectedSignerThumbprint = ''
 )
 $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
@@ -91,6 +97,28 @@ if (($Kind -eq 'MSI' -and [IO.Path]::GetExtension($installer) -ine '.msi') -or
 $actual = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($actual -cne $ExpectedSha256.ToLowerInvariant()) {
     throw 'REFUSED: installer hash differs from trusted release manifest'
+}
+
+# Functional VM acceptance may run with unsigned preproduction installers.
+# A functional PASS is never evidence of a signed release. In signed mode,
+# obtain the trusted signer fingerprint from an independently verified release
+# record, NEVER from the installer or certificate being checked here.
+if (-not $RequireSigned -and -not [string]::IsNullOrWhiteSpace($ExpectedSignerThumbprint)) {
+    throw 'REFUSED: signer thumbprint requires -RequireSigned'
+}
+if ($RequireSigned -and $ExpectedSignerThumbprint -notmatch '^[A-Fa-f0-9]{40}$') {
+    throw 'REFUSED: signed installer requires a trusted 40-hex signer thumbprint'
+}
+$installerSignatureVerified = $false
+if ($RequireSigned) {
+    $sig = Get-AuthenticodeSignature -LiteralPath $installer -ErrorAction Stop
+    if ($sig.Status -ne 'Valid' -or
+        $null -eq $sig.SignerCertificate -or
+        $sig.SignerCertificate.Thumbprint -ine $ExpectedSignerThumbprint -or
+        $null -eq $sig.TimeStamperCertificate) {
+        throw 'REFUSED: installer Authenticode identity, trust or timestamp invalid'
+    }
+    $installerSignatureVerified = $true
 }
 
 # Test-only toolchain must be staged before the hypervisor disconnects
@@ -185,6 +213,10 @@ try {
         kind = $Kind
         source_sha = $ExpectedCommitSha.ToLowerInvariant()
         installer_sha256 = $actual
+        installer_authenticode_verified = $installerSignatureVerified
+        # A single VM acceptance is NEVER a complete production GO.
+        release_ready = $false
+        signature_scope = if ($installerSignatureVerified) { 'signed_installer_only' } else { 'unsigned_or_unverified_functional_qa' }
         installed_gui_report_sha256 = (Get-FileHash -LiteralPath $proofCopy -Algorithm SHA256).Hash.ToLowerInvariant()
         webview2_version = $after
         passed = $true
@@ -193,6 +225,11 @@ try {
     }
     $proofMeta | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $proofRoot 'airgap-evidence.json') -Encoding utf8 -ErrorAction Stop
     Write-Host ('PASS: retained offline acceptance evidence in TEMP/' + $proofName)
+    if (-not $installerSignatureVerified) {
+        Write-Warning 'FUNCTIONAL QA ONLY: installer signature not verified; NOT a production release.'
+    } else {
+        Write-Host 'PASS: installer Authenticode identity and timestamp verified (not full release certification).'
+    }
     $success = $true
     Write-Host ('PASS: offline ' + $Kind + ' install/start/uninstall on WebView2-free VM')
     Write-Host ('PASS: SHA256=' + $actual)
