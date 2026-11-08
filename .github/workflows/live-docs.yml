@@ -9,7 +9,7 @@ on:
       - "Rust migration"
       - "Windows installer packaging (manual; optional Authenticode)"
       - "CodeQL Advanced"
-      - "RustSec dependency audit (observe only)"
+      - "RustSec dependency audit (blocking)"
     types: [completed]
   workflow_dispatch:
   pull_request:
