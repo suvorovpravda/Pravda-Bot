@@ -12,7 +12,7 @@ export const WORKFLOWS = Object.freeze([
   {id:"rust.yml", name:"RUST / WINDOWS + LINUX", kind:"required"},
   {id:"windows-package.yml", name:"MSI / NSIS INSTALLER", kind:"required"},
   {id:"codeql.yml", name:"CODEQL / ANALYSE", kind:"required"},
-  {id:"rustsec-audit.yml", name:"RUSTSEC / OBSERVATION", kind:"observe"}
+  {id:"rustsec-audit.yml", name:"RUSTSEC / AUDIT BLOQUANT", kind:"required"}
 ]);
 
 const TAG = "PRAVDA-STATUS-v1";
@@ -65,7 +65,7 @@ export function selectedRun(workflowRuns, sourceSha, observeOnly=false) {
   const url = typeof run.html_url === "string" && /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/actions\/runs\/\d+$/.test(run.html_url)
     ?run.html_url:null;
   return {state,sha:sha.slice(0,10),url,observedAt:run.updated_at||run.created_at||null,
-    // A nonblocking audit is not a clean bill of health, even if CI says success.
+    // Nonblocking legacy workflow support; current RustSec workflow is blocking.
     auditMode:observeOnly?"nonblocking":undefined};
 }
 
@@ -255,8 +255,9 @@ function runTests(){
   const model=buildSnapshot({guide,sourceSha:"a".repeat(40),
     runs:Object.fromEntries(WORKFLOWS.map(w=>[w.id,[sampleRun]])),
     prs:[{state:"open"}],issues:[{state:"open"}, {state:"open",pull_request:{url:"x"}}]});
-  assert.equal(model.required_checks.passed,3);
-  assert.equal(model.workflows[3].state,"OBSERVE_ONLY");
+  assert.equal(model.required_checks.passed,4);
+  assert.equal(model.workflows[3].state,"PASS");
+  assert.equal(model.workflows[3].auditMode,undefined);
   assert.equal(model.open_issues,1);
   assert.match(model.security_note,/RustSec CI is blocking but SHA-scoped/);
   assert.match(model.security_note,/offline VM QA remain unverified/);
@@ -265,7 +266,7 @@ function runTests(){
     runs:Object.fromEntries(WORKFLOWS.map(w=>[w.id,[sampleRun]])),
     prs:[{state:"open",number:172,head:{sha:"b".repeat(40)},draft:true}],
     issues:[]});
-  assert.equal(candidateModel.required_checks.passed,3);
+  assert.equal(candidateModel.required_checks.passed,4);
   assert.deepEqual(candidateModel.active_pr,{
     number:172,head_sha:"b".repeat(40),draft:true,evidence_scope:"PR_ONLY_NOT_MAIN"
   });
@@ -276,7 +277,16 @@ function runTests(){
   assert.equal(selectedRun([],"a".repeat(40)).state,"NOT_RUN");
   const svg=renderSvg(model);
   assert.match(svg,/NO-GO/);
-  assert.match(svg,/OBSERVE ONLY/);
+  assert.doesNotMatch(svg,/OBSERVE ONLY/);
+  assert.match(svg,/RUSTSEC \/ AUDIT BLOQUANT/);
+  const failedRustSec={...sampleRun,conclusion:"failure"};
+  const failedModel=buildSnapshot({guide,sourceSha:"a".repeat(40),
+    runs:Object.fromEntries(WORKFLOWS.map(w=>[w.id,[w.id==="rustsec-audit.yml"?failedRustSec:sampleRun]])),
+    prs:[],issues:[]});
+  assert.equal(failedModel.required_checks.total,4);
+  assert.equal(failedModel.required_checks.passed,3);
+  assert.equal(failedModel.workflows[3].state,"FAIL");
+  assert.match(renderSvg(failedModel),/FAIL/);
   assert.ok(svg.endsWith("</svg>\n"));
   console.log("PASS: live board percentages, SHA equality, SHA-scoped RustSec, redaction and SVG layout");
 }
