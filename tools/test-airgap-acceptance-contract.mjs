@@ -46,7 +46,7 @@ for (const required of ["RequireSigned", "ExpectedSignerThumbprint",
     "Offline QA must distinguish signed and unsigned release evidence: "+required);
 }
 const signatureCheck = offline.indexOf("if ($RequireSigned) {");
-const beforeInstall = offline.indexOf("// Test-only toolchain must be staged");
+const beforeInstall = offline.indexOf("# Test-only toolchain must be staged");
 assert.ok(signatureCheck >= 0 && signatureCheck < beforeInstall,
   "Signature must be checked before executing the offline installer");
 assert.ok(workflow.includes("Initialize-Pravda-Airgap-Gui.ps1"),
