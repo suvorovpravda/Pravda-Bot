@@ -61,4 +61,24 @@ for (const workflow of ["windows-package.yml","rustsec-audit.yml"]) {
 assert.match(readFileSync(dir+"/rust.yml","utf8"),
   /\$checkedOutSha = \(git rev-parse HEAD\)\.Trim\(\)/,
   "Native WebView2 evidence must match the checked-out source commit");
+// On untrusted PRs, packaging must not expose signing keys even when the
+// requested output is an unsigned test candidate.
+const packaging=readFileSync(dir+"/windows-package.yml","utf8");
+const unsignedBegin=packaging.indexOf("- name: Build NSIS and MSI with locked Cargo dependencies");
+const signedBegin=packaging.indexOf("- name: Build signed NSIS and MSI with locked Cargo dependencies");
+const afterBuild=packaging.indexOf("- name: Prove release desktop PE uses GUI subsystem",signedBegin);
+assert.ok(unsignedBegin>=0 && signedBegin>unsignedBegin && afterBuild>signedBegin,
+  "Signed and unsigned Tauri builds must be separate CI steps");
+const unsignedBuild=packaging.slice(unsignedBegin,signedBegin);
+const signedBuild=packaging.slice(signedBegin,afterBuild);
+assert.match(unsignedBuild,/if: \$\{\{ !inputs\.signed \}\}/,
+  "Unsigned builds must run only without signed-release authorization");
+assert.doesNotMatch(unsignedBuild,/TAURI_SIGNING_PRIVATE_KEY|tauri\.signing\.ci\.json/,
+  "Unsigned PR builds must never receive updater signing credentials");
+assert.match(signedBuild,/if: \$\{\{ inputs\.signed && github\.event_name == 'workflow_dispatch' \}\}/,
+  "Signed artifacts must be limited to manual, explicitly authorized runs");
+assert.match(signedBuild,/TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNING_PRIVATE_KEY \}\}/,
+  "Signed builds require the protected Tauri signing secret");
+assert.match(packaging,/environment: \$\{\{ inputs\.signed && 'windows-signing' \|\| 'unsigned-test' \}\}/,
+  "Signed builds must remain isolated in the protected signing environment");
 console.log("GitHub Actions supply-chain: "+checked+" remote action references pinned to reviewed SHA");

@@ -220,20 +220,27 @@ jobs:
           }
           $config | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'tauri.signing.ci.json' -Encoding utf8
       - name: Build NSIS and MSI with locked Cargo dependencies
+        # PR and ordinary CI candidates must NEVER receive Tauri signing secrets.
+        if: ${{ !inputs.signed }}
+        shell: pwsh
+        working-directory: crates/pravda-app
+        run: |
+          $ErrorActionPreference='Stop'
+          cargo tauri build --ci --bundles nsis,msi -- --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Unsigned Tauri Windows package build failed' }
+      - name: Build signed NSIS and MSI with locked Cargo dependencies
+        # Signing is opt-in ONLY, on a protected manual run whose ref and
+        # environment prerequisites were validated above.
+        if: ${{ inputs.signed && github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         working-directory: crates/pravda-app
         env:
-          PRAVDA_SIGNED: ${{ inputs.signed }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $ErrorActionPreference='Stop'
-          if ($env:PRAVDA_SIGNED -eq 'true') {
-            cargo tauri build --ci --config tauri.signing.ci.json --bundles nsis,msi -- --locked
-          } else {
-            cargo tauri build --ci --bundles nsis,msi -- --locked
-          }
-          if ($LASTEXITCODE -ne 0) { throw 'Tauri Windows package build failed' }
+          cargo tauri build --ci --config tauri.signing.ci.json --bundles nsis,msi -- --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Signed Tauri Windows package build failed' }
       - name: Prove release desktop PE uses GUI subsystem (no terminal lifetime)
         shell: pwsh
         run: |
