@@ -1,7 +1,7 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "0c63692555a51b7af29260f59dfe16291751f0a2",
-  "latest_evidence_at": "2026-11-09T16:27:10Z",
+  "source_sha": "f37cebae2d204434c599311861dbe2a9f14c1c3b",
+  "latest_evidence_at": "2026-11-09T17:41:27Z",
   "historical": {
     "rows": [
       {
@@ -86,53 +86,53 @@
   },
   "required_checks": {
     "passed": 1,
-    "total": 3
+    "total": 4
   },
   "workflows": [
     {
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "STALE_SHA",
-      "sha": "aac737e8c6",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255053",
-      "observedAt": "2026-11-07T11:08:28Z"
+      "state": "RUNNING",
+      "sha": "f37cebae2d",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016677",
+      "observedAt": "2026-11-09T17:41:16Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "STALE_SHA",
-      "sha": "aac737e8c6",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366255019",
-      "observedAt": "2026-11-07T11:18:28Z"
+      "state": "RUNNING",
+      "sha": "f37cebae2d",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016651",
+      "observedAt": "2026-11-09T17:41:10Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "0c63692555",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42366574216",
-      "observedAt": "2026-11-07T11:09:30Z"
+      "state": "RUNNING",
+      "sha": "f37cebae2d",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016781",
+      "observedAt": "2026-11-09T17:41:10Z"
     },
     {
       "id": "rustsec-audit.yml",
-      "name": "RUSTSEC / OBSERVATION",
-      "kind": "observe",
-      "state": "OBSERVE_ONLY",
-      "sha": "0c63692555",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42654848278",
-      "observedAt": "2026-11-09T16:27:10Z",
-      "auditMode": "nonblocking"
+      "name": "RUSTSEC / AUDIT BLOQUANT",
+      "kind": "required",
+      "state": "PASS",
+      "sha": "f37cebae2d",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016591",
+      "observedAt": "2026-11-09T17:41:27Z"
     }
   ],
-  "open_prs": 1,
+  "open_prs": 0,
+  "active_pr": null,
   "open_issues": 5,
   "production": "NO-GO",
   "trading_live": "OFF",
   "signed_updater": "OFF",
-  "security_note": "RustSec observe-only is never treated as PASS",
+  "security_note": "RustSec CI is blocking but SHA-scoped; signed release and offline VM QA remain unverified",
   "data_source": "GitHub Actions API + GitHub Issues/PR API + central guide",
   "polling": "GitHub scheduled best effort / 10 min + selected completed workflows"
 }
