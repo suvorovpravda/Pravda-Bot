@@ -30,7 +30,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: pravda-live-docs-main
+  group: pravda-live-docs-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
   cancel-in-progress: false
 
 jobs:
