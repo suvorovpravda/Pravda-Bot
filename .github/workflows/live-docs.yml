@@ -17,7 +17,6 @@ on:
     paths:
       - ".github/workflows/live-docs.yml"
       - "tools/update-live-dashboard.mjs"
-      - "tools/sonar-main-diagnostics.mjs"
       - "docs/assets/pravda-live-status.svg"
       - "docs/assets/pravda-live-status.json"
       - "README.md"
@@ -31,7 +30,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: pravda-live-docs-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'main' }}
+  group: pravda-live-docs-main
   cancel-in-progress: false
 
 jobs:
@@ -101,10 +100,6 @@ jobs:
             console.log("SONAR_PR_ISSUES_UNAVAILABLE: "+String(e?.name||"fetch_error"));
           }
           NODE
-
-      - name: Diagnose SonarCloud main security issues and duplicated components (read-only)
-        # Trusted same-repository PRs, no credentials and no write permissions.
-        run: node tools/sonar-main-diagnostics.mjs
 
   update:
     # Privileged updates must NEVER execute a PR's untrusted code.
