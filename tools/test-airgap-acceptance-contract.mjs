@@ -9,18 +9,20 @@ const msi = read("./Test-Pravda-Msi-Install.ps1");
 const nsis = read("./Test-Pravda-Nsis-Install.ps1");
 const workflow = read("../.github/workflows/windows-package.yml");
 const gui = read("./test-installed-onboarding.mjs");
-assert.match(workflow,/PRAVDA_SOURCE_SHA: \$\\{\\{ github\\.event\\.pull_request\\.head\\.sha \\|\\| github\\.sha \\}\\}/,
+assert.ok(workflow.includes('PRAVDA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}'),
   "Windows CI must stamp the actual source HEAD, not synthetic PR merge SHA");
-assert.match(gui,/sha: process\\.env\\.PRAVDA_SOURCE_SHA \\|\\| ""/,
+assert.ok(gui.includes('sha: process.env.PRAVDA_SOURCE_SHA || ""'),
   "Installed GUI report must use exact immutable source SHA");
 for (const script of [msi,nsis]) {
-  assert.match(script,/\\$uiEvidence\\.sha -cne \\$env:PRAVDA_SOURCE_SHA/,
+  assert.ok(script.includes('$uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA'),
     "Installed GUI acceptance must compare report against the source HEAD");
-  assert.match(script,/Installed GUI acceptance requires the exact source SHA/,
+  assert.ok(script.includes('Installed GUI acceptance requires the exact source SHA'),
     "Missing source SHA must fail closed");
+  assert.ok(script.includes("node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')"),
+    "Native GUI runner must remain connected");
 }
-assert.match(offline,/\\$env:PRAVDA_SOURCE_SHA = \\$ExpectedCommitSha\\.ToLowerInvariant\\(\\)/,
-  "Airgap VM must bind its report to the externally trusted release SHA");
+assert.ok(offline.includes('$env:PRAVDA_SOURCE_SHA = $ExpectedCommitSha.ToLowerInvariant()'),
+  "Airgap VM must bind its report to externally trusted source SHA");
 
 for (const required of ["ExpectedCommitSha","GITHUB_SHA",
   "PRAVDA_AIRGAP_ACCEPTANCE","Initialize-Pravda-Airgap-Gui.ps1",

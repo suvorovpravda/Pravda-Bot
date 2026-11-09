@@ -165,7 +165,10 @@ try {
         if ($env:PRAVDA_AIRGAP_ACCEPTANCE -ceq 'true') {
             & (Join-Path $PSScriptRoot 'Initialize-Pravda-Airgap-Gui.ps1')
         }
-        if ($env:PRAVDA_SOURCE_SHA -notmatch '^[0-9a-fA-F]{40}
+        if ($env:PRAVDA_SOURCE_SHA -notmatch '^[0-9a-fA-F]{40}$') {
+            throw 'Installed GUI acceptance requires the exact source SHA'
+        }
+        node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')
         if ($LASTEXITCODE -ne 0) {
             throw 'MSI installed production GUI onboarding acceptance failed'
         }
