@@ -12,6 +12,7 @@ on:
       - 'tools/test-windows-installer-verifier.ps1'
       - 'tools/Test-Pravda-Msi-Install.ps1'
       - 'tools/Test-Pravda-Nsis-Install.ps1'
+      - 'tools/Invoke-Pravda-Installed-Onboarding.ps1'
       - 'tools/test-installed-onboarding.mjs'
       - 'tools/Test-Pravda-Airgap-Install.ps1'
       - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
@@ -30,6 +31,7 @@ on:
       - 'tools/test-windows-installer-verifier.ps1'
       - 'tools/Test-Pravda-Msi-Install.ps1'
       - 'tools/Test-Pravda-Nsis-Install.ps1'
+      - 'tools/Invoke-Pravda-Installed-Onboarding.ps1'
       - 'tools/test-installed-onboarding.mjs'
       - 'tools/Test-Pravda-Airgap-Install.ps1'
       - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
@@ -82,7 +84,7 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Test-Pravda-Nsis-Install.ps1', 'tools/Test-Pravda-Airgap-Install.ps1', 'tools/Initialize-Pravda-Airgap-Gui.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
+          foreach ($path in @('tools/Test-Pravda-Msi-Install.ps1', 'tools/Test-Pravda-Nsis-Install.ps1', 'tools/Invoke-Pravda-Installed-Onboarding.ps1', 'tools/Test-Pravda-Airgap-Install.ps1', 'tools/Initialize-Pravda-Airgap-Gui.ps1', 'tools/Verify-Pravda-Installer.ps1', 'tools/test-windows-installer-verifier.ps1')) {
             $tokens = $null
             $errors = $null
             $resolved = (Resolve-Path -LiteralPath $path -ErrorAction Stop).Path
