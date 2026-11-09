@@ -1,10 +1,11 @@
-name: RustSec dependency audit (observe only)
+name: RustSec dependency audit (blocking)
 
 on:
   push:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'crates/pravda-app/Cargo.lock'
       - 'Cargo.toml'
       - '**/Cargo.toml'
       - '.cargo/audit.toml'
@@ -13,6 +14,7 @@ on:
     branches: [main]
     paths:
       - 'Cargo.lock'
+      - 'crates/pravda-app/Cargo.lock'
       - 'Cargo.toml'
       - '**/Cargo.toml'
       - '.cargo/audit.toml'
@@ -30,13 +32,34 @@ concurrency:
 
 jobs:
   audit:
-    name: RustSec advisory scan (non-blocking)
+    name: RustSec / ${{ matrix.component }}
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: core
+            lockfile: Cargo.lock
+          - component: desktop
+            lockfile: crates/pravda-app/Cargo.lock
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec  # stable
       - name: Cache pinned audit tool
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6
@@ -57,37 +80,68 @@ jobs:
             cargo install cargo-audit --version 0.22.2 --locked --force
           fi
           cargo audit --version
-      - name: Audit locked Rust dependencies
-        id: audit
-        continue-on-error: true
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo audit --file Cargo.lock --format sarif > rustsec.sarif
-      - name: Explain audit outcome
-        if: always()
+      - name: Audit ${{ matrix.component }} locked dependencies (blocking)
         shell: bash
         env:
-          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          LOCKFILE: ${{ matrix.lockfile }}
         run: |
-          {
-            echo '### RustSec Cargo.lock audit — observation phase'
-            if [ "$AUDIT_OUTCOME" = 'success' ]; then
-              echo 'The RustSec audit exited successfully; inspect the SARIF artifact for details.'
-            elif [ "$AUDIT_OUTCOME" = 'failure' ]; then
-              echo 'The audit returned a nonzero exit code. This may indicate an advisory or an execution/database failure: inspect the job logs and SARIF artifact.'
-              echo '::warning::RustSec audit returned a nonzero status; review advisories or tool/database failures before release.'
-            else
-              echo 'The audit did not complete. No claim of a clean dependency set is permitted.'
-              echo '::warning::RustSec audit was not completed.'
-            fi
-            echo 'This check is advisory during the rollout; it does not validate signed Windows packages or the physical offline VM acceptance.'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Preserve SARIF findings for review
+          set -euo pipefail
+          test -f "$LOCKFILE"
+          cargo audit --file "$LOCKFILE" --format sarif > rustsec.sarif
+          echo "RustSec ${LOCKFILE}: all advisories accepted by cargo-audit" >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve SARIF findings even on blocking failure
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
         with:
-          name: rustsec-dependency-scan-${{ github.sha }}
+          name: rustsec-${{ matrix.component }}-${{ github.event.pull_request.head.sha || github.sha }}
           path: rustsec.sarif
           if-no-files-found: warn
           retention-days: 30
+
+
+  regenerate_desktop_lock:
+    name: Generate desktop lockfile candidate with Cargo
+    # Do not commit, push, or modify main; this is a reviewable artifact only.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec  # stable
+      - name: Regenerate desktop lockfile using Cargo resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo metadata --manifest-path crates/pravda-app/Cargo.toml --format-version 1 >/dev/null
+          git diff --check
+          test -s crates/pravda-app/Cargo.lock
+          git diff -- crates/pravda-app/Cargo.lock > desktop-lock-cargo.patch
+          if test ! -s desktop-lock-cargo.patch; then
+            echo 'Desktop lockfile unchanged after Cargo metadata'
+          fi
+      - name: Preserve Cargo-generated lock and review diff
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: desktop-lock-cargo-${{ github.event.pull_request.head.sha }}
+          path: |
+            crates/pravda-app/Cargo.lock
+            desktop-lock-cargo.patch
+          if-no-files-found: error
+          retention-days: 7

@@ -19,7 +19,7 @@ const configuredNativePort = process.env.PRAVDA_ONBOARDING_NATIVE_DRIVER_PORT ==
   ? null : Number(process.env.PRAVDA_ONBOARDING_NATIVE_DRIVER_PORT);
 let port = null, nativePort = null;
 const report = {
-  version: 1, kind, sha: process.env.GITHUB_SHA || "",
+  version: 1, kind, sha: process.env.PRAVDA_SOURCE_SHA || "",
   windows: process.env.PRAVDA_E2E_WINDOWS_VERSION || "",
   webview2: process.env.PRAVDA_E2E_WEBVIEW2_VERSION || "",
   scope: "Installed release GUI: setup, process restart, login, logout",

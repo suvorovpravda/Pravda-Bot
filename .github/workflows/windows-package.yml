@@ -47,6 +47,10 @@ on:
         default: false
 permissions:
   contents: read
+# Required immutable source SHA; GitHub's GITHUB_SHA is a temporary merge SHA
+# on pull_request events and MUST NOT label the installed release evidence.
+env:
+  PRAVDA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 concurrency:
   group: windows-installer-${{ github.ref }}
   cancel-in-progress: true
@@ -59,7 +63,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec  # stable
       - name: Parse Windows installer scripts before expensive builds
         shell: pwsh
@@ -207,20 +224,27 @@ jobs:
           }
           $config | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath 'tauri.signing.ci.json' -Encoding utf8
       - name: Build NSIS and MSI with locked Cargo dependencies
+        # PR and ordinary CI candidates must NEVER receive Tauri signing secrets.
+        if: ${{ !inputs.signed }}
+        shell: pwsh
+        working-directory: crates/pravda-app
+        run: |
+          $ErrorActionPreference='Stop'
+          cargo tauri build --ci --bundles nsis,msi -- --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Unsigned Tauri Windows package build failed' }
+      - name: Build signed NSIS and MSI with locked Cargo dependencies
+        # Signing is opt-in ONLY, on a protected manual run whose ref and
+        # environment prerequisites were validated above.
+        if: ${{ inputs.signed && github.event_name == 'workflow_dispatch' }}
         shell: pwsh
         working-directory: crates/pravda-app
         env:
-          PRAVDA_SIGNED: ${{ inputs.signed }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           $ErrorActionPreference='Stop'
-          if ($env:PRAVDA_SIGNED -eq 'true') {
-            cargo tauri build --ci --config tauri.signing.ci.json --bundles nsis,msi -- --locked
-          } else {
-            cargo tauri build --ci --bundles nsis,msi -- --locked
-          }
-          if ($LASTEXITCODE -ne 0) { throw 'Tauri Windows package build failed' }
+          cargo tauri build --ci --config tauri.signing.ci.json --bundles nsis,msi -- --locked
+          if ($LASTEXITCODE -ne 0) { throw 'Signed Tauri Windows package build failed' }
       - name: Prove release desktop PE uses GUI subsystem (no terminal lifetime)
         shell: pwsh
         run: |
@@ -277,7 +301,7 @@ jobs:
       - name: Build single-click Windows production test center with embedded payloads
         shell: pwsh
         env:
-          PRAVDA_BUILD_COMMIT: ${{ github.sha }}
+          PRAVDA_BUILD_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           PRAVDA_TEST_CENTER_REQUIRE_PAYLOADS: '1'
         run: |
           $ErrorActionPreference = 'Stop'
@@ -443,7 +467,7 @@ jobs:
         if: ${{ inputs.signed && startsWith(github.ref, 'refs/tags/v') }}
         shell: pwsh
         env:
-          RELEASE_COMMIT_SHA: ${{ github.sha }}
+          RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_SIGNING_PUBLIC_KEY }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -478,7 +502,7 @@ jobs:
         shell: pwsh
         env:
           SIGNED: ${{ inputs.signed }}
-          RELEASE_COMMIT: ${{ github.sha }}
+          RELEASE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           RELEASE_REF: ${{ github.ref }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -594,7 +618,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
           name: pravda-windows-${{ inputs.signed && 'signed' || 'unsigned' }}-candidate-installers
@@ -602,7 +639,7 @@ jobs:
       - name: Validate extracted EXE, MSI, NSIS, Doctor, Harness and provenance
         shell: pwsh
         env:
-          EXPECTED_COMMIT: ${{ github.sha }}
+          EXPECTED_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
           EXPECTED_SIGNED: ${{ inputs.signed || false }}
         run: |
           $ErrorActionPreference = 'Stop'
@@ -733,7 +770,7 @@ jobs:
             if ($finding.status -eq 'FAIL') { Write-Host ('Integrated FAIL check=' + $finding.check + ' detail=' + $finding.detail) }
           }
           if ($testerExit -ne 0) { throw 'Integrated tester terminated unsuccessfully; inspect retained report' }
-          if ($report.schema_version -ne 1 -or $report.commit -ne '${{ github.sha }}') {
+          if ($report.schema_version -ne 1 -or $report.commit -ne '${{ github.event.pull_request.head.sha || github.sha }}') {
             throw 'Integrated report is not linked to the verified commit'
           }
           foreach ($check in @('doctor_startup','harness_smoke','desktop_process','synthetic_sqlite_health')) {

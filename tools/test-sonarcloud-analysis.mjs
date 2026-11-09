@@ -23,11 +23,11 @@ assert.match(readFileSync("archive/python-legacy/root-packaging/pyproject.toml",
 assert.equal(config.get("sonar.sources"),".",
   "Keep source audit at repository root, including active Rust and historical Python");
 const testRoots=["archive/python-legacy/tests","tests_js"];
-assert.deepEqual(config.get("sonar.tests")?.split(",").map(x=>x.trim()).sort(),
-  testRoots.slice().sort(),"Mark both Python and JS test roots as test code");
+assert.deepEqual(config.get("sonar.tests")?.split(",").map(x=>x.trim()).sort((a,b)=>a.localeCompare(b)),
+  testRoots.slice().sort((a,b)=>a.localeCompare(b)),"Mark both Python and JS test roots as test code");
 for (const dir of testRoots) assert.ok(existsSync(dir),"Test directory is absent: "+dir);
-assert.deepEqual(config.get("sonar.exclusions")?.split(",").map(x=>x.trim()).sort(),
-  testRoots.map(x=>x+"/**").sort(),
+assert.deepEqual(config.get("sonar.exclusions")?.split(",").map(x=>x.trim()).sort((a,b)=>a.localeCompare(b)),
+  testRoots.map(x=>x+"/**").sort((a,b)=>a.localeCompare(b)),
   "Only the same test roots may be excluded from production-source scope");
 assert.equal(config.has("sonar.test.exclusions"),false,
   "Do not hide the test suite from SonarCloud's test-code analysis");

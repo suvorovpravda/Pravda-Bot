@@ -160,11 +160,16 @@ impl Auth {
         let temporary = PathBuf::from(temporary);
         let result = (|| -> Result<(), AuthError> {
             use std::io::Write as _;
-            let mut file = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&temporary)
-                .map_err(|_| AuthError::Storage)?;
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            // Salted password verifiers are sensitive; never grant local
+            // readers access, even with a permissive process umask.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt;
+                options.mode(0o600);
+            }
+            let mut file = options.open(&temporary).map_err(|_| AuthError::Storage)?;
             file.write_all(text.as_bytes())
                 .map_err(|_| AuthError::Storage)?;
             file.sync_all().map_err(|_| AuthError::Storage)?;
@@ -247,6 +252,28 @@ mod crypto_compatibility_tests {
     // Vecteur indépendant, calculé avec PBKDF2-HMAC-SHA256, 600 000
     // itérations et 32 octets. Le format des vérificateurs existants
     // doit rester identique pendant la migration des crates RustCrypto.
+    #[cfg(unix)]
+    #[test]
+    fn newly_created_verifier_is_private_on_unix() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let suffix = to_hex(&random_bytes::<16>().expect("random test suffix"));
+        let path = std::env::temp_dir().join(format!("pravda-auth-permission-{suffix}.json"));
+        let auth = Auth::load(&path, 1_000).expect("initialize test verifier");
+        let password: String = (0_u8..20).map(|i| char::from(b'a' + i)).collect();
+        auth.set_password(&password).expect("persist test verifier");
+        let permissions = std::fs::metadata(&path)
+            .expect("stored verifier")
+            .permissions()
+            .mode()
+            & 0o777;
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(
+            permissions, 0o600,
+            "password verifier must reject group and world access"
+        );
+    }
+
     #[test]
     fn pbkdf2_sha256_legacy_compatibility_vector() {
         // Deterministic non-secret test inputs generated at runtime, not

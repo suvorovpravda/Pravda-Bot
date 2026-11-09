@@ -8,6 +8,22 @@ const helper = read("./Initialize-Pravda-Airgap-Gui.ps1");
 const msi = read("./Test-Pravda-Msi-Install.ps1");
 const nsis = read("./Test-Pravda-Nsis-Install.ps1");
 const workflow = read("../.github/workflows/windows-package.yml");
+const gui = read("./test-installed-onboarding.mjs");
+assert.ok(workflow.includes('PRAVDA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}'),
+  "Windows CI must stamp the actual source HEAD, not synthetic PR merge SHA");
+assert.ok(gui.includes('sha: process.env.PRAVDA_SOURCE_SHA || ""'),
+  "Installed GUI report must use exact immutable source SHA");
+for (const script of [msi,nsis]) {
+  assert.ok(script.includes('$uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA'),
+    "Installed GUI acceptance must compare report against the source HEAD");
+  assert.ok(script.includes('Installed GUI acceptance requires the exact source SHA'),
+    "Missing source SHA must fail closed");
+  assert.ok(script.includes("node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')"),
+    "Native GUI runner must remain connected");
+}
+assert.ok(offline.includes('$env:PRAVDA_SOURCE_SHA = $ExpectedCommitSha.ToLowerInvariant()'),
+  "Airgap VM must bind its report to externally trusted source SHA");
+
 for (const required of ["ExpectedCommitSha","GITHUB_SHA",
   "PRAVDA_AIRGAP_ACCEPTANCE","Initialize-Pravda-Airgap-Gui.ps1",
   "msedgedriver.exe","tauri-driver.exe","node.exe",
@@ -36,6 +52,19 @@ for (const required of ["pravda-airgap-evidence-", "installed-gui-report.json",
   assert.ok(offline.includes(required),
     "Offline run must preserve separately hashed GUI evidence: "+required);
 }
+// A functional offline VM PASS must never silently become a signed-release PASS.
+for (const required of ["RequireSigned", "ExpectedSignerThumbprint",
+  "Get-AuthenticodeSignature", "SignerCertificate.Thumbprint",
+  "TimeStamperCertificate", "installer_authenticode_verified",
+  "release_ready = $false", "unsigned_or_unverified_functional_qa",
+  "FUNCTIONAL QA ONLY", "REFUSED: installer Authenticode"]) {
+  assert.ok(offline.includes(required),
+    "Offline QA must distinguish signed and unsigned release evidence: "+required);
+}
+const signatureCheck = offline.indexOf("if ($RequireSigned) {");
+const beforeInstall = offline.indexOf("# Test-only toolchain must be staged");
+assert.ok(signatureCheck >= 0 && signatureCheck < beforeInstall,
+  "Signature must be checked before executing the offline installer");
 assert.ok(workflow.includes("Initialize-Pravda-Airgap-Gui.ps1"),
   "Windows CI must parse the offline GUI helper");
 assert.ok(workflow.includes("-ExpectedCommitSha ('0' * 40)"),

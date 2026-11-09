@@ -657,7 +657,7 @@ fn safe_article_link(raw: &str) -> Result<String, &'static str> {
     if raw.len() > 1500 || raw.contains('\r') || raw.contains('\n') {
         return Err("INVALID_ARTICLE_LINK");
     }
-    let link = reqwest::Url::parse(raw).map_err(|_| "INVALID_ARTICLE_LINK")?;
+    let link = url::Url::parse(raw).map_err(|_| "INVALID_ARTICLE_LINK")?;
     if link.scheme() != "https"
         || !link.username().is_empty()
         || link.password().is_some()
