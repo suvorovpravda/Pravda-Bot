@@ -26,8 +26,8 @@ for(const [kind,endpoint,params] of requests){
       const list=Array.isArray(data.components)?data.components:[];
       console.log('SONAR_MAIN_COMPONENTS_TOTAL='+data.paging?.total);
       for(const q of list.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
-      const qualified=list.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.periods?.[0]?.value??m.value??0)>0));
-      for(const q of qualified.slice(0,100))console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value}))}));
+      const qualified=list.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
+      for(const q of qualified.slice(0,100))console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
     }
   }catch(e){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.name||'error'));}
 }
