@@ -35,7 +35,9 @@ concurrency:
 
 jobs:
   verify_pr:
-    if: github.event_name == 'pull_request'
+    # Only branches within this trusted repository may execute its JS in CI.
+    # Fork PRs are intentionally skipped, never treated as a verified PASS.
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read

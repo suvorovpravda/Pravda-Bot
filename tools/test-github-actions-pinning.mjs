@@ -92,4 +92,11 @@ for (const [workflow,count] of Object.entries({
 }
 // live-docs' main-only publishing checkout requires a write credential; its
 // privileged job must never execute PR code (enforced by its own workflow).
+// SonarCloud S7631: never execute fork-controlled JavaScript in verify_pr.
+// The privileged update job still always checks out protected main.
+const liveDocs=readFileSync(dir+"/live-docs.yml","utf8");
+assert.match(liveDocs,/verify_pr:\s*#[^\n]*\n\s*#[^\n]*\n\s*if: github\.event_name == 'pull_request' && github\.event\.pull_request\.head\.repo\.full_name == github\.repository/,
+  "PR verification must exclude forks before running repository JavaScript");
+assert.match(liveDocs,/update:[\s\S]*?ref: main/,
+  "Privileged updates must continue to run from trusted main");
 console.log("GitHub Actions supply-chain: "+checked+" remote action references pinned to reviewed SHA");
