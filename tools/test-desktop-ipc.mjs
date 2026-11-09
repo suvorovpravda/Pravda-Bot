@@ -43,7 +43,7 @@ for(const [exchange,source] of [["Binance",binance],["Kraken",kraken]]) {
     exchange+" must respond to server ping");
 }
 assert.equal(cfg.build.frontendDist,"frontend");
-assert.deepEqual([...cfg.bundle.targets].sort(),["msi","nsis"],
+assert.deepEqual([...cfg.bundle.targets].sort((a,b)=>a.localeCompare(b)),["msi","nsis"],
   "Both MSI and NSIS must be produced for Windows release");
 assert.equal(cfg.bundle.windows?.webviewInstallMode?.type,"offlineInstaller",
   "Windows installers must contain the official offline WebView2 prerequisite");
