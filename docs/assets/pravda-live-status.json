@@ -1,7 +1,7 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "f37cebae2d204434c599311861dbe2a9f14c1c3b",
-  "latest_evidence_at": "2026-11-09T17:59:58Z",
+  "source_sha": "e513cf62099224d9383c94baa6161cab1285fe56",
+  "latest_evidence_at": "2026-11-09T19:01:38Z",
   "historical": {
     "rows": [
       {
@@ -85,7 +85,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 4,
+    "passed": 1,
     "total": 4
   },
   "workflows": [
@@ -94,33 +94,33 @@
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
       "state": "PASS",
-      "sha": "f37cebae2d",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016677",
-      "observedAt": "2026-11-09T17:47:56Z"
+      "sha": "e513cf6209",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42678094420",
+      "observedAt": "2026-11-09T19:01:38Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "PASS",
-      "sha": "f37cebae2d",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016651",
-      "observedAt": "2026-11-09T17:59:58Z"
+      "state": "RUNNING",
+      "sha": "e513cf6209",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42678094364",
+      "observedAt": "2026-11-09T18:53:36Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "f37cebae2d",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016781",
-      "observedAt": "2026-11-09T17:49:57Z"
+      "state": "RUNNING",
+      "sha": "e513cf6209",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42678094780",
+      "observedAt": "2026-11-09T18:53:36Z"
     },
     {
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / AUDIT BLOQUANT",
       "kind": "required",
-      "state": "PASS",
+      "state": "STALE_SHA",
       "sha": "f37cebae2d",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42667016591",
       "observedAt": "2026-11-09T17:41:27Z"
