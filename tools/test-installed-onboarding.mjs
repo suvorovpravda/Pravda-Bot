@@ -67,6 +67,17 @@ const ui = () => evaluate(
   "setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
   "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
 );
+function failOnStartupError(view, label) {
+  if (!view.startupFailure) return;
+  // Only bounded, allowlisted diagnostics may appear in CI logs.
+  const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
+    ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
+  const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|02[A-I]|03[A-C]|XX)$/.test(view.startupPhase)
+    ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
+  const cause = /^PRAVDA-UI-CAUSE\|(?:NOT_CLASSIFIED|NOT_RANGE|STACK_OVERFLOW|ARRAY_LENGTH|INVALID_DATE|PRECISION|REPEAT_COUNT|OTHER_RANGE)$/.test(view.startupCause)
+    ? view.startupCause : "PRAVDA-UI-CAUSE|NOT_CLASSIFIED";
+  throw Error(label+" "+code+" "+phase+" "+cause);
+}
 async function element(selector) {
   const item = await wd("POST", "/element", {using:"css selector", value:selector});
   const id = item["element-6066-11e4-a52e-4f735466cecf"];
@@ -205,15 +216,7 @@ try {
   await click(".ipc-auth-screen button[type=submit]");
   await until(async () => {
     const view = await ui();
-    if (view.startupFailure) {
-      const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
-        ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
-      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|02[A-I]|03[A-C]|XX)$/.test(view.startupPhase)
-        ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
-      const cause = /^PRAVDA-UI-CAUSE\|(?:NOT_CLASSIFIED|NOT_RANGE|STACK_OVERFLOW|ARRAY_LENGTH|INVALID_DATE|PRECISION|REPEAT_COUNT|OTHER_RANGE)$/.test(view.startupCause)
-        ? view.startupCause : "PRAVDA-UI-CAUSE|NOT_CLASSIFIED";
-      throw Error("Desktop startup reported a partial dashboard initialization: "+code+" "+phase+" "+cause);
-    }
+    failOnStartupError(view, "Desktop startup reported a partial dashboard initialization:");
     return view.dashboard && view.ready;
   }, "GUI password enrollment and completed dashboard script");
   check("GUI enrollment created verifier and initialized every dashboard handler",
@@ -240,15 +243,7 @@ try {
   await click(".ipc-auth-screen button[type=submit]");
   await until(async () => {
     const view = await ui();
-    if (view.startupFailure) {
-      const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
-        ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
-      const phase = /^PRAVDA-UI-PHASE\|P(?:0[0-9]|1[0-5]|02[A-I]|03[A-C]|XX)$/.test(view.startupPhase)
-        ? view.startupPhase : "PRAVDA-UI-PHASE|PXX";
-      const cause = /^PRAVDA-UI-CAUSE\|(?:NOT_CLASSIFIED|NOT_RANGE|STACK_OVERFLOW|ARRAY_LENGTH|INVALID_DATE|PRECISION|REPEAT_COUNT|OTHER_RANGE)$/.test(view.startupCause)
-        ? view.startupCause : "PRAVDA-UI-CAUSE|NOT_CLASSIFIED";
-      throw Error("Restarted desktop reported partial dashboard initialization: "+code+" "+phase+" "+cause);
-    }
+    failOnStartupError(view, "Restarted desktop reported partial dashboard initialization:");
     return view.dashboard && view.ready;
   }, "persisted password login and completed dashboard script");
   check("Native GUI logs into fully initialized installed release after restart",
