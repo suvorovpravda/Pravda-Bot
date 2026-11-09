@@ -61,6 +61,43 @@ jobs:
           node-version: "22"
       - name: Validate historical data, SVG and security semantics without network
         run: node tools/update-live-dashboard.mjs --test
+      - name: Read exact SonarCloud PR issue details (diagnostic, never release approval)
+        # Public SonarCloud API only. No tokens, PR credentials, or writable permissions.
+        env:
+          SONAR_PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          node --input-type=module <<'NODE'
+          const url = new URL("https://sonarcloud.io/api/issues/search");
+          for (const [k,v] of Object.entries({
+            componentKeys: "suvorovpravda_Pravda-Bot",
+            pullRequest: process.env.SONAR_PR_NUMBER,
+            resolved: "false",
+            ps: "100"
+          })) url.searchParams.set(k,v);
+          try {
+            const r=await fetch(url,{headers:{Accept:"application/json"},signal:AbortSignal.timeout(15000)});
+            console.log("SONAR_PR_ISSUES_HTTP_STATUS="+r.status);
+            if (!r.ok) {
+              console.log("SONAR_PR_ISSUES_UNAVAILABLE: cannot infer zero findings");
+            } else {
+              const data=await r.json();
+              const issues=Array.isArray(data.issues)?data.issues:null;
+              if (!issues) throw Error("SonarCloud issues schema missing");
+              console.log("SONAR_PR_ISSUES_TOTAL="+data.total);
+              for (const issue of issues) {
+                console.log("SONAR_PR_ISSUE="+JSON.stringify({
+                  key:issue.key,rule:issue.rule,component:issue.component,
+                  line:issue.line??issue.textRange?.startLine??null,
+                  type:issue.type,severity:issue.severity,
+                  impacts:issue.impacts?.map(i=>({quality:i.softwareQuality,severity:i.severity})),
+                  message:String(issue.message??"").slice(0,240)
+                }));
+              }
+            }
+          } catch(e) {
+            console.log("SONAR_PR_ISSUES_UNAVAILABLE: "+String(e?.name||"fetch_error"));
+          }
+          NODE
 
   update:
     # Privileged updates must NEVER execute a PR's untrusted code.
