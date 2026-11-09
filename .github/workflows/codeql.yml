@@ -29,7 +29,21 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+    - name: Enforce exact checked-out source SHA
+      shell: bash
+      env:
+        EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      run: |
+        set -euo pipefail
+        actual="$(git rev-parse HEAD)"
+        if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+          echo "::error::Checked-out SHA differs from the required source SHA"
+          exit 1
+        fi
+        echo "Verified source SHA=$actual"
     - name: Initialize CodeQL
       uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066  # v4
       with:

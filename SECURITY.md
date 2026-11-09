@@ -20,11 +20,11 @@
 
 ## ⚡ Security Live Pulse — métriques GitHub actualisées
 
-![Observatoire sécurité quasi temps réel : workflows au SHA canonique, statut RustSec non bloquant, PR et Issues ouvertes, GO interdit sans preuve](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
+![Observatoire sécurité quasi temps réel : workflows au SHA canonique, statut RustSec bloquant, PR et Issues ouvertes, GO interdit sans preuve](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
 
 **[Statut brut JSON](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json)** · **[Actualisations GitHub Actions](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
 
-Les résultats sont publiés dans la **branche distincte `status/live`** depuis les API GitHub, environ toutes les 10 minutes et après les workflows surveillés (horaires non garantis). GitHub peut conserver temporairement en cache l'image. Le contenu statique de `main` reste soumis aux Pull Requests obligatoires : **aucune écriture directe ne contourne la protection de branche**. L'horodatage marque la dernière preuve observée, pas une certification. Les tests dont le SHA diffère sont indiqués comme périmés ; **RustSec observe-only n'est jamais converti en PASS** et la publication reste **NO-GO**.
+Les résultats sont publiés dans la **branche distincte `status/live`** depuis les API GitHub, environ toutes les 10 minutes et après les workflows surveillés (horaires non garantis). GitHub peut conserver temporairement en cache l'image. Le contenu statique de `main` reste soumis aux Pull Requests obligatoires : **aucune écriture directe ne contourne la protection de branche**. L'horodatage marque la dernière preuve observée, pas une certification. Les tests dont le SHA diffère sont indiqués comme périmés ; **RustSec est bloquant sur les dépendances vérifiées, mais sa réussite ne constitue pas un GO production** et la publication reste **NO-GO**.
 
 ## 🌌 Security cockpit
 
@@ -44,7 +44,7 @@ Les résultats sont publiés dans la **branche distincte `status/live`** depuis 
 
 </div>
 
-Les badges dynamiques indiquent uniquement le résultat de leurs workflows. Le workflow **RustSec dependency audit (observe only)** peut être marqué réussi alors qu'une commande d'audit des dépendances a échoué : ce badge ne constitue **jamais** une preuve d'absence de vulnérabilités.
+Les badges dynamiques indiquent uniquement le résultat de leurs workflows. Le workflow **RustSec dependency audit (blocking)** bloque les vulnérabilités détectées par cargo-audit sur les dépendances analysées. Son succès ne prouve ni la signature des artefacts ni la qualification Windows hors ligne : **NO-GO** tant que ces preuves manquent.
 
 ## 📊 Jalons de sécurité et risques
 

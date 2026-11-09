@@ -38,7 +38,21 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy
@@ -109,7 +123,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt, clippy
@@ -153,8 +180,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
@@ -166,7 +206,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@035fceb3c12fb0c6a9461b52775e16473133e591 # 1.95.0
 
       - name: Check workspace with MSRV
@@ -179,7 +233,20 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - name: Enforce reproducible Tauri desktop lockfile
         shell: pwsh
@@ -247,6 +314,20 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           components: rustfmt
@@ -315,6 +396,20 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Enforce exact checked-out source SHA
+        shell: bash
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          actual="$(git rev-parse HEAD)"
+          if [ "$actual" != "$EXPECTED_SOURCE_SHA" ]; then
+            echo "::error::Checked-out SHA differs from the required source SHA"
+            exit 1
+          fi
+          echo "Verified source SHA=$actual"
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
@@ -381,7 +476,8 @@ jobs:
           }
           $report = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
           if ($report.passed -ne $true) { throw "Native IPC E2E report is not passed" }
-          if ($report.git_sha -ne $env:GITHUB_SHA) {
+          $checkedOutSha = (git rev-parse HEAD).Trim()
+          if ($report.git_sha -cne $checkedOutSha) {
             throw "Evidence SHA does not match checked out commit"
           }
           if ($report.webview2_version -notmatch '^\d+\.\d+\.\d+\.\d+$' -or
@@ -445,7 +541,7 @@ jobs:
           if ($hostileEvidence.Count -ne 1) {
             throw "Missing controlled HTTPS-hostile-origin native test outcome"
           }
-          Write-Host "Verified $($tests.Count) native WebView2 security assertions on $env:GITHUB_SHA."
+          Write-Host "Verified $($tests.Count) native WebView2 security assertions on $checkedOutSha."
 
       - name: Attach redacted JSON test report
         if: always()

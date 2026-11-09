@@ -40,4 +40,25 @@ for(const name of readdirSync(dir).filter(p=>/\.ya?ml$/i.test(p)).sort()) {
 }
 assert.ok(checked>=30,"Expected to inspect all active Windows, Rust, security and docs workflows");
 assert.deepEqual(errors,[],"All GitHub Actions must use reviewed, immutable commit SHAs");
+// PR checks must prove the branch HEAD, not the synthetic refs/pull/*/merge SHA.
+const exactCheckoutRef = "ref: ${{ github.event.pull_request.head.sha || github.sha }}";
+for (const [workflow,required] of Object.entries({
+  "rust.yml":7, "rustsec-audit.yml":2, "codeql.yml":1,
+  "browser-fallback.yml":1, "windows-package.yml":2, "live-docs.yml":1
+})) {
+  const source=readFileSync(dir+"/"+workflow,"utf8");
+  assert.equal(source.split(exactCheckoutRef).length-1,required,
+    workflow+": PR checkouts must be pinned to the actual head");
+  assert.equal(source.split("- name: Enforce exact checked-out source SHA").length-1,required,
+    workflow+": exact SHA must be asserted before tests");
+}
+assert.match(readFileSync(dir+"/live-docs.yml","utf8"),/ref: main/,
+  "Live status publisher must remain on protected main");
+for (const workflow of ["windows-package.yml","rustsec-audit.yml"]) {
+  assert.ok(!readFileSync(dir+"/"+workflow,"utf8").includes("${{ github.sha }}"),
+    workflow+": artifact labels must not use the synthetic merge commit");
+}
+assert.match(readFileSync(dir+"/rust.yml","utf8"),
+  /\$checkedOutSha = \(git rev-parse HEAD\)\.Trim\(\)/,
+  "Native WebView2 evidence must match the checked-out source commit");
 console.log("GitHub Actions supply-chain: "+checked+" remote action references pinned to reviewed SHA");
