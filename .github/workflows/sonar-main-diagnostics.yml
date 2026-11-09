@@ -1,0 +1,24 @@
+name: SonarCloud main diagnostic
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/sonar-main-diagnostics.yml'
+      - 'tools/sonar-main-diagnostics.mjs'
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
+      - name: Query public main branch SonarCloud diagnostics
+        run: node tools/sonar-main-diagnostics.mjs

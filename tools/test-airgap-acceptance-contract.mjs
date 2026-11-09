@@ -9,17 +9,25 @@ const msi = read("./Test-Pravda-Msi-Install.ps1");
 const nsis = read("./Test-Pravda-Nsis-Install.ps1");
 const workflow = read("../.github/workflows/windows-package.yml");
 const gui = read("./test-installed-onboarding.mjs");
+const acceptance = read("./Invoke-Pravda-Installed-Onboarding.ps1");
 assert.ok(workflow.includes('PRAVDA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}'),
   "Windows CI must stamp the actual source HEAD, not synthetic PR merge SHA");
 assert.ok(gui.includes('sha: process.env.PRAVDA_SOURCE_SHA || ""'),
   "Installed GUI report must use exact immutable source SHA");
 for (const script of [msi,nsis]) {
-  assert.ok(script.includes('$uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA'),
-    "Installed GUI acceptance must compare report against the source HEAD");
-  assert.ok(script.includes('Installed GUI acceptance requires the exact source SHA'),
-    "Missing source SHA must fail closed");
-  assert.ok(script.includes("node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')"),
-    "Native GUI runner must remain connected");
+  assert.ok(script.includes('Invoke-Pravda-Installed-Onboarding.ps1'),
+    'Both installed-bundle testers must invoke the shared fail-closed GUI acceptance');
+}
+for (const required of [
+  '$uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA',
+  'Installed GUI acceptance requires the exact source SHA',
+  "node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')",
+  'Initialize-Pravda-Airgap-Gui.ps1',
+  'PRAVDA_AIRGAP_ACCEPTANCE',
+  '$uiEvidence.passed -ne $true'
+]) {
+  assert.ok(acceptance.includes(required),
+    'Shared GUI acceptance must retain mandatory evidence checks: '+required);
 }
 assert.ok(offline.includes('$env:PRAVDA_SOURCE_SHA = $ExpectedCommitSha.ToLowerInvariant()'),
   "Airgap VM must bind its report to externally trusted source SHA");
@@ -39,12 +47,8 @@ for (const required of ["WebView2 runtime missing after offline installer",
 assert.doesNotMatch(helper,/Invoke-WebRequest|Invoke-RestMethod|Start-BitsTransfer/,
   "GUI helper must never attempt to fetch anything in offline VM");
 for (const [name,source] of [["MSI",msi],["NSIS",nsis]]) {
-  assert.ok(source.includes("PRAVDA_AIRGAP_ACCEPTANCE -ceq 'true'"),
-    name+" must detect explicitly offline VM acceptance");
-  assert.ok(source.includes("Initialize-Pravda-Airgap-Gui.ps1"),
-    name+" must verify offline GUI prerequisites after WebView2 installation");
-  assert.ok(source.includes("node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')"),
-    name+" must use its own local test script rather than current directory");
+  assert.ok(source.includes("Invoke-Pravda-Installed-Onboarding.ps1"),
+    name+' must call the shared installed-GUI acceptance verifier');
 }
 for (const required of ["pravda-airgap-evidence-", "installed-gui-report.json",
   "installed_gui_report_sha256", "installer_sha256", "source_sha",

@@ -154,24 +154,7 @@ try {
         $env:PRAVDA_INSTALLED_EXE = $applications[0].FullName
         $env:PRAVDA_INSTALL_KIND = 'NSIS'
         $env:PRAVDA_ONBOARDING_REPORT = Join-Path $env:RUNNER_TEMP 'Pravda-nsis-installed-onboarding.json'
-        if ($env:PRAVDA_AIRGAP_ACCEPTANCE -ceq 'true') {
-            & (Join-Path $PSScriptRoot 'Initialize-Pravda-Airgap-Gui.ps1')
-        }
-        if ($env:PRAVDA_SOURCE_SHA -notmatch '^[0-9a-fA-F]{40}$') {
-            throw 'Installed GUI acceptance requires the exact source SHA'
-        }
-        node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')
-        if ($LASTEXITCODE -ne 0) {
-            throw 'NSIS installed production GUI onboarding acceptance failed'
-        }
-        $uiEvidence = Get-Content -LiteralPath $env:PRAVDA_ONBOARDING_REPORT -Raw -ErrorAction Stop | ConvertFrom-Json
-        if ($uiEvidence.version -ne 1 -or $uiEvidence.passed -ne $true -or
-            $uiEvidence.kind -cne 'NSIS' -or $uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA -or
-            @($uiEvidence.tests).Count -lt 14 -or
-            @($uiEvidence.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
-            throw 'NSIS native GUI onboarding evidence is missing or invalid'
-        }
-        Write-Host 'PASS: NSIS installed production WebView2 first-use setup, restart, login and logout'
+        & (Join-Path $PSScriptRoot 'Invoke-Pravda-Installed-Onboarding.ps1') -Kind NSIS
 
     }
     finally {
