@@ -99,4 +99,9 @@ assert.match(liveDocs,/verify_pr:\s*#[^\n]*\n\s*#[^\n]*\n\s*if: github\.event_na
   "PR verification must exclude forks before running repository JavaScript");
 assert.match(liveDocs,/update:[\s\S]*?ref: main/,
   "Privileged updates must continue to run from trusted main");
+// GitHub protected main requires the status context exactly 'Analyze Rust'.
+// GitHub check names are case-sensitive: 'Analyze rust' is NOT equivalent.
+const codeqlWorkflow=readFileSync(dir+"/codeql.yml","utf8");
+assert.ok(codeqlWorkflow.includes("name: Analyze ${{ matrix.language == 'rust' && 'Rust' || matrix.language }}"),
+  "Branch protection expects CodeQL Rust check named exactly Analyze Rust");
 console.log("GitHub Actions supply-chain: "+checked+" remote action references pinned to reviewed SHA");

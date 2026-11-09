@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   analyze:
-    name: Analyze ${{ matrix.language }}
+    name: Analyze ${{ matrix.language == 'rust' && 'Rust' || matrix.language }}
     strategy:
       fail-fast: false
       matrix:
