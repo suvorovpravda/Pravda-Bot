@@ -157,13 +157,84 @@ try {
         if ($env:PRAVDA_AIRGAP_ACCEPTANCE -ceq 'true') {
             & (Join-Path $PSScriptRoot 'Initialize-Pravda-Airgap-Gui.ps1')
         }
+        if ($env:PRAVDA_SOURCE_SHA -notmatch '^[0-9a-fA-F]{40}
+        if ($LASTEXITCODE -ne 0) {
+            throw 'NSIS installed production GUI onboarding acceptance failed'
+        }
+        $uiEvidence = Get-Content -LiteralPath $env:PRAVDA_ONBOARDING_REPORT -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($uiEvidence.version -ne 1 -or $uiEvidence.passed -ne $true -or
+            $uiEvidence.kind -cne 'NSIS' -or $uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA -or
+            @($uiEvidence.tests).Count -lt 14 -or
+            @($uiEvidence.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw 'NSIS native GUI onboarding evidence is missing or invalid'
+        }
+        Write-Host 'PASS: NSIS installed production WebView2 first-use setup, restart, login and logout'
+
+    }
+    finally {
+        if ($null -ne $app) {
+            $app.Refresh()
+            if (-not $app.HasExited) {
+                Stop-Process -Id $app.Id -Force -ErrorAction Stop
+                $app.WaitForExit(10000) | Out-Null
+            }
+        }
+        foreach ($key in $keys) {
+            [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process')
+        }
+    }
+
+    foreach ($canary in $canaries) {
+        New-Item -ItemType Directory -Path (Split-Path -Parent $canary) -Force | Out-Null
+        Set-Content -LiteralPath $canary -Value $canaryText -NoNewline -Encoding utf8
+    }
+    $uninstallers = @(Get-ChildItem -LiteralPath $destination -Filter '*.exe' -File -Recurse -ErrorAction Stop |
+        Where-Object { $_.Name -match '^(?i:uninstall|unins[0-9]+)\.exe$' })
+    if ($uninstallers.Count -ne 1) {
+        throw "NSIS expected exactly one private uninstaller; got $($uninstallers.Count)"
+    }
+    $uninstaller = Start-Process -FilePath $uninstallers[0].FullName -ArgumentList '/S' -PassThru -Wait
+    if ($uninstaller.ExitCode -ne 0) {
+        throw "NSIS silent uninstall failed with code $($uninstaller.ExitCode)"
+    }
+    $uninstalled = $true
+    if (@(Get-PravdaNsisRegistration).Count -ne 0) {
+        throw 'NSIS product registration remains after silent uninstall'
+    }
+    foreach ($canary in $canaries) {
+        if (-not (Test-Path -LiteralPath $canary -PathType Leaf) -or
+            (Get-Content -LiteralPath $canary -Raw) -cne $canaryText) {
+            throw 'NSIS uninstall removed or changed per-user profile data'
+        }
+    }
+    $testSucceeded = $true
+    Write-Host 'PASS: NSIS silent uninstall retains both synthetic per-user files'
+}
+finally {
+    foreach ($canary in $canaries) {
+        if ((Test-Path -LiteralPath $canary -PathType Leaf) -and
+            (Get-Content -LiteralPath $canary -Raw) -ceq $canaryText) {
+            Remove-Item -LiteralPath $canary -Force -ErrorAction SilentlyContinue
+        }
+    }
+    # Only remove a directory created under the disposable runner root.
+    if (Test-Path -LiteralPath $root -PathType Container) {
+        Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    if (-not $testSucceeded) {
+        Write-Warning "NSIS smoke failed (installed=$installed, uninstalled=$uninstalled)"
+    }
+}
+) {
+            throw 'Installed GUI acceptance requires the exact source SHA'
+        }
         node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')
         if ($LASTEXITCODE -ne 0) {
             throw 'NSIS installed production GUI onboarding acceptance failed'
         }
         $uiEvidence = Get-Content -LiteralPath $env:PRAVDA_ONBOARDING_REPORT -Raw -ErrorAction Stop | ConvertFrom-Json
         if ($uiEvidence.version -ne 1 -or $uiEvidence.passed -ne $true -or
-            $uiEvidence.kind -cne 'NSIS' -or $uiEvidence.sha -cne $env:GITHUB_SHA -or
+            $uiEvidence.kind -cne 'NSIS' -or $uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA -or
             @($uiEvidence.tests).Count -lt 14 -or
             @($uiEvidence.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
             throw 'NSIS native GUI onboarding evidence is missing or invalid'

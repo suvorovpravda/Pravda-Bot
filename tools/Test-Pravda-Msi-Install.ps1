@@ -165,13 +165,132 @@ try {
         if ($env:PRAVDA_AIRGAP_ACCEPTANCE -ceq 'true') {
             & (Join-Path $PSScriptRoot 'Initialize-Pravda-Airgap-Gui.ps1')
         }
+        if ($env:PRAVDA_SOURCE_SHA -notmatch '^[0-9a-fA-F]{40}
+        if ($LASTEXITCODE -ne 0) {
+            throw 'MSI installed production GUI onboarding acceptance failed'
+        }
+        $uiEvidence = Get-Content -LiteralPath $env:PRAVDA_ONBOARDING_REPORT -Raw -ErrorAction Stop | ConvertFrom-Json
+        if ($uiEvidence.version -ne 1 -or $uiEvidence.passed -ne $true -or
+            $uiEvidence.kind -cne 'MSI' -or $uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA -or
+            @($uiEvidence.tests).Count -lt 14 -or
+            @($uiEvidence.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
+            throw 'MSI native GUI onboarding evidence is missing or invalid'
+        }
+        Write-Host 'PASS: MSI installed production WebView2 first-use setup, restart, login and logout'
+
+    }
+    finally {
+        if ($null -ne $app) {
+            $app.Refresh()
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction Stop }
+        }
+        foreach ($key in $keys) {
+            [Environment]::SetEnvironmentVariable($key, $previous[$key], 'Process')
+        }
+        Remove-Item -LiteralPath $smokeDir -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    # This sentinel represents an existing per-user file; the installer must not
+    # delete the Tauri app data directory on uninstall. It does not replace a
+    # full GUI/database persistence acceptance test.
+    foreach ($canary in $canaries) {
+        New-Item -Path (Split-Path -Parent $canary) -ItemType Directory -Force | Out-Null
+        Set-Content -LiteralPath $canary -Value $canaryContents -Encoding utf8
+    }
+    Write-Host 'PASS: silent MSI install, registered product and Windows application binary'
+    $testSucceeded = $true
+}
+finally {
+    if (-not $installedCode) {
+        $candidates = @(Get-PravdaInstall)
+        if ($candidates.Count -eq 1) { $installedCode = [string]$candidates[0].PSChildName }
+    }
+    if ($installedCode -and $installedCode -match '^\{[A-Fa-f0-9-]{36}\}$') {
+        $remove = Start-Process -FilePath $msiexec -ArgumentList @(
+            '/x', $installedCode, '/qn', '/norestart'
+        ) -Wait -PassThru
+        if ($remove.ExitCode -ne 0) {
+            throw "MSI uninstall failed with exit code $($remove.ExitCode)"
+        }
+        if (@(Get-PravdaInstall).Count -ne 0) {
+            throw 'MSI product remains registered after uninstall'
+        }
+        Write-Host 'PASS: clean MSI uninstall and registry removal'
+        if ($testSucceeded) {
+            foreach ($canary in $canaries) {
+                if (-not (Test-Path -LiteralPath $canary -PathType Leaf) -or
+                    (Get-Content -LiteralPath $canary -Raw).TrimEnd() -cne $canaryContents) {
+                    throw "MSI uninstall removed or altered existing per-user app data: $canary"
+                }
+            }
+            Write-Host 'PASS: existing per-user app data survives MSI uninstall'
+            # Reinstall the same verified MSI and prove user files persist.
+            # Keep the product cleanup inside a finally, even if acceptance fails.
+            try {
+                $again = Start-Process -FilePath $msiexec -ArgumentList @(
+                    '/i', ('"' + $msi + '"'), '/qn', '/norestart'
+                ) -PassThru -Wait
+                if ($again.ExitCode -ne 0) {
+                    throw "MSI reinstall failed with exit code $($again.ExitCode)"
+                }
+                $installedAgain = @(Get-PravdaInstall)
+                if ($installedAgain.Count -ne 1 -or
+                    [string]$installedAgain[0].PSChildName -cne $installedCode) {
+                    throw 'MSI reinstall did not restore exactly the same product registration'
+                }
+                if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
+                    throw 'MSI reinstall did not restore the installed desktop executable'
+                }
+                foreach ($canary in $canaries) {
+                    if (-not (Test-Path -LiteralPath $canary -PathType Leaf) -or
+                        (Get-Content -LiteralPath $canary -Raw).TrimEnd() -cne $canaryContents) {
+                        throw "MSI reinstall changed the existing user-data canary: $canary"
+                    }
+                }
+                Write-Host 'PASS: MSI reinstall preserves both user-data canaries and desktop binary'
+            }
+            finally {
+                $afterReinstall = @(Get-PravdaInstall)
+                if ($afterReinstall.Count -eq 1) {
+                    $guid = [string]$afterReinstall[0].PSChildName
+                    if ($guid -notmatch '^[{][A-Fa-f0-9-]{36}[}]$' -or $guid -cne $installedCode) {
+                        throw 'Unexpected product registration after reinstall; refusing unrelated uninstall'
+                    }
+                    $cleanup = Start-Process -FilePath $msiexec -ArgumentList @(
+                        '/x', $guid, '/qn', '/norestart'
+                    ) -PassThru -Wait
+                    if ($cleanup.ExitCode -ne 0) {
+                        throw "Post-reinstall cleanup failed with code $($cleanup.ExitCode)"
+                    }
+                }
+                if (@(Get-PravdaInstall).Count -ne 0) {
+                    throw 'MSI remains installed after the final uninstall'
+                }
+            }
+        }
+    }
+    foreach ($canary in $canaries) {
+        if (Test-Path -LiteralPath $canary -PathType Leaf) {
+            Remove-Item -LiteralPath $canary -Force -ErrorAction SilentlyContinue
+        }
+    }
+    # Retain verbose MSI log on ANY smoke failure for the CI failure artifact.
+    # The Windows hosted runner has no broker or code-signing secrets.
+    if ($testSucceeded) {
+        Remove-Item -LiteralPath $log -Force -ErrorAction SilentlyContinue
+    } else {
+        Write-Warning 'MSI smoke failed; retaining verbose log for protected CI artifact'
+    }
+}
+) {
+            throw 'Installed GUI acceptance requires the exact source SHA'
+        }
         node (Join-Path $PSScriptRoot 'test-installed-onboarding.mjs')
         if ($LASTEXITCODE -ne 0) {
             throw 'MSI installed production GUI onboarding acceptance failed'
         }
         $uiEvidence = Get-Content -LiteralPath $env:PRAVDA_ONBOARDING_REPORT -Raw -ErrorAction Stop | ConvertFrom-Json
         if ($uiEvidence.version -ne 1 -or $uiEvidence.passed -ne $true -or
-            $uiEvidence.kind -cne 'MSI' -or $uiEvidence.sha -cne $env:GITHUB_SHA -or
+            $uiEvidence.kind -cne 'MSI' -or $uiEvidence.sha -cne $env:PRAVDA_SOURCE_SHA -or
             @($uiEvidence.tests).Count -lt 14 -or
             @($uiEvidence.tests | Where-Object { $_.passed -ne $true }).Count -ne 0) {
             throw 'MSI native GUI onboarding evidence is missing or invalid'

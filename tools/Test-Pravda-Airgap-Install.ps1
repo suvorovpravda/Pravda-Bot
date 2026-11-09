@@ -150,7 +150,7 @@ $root = Join-Path $env:TEMP ('pravda-offline-acceptance-' + [guid]::NewGuid().To
 New-Item -ItemType Directory -Path $root -Force | Out-Null
 $oldTemp = [Environment]::GetEnvironmentVariable('RUNNER_TEMP', 'Process')
 $oldEnvironment = @{}
-foreach ($name in @('GITHUB_SHA', 'PRAVDA_AIRGAP_ACCEPTANCE',
+foreach ($name in @('GITHUB_SHA', 'PRAVDA_SOURCE_SHA', 'PRAVDA_AIRGAP_ACCEPTANCE',
                     'PRAVDA_E2E_WEBVIEW2_VERSION', 'PRAVDA_E2E_WINDOWS_VERSION')) {
     $oldEnvironment[$name] = [Environment]::GetEnvironmentVariable($name, 'Process')
 }
@@ -159,6 +159,7 @@ try {
     $env:RUNNER_TEMP = $root
     # The operator supplies the trusted source SHA, never inferred from VM.
     $env:GITHUB_SHA = $ExpectedCommitSha.ToLowerInvariant()
+    $env:PRAVDA_SOURCE_SHA = $ExpectedCommitSha.ToLowerInvariant()
     $env:PRAVDA_AIRGAP_ACCEPTANCE = 'true'
     Remove-Item Env:PRAVDA_E2E_WEBVIEW2_VERSION -ErrorAction SilentlyContinue
     Remove-Item Env:PRAVDA_E2E_WINDOWS_VERSION -ErrorAction SilentlyContinue

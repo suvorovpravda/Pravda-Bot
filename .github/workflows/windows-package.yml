@@ -47,6 +47,10 @@ on:
         default: false
 permissions:
   contents: read
+# Required immutable source SHA; GitHub's GITHUB_SHA is a temporary merge SHA
+# on pull_request events and MUST NOT label the installed release evidence.
+env:
+  PRAVDA_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 concurrency:
   group: windows-installer-${{ github.ref }}
   cancel-in-progress: true
