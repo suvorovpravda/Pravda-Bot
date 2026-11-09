@@ -17,6 +17,7 @@ on:
     paths:
       - ".github/workflows/live-docs.yml"
       - "tools/update-live-dashboard.mjs"
+      - "tools/sonar-main-diagnostics.mjs"
       - "docs/assets/pravda-live-status.svg"
       - "docs/assets/pravda-live-status.json"
       - "README.md"
