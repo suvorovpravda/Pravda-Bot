@@ -81,4 +81,15 @@ assert.match(signedBuild,/TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNI
   "Signed builds require the protected Tauri signing secret");
 assert.match(packaging,/environment: \$\{\{ inputs\.signed && 'windows-signing' \|\| 'unsigned-test' \}\}/,
   "Signed builds must remain isolated in the protected signing environment");
+// All PR checkouts must avoid writing the repository token to Git config.
+for (const [workflow,count] of Object.entries({
+  "rust.yml":7, "rustsec-audit.yml":2, "codeql.yml":1,
+  "browser-fallback.yml":1, "windows-package.yml":2, "live-docs.yml":1
+})) {
+  const content=readFileSync(dir+"/"+workflow,"utf8");
+  assert.equal(content.split("persist-credentials: false").length-1,count,
+    workflow+": each PR checkout must disable persisted GitHub credentials");
+}
+// live-docs' main-only publishing checkout requires a write credential; its
+// privileged job must never execute PR code (enforced by its own workflow).
 console.log("GitHub Actions supply-chain: "+checked+" remote action references pinned to reviewed SHA");
