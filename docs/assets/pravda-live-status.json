@@ -126,8 +126,13 @@
       "observedAt": "2026-11-09T17:41:27Z"
     }
   ],
-  "open_prs": 0,
-  "active_pr": null,
+  "open_prs": 1,
+  "active_pr": {
+    "number": 174,
+    "head_sha": "a75cf4fbf671c178db0db4fc94e51f79b14ad964",
+    "draft": true,
+    "evidence_scope": "PR_ONLY_NOT_MAIN"
+  },
   "open_issues": 5,
   "production": "NO-GO",
   "trading_live": "OFF",
