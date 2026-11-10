@@ -294,6 +294,7 @@ impl PaperControl {
         Self::open_locked(connection, key)
     }
 
+    #[cfg(test)]
     fn open_with_key(path: &Path, key: SecretValue) -> Result<Self, ControlError> {
         let connection = Self::exclusive_connection(path)?;
         Self::open_locked(connection, key)
@@ -346,7 +347,7 @@ impl PaperControl {
 
     fn request_stop(&self) -> Result<(), ControlError> {
         self.stop_epoch
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
                 value.checked_add(2).map(|next| next | 1)
             })
             .map_err(|_| ControlError::Capacity)?;
