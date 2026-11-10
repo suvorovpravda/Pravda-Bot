@@ -2781,6 +2781,7 @@ dependencies = [
  "pravda-market-core",
  "pravda-store",
  "rpassword",
+ "rusqlite",
  "serde",
  "serde_json",
  "sha2 0.11.1",
