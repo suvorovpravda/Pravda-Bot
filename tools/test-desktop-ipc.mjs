@@ -293,6 +293,12 @@ assert.match(js,/paperAction\("ipc_paper_trade"/,
   "Paper order submit must be wired");
 assert.match(js,/paperAction\("ipc_paper_reset"\)/,
   "Paper reset must be wired");
+for(const element of ["paper-stop","paper-control-status","paper-rearm","paper-rearm-password"]) {
+  assert.ok(html.includes('id="'+element+'"'),"Missing explicit paper safety control: "+element);
+}
+assert.match(js,/ipc_paper_emergency_stop/,"Emergency stop must be connected to native IPC");
+assert.match(js,/ipc_paper_rearm/,"Rearm must require an explicit UI interaction");
+assert.match(ipc,/control\s*\.with_paper_trade\(/,"Paper trades must pass through native persistent kill switch");
 assert.match(paper,/START_CENTS:\s*u64\s*=\s*1_000_000/,
   "Synthetic initial balance must be deterministic and declared");
 assert.match(paper,/FEE_BPS:\s*u64\s*=\s*36/,
@@ -368,7 +374,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,23);
+assert.equal(new Set(handlers).size,26);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
