@@ -1,6 +1,10 @@
 name: "Live README & Security cockpit"
 
 on:
+  # A merge to protected main must refresh the status feed immediately,
+  # without waiting for CI completion or the best-effort cron scheduler.
+  push:
+    branches: [main]
   schedule:
     # GitHub cron is best effort: minimum practical interval is 5 min.
     - cron: "*/10 * * * *"
