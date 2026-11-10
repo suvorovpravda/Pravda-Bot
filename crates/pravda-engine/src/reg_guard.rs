@@ -568,6 +568,4 @@ mod tests {
 
         short.target_price_micros = short.entry_price_micros;
         must_reject(RegRule::R003, short, policy());
-    }
-
-}
+    }}
