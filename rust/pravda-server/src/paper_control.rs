@@ -253,9 +253,30 @@ fn append(
 }
 
 impl PaperControl {
+    /// Acquire the lifetime-long SQLite EXCLUSIVE lock BEFORE touching the
+    /// Windows credential. Two simultaneous first launches must never race
+    /// CredWriteW and permanently replace the HMAC signing key.
+    fn exclusive_connection(path: &Path) -> Result<Connection, ControlError> {
+        let connection = Connection::open(path).map_err(|_| ControlError::Unavailable)?;
+        connection
+            .execute_batch(
+                "PRAGMA busy_timeout=1000;
+                 PRAGMA locking_mode=EXCLUSIVE;
+                 PRAGMA journal_mode=WAL;
+                 PRAGMA synchronous=FULL;
+                 BEGIN IMMEDIATE;
+                 COMMIT;",
+            )
+            .map_err(|_| ControlError::Unavailable)?;
+        Ok(connection)
+    }
+
     /// Production entry point. On non-Windows platforms this refuses to
     /// generate a plaintext fallback key or silently arm the application.
     pub fn open(path: &Path) -> Result<Self, ControlError> {
+        // Keep the lock open through credential read/create, journal
+        // initialization, and every subsequent PAPER mutation.
+        let connection = Self::exclusive_connection(path)?;
         let vault = WindowsCredentialStore;
         let key = match vault.get(SIGNING_KEY_ID) {
             Ok(existing) => existing,
@@ -270,21 +291,24 @@ impl PaperControl {
             }
             Err(_) => return Err(ControlError::Unavailable),
         };
-        Self::open_with_key(path, key)
+        Self::open_locked(connection, key)
     }
 
     fn open_with_key(path: &Path, key: SecretValue) -> Result<Self, ControlError> {
+        let connection = Self::exclusive_connection(path)?;
+        Self::open_locked(connection, key)
+    }
+
+    fn open_locked(
+        mut connection: Connection,
+        key: SecretValue,
+    ) -> Result<Self, ControlError> {
         if key.expose().len() != 32 {
             return Err(ControlError::Corrupt);
         }
-        let mut connection = Connection::open(path).map_err(|_| ControlError::Unavailable)?;
         connection
             .execute_batch(
-                "PRAGMA busy_timeout=1000;
-                 PRAGMA locking_mode=EXCLUSIVE;
-                 PRAGMA journal_mode=WAL;
-                 PRAGMA synchronous=FULL;
-                 CREATE TABLE IF NOT EXISTS paper_control_log(
+                "CREATE TABLE IF NOT EXISTS paper_control_log(
                     seq INTEGER PRIMARY KEY NOT NULL,
                     at_sec INTEGER NOT NULL,
                     action TEXT NOT NULL,
@@ -633,6 +657,21 @@ mod tests {
             Err(ControlError::Cooldown)
         );
         drop(control);
+        assert!(test_control(&path).unwrap().status().unwrap().stopped);
+    }
+
+    #[test]
+    fn journal_lock_is_acquired_before_initializing_signing_key() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        // This simulates a first launch holding the control lock but not yet
+        // having read or generated an audit signing key.
+        let first = PaperControl::exclusive_connection(&path).unwrap();
+        assert!(matches!(
+            PaperControl::exclusive_connection(&path),
+            Err(ControlError::Unavailable)
+        ));
+        drop(first);
         assert!(test_control(&path).unwrap().status().unwrap().stopped);
     }
 
