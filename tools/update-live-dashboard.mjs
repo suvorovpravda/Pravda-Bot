@@ -69,7 +69,44 @@ export function selectedRun(workflowRuns, sourceSha, observeOnly=false) {
     auditMode:observeOnly?"nonblocking":undefined};
 }
 
-export function buildSnapshot({guide,runs,prs,issues,sourceSha,refreshedAtUtc=new Date().toISOString()}) {
+/** Audit the exact main SHA against its active GitHub ruleset and check runs.
+ * Unknown API responses must never be presented as an effective protection.
+ * This is read-only evidence, not a production-release authorization.
+ */
+export function evaluateGovernance(policy, checkRuns, sourceSha) {
+  assert.match(sourceSha,/^[a-f0-9]{40}$/);
+  const empty={state:"UNKNOWN",source_sha:sourceSha,policy_active:false,
+    strict_main_checks:false,pr_required:false,checks:[],reason:"EVIDENCE_UNAVAILABLE"};
+  if(!policy || !Array.isArray(checkRuns?.check_runs)) return empty;
+  const requireChecks=policy.rules?.find(r=>r.type==="required_status_checks")?.parameters;
+  const requirePr=policy.rules?.some(r=>r.type==="pull_request")===true;
+  const strict=requireChecks?.strict_required_status_checks_policy===true;
+  const active=policy.enforcement==="active";
+  const required=requireChecks?.required_status_checks;
+  if(!Array.isArray(required) || required.length===0) {
+    return {...empty,state:"FAIL",policy_active:active,
+      strict_main_checks:strict,pr_required:requirePr,reason:"MISSING_REQUIRED_CHECKS"};
+  }
+  const checks=required.map(item=>{
+    const name=item?.context;
+    const candidates=checkRuns.check_runs.filter(c=>c.name===name &&
+      c.head_sha===sourceSha);
+    const observed=candidates.find(c=>c.status==="completed" && c.conclusion==="success");
+    const failed=candidates.some(c=>c.status==="completed" && c.conclusion==="failure");
+    return {name,state:observed?"PASS":failed?"FAIL":
+      candidates.length?"PENDING":"MISSING"};
+  });
+  const configured=active && strict && requirePr;
+  const state=!configured?"FAIL":
+    checks.every(c=>c.state==="PASS")?"PASS":
+    checks.some(c=>c.state==="FAIL")?"FAIL":"PENDING";
+  return {state,source_sha:sourceSha,policy_active:active,
+    strict_main_checks:strict,pr_required:requirePr,checks,
+    reason:configured?"SHA_SCOPED_REQUIRED_CHECKS":"INACTIVE_OR_WEAK_RULESET"};
+}
+
+export function buildSnapshot({guide,runs,prs,issues,sourceSha,governancePolicy=null,
+  governanceChecks=null,refreshedAtUtc=new Date().toISOString()}) {
   assert.match(refreshedAtUtc,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/,
     "Live refresh timestamp must be a concrete UTC instant");
   const history=parseHistorical(guide);
@@ -100,6 +137,7 @@ export function buildSnapshot({guide,runs,prs,issues,sourceSha,refreshedAtUtc=ne
     schema:TAG,source_sha:sourceSha,latest_evidence_at:lastEvent,
     refreshed_at_utc:refreshedAtUtc,
     historical:history,required_checks:{passed,total:required.length},
+    p0_governance:evaluateGovernance(governancePolicy,governanceChecks,sourceSha),
     workflows:statuses,open_prs:openPrs,active_pr:activePr,open_issues:openIssues,
     production:"NO-GO",trading_live:"OFF",signed_updater:"OFF",
     security_note:"RustSec CI is blocking but SHA-scoped; signed release and offline VM QA remain unverified",
@@ -139,6 +177,8 @@ export function renderSvg(snapshot) {
   blocks.push(nodeText(69,99,"Synchronisation planifiée toutes les 10 min — exécution différée possible sur GitHub Actions",15,"#A6B3D4",500));
   blocks.push(nodeText(1278,73,"NO-GO",33,"#FF668D",800));
   blocks.push(nodeText(1280,101,"PRODUCTION / MANUAL GATE",13,"#B8BDD6",650));
+  blocks.push(nodeText(1280,119,"P0 GOVERNANCE "+snapshot.p0_governance.state,11,
+    snapshot.p0_governance.state==="PASS"?"#54DFC0":"#FFCD76",650));
   blocks.push(panel(66,128,348,169));blocks.push(panel(429,128,348,169));
   blocks.push(panel(792,128,345,169));blocks.push(panel(1152,128,378,169));
   blocks.push(ring(152,216,h.percentage,"#A88BFF"));
@@ -201,12 +241,18 @@ async function loadGithub(repo, branch) {
     ...WORKFLOWS.map(w=>api(prefix+"/actions/workflows/"+encodeURIComponent(w.id)+"/runs?branch=main&per_page=14")
       .then(x=>[w.id,x.workflow_runs||[]])),
     api(prefix+"/pulls?state=open&per_page=100").then(x=>["prs",x]),
-    api(prefix+"/issues?state=open&per_page=100").then(x=>["issues",x])
+    api(prefix+"/issues?state=open&per_page=100").then(x=>["issues",x]),
+    // Public ruleset and Checks API are read-only. If permissions or an API
+    // endpoint are unavailable, the published state becomes UNKNOWN, not PASS.
+    api(prefix+"/rulesets/26400957").catch(()=>null).then(x=>["policy",x]),
+    api(prefix+"/commits/"+source.sha+"/check-runs?per_page=100").catch(()=>null)
+      .then(x=>["checkRuns",x])
   ];
   const entries=await Promise.all(requests);
   const data=Object.fromEntries(entries);
   return {sourceSha:source.sha,runs:Object.fromEntries(WORKFLOWS.map(w=>[w.id,data[w.id]])),
-    prs:data.prs,issues:data.issues};
+    prs:data.prs,issues:data.issues,governancePolicy:data.policy,
+    governanceChecks:data.checkRuns};
 }
 
 function stableJson(value){return JSON.stringify(value,null,2)+"\n"}
@@ -236,6 +282,8 @@ function runTests(){
     "Matching the branch name alone does not authenticate the source repository");
   assert.match(updateJob,/^    permissions:\n      contents: write$/m,
     "The write scope belongs to the trusted update job only");
+  assert.match(updateJob,/^      checks: read$/m,
+    "The governance observer requires only read access to check-runs");
   // The protected main branch MUST NOT be a destination for generated status commits.
   // The read-only README/SECURITY embeds display the separately refreshed status branch.
   assert.doesNotMatch(updateJob,/git push origin HEAD:main|git push origin "HEAD:refs\/heads\/main"/,
@@ -265,6 +313,32 @@ function runTests(){
     runs:Object.fromEntries(WORKFLOWS.map(w=>[w.id,[sampleRun]])),
     prs:[{state:"open"}],issues:[{state:"open"}, {state:"open",pull_request:{url:"x"}}]});
   assert.equal(model.required_checks.passed,4);
+  assert.equal(model.p0_governance.state,"UNKNOWN");
+  const requiredRules={enforcement:"active",rules:[
+    {type:"pull_request",parameters:{required_approving_review_count:0}},
+    {type:"required_status_checks",parameters:{
+      strict_required_status_checks_policy:true,
+      required_status_checks:[{context:"CodeQL"},{context:"Rust check (windows-latest)"},
+        {context:"Windows desktop build and startup"}]
+    }}
+  ]};
+  const checksOk={check_runs:requiredRules.rules[1].parameters.required_status_checks
+    .map(x=>({name:x.context,head_sha:"a".repeat(40),
+      status:"completed",conclusion:"success"}))};
+  const governance=evaluateGovernance(requiredRules,checksOk,"a".repeat(40));
+  assert.equal(governance.state,"PASS");
+  assert.equal(governance.checks.length,3);
+  assert.equal(evaluateGovernance(requiredRules,checksOk,"b".repeat(40)).state,"PENDING");
+  assert.equal(evaluateGovernance(null,checksOk,"a".repeat(40)).state,"UNKNOWN");
+  assert.equal(evaluateGovernance({...requiredRules,enforcement:"disabled"},checksOk,
+    "a".repeat(40)).state,"FAIL");
+  assert.equal(evaluateGovernance({...requiredRules,rules:[
+    requiredRules.rules[0],
+    {...requiredRules.rules[1],parameters:{
+      ...requiredRules.rules[1].parameters,strict_required_status_checks_policy:false
+    }}]},checksOk,"a".repeat(40)).state,"FAIL");
+  assert.equal(evaluateGovernance(requiredRules,{check_runs:checksOk.check_runs.map(
+    x=>({...x,conclusion:"failure"}))},"a".repeat(40)).state,"FAIL");
   assert.equal(model.workflows[3].state,"PASS");
   assert.equal(model.workflows[3].auditMode,undefined);
   assert.equal(model.open_issues,1);
