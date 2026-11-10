@@ -1,5 +1,6 @@
 //! Auth-free public market and news connectors. Never submit orders or load API keys.
 //! All network addresses are pinned HTTPS; no caller-provided URL can be requested.
+use chrono::NaiveDate;
 use reqwest::{Client, Url};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -54,6 +55,7 @@ fn fx_from_json(value: Value) -> Result<Value, &'static str> {
             || !row.rate.is_finite()
             || row.rate <= 0.0
             || row.date.len() != 10
+            || NaiveDate::parse_from_str(&row.date, "%Y-%m-%d").is_err()
         {
             continue;
         }
@@ -63,6 +65,10 @@ fn fx_from_json(value: Value) -> Result<Value, &'static str> {
             }
         } else {
             date = Some(row.date.clone());
+        }
+        // Never silently replace two conflicting daily quotes from one source.
+        if rates.contains_key(&row.quote) {
+            return Err("DUPLICATE_FX_PAIR");
         }
         rates.insert(row.quote, json!(row.rate));
     }
@@ -156,7 +162,18 @@ fn entsog_from_json(value: Value) -> Result<Value, &'static str> {
                 .and_then(|s| s.parse::<f64>().ok())
         });
         let Some(value) = amount else { continue };
-        if point.is_empty() || point.len() > 150 || !value.is_finite() || value < 0.0 {
+        // Missing units are not presumed to be kWh/day. Such a number cannot
+        // be safely shown alongside a verified physical-flow observation.
+        let Some(unit) = row.get("unit").and_then(Value::as_str) else {
+            continue;
+        };
+        if point.is_empty()
+            || point.len() > 150
+            || !value.is_finite()
+            || value < 0.0
+            || unit.trim().is_empty()
+            || unit.len() > 30
+        {
             continue;
         }
         let dir = if direction.to_ascii_lowercase().contains("entry") {
@@ -167,7 +184,7 @@ fn entsog_from_json(value: Value) -> Result<Value, &'static str> {
             continue;
         };
         observations.push(json!({"point":point,"direction":dir,"value":value,
-            "unit":row.get("unit").and_then(Value::as_str).unwrap_or("kWh/d"),
+            "unit":unit,
             "operator":row.get("operatorLabel").and_then(Value::as_str).unwrap_or(""),
             "period_from":row.get("periodFrom").and_then(Value::as_str).unwrap_or(""),
             "updated_at":row.get("lastUpdateDate").and_then(Value::as_str).unwrap_or(""),
@@ -226,7 +243,47 @@ mod tests {
         assert_eq!(out["articles"].as_array().unwrap().len(), 1);
     }
     #[test]
-    fn entsog_does_not_fabricate_observations() {
+    fn fx_rejects_invalid_calendar_dates_and_duplicate_quotes() {
+        let rates = |date: &str| {
+            json!([
+                {"date":date,"base":"EUR","quote":"USD","rate":1.12},
+                {"date":date,"base":"EUR","quote":"CHF","rate":0.92}
+            ])
+        };
+        for invalid in ["2026-02-30", "2026-13-01", "not-a-date"] {
+            assert!(
+                fx_from_json(rates(invalid)).is_err(),
+                "invalid date: {invalid}"
+            );
+        }
+        assert!(matches!(
+            fx_from_json(json!([
+                {"date":"2026-11-02","base":"EUR","quote":"USD","rate":1.12},
+                {"date":"2026-11-02","base":"EUR","quote":"CHF","rate":0.92},
+                {"date":"2026-11-02","base":"EUR","quote":"USD","rate":8.99}
+            ])),
+            Err("DUPLICATE_FX_PAIR")
+        ));
+        assert!(fx_from_json(rates("2026-11-02")).is_ok());
+    }
+
+    #[test]
+    fn entsog_does_not_fabricate_observations_or_units() {
         assert!(entsog_from_json(json!({"operationalData":[]})).is_err());
+        let missing_unit = json!({
+            "pointLabel":"Test point", "directionKey":"entry", "value":120.0
+        });
+        assert!(entsog_from_json(json!({"operationalData":[missing_unit.clone()]})).is_err());
+        let report = entsog_from_json(json!({"operationalData":[
+            missing_unit,
+            {"pointLabel":"Verified point","directionKey":"exit",
+             "value":"73.4","unit":"kWh/d","lastUpdateDate":"2026-11-02"}
+        ]}))
+        .unwrap();
+        assert_eq!(report["status"], "delayed");
+        assert_eq!(report["entry_count"], 0);
+        assert_eq!(report["exit_count"], 1);
+        assert_eq!(report["observations"].as_array().unwrap().len(), 1);
+        assert_eq!(report["observations"][0]["unit"], "kWh/d");
     }
 }
