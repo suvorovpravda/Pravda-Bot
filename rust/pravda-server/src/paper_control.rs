@@ -440,7 +440,7 @@ mod tests {
             initial.with_paper_trade(|| Ok::<_, &'static str>(())),
             Err("PAPER_KILL_SWITCH_ACTIVE")
         );
-        initial.rearm_after_fresh_auth().unwrap();
+        initial.rearm_with_reset(|| ()).unwrap();
         assert!(!initial.status().unwrap().stopped);
         assert_eq!(
             initial.with_paper_trade(|| Ok::<_, &'static str>(42)),
@@ -457,10 +457,10 @@ mod tests {
         let directory = tempdir().unwrap();
         let path = directory.path().join("control.sqlite");
         let control = test_control(&path).unwrap();
-        control.rearm_after_fresh_auth().unwrap();
+        control.rearm_with_reset(|| ()).unwrap();
         control.emergency_stop().unwrap();
         assert_eq!(
-            control.rearm_after_fresh_auth(),
+            control.rearm_with_reset(|| ()),
             Err(ControlError::Cooldown)
         );
         assert_eq!(
@@ -500,7 +500,7 @@ mod tests {
         let directory = tempdir().unwrap();
         let path = directory.path().join("control.sqlite");
         let control = test_control(&path).unwrap();
-        control.rearm_after_fresh_auth().unwrap();
+        control.rearm_with_reset(|| ()).unwrap();
         assert_eq!(
             control.with_paper_trade(|| Err::<(), _>("INVALID_PAPER_QUANTITY")),
             Err("INVALID_PAPER_QUANTITY")
@@ -517,4 +517,66 @@ mod tests {
         fs::write(&path, b"not a database").unwrap();
         assert!(test_control(&path).is_err());
     }
+    #[test]
+    fn duplicate_arm_never_resets_portfolio_or_corrupts_journal() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        let control = test_control(&path).unwrap();
+        let resets = AtomicUsize::new(0);
+        control.rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst)).unwrap();
+        assert_eq!(resets.load(Ordering::SeqCst), 1);
+        let before = control.status().unwrap().audit_records;
+        assert_eq!(
+            control.rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst)),
+            Err(ControlError::AlreadyArmed)
+        );
+        assert_eq!(resets.load(Ordering::SeqCst), 1);
+        assert_eq!(control.status().unwrap().audit_records, before);
+        drop(control);
+        assert!(test_control(&path).unwrap().status().unwrap().stopped);
+    }
+
+    #[test]
+    fn interrupted_stop_append_never_commits_a_second_arm() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        let control = test_control(&path).unwrap();
+        control.rearm_with_reset(|| ()).unwrap();
+        // Reproduce a stop request that reached memory but whose journal
+        // append failed. The persisted journal still contains REARM_PAPER.
+        control.request_stop().unwrap();
+        let before = control.status().unwrap().audit_records;
+        let resets = AtomicUsize::new(0);
+        assert_eq!(
+            control.rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst)),
+            Err(ControlError::AlreadyArmed)
+        );
+        assert_eq!(resets.load(Ordering::SeqCst), 0);
+        assert_eq!(control.status().unwrap().audit_records, before);
+        // A new explicit emergency stop records the missing stop transition.
+        control.emergency_stop().unwrap();
+        assert_eq!(control.rearm_with_reset(|| ()), Err(ControlError::Cooldown));
+        drop(control);
+        assert!(test_control(&path).unwrap().status().unwrap().stopped);
+    }
+
+    #[test]
+    fn rejected_rearm_during_cooldown_never_resets_portfolio() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        let control = test_control(&path).unwrap();
+        control.rearm_with_reset(|| ()).unwrap();
+        control.emergency_stop().unwrap();
+        let resets = AtomicUsize::new(0);
+        assert_eq!(
+            control.rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst)),
+            Err(ControlError::Cooldown)
+        );
+        assert_eq!(resets.load(Ordering::SeqCst), 0);
+        assert!(control.status().unwrap().stopped);
+    }
+
 }
