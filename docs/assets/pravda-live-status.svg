@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="485" viewBox="0 0 1600 485" role="img">
 <title>Pravda-Bot Live Pulse — GitHub workflow status, historical milestone progress and release NO-GO</title>
-<desc>Source SHA 5ce9542996. Historic milestone percentage 47 percent. Latest three required CI workflow outcomes 0 over 4. Production NO-GO.</desc>
+<desc>Source SHA 5ce9542996. Historic milestone percentage 47 percent. Latest three required CI workflow outcomes 1 over 4. Production NO-GO.</desc>
 <defs><linearGradient id="livebg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#181C3E"/><stop offset=".58" stop-color="#0C1328"/><stop offset="1" stop-color="#18132E"/></linearGradient></defs>
 <rect width="1600" height="485" rx="24" fill="url(#livebg)"/>
 <rect x="34" y="27" width="1532" height="435" rx="20" fill="#0E1530" stroke="#455078"/>
@@ -18,8 +18,8 @@
 <text x="221" y="186" fill="#9DAFFF" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" >HISTORICAL</text>
 <text x="221" y="215" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="19" font-weight="750" >20 / 43 jalons</text>
 <text x="221" y="242" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="500" >Guide P0–P2</text>
-<circle cx="513" cy="216" r="47" fill="none" stroke="#303956" stroke-width="14"/><circle cx="513" cy="216" r="47" fill="none" stroke="#51D9FB" stroke-width="14" stroke-linecap="round" stroke-dasharray="0.00 295.31" transform="rotate(-90 513 216)"/>
-<text x="486" y="224" fill="#FFFFFF" font-family="Segoe UI,Arial,sans-serif" font-size="26" font-weight="800" >0/4</text>
+<circle cx="513" cy="216" r="47" fill="none" stroke="#303956" stroke-width="14"/><circle cx="513" cy="216" r="47" fill="none" stroke="#51D9FB" stroke-width="14" stroke-linecap="round" stroke-dasharray="73.83 221.48" transform="rotate(-90 513 216)"/>
+<text x="486" y="224" fill="#FFFFFF" font-family="Segoe UI,Arial,sans-serif" font-size="26" font-weight="800" >1/4</text>
 <text x="584" y="185" fill="#9DAFFF" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" >WORKFLOWS CI</text>
 <text x="584" y="213" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="600" >au SHA source</text>
 <text x="584" y="239" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="500" >Pas un score release</text>
@@ -28,9 +28,9 @@
 <text x="1175" y="186" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" >ISSUES OUVERTES</text>
 <text x="1175" y="253" fill="#6BDDFC" font-family="Segoe UI,Arial,sans-serif" font-size="73" font-weight="800" >7</text>
 <rect x="73" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
-<circle cx="91" cy="352" r="5" fill="#51D9FB"/>
+<circle cx="91" cy="352" r="5" fill="#54DFC0"/>
 <text x="106" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >RUST / WINDOWS + LINUX</text>
-<text x="90" y="385" fill="#51D9FB" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >RUNNING · 5ce9542996</text>
+<text x="90" y="385" fill="#54DFC0" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >PASS · 5ce9542996</text>
 <rect x="450" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
 <circle cx="468" cy="352" r="5" fill="#B39AFC"/>
 <text x="483" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >MSI / NSIS INSTALLER</text>
@@ -43,6 +43,6 @@
 <circle cx="1222" cy="352" r="5" fill="#B39AFC"/>
 <text x="1237" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >RUSTSEC / AUDIT BLOQUANT</text>
 <text x="1221" y="385" fill="#B39AFC" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >STALE SHA · f37cebae2d</text>
-<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-10 08:43 UTC   ·   LATEST MAIN EVIDENCE  2026-11-10 08:43 UTC   ·   MAIN SHA  5ce9542996</text>
+<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-10 08:52 UTC   ·   LATEST MAIN EVIDENCE  2026-11-10 08:51 UTC   ·   MAIN SHA  5ce9542996</text>
 <text x="1316" y="448" fill="#65DDBA" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="730" >LIVE ORDERS  OFF</text>
 </svg>
