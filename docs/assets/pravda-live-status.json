@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "b602e7c08212fca5505bab5060f88e202584ea98",
-  "latest_evidence_at": "2026-11-10T07:19:36Z",
-  "refreshed_at_utc": "2026-11-10T07:19:43.859Z",
+  "latest_evidence_at": "2026-11-10T07:27:25Z",
+  "refreshed_at_utc": "2026-11-10T07:27:36.618Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 1,
     "total": 4
   },
   "p0_governance": {
@@ -102,11 +102,11 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PENDING"
+        "state": "PASS"
       },
       {
         "name": "Windows desktop build and startup",
-        "state": "PENDING"
+        "state": "PASS"
       }
     ],
     "reason": "SHA_SCOPED_REQUIRED_CHECKS"
@@ -116,10 +116,10 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "b602e7c082",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42774478101",
-      "observedAt": "2026-11-10T07:19:36Z"
+      "observedAt": "2026-11-10T07:27:25Z"
     },
     {
       "id": "windows-package.yml",
