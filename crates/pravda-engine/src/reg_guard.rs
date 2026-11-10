@@ -184,8 +184,7 @@ fn calculate(policy: Policy, c: Candidate) -> Result<(Metrics, u128, u16), Missi
     if age > policy.max_quote_age_ms {
         return Err(MissingOrInvalid::BadQuoteOrClock);
     }
-    if c
-        .last_emergency_stop_sec
+    if c.last_emergency_stop_sec
         .is_some_and(|last| last > c.now_sec)
     {
         return Err(MissingOrInvalid::BadQuoteOrClock);
@@ -482,7 +481,10 @@ mod tests {
         assert_eq!(evaluate(policy(), c).verdict, Verdict::Escalated);
         c = candidate();
         c.most_correlated_position_milli = None;
-        assert_eq!(evaluate(policy(), c).error, Some(MissingOrInvalid::MissingCorrelation));
+        assert_eq!(
+            evaluate(policy(), c).error,
+            Some(MissingOrInvalid::MissingCorrelation)
+        );
         c = candidate();
         c.fees_micros = None;
         assert_eq!(evaluate(policy(), c).verdict, Verdict::Escalated);
@@ -503,7 +505,10 @@ mod tests {
         assert_eq!(evaluate(policy(), c).verdict, Verdict::Escalated);
         let mut p = policy();
         p.max_quote_age_ms = 0;
-        assert_eq!(evaluate(p, candidate()).error, Some(MissingOrInvalid::InvalidPolicy));
+        assert_eq!(
+            evaluate(p, candidate()).error,
+            Some(MissingOrInvalid::InvalidPolicy)
+        );
     }
 
     #[test]
