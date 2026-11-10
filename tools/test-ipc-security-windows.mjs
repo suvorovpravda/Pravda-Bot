@@ -10,8 +10,12 @@ import {randomBytes, createHash} from "node:crypto";
 
 const exe = resolve("crates/pravda-app/target/debug/pravda-app.exe");
 const basePort = Number(process.env.PRAVDA_E2E_DRIVER_PORT || "4444");
+// Private unpredictable directory for the default report; user-supplied CI
+// report paths still use exclusive file creation, never overwrite.
+const reportDirectory = process.env.PRAVDA_E2E_REPORT ? null :
+  mkdtempSync(join(tmpdir(),"Pravda-IPC-security-"));
 const reportPath = resolve(process.env.PRAVDA_E2E_REPORT ||
-  join(tmpdir(),"Pravda-IPC-security-"+Date.now()+".json"));
+  join(reportDirectory,"report.json"));
 const report = {
   started: new Date().toISOString(), passed: false, tests: [],
   scope: "Real WebView2: main, concurrent same-process unprivileged WebView, and separate probe",
@@ -143,7 +147,7 @@ async function stopSession() {
 async function assertDriverPortFree(driverPort) {
   port = driverPort;
   try {
-    const response = await http("GET", "/status", undefined, 1_000);
+    await http("GET", "/status", undefined, 1_000);
     throw Error("Native WebDriver port still active: " + driverPort);
   } catch (error) {
     if (String(error).includes("still active")) throw error;
