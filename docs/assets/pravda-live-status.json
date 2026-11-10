@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "5ce95429960c9d761db1b27ec3e51d72a1f28184",
-  "latest_evidence_at": "2026-11-10T08:52:20Z",
-  "refreshed_at_utc": "2026-11-10T08:52:32.160Z",
+  "source_sha": "bbfe89507f9613544c9d9cb6c1c359f0cfbb5bd2",
+  "latest_evidence_at": "2026-11-10T09:43:14Z",
+  "refreshed_at_utc": "2026-11-10T09:43:20.906Z",
   "historical": {
     "rows": [
       {
@@ -86,12 +86,12 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 2,
+    "passed": 0,
     "total": 4
   },
   "p0_governance": {
     "state": "PENDING",
-    "source_sha": "5ce95429960c9d761db1b27ec3e51d72a1f28184",
+    "source_sha": "bbfe89507f9613544c9d9cb6c1c359f0cfbb5bd2",
     "policy_active": true,
     "strict_main_checks": true,
     "pr_required": true,
@@ -102,11 +102,11 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PASS"
+        "state": "PENDING"
       },
       {
         "name": "Windows desktop build and startup",
-        "state": "PASS"
+        "state": "PENDING"
       }
     ],
     "reason": "SHA_SCOPED_REQUIRED_CHECKS"
@@ -116,10 +116,10 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "PASS",
-      "sha": "5ce9542996",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42784909596",
-      "observedAt": "2026-11-10T08:51:50Z"
+      "state": "RUNNING",
+      "sha": "bbfe89507f",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42793050692",
+      "observedAt": "2026-11-10T09:43:11Z"
     },
     {
       "id": "windows-package.yml",
@@ -134,10 +134,10 @@
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "5ce9542996",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42784910018",
-      "observedAt": "2026-11-10T08:52:20Z"
+      "state": "RUNNING",
+      "sha": "bbfe89507f",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42793050720",
+      "observedAt": "2026-11-10T09:43:14Z"
     },
     {
       "id": "rustsec-audit.yml",
