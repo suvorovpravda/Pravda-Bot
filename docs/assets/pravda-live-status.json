@@ -1,7 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "588a75eeec5fb0c92a9d7ffbd5bdd8374ef41453",
-  "latest_evidence_at": "2026-11-10T04:57:03Z",
+  "source_sha": "6d6c05644da169985dd6e9bc4ed89dfea9b3398e",
+  "latest_evidence_at": "2026-11-10T05:06:16Z",
+  "refreshed_at_utc": "2026-11-10T05:06:18.927Z",
   "historical": {
     "rows": [
       {
@@ -85,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 2,
+    "passed": 0,
     "total": 4
   },
   "workflows": [
@@ -93,16 +94,16 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "PASS",
-      "sha": "588a75eeec",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165659",
-      "observedAt": "2026-11-10T04:56:36Z"
+      "state": "RUNNING",
+      "sha": "6d6c05644d",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42759984902",
+      "observedAt": "2026-11-10T05:06:16Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "STALE_SHA",
       "sha": "588a75eeec",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165906",
       "observedAt": "2026-11-10T04:48:32Z"
@@ -111,10 +112,10 @@
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "588a75eeec",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165630",
-      "observedAt": "2026-11-10T04:57:03Z"
+      "state": "RUNNING",
+      "sha": "6d6c05644d",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42759985046",
+      "observedAt": "2026-11-10T05:06:15Z"
     },
     {
       "id": "rustsec-audit.yml",
@@ -126,13 +127,8 @@
       "observedAt": "2026-11-09T17:41:27Z"
     }
   ],
-  "open_prs": 1,
-  "active_pr": {
-    "number": 175,
-    "head_sha": "6fcaabe54db52301d4ac9071b12a6e32ba370890",
-    "draft": false,
-    "evidence_scope": "PR_ONLY_NOT_MAIN"
-  },
+  "open_prs": 0,
+  "active_pr": null,
   "open_issues": 5,
   "production": "NO-GO",
   "trading_live": "OFF",
