@@ -1,4 +1,5 @@
 pub mod agent_contract;
+pub mod agent_pipeline;
 mod process_metrics;
 pub mod runtime;
 pub use runtime::{guard_spread, PravdaRuntime, RuntimePolicy};
