@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "46f85c940a0dc212a5edd57eb05dfe4a501f8262",
-  "latest_evidence_at": "2026-11-10T08:29:52Z",
-  "refreshed_at_utc": "2026-11-10T08:30:02.784Z",
+  "latest_evidence_at": "2026-11-10T08:31:42Z",
+  "refreshed_at_utc": "2026-11-10T08:31:52.420Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 1,
+    "passed": 2,
     "total": 4
   },
   "p0_governance": {
@@ -116,10 +116,10 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "46f85c940a",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42782307651",
-      "observedAt": "2026-11-10T08:23:59Z"
+      "observedAt": "2026-11-10T08:31:42Z"
     },
     {
       "id": "windows-package.yml",
