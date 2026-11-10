@@ -1,4 +1,5 @@
 pub mod backtest;
+pub mod reg_guard;
 pub mod research_risk;
 pub use backtest::{replay, ReplayConfig, ReplayError, ReplayResult, ReplayTick};
 
