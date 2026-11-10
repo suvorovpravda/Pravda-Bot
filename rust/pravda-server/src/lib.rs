@@ -288,10 +288,13 @@ async fn run_server_with_optional_auth(
         .route("/api/market", get(api_market))
         .route("/api/fx", get(api_fx))
         .route("/api/energy", get(api_energy))
+        // Keep the names used by the existing browser dashboard.
+        .route("/api/eu/flows", get(api_energy))
         .route("/api/history", get(api_history))
         .route("/api/market/history", get(history::json_history))
         .route("/api/market/history.csv", get(history::csv_history))
         .route("/api/news", get(api_news))
+        .route("/api/geopolitics", get(api_news))
         .route("/api/alerts", get(api_alerts))
         .route("/api/alerts/check", get(api_alerts_check))
         .route("/api/alerts/:id", axum::routing::delete(api_alert_delete))
