@@ -83,6 +83,38 @@ Cette ADR est un livrable de conception ; sa création, la CI verte de documenta
 | M-19 | P1 | Position venue, snapshot portefeuille et devise locale divergent | Faux PnL / exposition | Réconciliation, horodatages et état inconnu = refus ; aucune valeur inventée |
 | M-20 | P0 | Arrêt, crash ou panne du coupe-circuit | Nouvel ordre malgré alerte | Fail-closed natif, reprise explicite, persistance des refus pour le futur lot live |
 
+
+### 3.1 Matrice d'impact et de vraisemblance qualitative — critère T-002
+
+**Méthode :** l'impact ci-dessous est évalué en cas de matérialisation de la menace, non comme une perte prévue. La vraisemblance est qualifiée **non mesurée** lorsqu'aucun taux d'occurrence, test adversarial ou historique vérifiable n'existe. Pour ne pas inventer de probabilités, nous distinguons *surface déjà pertinente pour la simulation/observation* et *surface conditionnelle à un futur lot live ou IA*. Les priorités P0/P1 restent celles du registre précédent. Une exposition actuelle n'implique **pas** qu'une vulnérabilité ait été observée.
+
+| Menace | Impact conditionnel | Vraisemblance / exposition constatée ou à mesurer | Priorité |
+| --- | --- | --- | --- |
+| M-01 | Critique — ordre non autorisé | Non mesurée ; conditionnée au futur chemin live (désactivé) | P0 |
+| M-02 | Critique — contournement de limites | Non mesurée ; cible le futur moteur complet/stratégies | P0 |
+| M-03 | Critique — décisions sur prix erronés | Non mesurée ; surface prix/observations déjà pertinente | P0 |
+| M-04 | Critique — notionnel faux | Non mesurée ; unités et instruments à vérifier dans les calculs papier | P0 |
+| M-05 | Critique — short sans emprunt | Non mesurée ; produit short futur, simulation papier partielle | P0 |
+| M-06 | Critique — liquidation de dérivé | Non mesurée ; marge et contrat dérivé futurs | P0 |
+| M-07 | Critique — exposition optionnelle | Non mesurée ; produit option futur, validation modèle nécessaire | P0 |
+| M-08 | Critique — exposition brute masquée | Non mesurée ; applicable dès qu'un portefeuille multi-jambes existe | P0 |
+| M-09 | Critique — hedge partiellement exécuté | Non mesurée ; ordre multi-jambes live futur seulement | P0 |
+| M-10 | Critique — ordre doublonné | Non mesurée ; exécution réelle future seulement | P0 |
+| M-11 | Critique — coupe-circuit contourné | Non mesurée ; limites papier à tester, live futur interdit | P0 |
+| M-12 | Critique — collatéral ou marge indisponible | Non mesurée ; levier/marge du futur instrument | P0 |
+| M-13 | Élevé — résultats papier trompeurs | Non mesurée ; simulateur et backtest déjà concernés par les hypothèses de frais | P1 |
+| M-14 | Élevé — conclusions de backtest fausses | Non mesurée ; replay/backtest déjà pertinent | P1 |
+| M-15 | Élevé — injection et altération de politiques | Non mesurée ; sources textuelles existantes, sortie IA future | P1 |
+| M-16 | Critique — inéligibilité juridique | Non mesurée ; toute opération réglementée future requiert revue humaine | P0 |
+| M-17 | Élevé — divulgation de secrets | Non mesurée ; frontières d'authentification et diagnostic déjà présentes | P1 |
+| M-18 | Critique — mise à jour malveillante | Non mesurée ; chaîne de livraison existante, updater live non autorisé | P0 |
+| M-19 | Élevé — PnL incohérent | Non mesurée ; données portefeuille/venue à rapprocher | P1 |
+| M-20 | Critique — arrêt d'urgence inefficace | Non mesurée ; coupe-circuit PAPER soumis à tests dédiés, live interdit | P0 |
+
+**Ordre de traitement :** P0 avec surface active (données, conversions, coupe-circuit) → P0 conditionnels au futur live (marge, ordre, idempotence) avant toute nouvelle permission → P1 liés à la reproductibilité, aux secrets et à l'IA. La vraisemblance ne peut passer de « non mesurée » à faible/moyenne/forte qu'avec **preuves sur SHA, tests adversariaux ou données d'incidents** ; aucune issue n'est fermée au seul motif d'une priorité ou d'une supposition.
+
+**Critère de fermeture de T-002 :** cette matrice complète le livrable de *modélisation*. Elle ne déclare pas que les tests NEG-01..16 sont exécutés, ni que la conformité FR/CH est acquise. Les tests et contrôles techniques restent suivis séparément dans les lots T-003 à T-007 et #160.
+
 ## 4. Contrôles nécessaires avant toute implémentation de short / marge
 
 **C-01 — Contrat d'instrument** : chaque objet doit distinguer spot, short avec emprunt, future, option et autres produits ; décrire identifiant de venue, devise, précision, multiplicateur, sens, échéance, règlement, marge et frais pertinents. Rejeter inconnu/absent au lieu de le traiter comme spot.
