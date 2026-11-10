@@ -26,7 +26,19 @@
 
 Ce panneau est **alimenté par la branche dédiée `status/live`** environ toutes les 10 minutes et après les workflows CI surveillés, selon la disponibilité de GitHub Actions. **La branche `main` reste protégée** : aucune mise à jour automatique ne la contourne. Les textes permanents du README et de SECURITY sont modifiés via Pull Request, tandis que ce panneau et son JSON reflètent les dernières preuves GitHub publiées. Le cache des images GitHub peut retarder leur affichage. Aucune exécution CI ne vaut certification de production.
 
-**Source de vérité :** derniers runs CI sur `main` et leur SHA, nombre de PR/Issues ouvertes, et jalons chiffrés du guide central. Les audits RustSec **non bloquants** affichent `OBSERVE ONLY`, jamais un feu vert de sécurité. **Un workflow PASS n'est pas un GO production.** La dernière preuve affichée est horodatée ; si la synchronisation échoue, les données restent celles de la dernière réussite et ne doivent pas être considérées comme instantanées.
+**Source de vérité :** derniers runs CI sur `main` et leur SHA, nombre de PR/Issues ouvertes, et jalons chiffrés du guide central. L'audit RustSec est **bloquant** pour les dépendances évaluées ; un résultat sur un ancien commit reste `STALE_SHA` et n'est jamais compté comme un PASS sur le commit courant. **Un workflow PASS n'est pas un GO production.** La dernière preuve affichée est horodatée ; si la synchronisation échoue, les données restent celles de la dernière réussite et ne doivent pas être considérées comme instantanées.
+
+### État observé aujourd'hui, sans faux pourcentage d'avancement
+
+**Le panneau « Live Pulse » ci-dessus est le statut courant**, rechargé après chaque fusion dans `main`, après les principales CI et via un contrôle planifié. Il affiche la **date de synchronisation UTC**, la dernière preuve CI et le **SHA exact** analysé. Les résultats d'un commit antérieur sont marqués `STALE_SHA`, jamais réussis pour le commit courant. En cas de retard GitHub Actions ou de cache des images, ouvrir le [JSON horodaté](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json) pour vérifier la fraîcheur.
+
+**Notes SonarCloud du code global** (mesurées séparément de la Quality Gate sur le nouveau code ; ces badges sont servis directement par SonarCloud) :
+
+[![SonarCloud Security Rating](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+[![SonarCloud Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=reliability_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+[![SonarCloud Duplicated Lines](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=duplicated_lines_density)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+
+Les sections suivantes constituent le **registre documentaire versionné** : elles ne changent qu'après une Pull Request, contrairement aux preuves d'exécution du panneau dynamique. Les pourcentages de jalons restent historiques et **ne sont pas recalculés à partir des checks GitHub**.
 
 ## 🌌 Control dashboard
 
@@ -81,7 +93,7 @@ xychart-beta
 
 **Agrégation pondérée des jalons historiques :** P0 **61 %** (14/23), P1 **42 %** (5/12), P2 **13 %** (1/8). La décision de publication dépend **exclusivement** des critères GO / NO-GO ci-dessous.
 
-## 🚦 Release gate — état actuel
+## 🚦 Release gate — exigences documentées (à vérifier sur le SHA courant)
 
 | Vérification | État | Preuve manquante |
 | :--- | :---: | :--- |

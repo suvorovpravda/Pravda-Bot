@@ -69,7 +69,9 @@ export function selectedRun(workflowRuns, sourceSha, observeOnly=false) {
     auditMode:observeOnly?"nonblocking":undefined};
 }
 
-export function buildSnapshot({guide,runs,prs,issues,sourceSha}) {
+export function buildSnapshot({guide,runs,prs,issues,sourceSha,refreshedAtUtc=new Date().toISOString()}) {
+  assert.match(refreshedAtUtc,/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/,
+    "Live refresh timestamp must be a concrete UTC instant");
   const history=parseHistorical(guide);
   assert.ok(Array.isArray(prs) && Array.isArray(issues));
   const statuses = WORKFLOWS.map(w=>({
@@ -96,6 +98,7 @@ export function buildSnapshot({guide,runs,prs,issues,sourceSha}) {
     .sort((a,b)=>Date.parse(b)-Date.parse(a))[0]||null;
   return {
     schema:TAG,source_sha:sourceSha,latest_evidence_at:lastEvent,
+    refreshed_at_utc:refreshedAtUtc,
     historical:history,required_checks:{passed,total:required.length},
     workflows:statuses,open_prs:openPrs,active_pr:activePr,open_issues:openIssues,
     production:"NO-GO",trading_live:"OFF",signed_updater:"OFF",
@@ -165,8 +168,9 @@ export function renderSvg(snapshot) {
     blocks.push(nodeText(x+33,y+27,row.name,14,"#F3F5FF",750));
     blocks.push(nodeText(x+17,y+54,row.state.replaceAll("_"," ")+" · "+(row.sha||"—"),15,color,700));
   }
-  const update=snapshot.latest_evidence_at ? new Date(snapshot.latest_evidence_at).toISOString().replace("T"," ").slice(0,16)+" UTC" : "aucune preuve reçue";
-  blocks.push(nodeText(73,448,"LATEST MAIN EVIDENCE  "+update+"   ·   MAIN SHA  "+snapshot.source_sha.slice(0,10),14,"#A6B5D5",650));
+  const evidence=snapshot.latest_evidence_at ? new Date(snapshot.latest_evidence_at).toISOString().replace("T"," ").slice(0,16)+" UTC" : "aucune preuve reçue";
+  const sync=new Date(snapshot.refreshed_at_utc).toISOString().replace("T"," ").slice(0,16)+" UTC";
+  blocks.push(nodeText(73,448,"SYNC  "+sync+"   ·   LATEST MAIN EVIDENCE  "+evidence+"   ·   MAIN SHA  "+snapshot.source_sha.slice(0,10),14,"#A6B5D5",650));
   blocks.push(nodeText(1316,448,"LIVE ORDERS  OFF",14,"#65DDBA",730));
   blocks.push("</svg>");
   return blocks.join("\n")+"\n";
@@ -216,6 +220,9 @@ function runTests(){
   // Regression for SonarCloud workflow_run trust boundary: a workflow run from
   // a fork whose branch is also "main" must not activate the write-capable job.
   const workflow=readFileSync(".github/workflows/live-docs.yml","utf8");
+  const triggers=workflow.split("\npermissions:\n")[0];
+  assert.match(triggers,/\n  push:\n    branches: \[main\]/,
+    "A protected-main push must refresh the live feed without manual relaunch");
   const rootPermissions=workflow.split("\npermissions:\n")[1]?.split("\nconcurrency:\n")[0];
   assert.ok(rootPermissions,"Expected explicit top-level GitHub Actions permissions");
   assert.match(rootPermissions,/^  contents: read$/m,
@@ -241,10 +248,12 @@ function runTests(){
     "Publication must explicitly refuse a forged production GO status");
   const remoteImage="https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg";
   const remoteJson="https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json";
+  const sonarBadge="https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating";
   for(const doc of ["README.md","SECURITY.md"]) {
     const markdown=readFileSync(doc,"utf8");
     assert.ok(markdown.includes(remoteImage),doc+" must render the updated status image");
     assert.ok(markdown.includes(remoteJson),doc+" must link the published JSON");
+    assert.ok(markdown.includes(sonarBadge),doc+" must display up-to-date global security rating");
     assert.ok(!markdown.includes("](docs/assets/pravda-live-status.svg)"),
       doc+" must not display the never-updated legacy main-branch image");
   }
@@ -277,6 +286,9 @@ function runTests(){
   assert.equal(selectedRun([],"a".repeat(40)).state,"NOT_RUN");
   const svg=renderSvg(model);
   assert.match(svg,/NO-GO/);
+  assert.match(svg,/SYNC  /);
+  assert.match(svg,/LATEST MAIN EVIDENCE/);
+  assert.match(model.refreshed_at_utc,/Z$/);
   assert.doesNotMatch(svg,/OBSERVE ONLY/);
   assert.match(svg,/RUSTSEC \/ AUDIT BLOQUANT/);
   const failedRustSec={...sampleRun,conclusion:"failure"};
