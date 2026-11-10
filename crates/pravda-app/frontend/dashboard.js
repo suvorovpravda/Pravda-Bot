@@ -1435,6 +1435,45 @@ const translations = {
         });
     });
     $("paper-reset").addEventListener("click", () => { void paperAction("ipc_paper_reset"); });
+    // Emergency stop is never queued behind an unrelated paperBusy UI flag.
+    $("paper-stop").addEventListener("click", async () => {
+        paperStopped = true;
+        $("paper-trade").disabled = true;
+        $("paper-control-status").textContent = "ARRÊT EN COURS · nouveaux trades bloqués.";
+        try {
+            await window.pravdaInvoke("ipc_paper_emergency_stop");
+            $("paper-control-status").textContent = "ARRÊT D'URGENCE ACTIVÉ · réarmement humain requis.";
+            $("paper-notice").textContent = "Arrêt journalisé localement.";
+        } catch (error) {
+            $("paper-control-status").textContent = "ÉTAT INCONNU · simulation bloquée.";
+            $("paper-notice").textContent = paperMessage(error);
+        }
+    });
+    $("paper-rearm").addEventListener("click", async () => {
+        if (!securitySessionReady() || paperBusy) return;
+        const field = $("paper-rearm-password");
+        const password = field.value;
+        field.value = "";
+        if (!password) {
+            $("paper-notice").textContent = "Mot de passe requis pour réarmer.";
+            return;
+        }
+        const generation = window.pravdaAuthGeneration;
+        paperStopped = true;
+        $("paper-trade").disabled = true;
+        try {
+            await window.pravdaInvoke("ipc_paper_rearm", {password});
+            if (generation !== window.pravdaAuthGeneration) return;
+            paperStopped = false;
+            $("paper-control-status").textContent = "RÉARMÉ · simulation uniquement.";
+            $("paper-notice").textContent = "Mot de passe vérifié ; portefeuille fictif remis à zéro.";
+            void refreshPaper(true);
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("paper-control-status").textContent = "ARRÊTÉ · aucun trade autorisé.";
+            $("paper-notice").textContent = paperMessage(error);
+        }
+    });
     window.refreshPaper = () => refreshPaper(true);
     window.pravdaDashboardPhase = "P03B";
 
