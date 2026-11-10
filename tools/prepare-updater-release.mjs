@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
-  createReadStream, existsSync, lstatSync, openSync, closeSync, readSync,
+  createReadStream, lstatSync, openSync, closeSync, readSync,
   readFileSync, writeFileSync, unlinkSync
 } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -98,8 +98,7 @@ export async function buildUpdaterMetadata(options) {
 export function writeUpdaterMetadata(outputDir, metadata) {
   const latest = join(outputDir, "latest.json");
   const evidence = join(outputDir, "latest.provenance.json");
-  assert.ok(!existsSync(latest) && !existsSync(evidence),
-    "Refusing to overwrite existing updater release metadata");
+  // Exclusive creation is the security boundary. Avoid check-then-write races.
   let evidenceCreated = false;
   try {
     writeFileSync(evidence, JSON.stringify(metadata.provenance, null, 2) + "\n", {flag: "wx", mode: 0o600});
@@ -107,6 +106,9 @@ export function writeUpdaterMetadata(outputDir, metadata) {
     writeFileSync(latest, JSON.stringify(metadata.manifest, null, 2) + "\n", {flag: "wx", mode: 0o600});
   } catch (error) {
     if (evidenceCreated) unlinkSync(evidence);
+    if (error?.code === "EEXIST") {
+      throw new Error("Refusing to overwrite existing updater release metadata", {cause:error});
+    }
     throw error;
   }
   return { latest, evidence };
