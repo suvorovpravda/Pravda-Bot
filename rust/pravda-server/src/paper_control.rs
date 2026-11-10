@@ -313,8 +313,22 @@ impl PaperControl {
         })
     }
 
+    fn is_stopped(&self) -> bool {
+        self.stop_epoch.load(Ordering::SeqCst) & 1 != 0
+    }
+
+    fn request_stop(&self) -> Result<(), ControlError> {
+        self.stop_epoch
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                value.checked_add(2).map(|next| next | 1)
+            })
+            .map_err(|_| ControlError::Capacity)?;
+        Ok(())
+    }
+
     pub fn emergency_stop(&self) -> Result<(), ControlError> {
-        self.stopped.store(true, Ordering::SeqCst);
+        // Immediate veto must not wait for the journal mutex or for PBKDF2.
+        self.request_stop()?;
         let mut connection = self
             .connection
             .lock()
@@ -323,16 +337,18 @@ impl PaperControl {
         Ok(())
     }
 
-    /// Caller MUST verify a new human password against the same Auth service
-    /// and hold the Rust authenticated session lock before invoking this.
-    pub fn rearm_after_fresh_auth(&self) -> Result<(), ControlError> {
+    /// Caller MUST verify the password on a blocking worker and keep the
+    /// authenticated Rust session lock throughout the final native mutation.
+    /// The paper reset is performed only after the durable rearm succeeded.
+    pub fn rearm_with_reset<T>(&self, reset: impl FnOnce() -> T) -> Result<T, ControlError> {
         let mut connection = self
             .connection
             .lock()
             .map_err(|_| ControlError::Unavailable)?;
+        let expected_epoch = self.stop_epoch.load(Ordering::SeqCst);
         let state = verify(&connection, self.key.expose())?;
-        if state.armed && !self.stopped.load(Ordering::SeqCst) {
-            return Err(ControlError::Corrupt);
+        if expected_epoch & 1 == 0 || state.armed {
+            return Err(ControlError::AlreadyArmed);
         }
         if let Some(when) = state.last_emergency_at {
             let since = now_seconds()?
@@ -343,8 +359,17 @@ impl PaperControl {
             }
         }
         append(&mut connection, self.key.expose(), "REARM_PAPER")?;
-        self.stopped.store(false, Ordering::SeqCst);
-        Ok(())
+        // A concurrently requested emergency stop increments the epoch
+        // before obtaining the journal lock: CAS must never clear that stop.
+        self.stop_epoch
+            .compare_exchange(
+                expected_epoch,
+                expected_epoch & !1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            )
+            .map_err(|_| ControlError::Stopped)?;
+        Ok(reset())
     }
 
     /// Serializes stop/rearm with the existing synchronous paper mutation.
@@ -354,7 +379,7 @@ impl PaperControl {
         &self,
         trade: impl FnOnce() -> Result<T, &'static str>,
     ) -> Result<T, &'static str> {
-        if self.stopped.load(Ordering::SeqCst) {
+        if self.is_stopped() {
             return Err(ControlError::Stopped.code());
         }
         let mut connection = self
@@ -362,12 +387,12 @@ impl PaperControl {
             .lock()
             .map_err(|_| ControlError::Unavailable.code())?;
         let state = verify(&connection, self.key.expose()).map_err(|e| e.code())?;
-        if !state.armed || self.stopped.load(Ordering::SeqCst) {
-            self.stopped.store(true, Ordering::SeqCst);
+        if !state.armed || self.is_stopped() {
+            let _ = self.request_stop();
             return Err(ControlError::Stopped.code());
         }
         if let Err(error) = append(&mut connection, self.key.expose(), "PAPER_INTENT") {
-            self.stopped.store(true, Ordering::SeqCst);
+            let _ = self.request_stop();
             return Err(error.code());
         }
         let result = trade();
@@ -377,7 +402,7 @@ impl PaperControl {
             "PAPER_REFUSED"
         };
         if let Err(error) = append(&mut connection, self.key.expose(), code) {
-            self.stopped.store(true, Ordering::SeqCst);
+            let _ = self.request_stop();
             return Err(error.code());
         }
         result
