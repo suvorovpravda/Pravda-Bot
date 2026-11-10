@@ -124,7 +124,9 @@ fn action_from_storage(action: &str) -> Option<&'static str> {
 
 fn verify(connection: &Connection, key: &[u8]) -> Result<Verified, ControlError> {
     let mut stmt = connection
-        .prepare("SELECT seq, at_sec, action, previous_mac, mac FROM paper_control_log ORDER BY seq")
+        .prepare(
+            "SELECT seq, at_sec, action, previous_mac, mac FROM paper_control_log ORDER BY seq",
+        )
         .map_err(|_| ControlError::Unavailable)?;
     let rows = stmt
         .query_map([], |row| {
@@ -245,7 +247,8 @@ impl PaperControl {
                 let mut bytes = vec![0_u8; 32];
                 getrandom::fill(&mut bytes).map_err(|_| ControlError::Unavailable)?;
                 let value = SecretValue::new(bytes);
-                vault.put(SIGNING_KEY_ID, &value)
+                vault
+                    .put(SIGNING_KEY_ID, &value)
                     .map_err(|_| ControlError::Unavailable)?;
                 value
             }
@@ -288,7 +291,10 @@ impl PaperControl {
     }
 
     pub fn status(&self) -> Result<ControlStatus, ControlError> {
-        let connection = self.connection.lock().map_err(|_| ControlError::Unavailable)?;
+        let connection = self
+            .connection
+            .lock()
+            .map_err(|_| ControlError::Unavailable)?;
         let state = verify(&connection, self.key.expose())?;
         Ok(ControlStatus {
             stopped: self.stopped.load(Ordering::SeqCst) || !state.armed,
@@ -298,7 +304,10 @@ impl PaperControl {
 
     pub fn emergency_stop(&self) -> Result<(), ControlError> {
         self.stopped.store(true, Ordering::SeqCst);
-        let mut connection = self.connection.lock().map_err(|_| ControlError::Unavailable)?;
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| ControlError::Unavailable)?;
         append(&mut connection, self.key.expose(), "EMERGENCY_STOP")?;
         Ok(())
     }
@@ -306,13 +315,18 @@ impl PaperControl {
     /// Caller MUST verify a new human password against the same Auth service
     /// and hold the Rust authenticated session lock before invoking this.
     pub fn rearm_after_fresh_auth(&self) -> Result<(), ControlError> {
-        let mut connection = self.connection.lock().map_err(|_| ControlError::Unavailable)?;
+        let mut connection = self
+            .connection
+            .lock()
+            .map_err(|_| ControlError::Unavailable)?;
         let state = verify(&connection, self.key.expose())?;
         if state.armed && !self.stopped.load(Ordering::SeqCst) {
             return Err(ControlError::Corrupt);
         }
         if let Some(when) = state.last_emergency_at {
-            let since = now_seconds()?.checked_sub(when).ok_or(ControlError::Cooldown)?;
+            let since = now_seconds()?
+                .checked_sub(when)
+                .ok_or(ControlError::Cooldown)?;
             if since < REARM_COOLDOWN_SECONDS {
                 return Err(ControlError::Cooldown);
             }
@@ -373,10 +387,9 @@ mod tests {
     fn hmac_matches_a_standard_known_answer() {
         let mac = hmac_sha256(&[0x0b; 20], b"Hi There");
         let expected: [u8; 32] = [
-            0xb0, 0x34, 0x4c, 0x61, 0xd8, 0xdb, 0x38, 0x53,
-            0x38, 0x5c, 0xa8, 0xaf, 0xce, 0xaf, 0x0b, 0xf1,
-            0x2b, 0x88, 0x1d, 0xc2, 0x00, 0xc9, 0x83, 0x3d,
-            0xa7, 0x26, 0xe9, 0x37, 0x6c, 0x2e, 0x32, 0xcf,
+            0xb0, 0x34, 0x4c, 0x61, 0xd8, 0xdb, 0x38, 0x53, 0x38, 0x5c, 0xa8, 0xaf, 0xce, 0xaf,
+            0x0b, 0xf1, 0x2b, 0x88, 0x1d, 0xc2, 0x00, 0xc9, 0x83, 0x3d, 0xa7, 0x26, 0xe9, 0x37,
+            0x6c, 0x2e, 0x32, 0xcf,
         ];
         assert_eq!(mac, expected);
     }
@@ -393,7 +406,10 @@ mod tests {
         );
         initial.rearm_after_fresh_auth().unwrap();
         assert!(!initial.status().unwrap().stopped);
-        assert_eq!(initial.with_paper_trade(|| Ok::<_, &'static str>(42)), Ok(42));
+        assert_eq!(
+            initial.with_paper_trade(|| Ok::<_, &'static str>(42)),
+            Ok(42)
+        );
         drop(initial);
         let reopened = test_control(&path).unwrap();
         assert!(reopened.status().unwrap().stopped);
@@ -407,7 +423,10 @@ mod tests {
         let control = test_control(&path).unwrap();
         control.rearm_after_fresh_auth().unwrap();
         control.emergency_stop().unwrap();
-        assert_eq!(control.rearm_after_fresh_auth(), Err(ControlError::Cooldown));
+        assert_eq!(
+            control.rearm_after_fresh_auth(),
+            Err(ControlError::Cooldown)
+        );
         assert_eq!(
             control.with_paper_trade(|| Ok::<_, &'static str>(1)),
             Err("PAPER_KILL_SWITCH_ACTIVE")
@@ -422,7 +441,10 @@ mod tests {
         drop(control);
         let connection = Connection::open(&path).unwrap();
         connection
-            .execute("UPDATE paper_control_log SET action='REARM_PAPER' WHERE seq=1", [])
+            .execute(
+                "UPDATE paper_control_log SET action='REARM_PAPER' WHERE seq=1",
+                [],
+            )
             .unwrap();
         drop(connection);
         assert!(matches!(test_control(&path), Err(ControlError::Corrupt)));
