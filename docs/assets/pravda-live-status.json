@@ -1,7 +1,7 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "588a75eeec5fb0c92a9d7ffbd5bdd8374ef41453",
-  "latest_evidence_at": "2026-11-10T04:56:36Z",
+  "latest_evidence_at": "2026-11-10T04:57:03Z",
   "historical": {
     "rows": [
       {
@@ -85,7 +85,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 1,
+    "passed": 2,
     "total": 4
   },
   "workflows": [
@@ -111,10 +111,10 @@
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "588a75eeec",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165630",
-      "observedAt": "2026-11-10T04:48:30Z"
+      "observedAt": "2026-11-10T04:57:03Z"
     },
     {
       "id": "rustsec-audit.yml",
