@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "6d6c05644da169985dd6e9bc4ed89dfea9b3398e",
-  "latest_evidence_at": "2026-11-10T05:16:32Z",
-  "refreshed_at_utc": "2026-11-10T05:16:42.491Z",
+  "source_sha": "c4cd5442c0c29d02cb572b2d0fe85fb495248da6",
+  "latest_evidence_at": "2026-11-10T06:27:59Z",
+  "refreshed_at_utc": "2026-11-10T06:28:02.143Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 2,
+    "passed": 0,
     "total": 4
   },
   "workflows": [
@@ -94,28 +94,28 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "PASS",
-      "sha": "6d6c05644d",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42759984902",
-      "observedAt": "2026-11-10T05:14:34Z"
+      "state": "RUNNING",
+      "sha": "c4cd5442c0",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42768676103",
+      "observedAt": "2026-11-10T06:27:55Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "STALE_SHA",
-      "sha": "588a75eeec",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165906",
-      "observedAt": "2026-11-10T05:16:32Z"
+      "state": "RUNNING",
+      "sha": "c4cd5442c0",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42768675799",
+      "observedAt": "2026-11-10T06:27:58Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "6d6c05644d",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42759985046",
-      "observedAt": "2026-11-10T05:14:38Z"
+      "state": "RUNNING",
+      "sha": "c4cd5442c0",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42768676107",
+      "observedAt": "2026-11-10T06:27:59Z"
     },
     {
       "id": "rustsec-audit.yml",
@@ -127,8 +127,13 @@
       "observedAt": "2026-11-09T17:41:27Z"
     }
   ],
-  "open_prs": 0,
-  "active_pr": null,
+  "open_prs": 1,
+  "active_pr": {
+    "number": 176,
+    "head_sha": "b005a78bcb60052e99d36653abf5572d45620c08",
+    "draft": false,
+    "evidence_scope": "PR_ONLY_NOT_MAIN"
+  },
   "open_issues": 5,
   "production": "NO-GO",
   "trading_live": "OFF",
