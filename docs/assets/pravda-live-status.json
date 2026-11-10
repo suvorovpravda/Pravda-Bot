@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "6d6c05644da169985dd6e9bc4ed89dfea9b3398e",
-  "latest_evidence_at": "2026-11-10T05:06:16Z",
-  "refreshed_at_utc": "2026-11-10T05:06:18.927Z",
+  "latest_evidence_at": "2026-11-10T05:14:38Z",
+  "refreshed_at_utc": "2026-11-10T05:14:46.853Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 2,
     "total": 4
   },
   "workflows": [
@@ -94,10 +94,10 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "6d6c05644d",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42759984902",
-      "observedAt": "2026-11-10T05:06:16Z"
+      "observedAt": "2026-11-10T05:14:34Z"
     },
     {
       "id": "windows-package.yml",
@@ -106,16 +106,16 @@
       "state": "STALE_SHA",
       "sha": "588a75eeec",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165906",
-      "observedAt": "2026-11-10T04:48:32Z"
+      "observedAt": "2026-11-10T05:13:56Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "6d6c05644d",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42759985046",
-      "observedAt": "2026-11-10T05:06:15Z"
+      "observedAt": "2026-11-10T05:14:38Z"
     },
     {
       "id": "rustsec-audit.yml",
