@@ -26,7 +26,7 @@
 
 Ce panneau est **alimenté par la branche dédiée `status/live`** environ toutes les 10 minutes et après les workflows CI surveillés, selon la disponibilité de GitHub Actions. **La branche `main` reste protégée** : aucune mise à jour automatique ne la contourne. Les textes permanents du README et de SECURITY sont modifiés via Pull Request, tandis que ce panneau et son JSON reflètent les dernières preuves GitHub publiées. Le cache des images GitHub peut retarder leur affichage. Aucune exécution CI ne vaut certification de production.
 
-**Source de vérité :** derniers runs CI sur `main` et leur SHA, nombre de PR/Issues ouvertes, et jalons chiffrés du guide central. Les audits RustSec **non bloquants** affichent `OBSERVE ONLY`, jamais un feu vert de sécurité. **Un workflow PASS n'est pas un GO production.** La dernière preuve affichée est horodatée ; si la synchronisation échoue, les données restent celles de la dernière réussite et ne doivent pas être considérées comme instantanées.
+**Source de vérité :** derniers runs CI sur `main` et leur SHA, nombre de PR/Issues ouvertes, et jalons chiffrés du guide central. L'audit RustSec est **bloquant** pour les dépendances évaluées ; un résultat sur un ancien commit reste `STALE_SHA` et n'est jamais compté comme un PASS sur le commit courant. **Un workflow PASS n'est pas un GO production.** La dernière preuve affichée est horodatée ; si la synchronisation échoue, les données restent celles de la dernière réussite et ne doivent pas être considérées comme instantanées.
 
 ### État observé aujourd'hui, sans faux pourcentage d'avancement
 
