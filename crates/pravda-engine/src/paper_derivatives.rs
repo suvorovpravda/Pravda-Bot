@@ -273,7 +273,10 @@ pub fn assess(limits: Limits, c: Candidate) -> Result<Assessment, Refusal> {
         return Err(Refusal::StressBudget);
     }
     let reserve = add(
-        add(initial_margin.max(stress), ceil_bps(notional, limits.buffer_bps)?)?,
+        add(
+            initial_margin.max(stress),
+            ceil_bps(notional, limits.buffer_bps)?,
+        )?,
         entry_costs,
     )?;
     if reserve > c.free_collateral_micros {
@@ -333,15 +336,13 @@ pub fn settle(limits: Limits, c: Candidate, e: Exit) -> Result<Settlement, Refus
     let gross = match c.instrument {
         Instrument::BorrowedShort { .. }
         | Instrument::CashSettledFuture {
-            side: Side::Short,
-            ..
+            side: Side::Short, ..
         } => signed(c.price_micros)?
             .checked_sub(signed(e.price_micros)?)
             .and_then(|x| x.checked_mul(units))
             .ok_or(Refusal::Overflow)?,
         Instrument::CashSettledFuture {
-            side: Side::Long,
-            ..
+            side: Side::Long, ..
         } => signed(e.price_micros)?
             .checked_sub(signed(c.price_micros)?)
             .and_then(|x| x.checked_mul(units))
@@ -356,9 +357,12 @@ pub fn settle(limits: Limits, c: Candidate, e: Exit) -> Result<Settlement, Refus
                 OptionRight::Call => e.price_micros.saturating_sub(strike_micros),
                 OptionRight::Put => strike_micros.saturating_sub(e.price_micros),
             };
-            signed(mul(intrinsic, u128::try_from(units).map_err(|_| Refusal::Overflow)?)?)?
-                .checked_sub(signed(total_premium_micros)?)
-                .ok_or(Refusal::Overflow)?
+            signed(mul(
+                intrinsic,
+                u128::try_from(units).map_err(|_| Refusal::Overflow)?,
+            )?)?
+            .checked_sub(signed(total_premium_micros)?)
+            .ok_or(Refusal::Overflow)?
         }
         Instrument::Unsupported => return Err(Refusal::UnsupportedInstrument),
     };
