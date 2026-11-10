@@ -75,6 +75,9 @@ Pravda-Bot s’adresse aux personnes qui veulent un environnement Windows cohér
 
 ## État du projet
 
+Pravda-Bot avance vers sa prochaine version Windows. **La publication générale reste NO-GO** jusqu’à ce que les critères de sécurité et de livraison de l’[Issue #160](https://github.com/suvorovpravda/Pravda-Bot/issues/160) soient appuyés par les preuves attendues. Le développement, les changements documentés et les validations CI se poursuivent. Le packaging prévoit le prérequis WebView2 via `offlineInstaller` ; ce réglage n’atteste pas à lui seul une installation réussie sur une VM hors réseau.
+
+
 ### Statut des contrôles
 
 ![État horodaté des contrôles GitHub et du jalon de publication](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
