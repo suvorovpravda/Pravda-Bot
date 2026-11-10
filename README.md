@@ -75,6 +75,17 @@ Pravda-Bot s’adresse aux personnes qui veulent un environnement Windows cohér
 
 ## État du projet
 
+### Statut des contrôles
+
+![État horodaté des contrôles GitHub et du jalon de publication](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
+
+[Consulter les données JSON et leur date de synchronisation](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json) · [Historique des workflows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)
+
+[![Évaluation de sécurité SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+
+Ces indicateurs complètent la présentation des fonctions : ils rendent les vérifications et leur fraîcheur consultables, sans remplacer une recette de la version installée.
+
+
 Pravda-Bot est en développement actif. Le dépôt contient l’application Windows, ses composants Rust, ses outils de diagnostic et ses workflows de validation. Les contrôles CI rendent les changements observables ; leur réussite ne remplace pas la recette d’une version publiée sur les postes visés.
 
 **Le mode proposé ici est la consultation et la simulation. Les ordres de trading réel sont désactivés.** Pravda-Bot ne promet ni rendement, ni disponibilité permanente des prix, ni sécurité absolue. Les versions, fonctions et critères de publication sont documentés dans le dépôt.
