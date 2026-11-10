@@ -299,6 +299,22 @@ for(const element of ["paper-stop","paper-control-status","paper-rearm","paper-r
 assert.match(js,/ipc_paper_emergency_stop/,"Emergency stop must be connected to native IPC");
 assert.match(js,/ipc_paper_rearm/,"Rearm must require an explicit UI interaction");
 assert.match(ipc,/control\s*\.with_paper_trade\(/,"Paper trades must pass through native persistent kill switch");
+assert.match(html,/id="paper-rearm-password"[^>]+type="password"[^>]*>/,
+  "Rearm must use a hidden password field");
+assert.doesNotMatch(html,/id="paper-rearm-password"[^>]+maxlength=/,
+  "Rearm input must support the same password lengths as initial authentication");
+assert.match(ipc,/pub async fn ipc_paper_rearm\(/,
+  "PBKDF2 rearm verification must not block the Tauri event thread");
+assert.match(ipc,/spawn_blocking\(move \|\| -> Result<\(\), AuthError>/,
+  "Fresh password verifier must run on a blocking worker");
+assert.match(ipc,/let session_guard = paper_session_guard\(&session, window.label\(\)\)/,
+  "After verification, rearm must lock the current native session");
+assert.match(ipc,/session_guard.as_deref\(\) != Some\(issued_to.as_str\(\)\)/,
+  "Reject rearm if the session was replaced while PBKDF2 was running");
+assert.match(ipc,/\.rearm_with_reset\(\|\| paper\.reset\(\)\)/,
+  "Portfolio reset must happen only after successful native rearm");
+assert.doesNotMatch(ipc,/paper\.reset\(\);\s*control\s*\.rearm/,
+  "Rejected rearm must not clear a synthetic portfolio");
 assert.match(paper,/START_CENTS:\s*u64\s*=\s*1_000_000/,
   "Synthetic initial balance must be deterministic and declared");
 assert.match(paper,/FEE_BPS:\s*u64\s*=\s*36/,
