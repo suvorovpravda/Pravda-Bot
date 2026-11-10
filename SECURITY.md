@@ -14,6 +14,14 @@ Pravda-Bot est une application desktop Windows open source dédiée au suivi de 
 
 Ces choix réduisent certaines surfaces d’exposition et rendent les contrôles examinables. Ils ne rendent pas un poste invulnérable et ne remplacent ni la protection de Windows ni la vérification des fichiers téléchargés.
 
+## Points suivis avant publication
+
+La publication générale reste **NO-GO** tant que les critères de l’[Issue #160 — sécurité et déploiement](https://github.com/suvorovpravda/Pravda-Bot/issues/160) ne sont pas vérifiés sur les artefacts candidats.
+
+Le registre suit notamment l’avis **RUSTSEC-2026-0258** associé à la chaîne desktop `reqwest 0.11.27 → hyper 0.14.32 → h2 0.3.27`. Le statut doit être contrôlé sur le `Cargo.lock` du commit examiné ; une note historique ou un résultat d’audit sur un autre SHA ne prouve pas sa résolution. Le triage et les preuves de correction restent rattachés à l’Issue #160.
+
+Le packaging Windows configure le prérequis WebView2 avec `offlineInstaller`. Cette configuration décrit le mode prévu ; elle ne certifie pas une installation complète sur une machine vierge hors réseau.
+
 ## Vérifications visibles
 
 ![État horodaté des contrôles GitHub et du jalon de publication](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
