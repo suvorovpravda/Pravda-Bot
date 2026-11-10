@@ -12,17 +12,27 @@ import {isIP} from "node:net";
 
 const tracked=execFileSync("git",["ls-files","-z"],{encoding:"utf8"})
   .split("\0").filter(Boolean);
-const expected=[
+const canonicalDocs=[
   "README.md",
   "SECURITY.md",
   "docs/PRAVDA-GUIDE.md",
   "docs/REVIEWING.md",
   ".github/pull_request_template.md"
 ];
+// Technical records are individually allowlisted: this preserves the strict
+// documentation boundary while permitting reviewed architecture artifacts.
+const approvedTechnicalRecords=[
+  "docs/ADR-001-TRADING-SCOPE-RISK-GATES.md",
+  "docs/THREAT-MODEL-TRADING-T002.md"
+];
+const expected=[
+  ...canonicalDocs,
+  ...approvedTechnicalRecords.filter(path=>tracked.includes(path))
+];
 const deploymentPages=["README.md","SECURITY.md","docs/PRAVDA-GUIDE.md"];
 const docs=tracked.filter(p=>p.endsWith(".md")).sort((a,b)=>a.localeCompare(b));
 assert.deepEqual(docs,expected.slice().sort((a,b)=>a.localeCompare(b)),
-  "Only the canonical README, SECURITY, central guide, reviewing policy and PR template are allowed");
+  "Only canonical docs, the PR template and individually approved technical records are allowed");
 
 function progressRows(path) {
   const content=readFileSync(path,"utf8"), results=[];
@@ -59,6 +69,15 @@ for(const page of ["README.md","SECURITY.md","docs/REVIEWING.md"]) {
     page+": historical milestone fractions belong in the central guide, not the live release status");
   assert.match(content,/(?:NO-GO|NO GO)/,
     page+": current distribution must be explicitly marked NO-GO");
+}
+for(const page of approvedTechnicalRecords.filter(path=>tracked.includes(path))) {
+  const content=readFileSync(page,"utf8");
+  const duplicateProgress=content.split(/\r?\n/).filter(line =>
+    /^\|\s*\*\*P[012]\*\*\s*\|/.test(line) &&
+    /\b\d+\s*\/\s*\d+\b/.test(line) &&
+    /\b\d+\s*%/.test(line));
+  assert.equal(duplicateProgress.length,0,
+    page+": historical progress metrics must remain centralized in the guide");
 }
 assert.match(readFileSync("README.md","utf8"),/Issue #160|#160/, 
   "README must link to the central unresolved security/deployment register");
@@ -157,5 +176,5 @@ for(const page of deploymentPages) {
 }
 assert.match(readFileSync(".gitattributes","utf8"),
   /archive\/python-legacy\/\*\* linguist-vendored/);
-console.log("Docs boundary OK: canonical docs and PR template only");
+console.log("Docs boundary OK: canonical docs, PR template and approved technical records");
 console.log("Relative links valid, release NO-GO visible and historical guide progress consistent");
