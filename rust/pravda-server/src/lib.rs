@@ -82,10 +82,31 @@ async fn api_market(State(state): State<Arc<AppState>>) -> Json<Value> {
     Json(state.market_snapshot(state.config.stale_after).await)
 }
 
-async fn api_fx() -> Json<Value> {
-    Json(
-        json!({"status": "unavailable", "rates": {}, "timestamp": null, "notice": "FX connector not migrated"}),
-    )
+/// Public browser diagnostics reuse the native desktop Rust feed adapters.
+/// In explicit offline mode, never attempt an outbound request.
+async fn public_fx(enabled: bool) -> Value {
+    if !enabled {
+        return json!({"status":"unavailable","source":"BCE / Frankfurter",
+            "rates":{},"timestamp":null,"notice":"PUBLIC_FEEDS_DISABLED"});
+    }
+    pravda_fetchers::public_feeds::reference_fx().await
+}
+
+async fn api_fx(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(public_fx(state.config.market_feeds_enabled).await)
+}
+
+async fn public_energy(enabled: bool) -> Value {
+    if !enabled {
+        return json!({"status":"unavailable","source":"ENTSOG",
+            "observations":[],"entry_count":null,"exit_count":null,
+            "latest_source_update":null,"notice":"PUBLIC_FEEDS_DISABLED"});
+    }
+    pravda_fetchers::public_feeds::energy_flows().await
+}
+
+async fn api_energy(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(public_energy(state.config.market_feeds_enabled).await)
 }
 
 async fn api_history(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -110,8 +131,16 @@ async fn api_alert_delete() -> impl IntoResponse {
     )
 }
 
-async fn api_news() -> Json<Value> {
-    Json(json!({"articles": [], "message": "News endpoint"}))
+async fn public_news(enabled: bool) -> Value {
+    if !enabled {
+        return json!({"status":"unavailable","source":"GDELT DOC 2.0",
+            "articles":[],"retrieved_at":null,"notice":"PUBLIC_FEEDS_DISABLED"});
+    }
+    pravda_fetchers::public_feeds::geopolitical_news().await
+}
+
+async fn api_news(State(state): State<Arc<AppState>>) -> Json<Value> {
+    Json(public_news(state.config.market_feeds_enabled).await)
 }
 
 async fn api_alerts(State(state): State<Arc<AppState>>) -> Json<Value> {
@@ -258,10 +287,14 @@ async fn run_server_with_optional_auth(
         .route("/", get(dashboard))
         .route("/api/market", get(api_market))
         .route("/api/fx", get(api_fx))
+        .route("/api/energy", get(api_energy))
+        // Keep the names used by the existing browser dashboard.
+        .route("/api/eu/flows", get(api_energy))
         .route("/api/history", get(api_history))
         .route("/api/market/history", get(history::json_history))
         .route("/api/market/history.csv", get(history::csv_history))
         .route("/api/news", get(api_news))
+        .route("/api/geopolitics", get(api_news))
         .route("/api/alerts", get(api_alerts))
         .route("/api/alerts/check", get(api_alerts_check))
         .route("/api/alerts/:id", axum::routing::delete(api_alert_delete))
@@ -302,6 +335,29 @@ mod tests {
     use chrono::Utc;
     use pravda_fetchers::types::{Exchange, Symbol, Tick};
     use std::time::{Duration, Instant};
+
+    #[tokio::test]
+    async fn optional_public_features_are_fail_closed_offline() {
+        // No network mock: the false branch must not even create a HTTP client.
+        let fx = public_fx(false).await;
+        assert_eq!(fx["status"], "unavailable");
+        assert_eq!(fx["notice"], "PUBLIC_FEEDS_DISABLED");
+        assert_eq!(fx["rates"], json!({}));
+        assert!(fx["timestamp"].is_null());
+
+        let energy = public_energy(false).await;
+        assert_eq!(energy["status"], "unavailable");
+        assert_eq!(energy["notice"], "PUBLIC_FEEDS_DISABLED");
+        assert!(energy["observations"].as_array().unwrap().is_empty());
+        assert!(energy["entry_count"].is_null());
+
+        let news = public_news(false).await;
+        assert_eq!(news["status"], "unavailable");
+        assert_eq!(news["notice"], "PUBLIC_FEEDS_DISABLED");
+        assert!(news["articles"].as_array().unwrap().is_empty());
+        assert!(news["retrieved_at"].is_null());
+    }
+
     fn actionable_spread(k: &Tick, b: &Tick, now: Instant) -> Option<pravda_market_core::Spread> {
         configured_spread(k, b, now, &ServerConfig::default())
     }
