@@ -90,11 +90,14 @@ export function evaluateGovernance(policy, checkRuns, sourceSha) {
   const checks=required.map(item=>{
     const name=item?.context;
     const candidates=checkRuns.check_runs.filter(c=>c.name===name &&
-      c.head_sha===sourceSha);
-    const observed=candidates.find(c=>c.status==="completed" && c.conclusion==="success");
-    const failed=candidates.some(c=>c.status==="completed" && c.conclusion==="failure");
-    return {name,state:observed?"PASS":failed?"FAIL":
-      candidates.length?"PENDING":"MISSING"};
+      c.head_sha===sourceSha && Number.isSafeInteger(item?.integration_id) &&
+      c.app?.id===item.integration_id)
+      .sort((a,b)=>Date.parse(b.started_at||0)-Date.parse(a.started_at||0));
+    const latest=candidates[0];
+    return {name,state:!latest?"MISSING":
+      latest.status!=="completed"?"PENDING":
+      latest.conclusion==="success"?"PASS":
+      latest.conclusion==="failure"?"FAIL":"INCOMPLETE"};
   });
   const configured=active && strict && requirePr;
   const state=!configured?"FAIL":
@@ -318,18 +321,24 @@ function runTests(){
     {type:"pull_request",parameters:{required_approving_review_count:0}},
     {type:"required_status_checks",parameters:{
       strict_required_status_checks_policy:true,
-      required_status_checks:[{context:"CodeQL"},{context:"Rust check (windows-latest)"},
-        {context:"Windows desktop build and startup"}]
+      required_status_checks:[{context:"CodeQL",integration_id:57789},{context:"Rust check (windows-latest)",integration_id:15368},
+        {context:"Windows desktop build and startup",integration_id:15368}]
     }}
   ]};
   const checksOk={check_runs:requiredRules.rules[1].parameters.required_status_checks
-    .map(x=>({name:x.context,head_sha:"a".repeat(40),
+    .map(x=>({name:x.context,app:{id:x.integration_id},started_at:"2026-11-10T01:00:00Z",head_sha:"a".repeat(40),
       status:"completed",conclusion:"success"}))};
   const governance=evaluateGovernance(requiredRules,checksOk,"a".repeat(40));
   assert.equal(governance.state,"PASS");
   assert.equal(governance.checks.length,3);
   assert.equal(evaluateGovernance(requiredRules,checksOk,"b".repeat(40)).state,"PENDING");
   assert.equal(evaluateGovernance(null,checksOk,"a".repeat(40)).state,"UNKNOWN");
+  assert.equal(evaluateGovernance(requiredRules,{check_runs:checksOk.check_runs.map(
+    x=>({...x,app:{id:999999}}))},"a".repeat(40)).state,"PENDING");
+  assert.equal(evaluateGovernance(requiredRules,{check_runs:[
+    {...checksOk.check_runs[0],started_at:"2026-11-10T02:00:00Z",conclusion:"failure"},
+    ...checksOk.check_runs
+  ]},"a".repeat(40)).state,"FAIL");
   assert.equal(evaluateGovernance({...requiredRules,enforcement:"disabled"},checksOk,
     "a".repeat(40)).state,"FAIL");
   assert.equal(evaluateGovernance({...requiredRules,rules:[
