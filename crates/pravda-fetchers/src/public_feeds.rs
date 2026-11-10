@@ -164,9 +164,16 @@ fn entsog_from_json(value: Value) -> Result<Value, &'static str> {
         let Some(value) = amount else { continue };
         // Missing units are not presumed to be kWh/day. Such a number cannot
         // be safely shown alongside a verified physical-flow observation.
-        let Some(unit) = row.get("unit").and_then(Value::as_str) else { continue };
-        if point.is_empty() || point.len() > 150 || !value.is_finite() || value < 0.0
-            || unit.trim().is_empty() || unit.len() > 30 {
+        let Some(unit) = row.get("unit").and_then(Value::as_str) else {
+            continue;
+        };
+        if point.is_empty()
+            || point.len() > 150
+            || !value.is_finite()
+            || value < 0.0
+            || unit.trim().is_empty()
+            || unit.len() > 30
+        {
             continue;
         }
         let dir = if direction.to_ascii_lowercase().contains("entry") {
@@ -237,18 +244,26 @@ mod tests {
     }
     #[test]
     fn fx_rejects_invalid_calendar_dates_and_duplicate_quotes() {
-        let rates = |date: &str| json!([
-            {"date":date,"base":"EUR","quote":"USD","rate":1.12},
-            {"date":date,"base":"EUR","quote":"CHF","rate":0.92}
-        ]);
+        let rates = |date: &str| {
+            json!([
+                {"date":date,"base":"EUR","quote":"USD","rate":1.12},
+                {"date":date,"base":"EUR","quote":"CHF","rate":0.92}
+            ])
+        };
         for invalid in ["2026-02-30", "2026-13-01", "not-a-date"] {
-            assert!(fx_from_json(rates(invalid)).is_err(), "invalid date: {invalid}");
+            assert!(
+                fx_from_json(rates(invalid)).is_err(),
+                "invalid date: {invalid}"
+            );
         }
-        assert!(matches!(fx_from_json(json!([
-            {"date":"2026-11-02","base":"EUR","quote":"USD","rate":1.12},
-            {"date":"2026-11-02","base":"EUR","quote":"CHF","rate":0.92},
-            {"date":"2026-11-02","base":"EUR","quote":"USD","rate":8.99}
-        ])), Err("DUPLICATE_FX_PAIR")));
+        assert!(matches!(
+            fx_from_json(json!([
+                {"date":"2026-11-02","base":"EUR","quote":"USD","rate":1.12},
+                {"date":"2026-11-02","base":"EUR","quote":"CHF","rate":0.92},
+                {"date":"2026-11-02","base":"EUR","quote":"USD","rate":8.99}
+            ])),
+            Err("DUPLICATE_FX_PAIR")
+        ));
         assert!(fx_from_json(rates("2026-11-02")).is_ok());
     }
 
@@ -263,7 +278,8 @@ mod tests {
             missing_unit,
             {"pointLabel":"Verified point","directionKey":"exit",
              "value":"73.4","unit":"kWh/d","lastUpdateDate":"2026-11-02"}
-        ]})).unwrap();
+        ]}))
+        .unwrap();
         assert_eq!(report["status"], "delayed");
         assert_eq!(report["entry_count"], 0);
         assert_eq!(report["exit_count"], 1);
