@@ -299,10 +299,7 @@ impl PaperControl {
         Self::open_locked(connection, key)
     }
 
-    fn open_locked(
-        mut connection: Connection,
-        key: SecretValue,
-    ) -> Result<Self, ControlError> {
+    fn open_locked(mut connection: Connection, key: SecretValue) -> Result<Self, ControlError> {
         if key.expose().len() != 32 {
             return Err(ControlError::Corrupt);
         }
@@ -652,10 +649,7 @@ mod tests {
         assert_eq!(resets.load(Ordering::SeqCst), 0);
         assert_eq!(control.status().unwrap().audit_records, before);
         control.emergency_stop().unwrap();
-        assert_eq!(
-            control.rearm_with_reset(|| ()),
-            Err(ControlError::Cooldown)
-        );
+        assert_eq!(control.rearm_with_reset(|| ()), Err(ControlError::Cooldown));
         drop(control);
         assert!(test_control(&path).unwrap().status().unwrap().stopped);
     }
@@ -674,5 +668,4 @@ mod tests {
         drop(first);
         assert!(test_control(&path).unwrap().status().unwrap().stopped);
     }
-
 }
