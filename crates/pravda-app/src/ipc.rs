@@ -411,7 +411,9 @@ pub fn ipc_paper_emergency_stop(
     control: State<'_, PaperControl>,
 ) -> Result<(), String> {
     require_main(window.label()).map_err(str::to_string)?;
-    control.emergency_stop().map_err(|error| error.code().to_owned())
+    control
+        .emergency_stop()
+        .map_err(|error| error.code().to_owned())
 }
 
 /// Authenticated read returns only state and bounded event count.
@@ -450,7 +452,10 @@ pub fn ipc_paper_rearm(
     control
         .rearm_after_fresh_auth()
         .map_err(|error| error.code().to_owned())?;
-    Ok(vec!["mode|PAPER_ONLY".to_owned(), "stopped|false".to_owned()])
+    Ok(vec![
+        "mode|PAPER_ONLY".to_owned(),
+        "stopped|false".to_owned(),
+    ])
 }
 
 #[tauri::command]
