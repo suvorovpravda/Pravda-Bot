@@ -159,12 +159,12 @@ function activateDashboard() {
     screen.hidden = true;
     shell.hidden = false;
     if (dashboardLoaded) {
-        if (typeof window.refreshRevolutConsent === "function") window.refreshRevolutConsent();
-        if (typeof window.refreshAll === "function") window.refreshAll();
-        if (typeof window.refreshSecurity === "function") window.refreshSecurity();
-        if (typeof window.refreshUpdateReadiness === "function") window.refreshUpdateReadiness();
-        if (typeof window.refreshSecurityEvents === "function") window.refreshSecurityEvents();
-        if (typeof window.refreshPaper === "function") window.refreshPaper();
+        if (typeof window.refreshRevolutConsent === "function") void window.refreshRevolutConsent();
+        if (typeof window.refreshAll === "function") void window.refreshAll();
+        if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
+        if (typeof window.refreshUpdateReadiness === "function") void window.refreshUpdateReadiness();
+        if (typeof window.refreshSecurityEvents === "function") void window.refreshSecurityEvents();
+        if (typeof window.refreshPaper === "function") void window.refreshPaper();
         return;
     }
     // Multiple login confirmations must not inject dashboard.js twice.
@@ -242,7 +242,7 @@ form.addEventListener("submit", async event => {
     }
 });
 
-(async () => {
+void (async () => {
     if (typeof invoke !== "function") {
         errorText.textContent = "Pont Tauri IPC indisponible. Aucun repli HTTP.";
         submit.disabled = true;

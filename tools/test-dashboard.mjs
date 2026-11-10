@@ -8,7 +8,8 @@ const html = readFileSync(new URL("../dashboard.html", import.meta.url), "utf8")
 const scriptTag = html.match(/<script>([\s\S]*?)<\/script>/i);
 assert.ok(scriptTag, "dashboard must contain its inline script");
 const script = scriptTag[1];
-new vm.Script(script, { filename: "dashboard.html" });
+const parsedDashboard = new vm.Script(script, { filename: "dashboard.html" });
+assert.ok(parsedDashboard instanceof vm.Script, "Dashboard JavaScript must parse successfully");
 
 function between(start, end) {
     const a = script.indexOf(start);

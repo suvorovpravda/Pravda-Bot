@@ -26,11 +26,11 @@ $uninstallPaths = @(
     'Registry::HKEY_CURRENT_USER\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
 )
 function Get-PravdaInstall {
-    $matches = @(
+    $foundInstalls = @(
         Get-ItemProperty -Path $uninstallPaths -ErrorAction SilentlyContinue |
             Where-Object { $_.PSObject.Properties['DisplayName'] -and $_.DisplayName -eq 'Pravda-Bot' }
     )
-    return $matches
+    return $foundInstalls
 }
 
 if (@(Get-PravdaInstall).Count -ne 0) {

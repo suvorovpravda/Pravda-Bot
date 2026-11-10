@@ -20,8 +20,8 @@ const expected=[
   ".github/pull_request_template.md"
 ];
 const deploymentPages=["README.md","SECURITY.md","docs/PRAVDA-GUIDE.md"];
-const docs=tracked.filter(p=>p.endsWith(".md")).sort();
-assert.deepEqual(docs,expected.slice().sort(),
+const docs=tracked.filter(p=>p.endsWith(".md")).sort((a,b)=>a.localeCompare(b));
+assert.deepEqual(docs,expected.slice().sort((a,b)=>a.localeCompare(b)),
   "Only the canonical README, SECURITY, central guide, reviewing policy and PR template are allowed");
 
 function progressRows(path) {

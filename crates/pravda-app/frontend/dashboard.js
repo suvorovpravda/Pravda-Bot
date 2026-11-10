@@ -242,8 +242,8 @@ const translations = {
         updateClock();
         if (latestMarket) renderMarket(latestMarket);
         if (latestFx) renderFx(latestFx);
-        refreshAlerts();
-        refreshSources();
+        void refreshAlerts();
+        void refreshSources();
         $("alert-notice").textContent = t("priceAlertsUnavailable");
     }
 
@@ -501,7 +501,7 @@ const translations = {
             const b = quoteCell(row.binance);
             const k = quoteCell(row.kraken);
             const s = document.createElement("td"); s.textContent = row.spread;
-            if (row.spread !== "—") s.className = parseFloat(row.spread) >= 0 ? "positive" : "negative";
+            if (row.spread !== "—") s.className = Number.parseFloat(row.spread) >= 0 ? "positive" : "negative";
             tr.append(sym, b, k, s); tbody.append(tr);
         }
         const symbol = $("chart-symbol").value, exchange = $("chart-exchange").value;
@@ -918,7 +918,7 @@ const translations = {
         }
     });
     window.pravdaDashboardPhase = "P02D";
-    readRevolutConsent();
+    void readRevolutConsent();
 
     async function refreshRevolut() {
         const requestGeneration = window.pravdaAuthGeneration;
@@ -1184,8 +1184,8 @@ const translations = {
     $("acceptance-pre").addEventListener("click", () => runAcceptance("preproduction"));
     $("acceptance-post").addEventListener("click", () => runAcceptance("postproduction"));
     $("security-refresh").addEventListener("click", () => {
-        refreshSecurity(true);
-        refreshSecurityEvents();
+        void refreshSecurity(true);
+        void refreshSecurityEvents();
     });
     window.refreshSecurity = () => refreshSecurity(true);
     window.refreshSecurityEvents = refreshSecurityEvents;
@@ -1260,7 +1260,7 @@ const translations = {
     }
     $("updater-readiness").addEventListener("click", refreshUpdateReadiness);
     window.refreshUpdateReadiness = refreshUpdateReadiness;
-    refreshUpdateReadiness();
+    void refreshUpdateReadiness();
 
     // Paper Trading is a deterministic, Rust-owned sandbox and never touches
     // authenticated exchanges, local browser storage, or actual account funds.
@@ -1400,7 +1400,7 @@ const translations = {
             $("paper-reset").disabled = false;
             // An old response may finish after a new Rust login reset the portfolio.
             // Fetch the current session snapshot instead of leaving a blank/stale view.
-            if (generation !== window.pravdaAuthGeneration) refreshPaper(true);
+            if (generation !== window.pravdaAuthGeneration) void refreshPaper(true);
         }
     }
     window.pravdaDashboardPhase = "P03";
@@ -1409,13 +1409,13 @@ const translations = {
     window.pravdaDashboardPhase = "P03A";
     $("paper-order-form").addEventListener("submit", event => {
         event.preventDefault();
-        paperAction("ipc_paper_trade", {
+        void paperAction("ipc_paper_trade", {
             symbol:$("paper-symbol").value,
             side:$("paper-side").value,
             quantityMilli:Number($("paper-quantity").value)
         });
     });
-    $("paper-reset").addEventListener("click", () => paperAction("ipc_paper_reset"));
+    $("paper-reset").addEventListener("click", () => { void paperAction("ipc_paper_reset"); });
     window.refreshPaper = () => refreshPaper(true);
     window.pravdaDashboardPhase = "P03B";
 
@@ -1574,15 +1574,15 @@ const translations = {
             if (mapSvg) {
                 const NS = "http://www.w3.org/2000/svg";
                 mapSvg.replaceChildren();
-                const msgs = payload.messages.filter(m => Number.isFinite(parseFloat(m.lat)) && Number.isFinite(parseFloat(m.lon)));
+                const msgs = payload.messages.filter(m => Number.isFinite(Number.parseFloat(m.lat)) && Number.isFinite(Number.parseFloat(m.lon)));
                 if (msgs.length) {
-                    const lats = msgs.map(m=>parseFloat(m.lat));
-                    const lons = msgs.map(m=>parseFloat(m.lon));
+                    const lats = msgs.map(m=>Number.parseFloat(m.lat));
+                    const lons = msgs.map(m=>Number.parseFloat(m.lon));
                     const { min: minLat, max: maxLat } = finiteExtent(lats);
                     const { min: minLon, max: maxLon } = finiteExtent(lons);
                     const pad = 40;
                     msgs.forEach(m=>{
-                        const lat = parseFloat(m.lat), lon = parseFloat(m.lon);
+                        const lat = Number.parseFloat(m.lat), lon = Number.parseFloat(m.lon);
                         const x = pad + ((lon - minLon)/(maxLon - minLon || 1)) * (800 - pad*2);
                         const y = pad + (1 - (lat - minLat)/(maxLat - minLat || 1)) * (430 - pad*2);
                         const circle = document.createElementNS(NS,"circle");
@@ -1784,7 +1784,7 @@ const translations = {
     window.pravdaDashboardPhase = "P10";
     applyLanguage();
     window.pravdaDashboardPhase = "P11";
-    refreshAll();
+    void refreshAll();
     function startPolling() {
         setInterval(updateClock, 1000);
         setInterval(refreshMarket, 1000);
@@ -1798,7 +1798,7 @@ const translations = {
     window.pravdaDashboardPhase = "P12";
     startPolling();
     window.pravdaDashboardPhase = "P13";
-    refreshSystem();
+    void refreshSystem();
     setInterval(refreshSystem, 10000);
     
     // Tabs filtering
@@ -1824,9 +1824,9 @@ const translations = {
             requestAnimationFrame(drawPriceChart);
         }
         if (tab === "security") {
-            refreshSecurity(true);
-            refreshSecurityEvents();
-            refreshPaper(true);
+            void refreshSecurity(true);
+            void refreshSecurityEvents();
+            void refreshPaper(true);
         }
     }
     const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
@@ -1836,7 +1836,7 @@ const translations = {
         window.location.hash="/"+route;
         applyTab(route);
         document.querySelector(".tabs")?.scrollIntoView({block:"nearest",behavior:"smooth"});
-        if(route==="revolut")refreshRevolut();
+        if(route==="revolut") void refreshRevolut();
     }));
     window.addEventListener("hashchange",()=>applyTab(tabFromHash()));
     window.pravdaDashboardPhase = "P14";

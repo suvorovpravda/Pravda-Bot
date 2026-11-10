@@ -43,7 +43,7 @@ for(const [exchange,source] of [["Binance",binance],["Kraken",kraken]]) {
     exchange+" must respond to server ping");
 }
 assert.equal(cfg.build.frontendDist,"frontend");
-assert.deepEqual([...cfg.bundle.targets].sort(),["msi","nsis"],
+assert.deepEqual([...cfg.bundle.targets].sort((a,b)=>a.localeCompare(b)),["msi","nsis"],
   "Both MSI and NSIS must be produced for Windows release");
 assert.equal(cfg.bundle.windows?.webviewInstallMode?.type,"offlineInstaller",
   "Windows installers must contain the official offline WebView2 prerequisite");
@@ -285,7 +285,7 @@ assert.match(auth,/window\.pravdaClearPaper\(\)/,
   "Logout and reauthentication must erase previous paper values from the DOM");
 assert.match(js,/window\.pravdaClearPaper\s*=\s*clearPaperUi/,
   "Paper UI must expose a local clear method without contacting exchanges");
-assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) refreshPaper\(true\);/,
+assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) void refreshPaper\(true\);/,
   "Stale paper action completion must refresh after a new login");
 assert.match(js,/window\.pravdaInvoke\(command, args\)/,
   "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
