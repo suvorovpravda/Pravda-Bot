@@ -59,6 +59,7 @@ struct Verified {
     seq: u64,
     previous: [u8; 32],
     armed: bool,
+    pending_intent: bool,
     last_emergency_at: Option<u64>,
 }
 
@@ -146,6 +147,7 @@ fn verify(connection: &Connection, key: &[u8]) -> Result<Verified, ControlError>
         seq: 0,
         previous: [0; 32],
         armed: false,
+        pending_intent: false,
         last_emergency_at: None,
     };
     let mut pending_intent = false;
@@ -202,7 +204,10 @@ fn verify(connection: &Connection, key: &[u8]) -> Result<Verified, ControlError>
         state.previous.copy_from_slice(&supplied);
         state.seq = seq;
     }
-    // In-flight intent after a crash cannot be assumed to have completed.
+    // An incomplete trade is an unresolved state, not an implicit refusal.
+    // Preserve it so REARM_PAPER cannot corrupt the journal by appending
+    // after PAPER_INTENT without a terminal event or explicit STOP.
+    state.pending_intent = pending_intent;
     if pending_intent {
         state.armed = false;
     }
@@ -220,7 +225,7 @@ fn append(
     let previous = verify(&tx, key)?;
     // Validate transitions before committing. A transient failed stop write
     // must not let REARM_PAPER follow a still-armed durable journal.
-    if (action == "REARM_PAPER" && previous.armed)
+    if (action == "REARM_PAPER" && (previous.armed || previous.pending_intent))
         || (action == "PAPER_INTENT" && !previous.armed)
         || (action == "INITIAL_STOP" && previous.seq != 0)
     {
@@ -348,6 +353,9 @@ impl PaperControl {
             .map_err(|_| ControlError::Unavailable)?;
         let expected_epoch = self.stop_epoch.load(Ordering::SeqCst);
         let state = verify(&connection, self.key.expose())?;
+        if state.pending_intent {
+            return Err(ControlError::Stopped);
+        }
         if expected_epoch & 1 == 0 || state.armed {
             return Err(ControlError::AlreadyArmed);
         }
@@ -597,4 +605,35 @@ mod tests {
         let reopened = test_control(&path).unwrap();
         assert!(reopened.status().unwrap().stopped);
     }
+    #[test]
+    fn unfinalized_trade_intent_requires_stop_before_rearming() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        let control = test_control(&path).unwrap();
+        control.rearm_with_reset(|| ()).unwrap();
+        // Simulate an accepted PAPER_INTENT followed by a journal-write
+        // failure before PAPER_ACCEPTED/PAPER_REFUSED is written.
+        {
+            let mut connection = control.connection.lock().unwrap();
+            append(&mut connection, control.key.expose(), "PAPER_INTENT").unwrap();
+        }
+        control.request_stop().unwrap();
+        let before = control.status().unwrap().audit_records;
+        let resets = AtomicUsize::new(0);
+        assert_eq!(
+            control.rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst)),
+            Err(ControlError::Stopped)
+        );
+        assert_eq!(resets.load(Ordering::SeqCst), 0);
+        assert_eq!(control.status().unwrap().audit_records, before);
+        control.emergency_stop().unwrap();
+        assert_eq!(
+            control.rearm_with_reset(|| ()),
+            Err(ControlError::Cooldown)
+        );
+        drop(control);
+        assert!(test_control(&path).unwrap().status().unwrap().stopped);
+    }
+
 }
