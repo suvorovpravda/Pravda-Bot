@@ -57,15 +57,17 @@ async function until(predicate, label, limit = 80) {
 }
 const evaluate = script => wd("POST", "/execute/sync", {script, args: []});
 const ui = () => evaluate(
-  "return {login:document.querySelector('.ipc-auth-screen')?.hidden===false," +
-  "dashboard:document.querySelector('main.shell')?.hidden===false," +
-  "ready:window.pravdaDashboardReady===true," +
-  "startupFailure:!!document.querySelector('.ipc-startup-recovery,main.shell>.ipc-auth-error')," +
-  "startupCode:document.querySelector('.ipc-startup-recovery input')?.value || ''," +
-  "startupPhase:document.querySelector('.ipc-bootstrap-phase')?.value || ''," +
-  "startupCause:document.querySelector('.ipc-startup-cause')?.value || ''," +
-  " setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
-  "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
+  `return {
+    login:document.querySelector('.ipc-auth-screen')?.hidden===false,
+    dashboard:document.querySelector('main.shell')?.hidden===false,
+    ready:window.pravdaDashboardReady===true,
+    startupFailure:!!document.querySelector('.ipc-startup-recovery,main.shell>.ipc-auth-error'),
+    startupCode:document.querySelector('.ipc-startup-recovery input')?.value || '',
+    startupPhase:document.querySelector('.ipc-bootstrap-phase')?.value || '',
+    startupCause:document.querySelector('.ipc-startup-cause')?.value || '',
+    setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe',
+    confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true
+  };`
 );
 function failOnStartupError(view, label) {
   if (!view.startupFailure) return;
