@@ -82,6 +82,19 @@ export function evaluateGovernance(policy, checkRuns, sourceSha) {
   const requirePr=policy.rules?.some(r=>r.type==="pull_request")===true;
   const strict=requireChecks?.strict_required_status_checks_policy===true;
   const active=policy.enforcement==="active";
+  // A ruleset ID is not proof that the ruleset actually protects main.
+  // Fail closed on glob exclusions (the full GitHub fnmatch contract is not
+  // implemented here): never overclaim protection for a complex pattern.
+  const refs=policy.conditions?.ref_name;
+  const protectsMain=policy.target==="branch" &&
+    policy.source_type==="Repository" &&
+    policy.source==="suvorovpravda/Pravda-Bot" &&
+    Array.isArray(refs?.include) &&
+    refs.include.includes("refs/heads/main") &&
+    Array.isArray(refs.exclude) &&
+    refs.exclude.every(pattern=>typeof pattern==="string" &&
+      pattern!=="refs/heads/main" && pattern!=="~ALL" &&
+      !pattern.includes("*") && !pattern.includes("?"));
   const required=requireChecks?.required_status_checks;
   if(!Array.isArray(required) || required.length===0) {
     return {...empty,state:"FAIL",policy_active:active,
@@ -99,13 +112,14 @@ export function evaluateGovernance(policy, checkRuns, sourceSha) {
       latest.conclusion==="success"?"PASS":
       latest.conclusion==="failure"?"FAIL":"INCOMPLETE"};
   });
-  const configured=active && strict && requirePr;
+  const configured=active && strict && requirePr && protectsMain;
   const state=!configured?"FAIL":
     checks.every(c=>c.state==="PASS")?"PASS":
     checks.some(c=>c.state==="FAIL")?"FAIL":"PENDING";
   return {state,source_sha:sourceSha,policy_active:active,
     strict_main_checks:strict,pr_required:requirePr,checks,
-    reason:configured?"SHA_SCOPED_REQUIRED_CHECKS":"INACTIVE_OR_WEAK_RULESET"};
+    reason:configured?"SHA_SCOPED_REQUIRED_CHECKS":
+      !protectsMain?"RULESET_NOT_PROVEN_ON_MAIN":"INACTIVE_OR_WEAK_RULESET"};
 }
 
 export function buildSnapshot({guide,runs,prs,issues,sourceSha,governancePolicy=null,
@@ -317,7 +331,10 @@ function runTests(){
     prs:[{state:"open"}],issues:[{state:"open"}, {state:"open",pull_request:{url:"x"}}]});
   assert.equal(model.required_checks.passed,4);
   assert.equal(model.p0_governance.state,"UNKNOWN");
-  const requiredRules={enforcement:"active",rules:[
+  const requiredRules={enforcement:"active",target:"branch",
+    source_type:"Repository",source:"suvorovpravda/Pravda-Bot",
+    conditions:{ref_name:{include:["refs/heads/main"],exclude:[]}},
+    rules:[
     {type:"pull_request",parameters:{required_approving_review_count:0}},
     {type:"required_status_checks",parameters:{
       strict_required_status_checks_policy:true,
@@ -331,6 +348,22 @@ function runTests(){
   const governance=evaluateGovernance(requiredRules,checksOk,"a".repeat(40));
   assert.equal(governance.state,"PASS");
   assert.equal(governance.checks.length,3);
+  // Regression for the Code Review: an active ruleset on another branch
+  // cannot certify main, even if check runs on main happened to succeed.
+  assert.equal(evaluateGovernance({...requiredRules,conditions:{
+    ref_name:{include:["refs/heads/develop"],exclude:["refs/heads/main"]}
+  }},checksOk,"a".repeat(40)).state,"FAIL");
+  assert.equal(evaluateGovernance({...requiredRules,conditions:{
+    ref_name:{include:["refs/heads/main"],exclude:["refs/heads/main"]}
+  }},checksOk,"a".repeat(40)).state,"FAIL");
+  assert.equal(evaluateGovernance({...requiredRules,conditions:{
+    ref_name:{include:["refs/heads/main"],exclude:["refs/heads/*"]}
+  }},checksOk,"a".repeat(40)).state,"FAIL");
+  assert.equal(evaluateGovernance({...requiredRules,target:"tag"},checksOk,
+    "a".repeat(40)).state,"FAIL");
+  assert.equal(evaluateGovernance({...requiredRules,
+    source:"another-owner/another-repository"},checksOk,
+    "a".repeat(40)).state,"FAIL");
   assert.equal(evaluateGovernance(requiredRules,checksOk,"b".repeat(40)).state,"PENDING");
   assert.equal(evaluateGovernance(null,checksOk,"a".repeat(40)).state,"UNKNOWN");
   assert.equal(evaluateGovernance(requiredRules,{check_runs:checksOk.check_runs.map(
