@@ -285,7 +285,7 @@ assert.match(auth,/window\.pravdaClearPaper\(\)/,
   "Logout and reauthentication must erase previous paper values from the DOM");
 assert.match(js,/window\.pravdaClearPaper\s*=\s*clearPaperUi/,
   "Paper UI must expose a local clear method without contacting exchanges");
-assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) void refreshPaper\(true\);/,
+assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\s*\|\|\s*controlGeneration !== paperControlGeneration\) void refreshPaper\(true\);/,
   "Stale paper action completion must refresh after a new login");
 assert.match(js,/window\.pravdaInvoke\(command, args\)/,
   "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
