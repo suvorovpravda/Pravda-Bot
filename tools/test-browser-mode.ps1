@@ -110,7 +110,7 @@ try {
         # The browser compatibility API must reuse Rust feed adapters while
         # refusing all network traffic under the explicit offline setting.
         # Exercise real authenticated HTTP routes, not only source assertions.
-        foreach ($route in @('/api/fx', '/api/energy', '/api/news')) {
+        foreach ($route in @('/api/fx', '/api/energy', '/api/eu/flows', '/api/news', '/api/geopolitics')) {
             $response = $http.GetAsync("$base$route").GetAwaiter().GetResult()
             if ([int]$response.StatusCode -ne 200) {
                 throw "Public feed $route did not return a typed offline response"
