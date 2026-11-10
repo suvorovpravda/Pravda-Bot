@@ -5,7 +5,8 @@
  * NEVER infers production readiness, trading availability, or a security score.
  */
 import assert from "node:assert/strict";
-import {readFileSync, mkdirSync, writeFileSync, existsSync} from "node:fs";
+import {readFileSync, mkdirSync, writeFileSync, mkdtempSync, renameSync, rmSync, readdirSync} from "node:fs";
+import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 
 export const WORKFLOWS = Object.freeze([
@@ -126,7 +127,6 @@ function stateColor(state) {
 export function renderSvg(snapshot) {
   const h=snapshot.historical, checks=snapshot.required_checks;
   const rows=snapshot.workflows;
-  const colors=["#50D9FB","#FF5597","#A78BFF"];
   const blocks=[];
   blocks.push('<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="485" viewBox="0 0 1600 485" role="img">');
   blocks.push('<title>Pravda-Bot Live Pulse — GitHub workflow status, historical milestone progress and release NO-GO</title>');
@@ -211,12 +211,38 @@ async function loadGithub(repo, branch) {
 
 function stableJson(value){return JSON.stringify(value,null,2)+"\n"}
 function put(path,content) {
-  mkdirSync(dirname(path),{recursive:true});
-  if(existsSync(path) && readFileSync(path,"utf8")===content) return false;
-  writeFileSync(path,content,"utf8");
+  const dir=dirname(path);
+  mkdirSync(dir,{recursive:true});
+  try {
+    if(readFileSync(path,"utf8")===content) return false;
+  } catch(error) {
+    if(error?.code!=="ENOENT") throw error;
+  }
+  // Write into a private sibling directory, then atomically replace the
+  // destination. Never follow a destination symlink during the write.
+  const temporary=mkdtempSync(join(dir,".pravda-live-"));
+  try {
+    const staged=join(temporary,"status");
+    writeFileSync(staged,content,{flag:"wx",mode:0o600});
+    renameSync(staged,path);
+  } finally {
+    rmSync(temporary,{recursive:true,force:true});
+  }
   return true;
 }
 function runTests(){
+  // Validate atomic replacement, idempotence and cleanup with local fixtures.
+  const sandbox=mkdtempSync(join(tmpdir(),"pravda-live-status-test-"));
+  try {
+    const target=join(sandbox,"status.json");
+    assert.equal(put(target,"v1"),true);
+    assert.equal(put(target,"v1"),false);
+    assert.equal(put(target,"v2"),true);
+    assert.equal(readFileSync(target,"utf8"),"v2");
+    assert.deepEqual(readdirSync(sandbox),["status.json"]);
+  } finally {
+    rmSync(sandbox,{recursive:true,force:true});
+  }
   // Regression for SonarCloud workflow_run trust boundary: a workflow run from
   // a fork whose branch is also "main" must not activate the write-capable job.
   const workflow=readFileSync(".github/workflows/live-docs.yml","utf8");
