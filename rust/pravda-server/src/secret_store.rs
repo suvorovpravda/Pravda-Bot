@@ -81,6 +81,10 @@ fn scoped_target(identifier: &str) -> Result<String, SecretStoreError> {
     {
         return Err(SecretStoreError::InvalidName);
     }
+    // Audit evidence must never share the exchange-credential namespace.
+    if identifier == "internal_paper_audit_v1" {
+        return Ok("Pravda-Bot:audit:v1:paper-control".to_owned());
+    }
     Ok(format!("{TARGET_PREFIX}{identifier}"))
 }
 
