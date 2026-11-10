@@ -1360,6 +1360,7 @@ const translations = {
     let paperControlGeneration = 0;
     let paperStopInFlight = false;
     let paperRearmInFlight = false;
+    let paperRefreshNumber = 0;
     function paperMessage(error) {
         const messages = {
             INVALID_PAPER_INSTRUMENT:"Instrument fictif non autorisé.",
@@ -1383,8 +1384,10 @@ const translations = {
     async function refreshPaper(explicit = false) {
         const generation = window.pravdaAuthGeneration;
         const controlGeneration = paperControlGeneration;
+        const refreshNumber = ++paperRefreshNumber;
         const isCurrent = () => generation === window.pravdaAuthGeneration
-            && controlGeneration === paperControlGeneration && !paperStopInFlight;
+            && controlGeneration === paperControlGeneration && !paperStopInFlight
+            && refreshNumber === paperRefreshNumber;
         if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) return;
         try {
             const rows = await window.pravdaInvoke("ipc_paper_snapshot");
@@ -1409,7 +1412,8 @@ const translations = {
         }
     }
     async function paperAction(command, args = {}) {
-        if (paperBusy || paperStopInFlight) return;
+        if (paperBusy || paperStopInFlight
+            || (command === "ipc_paper_trade" && (paperStopped || paperRearmInFlight))) return;
         const generation = window.pravdaAuthGeneration;
         const controlGeneration = paperControlGeneration;
         paperBusy = true;
@@ -1450,22 +1454,32 @@ const translations = {
         });
     });
     $("paper-reset").addEventListener("click", () => { void paperAction("ipc_paper_reset"); });
-    // Emergency stop is never queued behind an unrelated paperBusy UI flag.
+    // Safety actions invalidate all in-flight status and paper responses.
+    // The STOP command never waits behind PBKDF2 or paperBusy.
     $("paper-stop").addEventListener("click", async () => {
+        const controlGeneration = ++paperControlGeneration;
+        const authGeneration = window.pravdaAuthGeneration;
+        paperStopInFlight = true;
         paperStopped = true;
         $("paper-trade").disabled = true;
         $("paper-control-status").textContent = "ARRÊT EN COURS · nouveaux trades bloqués.";
         try {
             await window.pravdaInvoke("ipc_paper_emergency_stop");
+            if (controlGeneration !== paperControlGeneration
+                || authGeneration !== window.pravdaAuthGeneration) return;
             $("paper-control-status").textContent = "ARRÊT D'URGENCE ACTIVÉ · réarmement humain requis.";
             $("paper-notice").textContent = "Arrêt journalisé localement.";
         } catch (error) {
+            if (controlGeneration !== paperControlGeneration
+                || authGeneration !== window.pravdaAuthGeneration) return;
             $("paper-control-status").textContent = "ÉTAT INCONNU · simulation bloquée.";
             $("paper-notice").textContent = paperMessage(error);
+        } finally {
+            if (controlGeneration === paperControlGeneration) paperStopInFlight = false;
         }
     });
     $("paper-rearm").addEventListener("click", async () => {
-        if (!securitySessionReady() || paperBusy) return;
+        if (!securitySessionReady() || paperBusy || paperStopInFlight || paperRearmInFlight) return;
         const field = $("paper-rearm-password");
         const password = field.value;
         field.value = "";
@@ -1474,22 +1488,27 @@ const translations = {
             return;
         }
         const generation = window.pravdaAuthGeneration;
+        const controlGeneration = ++paperControlGeneration;
+        paperRearmInFlight = true;
         paperStopped = true;
         $("paper-trade").disabled = true;
         try {
             await window.pravdaInvoke("ipc_paper_rearm", {password});
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
             paperStopped = false;
             $("paper-control-status").textContent = "RÉARMÉ · simulation uniquement.";
             $("paper-notice").textContent = "Mot de passe vérifié ; portefeuille fictif remis à zéro.";
             void refreshPaper(true);
         } catch (error) {
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
             $("paper-control-status").textContent = "ÉTAT À VÉRIFIER · nouveaux trades bloqués.";
             $("paper-notice").textContent = paperMessage(error);
-            // A failed rearm does not necessarily change the previous state:
-            // reread the authenticated Rust authority, never assume STOPPED.
+            // Rejected rearms are not necessarily STOPPED: reread Rust state.
             void refreshPaper(true);
+        } finally {
+            paperRearmInFlight = false;
         }
     });
     window.refreshPaper = () => refreshPaper(true);
