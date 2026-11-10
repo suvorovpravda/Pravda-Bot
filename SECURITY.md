@@ -26,6 +26,18 @@
 
 Les résultats sont publiés dans la **branche distincte `status/live`** depuis les API GitHub, environ toutes les 10 minutes et après les workflows surveillés (horaires non garantis). GitHub peut conserver temporairement en cache l'image. Le contenu statique de `main` reste soumis aux Pull Requests obligatoires : **aucune écriture directe ne contourne la protection de branche**. L'horodatage marque la dernière preuve observée, pas une certification. Les tests dont le SHA diffère sont indiqués comme périmés ; **RustSec est bloquant sur les dépendances vérifiées, mais sa réussite ne constitue pas un GO production** et la publication reste **NO-GO**.
 
+### Sécurité mesurée sur le code courant
+
+**Le panneau dynamique ci-dessus affiche le SHA de `main`, les contrôles du même SHA et l'horodatage UTC de la dernière synchronisation.** Le dernier contrôle RustSec peut être `STALE_SHA` si les dépendances n'ont pas été réauditées depuis ce commit ; ce statut n'est pas une validation de sécurité. Pour éviter une valeur affichée depuis le cache GitHub, consulter le [JSON de preuve](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json).
+
+**Notes SonarCloud du code global** (mesurées séparément de la Quality Gate sur le nouveau code ; ces badges sont servis directement par SonarCloud) :
+
+[![SonarCloud Security Rating](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+[![SonarCloud Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=reliability_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+[![SonarCloud Duplicated Lines](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=duplicated_lines_density)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+
+Le registre des risques ci-dessous est **un document versionné** et nécessite une Pull Request pour changer ; il ne doit pas être interprété comme une télémétrie synchronisée à chaque exécution CI.
+
 ## 🌌 Security cockpit
 
 ![Cockpit de sécurité bleu nuit et néon : jauges historiques IPC 50%, SQLite 75%, CI 60%, signature 0%, frontières de confiance et décision de sécurité NO-GO](docs/assets/pravda-security-cockpit.svg)
