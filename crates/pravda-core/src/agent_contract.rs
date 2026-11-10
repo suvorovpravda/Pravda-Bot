@@ -162,9 +162,7 @@ pub fn parse_untrusted_ai_reply(
     if timestamp.offset().local_minus_utc() != 0 {
         return Err(ContractRefusal::InvalidTimestamp);
     }
-    if !message.confidence_score.is_finite()
-        || !(0.0..=1.0).contains(&message.confidence_score)
-    {
+    if !message.confidence_score.is_finite() || !(0.0..=1.0).contains(&message.confidence_score) {
         return Err(ContractRefusal::InvalidConfidence);
     }
     if let Some(ref summary) = message.rationale {
@@ -177,10 +175,7 @@ pub fn parse_untrusted_ai_reply(
         }
     }
     if message.missing_fields.len() > 32
-        || !message
-            .missing_fields
-            .iter()
-            .all(|field| valid_text(field))
+        || !message.missing_fields.iter().all(|field| valid_text(field))
         || message
             .error_code
             .as_ref()
@@ -267,7 +262,9 @@ fn validate_paper_proposal(proposal: &PaperProposal) -> Result<(), ContractRefus
             .ok_or(ContractRefusal::InvalidProposal)?;
         let valid_direction = match proposal.action {
             ProposedAction::OpenLong => target.price_micros_usdt > proposal.entry_price_micros_usdt,
-            ProposedAction::OpenShort => target.price_micros_usdt < proposal.entry_price_micros_usdt,
+            ProposedAction::OpenShort => {
+                target.price_micros_usdt < proposal.entry_price_micros_usdt
+            }
         };
         if !valid_direction {
             return Err(ContractRefusal::InvalidProposal);
@@ -359,7 +356,10 @@ mod tests {
         assert!(matches!(parse(&v), Err(ContractRefusal::InvalidRequestId)));
         let mut v = good();
         v["schema_version"] = json!(2);
-        assert!(matches!(parse(&v), Err(ContractRefusal::UnsupportedVersion)));
+        assert!(matches!(
+            parse(&v),
+            Err(ContractRefusal::UnsupportedVersion)
+        ));
     }
 
     #[test]
@@ -385,10 +385,7 @@ mod tests {
         v["status"] = json!("INSUFFICIENT_DATA");
         v["decision"] = Value::Null;
         v["missing_fields"] = json!(["market_data.ohlcv_1m"]);
-        assert_eq!(
-            parse(&v).unwrap().status,
-            AnalysisStatus::InsufficientData
-        );
+        assert_eq!(parse(&v).unwrap().status, AnalysisStatus::InsufficientData);
         v["missing_fields"] = json!([]);
         assert!(matches!(parse(&v), Err(ContractRefusal::MissingFields)));
     }
