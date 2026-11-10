@@ -23,7 +23,8 @@ const canonicalDocs=[
 // documentation boundary while permitting reviewed architecture artifacts.
 const approvedTechnicalRecords=[
   "docs/ADR-001-TRADING-SCOPE-RISK-GATES.md",
-  "docs/THREAT-MODEL-TRADING-T002.md"
+  "docs/THREAT-MODEL-TRADING-T002.md",
+  "docs/ARCHITECTURE-AGENTS-T004.md"
 ];
 const expected=[
   ...canonicalDocs,
