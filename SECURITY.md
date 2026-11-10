@@ -14,6 +14,16 @@ Pravda-Bot est une application desktop Windows open source dédiée au suivi de 
 
 Ces choix réduisent certaines surfaces d’exposition et rendent les contrôles examinables. Ils ne rendent pas un poste invulnérable et ne remplacent ni la protection de Windows ni la vérification des fichiers téléchargés.
 
+## Vérifications visibles
+
+![État horodaté des contrôles GitHub et du jalon de publication](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
+
+[Statut JSON et date de synchronisation](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json) · [Historique des workflows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)
+
+[![Évaluation de sécurité SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+
+Le panneau reflète les vérifications publiées pour le SHA affiché ; la date JSON permet de juger leur fraîcheur. Les contrôles automatisés sont une partie du processus de sécurité, pas une certification de l’application.
+
 ## Limites à connaître
 
 - Un résultat CI valide le contrôle exécuté sur le commit indiqué ; il ne certifie pas à lui seul l’application complète ni le poste de l’utilisateur.
