@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "087804636ec8a098041a451994e17ab5554564dc",
-  "latest_evidence_at": "2026-11-10T12:26:14Z",
-  "refreshed_at_utc": "2026-11-10T12:27:05.635Z",
+  "latest_evidence_at": "2026-11-10T12:29:43Z",
+  "refreshed_at_utc": "2026-11-10T12:30:09.401Z",
   "historical": {
     "rows": [
       {
@@ -128,7 +128,7 @@
       "state": "RUNNING",
       "sha": "087804636e",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42815718754",
-      "observedAt": "2026-11-10T12:26:14Z"
+      "observedAt": "2026-11-10T12:29:43Z"
     },
     {
       "id": "codeql.yml",
@@ -137,7 +137,7 @@
       "state": "RUNNING",
       "sha": "087804636e",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42815718981",
-      "observedAt": "2026-11-10T12:26:08Z"
+      "observedAt": "2026-11-10T12:27:50Z"
     },
     {
       "id": "rustsec-audit.yml",
