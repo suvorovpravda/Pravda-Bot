@@ -32,7 +32,7 @@ assert.match(desktop,/stream_state.*?as_object_mut/s,
   "A real market snapshot must expose the Rust feed status");
 assert.match(js,/streamStatusMessage\(payload\.stream_state\)/,
   "UI must distinguish configured-offline feeds from waiting for first quote");
-assert.match(binance,/wss:\/\/stream\.binance\.com:443\/ws/,
+assert.match(binance,/^\s*url: "wss:\/\/stream\.binance\.com:443\/ws"\.to_string\(\),\s*$/m,
   "Spot market WSS must use the provider's documented 443 endpoint");
 for(const [exchange,source] of [["Binance",binance],["Kraken",kraken]]) {
   assert.match(source,/timeout\(Duration::from_secs\(15\), connect_async/,
@@ -361,7 +361,7 @@ assert.match(js,/if \(sessionChanged && securitySessionReady\(\)\) \{\s*void ref
 assert.match(auth,/window\.pravdaClearUpdateReadiness\(\)/,
   "Authentication transitions must reset stale update status");
 assert.match(html,/id="security-events"/,"Security events must be visible after login");
-assert.match(ipc,/protonvpn.*https:\/\/protonvpn\.com\/support\//,"Proton documentation must be a fixed official URL");
+assert.match(ipc,/^\s*"protonvpn"\s*=>\s*"https:\/\/protonvpn\.com\/support\/protonvpn-windows-vpn-application"\.to_owned\(\),\s*$/m,"Proton documentation must be a fixed official URL");
 assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
   "Simulator alerts must be rendered from the Rust IPC snapshot");
 assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.articles\)/,
@@ -494,10 +494,10 @@ assert.equal(ui.$("fx-rates").textContent,"session-B",
   "Old FX rejection must not overwrite a newer login's FX values");
 assert.equal(relocks,1,"Old FX rejection must not force login");
 
-for (const [name,url,target,good,bad,payload] of [
-  ["refreshHistory","/api/market/history","history-status","historyReady","unavailableFeed",
+for (const [name,target,bad,payload] of [
+  ["refreshHistory","history-status","unavailableFeed",
    {observations:[{ticks:1}]}],
-  ["refreshNews","/api/geopolitics","news-list","noArticles","newsFailure",
+  ["refreshNews","news-list","newsFailure",
    {status:"delayed",source:"GDELT",retrieved_at:"2026-11-04",articles:[]}]
 ]) {
   const old = ui[name]();
