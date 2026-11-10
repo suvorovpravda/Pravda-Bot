@@ -629,8 +629,6 @@
         context.scale(ratio, ratio);
         const width = rect.width, height = rect.height;
         context.clearRect(0, 0, width, height);
-        const symbol = $("chart-symbol").value;
-        const exchange = $("chart-exchange").value;
         const currency = $("chart-currency").value;
         const rangeMs = { day: 86400000, week: 604800000, month: 2592000000 }[$("chart-period").value];
         const windowStart = Date.now() - rangeMs;
