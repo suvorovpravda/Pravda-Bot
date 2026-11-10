@@ -718,4 +718,61 @@ assert.equal(updaterVm.$("updater-readiness").disabled,false,
   "Updater configuration action must recover after stale IPC resolves");
 assert.match(updaterVm.$("updater-checked").textContent,/aucun appel réseau/);
 
+// Exercise the real paper-control event handlers with a delayed native status
+// completion. An old "stopped|false" response must never re-enable trading
+// after the user has pressed emergency STOP.
+assert.match(js,/let paperControlGeneration = 0;/,
+  "A dedicated safety epoch must invalidate stale paper status reads");
+assert.match(js,/controlGeneration === paperControlGeneration && !paperStopInFlight/,
+  "A refresh cannot override STOP while an emergency command is pending");
+const paperPendingStatus = [];
+const paperUiNodes = new Map();
+const paperVm = {
+  window:{
+    pravdaAuthGeneration:1,
+    pravdaInvoke:(command) => {
+      if(command === "ipc_paper_snapshot") return Promise.resolve([]);
+      if(command === "ipc_paper_control_status") {
+        return new Promise(resolve => { paperPendingStatus.push(resolve); });
+      }
+      if(command === "ipc_paper_emergency_stop") return Promise.resolve();
+      return Promise.resolve([]);
+    }
+  },
+  securitySessionReady:()=>true,
+  securityVisible:()=>true,
+  renderPaper:()=>{},
+  $:id => {
+    if (!paperUiNodes.has(id)) {
+      paperUiNodes.set(id,{
+        textContent:"",
+        disabled:false,
+        value:"",
+        handlers:{},
+        addEventListener(event,callback){ this.handlers[event]=callback; }
+      });
+    }
+    return paperUiNodes.get(id);
+  }
+};
+const paperStart = js.indexOf("    let paperBusy = false;");
+const paperEnd = js.indexOf('    window.pravdaDashboardPhase = "P03B";',paperStart);
+assert.ok(paperStart >= 0 && paperEnd > paperStart,
+  "Actual native paper-status handlers must remain testable");
+vm.createContext(paperVm);
+vm.runInContext(js.slice(paperStart,paperEnd),paperVm,{
+  filename:"pravda-paper-control-status-race.js"
+});
+const oldPaperRefresh = paperVm.window.refreshPaper();
+await new Promise(setImmediate);
+assert.equal(paperPendingStatus.length,1,
+  "A native paper-control status request must be pending");
+await paperVm.$("paper-stop").handlers.click();
+paperPendingStatus[0](["stopped|false"]);
+await oldPaperRefresh;
+assert.equal(paperVm.$("paper-trade").disabled,true,
+  "Late pre-stop native status must never re-enable the trade button");
+assert.match(paperVm.$("paper-control-status").textContent,/ARRÊT D.URGENCE ACTIVÉ/,
+  "Late pre-stop status must not hide the acknowledged emergency stop");
+
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
