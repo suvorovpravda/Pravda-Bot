@@ -6,7 +6,7 @@ use crate::secret_store::{SecretStore, SecretStoreError, SecretValue, WindowsCre
 use rusqlite::{params, Connection, TransactionBehavior};
 use sha2::{Digest, Sha256};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
@@ -22,6 +22,7 @@ pub enum ControlError {
     Corrupt,
     Stopped,
     Cooldown,
+    AlreadyArmed,
     Capacity,
 }
 
@@ -32,6 +33,7 @@ impl ControlError {
             Self::Corrupt => "CONTROL_AUDIT_INTEGRITY_FAILURE",
             Self::Stopped => "PAPER_KILL_SWITCH_ACTIVE",
             Self::Cooldown => "PAPER_REARM_COOLDOWN",
+            Self::AlreadyArmed => "PAPER_ALREADY_ARMED",
             Self::Capacity => "CONTROL_AUDIT_CAPACITY_REACHED",
         }
     }
@@ -49,7 +51,8 @@ pub struct ControlStatus {
 pub struct PaperControl {
     connection: Mutex<Connection>,
     key: SecretValue,
-    stopped: AtomicBool,
+    // Bit 0 indicates STOPPED; upper bits increase on each emergency request.
+    stop_epoch: AtomicU64,
 }
 
 struct Verified {
@@ -215,6 +218,14 @@ fn append(
         .transaction_with_behavior(TransactionBehavior::Immediate)
         .map_err(|_| ControlError::Unavailable)?;
     let previous = verify(&tx, key)?;
+    // Validate transitions before committing. A transient failed stop write
+    // must not let REARM_PAPER follow a still-armed durable journal.
+    if (action == "REARM_PAPER" && previous.armed)
+        || (action == "PAPER_INTENT" && !previous.armed)
+        || (action == "INITIAL_STOP" && previous.seq != 0)
+    {
+        return Err(ControlError::Corrupt);
+    }
     let seq = previous.seq.checked_add(1).ok_or(ControlError::Capacity)?;
     if seq > MAX_AUDIT_ROWS {
         return Err(ControlError::Capacity);
@@ -286,7 +297,7 @@ impl PaperControl {
         Ok(Self {
             connection: Mutex::new(connection),
             key,
-            stopped: AtomicBool::new(true),
+            stop_epoch: AtomicU64::new(1),
         })
     }
 
@@ -297,7 +308,7 @@ impl PaperControl {
             .map_err(|_| ControlError::Unavailable)?;
         let state = verify(&connection, self.key.expose())?;
         Ok(ControlStatus {
-            stopped: self.stopped.load(Ordering::SeqCst) || !state.armed,
+            stopped: self.is_stopped() || !state.armed,
             audit_records: state.seq,
         })
     }
