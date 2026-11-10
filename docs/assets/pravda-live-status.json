@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "46f85c940a0dc212a5edd57eb05dfe4a501f8262",
-  "latest_evidence_at": "2026-11-10T08:23:54Z",
-  "refreshed_at_utc": "2026-11-10T08:23:59.161Z",
+  "latest_evidence_at": "2026-11-10T08:29:52Z",
+  "refreshed_at_utc": "2026-11-10T08:30:02.784Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 1,
     "total": 4
   },
   "p0_governance": {
@@ -102,11 +102,11 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PENDING"
+        "state": "PASS"
       },
       {
         "name": "Windows desktop build and startup",
-        "state": "PENDING"
+        "state": "PASS"
       }
     ],
     "reason": "SHA_SCOPED_REQUIRED_CHECKS"
@@ -119,7 +119,7 @@
       "state": "RUNNING",
       "sha": "46f85c940a",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42782307651",
-      "observedAt": "2026-11-10T08:23:51Z"
+      "observedAt": "2026-11-10T08:23:59Z"
     },
     {
       "id": "windows-package.yml",
@@ -134,10 +134,10 @@
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "46f85c940a",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42782307642",
-      "observedAt": "2026-11-10T08:23:54Z"
+      "observedAt": "2026-11-10T08:29:52Z"
     },
     {
       "id": "rustsec-audit.yml",
