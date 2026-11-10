@@ -107,6 +107,19 @@ try {
         if ([int]$res.StatusCode -ne 303) { throw "Saved password cannot authenticate after restart" }
         $dashboard = $http.GetAsync("$base/").GetAwaiter().GetResult()
         if ([int]$dashboard.StatusCode -ne 200) { throw "Dashboard failed after re-login" }
+        # The browser compatibility API must reuse Rust feed adapters while
+        # refusing all network traffic under the explicit offline setting.
+        # Exercise real authenticated HTTP routes, not only source assertions.
+        foreach ($route in @('/api/fx', '/api/energy', '/api/news')) {
+            $response = $http.GetAsync("$base$route").GetAwaiter().GetResult()
+            if ([int]$response.StatusCode -ne 200) {
+                throw "Public feed $route did not return a typed offline response"
+            }
+            $body = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+            if ($body.status -ne 'unavailable' -or $body.notice -ne 'PUBLIC_FEEDS_DISABLED') {
+                throw "Public feed $route attempted an online fetch or forged a successful offline result"
+            }
+        }
     } finally {
         $http.Dispose()
         $handler.Dispose()
