@@ -121,8 +121,8 @@ async fn main() {
     }
     // A separate user-scoped control journal starts STOPPED on every launch.
     // Its HMAC key resides in Windows Credential Manager, never in this DB.
-    let control_path = std::path::PathBuf::from(auth_path.clone())
-        .with_file_name("pravda_paper_control.sqlite3");
+    let control_path =
+        std::path::PathBuf::from(auth_path.clone()).with_file_name("pravda_paper_control.sqlite3");
     let paper_control = match pravda_server::paper_control::PaperControl::open(&control_path) {
         Ok(value) => value,
         Err(error) => {
