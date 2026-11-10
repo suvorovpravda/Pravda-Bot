@@ -1349,10 +1349,17 @@ const translations = {
         $("paper-control-status").textContent = "ARRÊTÉ · reconnexion requise.";
         $("paper-trade").disabled = true;
         paperStopped = true;
+        paperControlGeneration += 1;
+        paperStopInFlight = false;
     }
     window.pravdaClearPaper = clearPaperUi;
     let paperBusy = false;
     let paperStopped = true;
+    // Independent of authentication changes: invalidates stale native
+    // status responses when STOP or REARM starts.
+    let paperControlGeneration = 0;
+    let paperStopInFlight = false;
+    let paperRearmInFlight = false;
     function paperMessage(error) {
         const messages = {
             INVALID_PAPER_INSTRUMENT:"Instrument fictif non autorisé.",
@@ -1375,13 +1382,16 @@ const translations = {
     }
     async function refreshPaper(explicit = false) {
         const generation = window.pravdaAuthGeneration;
-        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy) return;
+        const controlGeneration = paperControlGeneration;
+        const isCurrent = () => generation === window.pravdaAuthGeneration
+            && controlGeneration === paperControlGeneration && !paperStopInFlight;
+        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) return;
         try {
             const rows = await window.pravdaInvoke("ipc_paper_snapshot");
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (!isCurrent()) return;
             renderPaper(rows);
             const control = await window.pravdaInvoke("ipc_paper_control_status");
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (!isCurrent()) return;
             paperStopped = !control.includes("stopped|false");
             $("paper-trade").disabled = paperStopped;
             $("paper-control-status").textContent = paperStopped
@@ -1391,7 +1401,7 @@ const translations = {
                 ? "Simulation suspendue par le coupe-circuit Rust."
                 : "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
         } catch (error) {
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (!isCurrent()) return;
             $("paper-notice").textContent = paperMessage(error);
             paperStopped = true;
             $("paper-trade").disabled = true;
@@ -1399,20 +1409,23 @@ const translations = {
         }
     }
     async function paperAction(command, args = {}) {
-        if (paperBusy) return;
+        if (paperBusy || paperStopInFlight) return;
         const generation = window.pravdaAuthGeneration;
+        const controlGeneration = paperControlGeneration;
         paperBusy = true;
         $("paper-trade").disabled = true;
         $("paper-reset").disabled = true;
         try {
             const rows = await window.pravdaInvoke(command, args);
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
             renderPaper(rows);
             $("paper-notice").textContent = command === "ipc_paper_reset"
                 ? "Portefeuille fictif remis à zéro. Aucun compte réel affecté."
                 : "Opération PAPER simulée en mémoire. Aucun ordre réel envoyé.";
         } catch (error) {
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
             $("paper-notice").textContent = paperMessage(error);
         } finally {
             paperBusy = false;
@@ -1420,7 +1433,8 @@ const translations = {
             $("paper-reset").disabled = false;
             // An old response may finish after a new Rust login reset the portfolio.
             // Fetch the current session snapshot instead of leaving a blank/stale view.
-            if (generation !== window.pravdaAuthGeneration) void refreshPaper(true);
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) void refreshPaper(true);
         }
     }
     window.pravdaDashboardPhase = "P03";
