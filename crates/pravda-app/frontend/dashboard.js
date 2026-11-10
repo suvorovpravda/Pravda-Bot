@@ -1365,6 +1365,7 @@ const translations = {
             UNAUTHORIZED:"Session expirée : reconnectez-vous.",
             PAPER_KILL_SWITCH_ACTIVE:"Arrêt d’urgence actif : aucune simulation autorisée.",
             PAPER_REARM_COOLDOWN:"Réarmement indisponible pendant 5 minutes.",
+            PAPER_ALREADY_ARMED:"Le moteur papier est déjà réarmé : aucun portefeuille modifié.",
             CONTROL_AUDIT_INTEGRITY_FAILURE:"Journal altéré : reprise interdite.",
             CONTROL_STORAGE_UNAVAILABLE:"Journal de sécurité indisponible.",
             CONTROL_AUDIT_CAPACITY_REACHED:"Journal plein : simulation bloquée.",
@@ -1470,8 +1471,11 @@ const translations = {
             void refreshPaper(true);
         } catch (error) {
             if (generation !== window.pravdaAuthGeneration) return;
-            $("paper-control-status").textContent = "ARRÊTÉ · aucun trade autorisé.";
+            $("paper-control-status").textContent = "ÉTAT À VÉRIFIER · nouveaux trades bloqués.";
             $("paper-notice").textContent = paperMessage(error);
+            // A failed rearm does not necessarily change the previous state:
+            // reread the authenticated Rust authority, never assume STOPPED.
+            void refreshPaper(true);
         }
     });
     window.refreshPaper = () => refreshPaper(true);
