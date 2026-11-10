@@ -1,7 +1,7 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "e513cf62099224d9383c94baa6161cab1285fe56",
-  "latest_evidence_at": "2026-11-09T19:21:05Z",
+  "source_sha": "588a75eeec5fb0c92a9d7ffbd5bdd8374ef41453",
+  "latest_evidence_at": "2026-11-10T04:56:36Z",
   "historical": {
     "rows": [
       {
@@ -85,7 +85,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 3,
+    "passed": 1,
     "total": 4
   },
   "workflows": [
@@ -94,27 +94,27 @@
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
       "state": "PASS",
-      "sha": "e513cf6209",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42678094420",
-      "observedAt": "2026-11-09T19:01:38Z"
+      "sha": "588a75eeec",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165659",
+      "observedAt": "2026-11-10T04:56:36Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "PASS",
-      "sha": "e513cf6209",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42678094364",
-      "observedAt": "2026-11-09T19:21:05Z"
+      "state": "RUNNING",
+      "sha": "588a75eeec",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165906",
+      "observedAt": "2026-11-10T04:48:32Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "e513cf6209",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42678094780",
-      "observedAt": "2026-11-09T19:02:13Z"
+      "state": "RUNNING",
+      "sha": "588a75eeec",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42758165630",
+      "observedAt": "2026-11-10T04:48:30Z"
     },
     {
       "id": "rustsec-audit.yml",
@@ -128,8 +128,8 @@
   ],
   "open_prs": 1,
   "active_pr": {
-    "number": 174,
-    "head_sha": "a75cf4fbf671c178db0db4fc94e51f79b14ad964",
+    "number": 175,
+    "head_sha": "6fcaabe54db52301d4ac9071b12a6e32ba370890",
     "draft": false,
     "evidence_scope": "PR_ONLY_NOT_MAIN"
   },
