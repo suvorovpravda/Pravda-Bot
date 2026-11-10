@@ -460,10 +460,7 @@ mod tests {
         let control = test_control(&path).unwrap();
         control.rearm_with_reset(|| ()).unwrap();
         control.emergency_stop().unwrap();
-        assert_eq!(
-            control.rearm_with_reset(|| ()),
-            Err(ControlError::Cooldown)
-        );
+        assert_eq!(control.rearm_with_reset(|| ()), Err(ControlError::Cooldown));
         assert_eq!(
             control.with_paper_trade(|| Ok::<_, &'static str>(1)),
             Err("PAPER_KILL_SWITCH_ACTIVE")
@@ -525,7 +522,9 @@ mod tests {
         let path = directory.path().join("control.sqlite");
         let control = test_control(&path).unwrap();
         let resets = AtomicUsize::new(0);
-        control.rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst)).unwrap();
+        control
+            .rearm_with_reset(|| resets.fetch_add(1, Ordering::SeqCst))
+            .unwrap();
         assert_eq!(resets.load(Ordering::SeqCst), 1);
         let before = control.status().unwrap().audit_records;
         assert_eq!(
@@ -591,15 +590,11 @@ mod tests {
             matches!(second, Err(ControlError::Unavailable)),
             "another SQLite connection must not acquire journal ownership"
         );
-        assert_eq!(
-            first.with_paper_trade(|| Ok::<_, &'static str>(7)),
-            Ok(7)
-        );
+        assert_eq!(first.with_paper_trade(|| Ok::<_, &'static str>(7)), Ok(7));
         let status = first.status().unwrap();
         assert!(!status.stopped);
         drop(first);
         let reopened = test_control(&path).unwrap();
         assert!(reopened.status().unwrap().stopped);
     }
-
 }
