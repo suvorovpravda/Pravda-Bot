@@ -216,7 +216,12 @@ fn calculate(policy: Policy, c: Candidate) -> Result<(Metrics, u128, u16), Missi
     )?;
     let notional = checked_product(c.entry_price_micros, units)?;
     let stop_distance = c.entry_price_micros.abs_diff(c.stop_price_micros);
-    let target_distance = c.target_price_micros.abs_diff(c.entry_price_micros);
+    // An upside target on a short (or downside target on a long) is a LOSS,
+    // never a positive reward. Keep the reported reward at zero on that path.
+    let target_distance = match c.side {
+        Side::Long => c.target_price_micros.saturating_sub(c.entry_price_micros),
+        Side::Short => c.entry_price_micros.saturating_sub(c.target_price_micros),
+    };
     let risk = checked_sum(checked_product(stop_distance, units)?, fees)?;
     let gross_reward = checked_product(target_distance, units)?;
     let reward = gross_reward.saturating_sub(fees);
@@ -273,8 +278,13 @@ pub fn evaluate(policy: Policy, c: Candidate) -> Review {
         )? {
             failures.push(RegRule::R002);
         }
-        if checked_product(metrics.reward_after_fees_micros, BASIS_POINTS)?
-            < checked_product(metrics.risk_if_stopped_micros, MIN_REWARD_RISK_BPS)?
+        let profitable_target = match c.side {
+            Side::Long => c.target_price_micros > c.entry_price_micros,
+            Side::Short => c.target_price_micros < c.entry_price_micros,
+        };
+        if !profitable_target
+            || checked_product(metrics.reward_after_fees_micros, BASIS_POINTS)?
+                < checked_product(metrics.risk_if_stopped_micros, MIN_REWARD_RISK_BPS)?
         {
             failures.push(RegRule::R003);
         }
@@ -535,4 +545,29 @@ mod tests {
         c.most_correlated_position_milli = None;
         assert_eq!(evaluate(policy(), c).verdict, Verdict::ApprovedPaperOnly);
     }
+    #[test]
+    fn r003_never_counts_a_losing_or_flat_target_as_profit() {
+        let mut long = candidate();
+        long.target_price_micros = 8_500_000;
+        let losing_long = evaluate(policy(), long);
+        assert_eq!(losing_long.verdict, Verdict::Rejected);
+        assert!(losing_long.violations.contains(&RegRule::R003));
+        assert_eq!(losing_long.metrics.unwrap().reward_after_fees_micros, 0);
+
+        long.target_price_micros = long.entry_price_micros;
+        must_reject(RegRule::R003, long, policy());
+
+        let mut short = candidate();
+        short.side = Side::Short;
+        short.stop_price_micros = 10_500_000;
+        short.target_price_micros = 11_500_000;
+        let losing_short = evaluate(policy(), short);
+        assert_eq!(losing_short.verdict, Verdict::Rejected);
+        assert!(losing_short.violations.contains(&RegRule::R003));
+        assert_eq!(losing_short.metrics.unwrap().reward_after_fees_micros, 0);
+
+        short.target_price_micros = short.entry_price_micros;
+        must_reject(RegRule::R003, short, policy());
+    }
+
 }
