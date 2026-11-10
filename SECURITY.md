@@ -1,187 +1,74 @@
-<div align="center">
+# Sécurité de Pravda-Bot
 
-# 🛡️ PRAVDA / SECURITY
-### TRUST CONTROL · RELEASE INTEGRITY · RISK MONITORING
+Pravda-Bot est une application desktop Windows open source dédiée au suivi de marché et à la simulation. La sécurité est traitée comme une propriété de l’architecture, du code, des dépendances et de chaque livraison.
 
-**Des permissions minimales, des preuves vérifiables et aucun faux indicateur de conformité.**
+> **Périmètre financier :** les fonctions décrites dans le dépôt couvrent la consultation et la simulation. Les ordres de trading réel sont désactivés.
 
-![ZeroTrust](https://img.shields.io/badge/SECURITY-ZERO%20TRUST%20DESIGN-917CFD?style=for-the-badge)
-![Release](https://img.shields.io/badge/RELEASE-NO--GO-FB527C?style=for-the-badge)
-![Secrets](https://img.shields.io/badge/SECRETS-NATIVE%20BOUNDARY-40CDE8?style=for-the-badge)
-![Signing](https://img.shields.io/badge/SIGNING-NOT%20QUALIFIED-FF617C?style=for-the-badge)
-![Updater](https://img.shields.io/badge/AUTO%20UPDATER-OFF-B967FF?style=for-the-badge)
-![LiveOrders](https://img.shields.io/badge/LIVE%20ORDERS-OFF-47D4B7?style=for-the-badge)
+## Principes de conception
 
-[**Security cockpit**](#-security-cockpit) · [**Contrôles**](#-jalons-de-sécurité-et-risques) · [**Threat model**](#-frontières-de-confiance) · [**Release gate**](#-release-security-gate) · [**Signalement**](#-signaler-une-vulnérabilité) · [**README**](README.md) · [**Reviewing**](docs/REVIEWING.md)
+- **Traitements applicatifs en Rust.** L’interface Tauri communique avec le cœur par les commandes IPC prévues par l’application.
+- **Séparation des usages.** Observation des marchés, données locales, évaluations de risque et simulation papier ont des rôles distincts.
+- **Stockage local.** L’historique pris en charge est conservé dans SQLite/WAL sur le poste.
+- **Diagnostics maîtrisés.** Doctor et Harness servent à la vérification et à la recette ; ils ne sont pas des outils de trading.
+- **Contrôles continus.** Le dépôt utilise des workflows CI, CodeQL et des contrôles de dépendances. Leurs résultats sont consultables dans l’onglet Actions.
 
-</div>
+Ces choix réduisent certaines surfaces d’exposition et rendent les contrôles examinables. Ils ne rendent pas un poste invulnérable et ne remplacent ni la protection de Windows ni la vérification des fichiers téléchargés.
 
----
+## Points suivis avant publication
 
-## ⚡ Security Live Pulse — métriques GitHub actualisées
+La publication générale reste **NO-GO** tant que les critères de l’[Issue #160 — sécurité et déploiement](https://github.com/suvorovpravda/Pravda-Bot/issues/160) ne sont pas vérifiés sur les artefacts candidats.
 
-![Observatoire sécurité quasi temps réel : workflows au SHA canonique, statut RustSec bloquant, PR et Issues ouvertes, GO interdit sans preuve](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
+Le registre suit notamment l’avis **RUSTSEC-2026-0258** associé à la chaîne desktop `reqwest 0.11.27 → hyper 0.14.32 → h2 0.3.27`. Le statut doit être contrôlé sur le `Cargo.lock` du commit examiné ; une note historique ou un résultat d’audit sur un autre SHA ne prouve pas sa résolution. Le triage et les preuves de correction restent rattachés à l’Issue #160.
 
-**[Statut brut JSON](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json)** · **[Actualisations GitHub Actions](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)**
+Le packaging Windows configure le prérequis WebView2 avec `offlineInstaller`. Cette configuration décrit le mode prévu ; elle ne certifie pas une installation complète sur une machine vierge hors réseau.
 
-Les résultats sont publiés dans la **branche distincte `status/live`** depuis les API GitHub, environ toutes les 10 minutes et après les workflows surveillés (horaires non garantis). GitHub peut conserver temporairement en cache l'image. Le contenu statique de `main` reste soumis aux Pull Requests obligatoires : **aucune écriture directe ne contourne la protection de branche**. L'horodatage marque la dernière preuve observée, pas une certification. Les tests dont le SHA diffère sont indiqués comme périmés ; **RustSec est bloquant sur les dépendances vérifiées, mais sa réussite ne constitue pas un GO production** et la publication reste **NO-GO**.
+## Vérifications visibles
 
-### Sécurité mesurée sur le code courant
+![État horodaté des contrôles GitHub et du jalon de publication](https://raw.githubusercontent.com/suvorovpravda/Pravda-Bot/status/live/docs/assets/pravda-live-status.svg)
 
-**Le panneau dynamique ci-dessus affiche le SHA de `main`, les contrôles du même SHA et l'horodatage UTC de la dernière synchronisation.** Le dernier contrôle RustSec peut être `STALE_SHA` si les dépendances n'ont pas été réauditées depuis ce commit ; ce statut n'est pas une validation de sécurité. Pour éviter une valeur affichée depuis le cache GitHub, consulter le [JSON de preuve](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json).
+[Statut JSON et date de synchronisation](https://github.com/suvorovpravda/Pravda-Bot/blob/status/live/docs/assets/pravda-live-status.json) · [Historique des workflows](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/live-docs.yml)
 
-**Notes SonarCloud du code global** (mesurées séparément de la Quality Gate sur le nouveau code ; ces badges sont servis directement par SonarCloud) :
+[![Évaluation de sécurité SonarCloud](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
 
-[![SonarCloud Security Rating](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=security_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
-[![SonarCloud Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=reliability_rating)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
-[![SonarCloud Duplicated Lines](https://sonarcloud.io/api/project_badges/measure?project=suvorovpravda_Pravda-Bot&metric=duplicated_lines_density)](https://sonarcloud.io/project/overview?id=suvorovpravda_Pravda-Bot)
+Le panneau reflète les vérifications publiées pour le SHA affiché ; la date JSON permet de juger leur fraîcheur. Les contrôles automatisés sont une partie du processus de sécurité, pas une certification de l’application.
 
-Le registre des risques ci-dessous est **un document versionné** et nécessite une Pull Request pour changer ; il ne doit pas être interprété comme une télémétrie synchronisée à chaque exécution CI.
+## Limites à connaître
 
-## 🌌 Security cockpit
+- Un résultat CI valide le contrôle exécuté sur le commit indiqué ; il ne certifie pas à lui seul l’application complète ni le poste de l’utilisateur.
+- Une compilation ou une recette de paquet ne signifie pas que l’installateur est signé ou qu’un mécanisme de mise à jour est qualifié. Consultez les [versions](https://github.com/suvorovpravda/Pravda-Bot/releases) et leurs preuves.
+- La disponibilité et la fraîcheur des cours dépendent des fournisseurs et du réseau.
+- La simulation utilise des opérations fictives et ne prédit pas les résultats futurs.
+- Le dépôt ne revendique aucune inviolabilité, certification réglementaire ou garantie de sécurité absolue.
 
-![Cockpit de sécurité bleu nuit et néon : jauges historiques IPC 50%, SQLite 75%, CI 60%, signature 0%, frontières de confiance et décision de sécurité NO-GO](docs/assets/pravda-security-cockpit.svg)
+## Signaler une vulnérabilité
 
-> **Précision essentielle :** ces anneaux illustrent les **jalons techniques historiques** du [guide central](docs/PRAVDA-GUIDE.md), pas une note de sûreté. Il est impossible de déduire un niveau de protection global d'un assemblage de pourcentages. Le statut de publication est **NO-GO** jusqu'à la levée documentée des conditions bloquantes.
+**Merci de ne pas publier de vulnérabilité exploitable, d’identifiant de compte ou de secret dans une Issue ou une Pull Request publique.**
 
-<div align="center">
+Utilisez en priorité la fonction **Report a vulnerability** dans l’onglet [Security du dépôt](https://github.com/suvorovpravda/Pravda-Bot/security), lorsqu’elle est disponible. Si GitHub ne propose pas ce formulaire, contactez le mainteneur par un canal privé indiqué sur son [profil GitHub](https://github.com/suvorovpravda) et demandez un canal de signalement sécurisé.
 
-![IPC](https://img.shields.io/badge/IPC%20HISTORIQUE-50%25-937CFA?style=for-the-badge)
-![SQLite](https://img.shields.io/badge/SQLITE%20HISTORIQUE-75%25-30CAE3?style=for-the-badge)
-![CI](https://img.shields.io/badge/CI%20HISTORIQUE-60%25-FB5493?style=for-the-badge)
-![Signing](https://img.shields.io/badge/SIGNATURE%20ENTERPRISE-0%25-F76A79?style=for-the-badge)
+Incluez, si possible :
 
-[![Rust Security CI](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml/badge.svg?branch=main)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/rust.yml)
-[![CodeQL](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/suvorovpravda/Pravda-Bot/actions/workflows/codeql.yml)
+- la version ou le SHA concerné ;
+- le composant et les conditions nécessaires ;
+- l’impact observé et les étapes minimales de reproduction ;
+- une preuve expurgée qui ne contient ni clé, ni token, ni donnée personnelle.
 
-</div>
+Ne transmettez pas de mot de passe, clé API, token, fichier PFX, base SQLite, fichiers WAL/SHM, export de compte ou journaux contenant des données privées.
 
-Les badges dynamiques indiquent uniquement le résultat de leurs workflows. Le workflow **RustSec dependency audit (blocking)** bloque les vulnérabilités détectées par cargo-audit sur les dépendances analysées. Son succès ne prouve ni la signature des artefacts ni la qualification Windows hors ligne : **NO-GO** tant que ces preuves manquent.
+## Traitement des signalements
 
-## 📊 Jalons de sécurité et risques
+Le mainteneur évaluera la portée et la reproductibilité, puis suivra les étapes adaptées : confirmation, correction, validation, avis de sécurité et publication. Le délai dépend de la gravité, de la complexité et de la disponibilité d’un correctif sûr ; aucun délai de réponse fixe n’est promis.
 
-Les quatre chiffres ci-dessous sont des **fractions historiques de tâches** ; ils n'ont pas de signification statistique de cybersécurité.
+Les signalements coordonnés sont appréciés. Attendez-vous à un accord sur la divulgation publique avant de publier des détails permettant l’exploitation.
 
-| Domaine | Avancement historique | Lecture correcte |
-| :--- | ---: | :--- |
-| 🟣 Sécurité IPC Windows | **50 %** | 2 jalons sur 4 documentés dans le guide, vérification native à maintenir |
-| 🟦 Historique / SQLite | **75 %** | 3 jalons sur 4, restaurations et migrations à qualifier |
-| 🌸 Vérifications CI et gouvernance | **60 %** | 3 jalons sur 5, recettage sur l'artefact exact obligatoire |
-| 🔴 Packaging Enterprise | **0 %** | 0 jalon sur 4, pas de chaîne de signature homologuée |
+## Versions et état des correctifs
 
-<details>
-<summary><strong>📈 Afficher le graphique Mermaid des jalons historiques</strong></summary>
+Les correctifs de sécurité sont publiés dans le dépôt et associés aux changements concernés. Pour toute vérification, relevez le SHA de la branche ou de la version installée et consultez les changements ainsi que les contrôles CI correspondants. Une version plus ancienne peut ne pas inclure les corrections récentes.
 
-~~~mermaid
-xychart-beta
-    title "Contrôles techniques historiques — PAS un security score"
-    x-axis ["IPC", "SQLite", "CI", "Enterprise"]
-    y-axis "Jalons (%)" 0 --> 100
-    bar [50,75,60,0]
-~~~
+## Liens utiles
 
-</details>
-
-### État des risques résiduels
-
-| Gravité | Surface | Situation | Action requise |
-| :--- | :--- | :--- | :--- |
-| 🔵 Recette CI | Interface Windows réellement installée | **MSI/NSIS E2E réussis** | Maintenir les tests sur le SHA de publication ; le poste utilisateur n'est pas homologué |
-| 🔴 P0 | Desktop RustSec | **Avis non levés** | Auditer Cargo.lock desktop, traiter h2 et les dépendances héritées |
-| 🟠 P0 | Flux publics | **Sur poste non prouvés** | Observation horodatée, provenance, reconnexion et contrôle des données périmées |
-| 🔴 P0 | Authenticode | **Non qualifié** | Signature, identité et timestamp sur tous les artefacts déclarés signés |
-| 🔴 P0 | Mise à jour signée | **OFF** | Vérification cryptographique, anti-downgrade, rollback |
-| 🔵 Recette CI | MSI / NSIS | **Onboarding, désinstallation et SQLite vérifiés en CI** | Authenticode, VM airgap et environnement utilisateur restent non qualifiés |
-| 🔴 P0 | VM sans WebView2 et sans réseau | **Non testée entièrement** | Isolation niveau hyperviseur et snapshots jetables |
-| 🟢 Contrôle | Trading live | **OFF** | Maintenir l'absence de capacités d'ordre jusqu'à homologation indépendante |
-
-**Correctif graphique vérifié dans la CI Windows :** les incidents `DASHBOARD_RANGE_L1 / P02H / P03` sont historiques. La [PR #168](https://github.com/suvorovpravda/Pravda-Bot/pull/168) est fusionnée ; le [run indépendant 42349767279](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42349767279), au SHA `1021115e`, valide sur installateurs **MSI et NSIS** : premier mot de passe, protection IPC, tableau de bord entièrement initialisé, redémarrage, reconnexion, déconnexion et conservation SQLite. **Aucune certification de la version finale ou des environnements utilisateur n'en découle.**
-
-**Registre principal : [Issue #160 — Security / Déploiement, GO / NO-GO](https://github.com/suvorovpravda/Pravda-Bot/issues/160).** Les difficultés reportées dans cette issue restent **ouvertes sur le fond** jusqu'à une preuve contraire.
-
-## 🔐 Frontières de confiance
-
-~~~mermaid
-flowchart TD
-    USER["👤 Session Windows"]
-    WEB["🖥️ Tauri / WebView2"]
-    IPC["🔐 Rust IPC Auth + Permissions"]
-    CORE["⚙️ Runtime Rust"]
-    STORE[("🗄️ SQLite / WAL")]
-    FEED["📡 API publiques autorisées"]
-    DIAG["🛡️ Doctor / Harness hors réseau"]
-    SIGN["🔏 Mise à jour signée : OFF"]
-    USER --> WEB --> IPC --> CORE
-    FEED --> CORE
-    CORE --> STORE
-    CORE --> DIAG
-    SIGN -. "Aucune installation implicite" .-> CORE
-~~~
-
-| Frontière | Politique de sécurité | Interdiction explicite |
-| :--- | :--- | :--- |
-| **Frontend → IPC** | Commandes autorisées par la fenêtre, session et validation Rust | Escalade via JS/DOM ou popup non autorisée |
-| **Session → callback** | Réponse liée à la session d'origine, révocation après déconnexion | Résultat ancien réutilisé sous une nouvelle session |
-| **Coffre → runtime** | Secrets conservés exclusivement côté natif | Mots de passe et clés dans WebView, rapports ou logs |
-| **Sources → moteur** | TLS, allowlist, consentement réseau et fraîcheur | Valeur fictive déclarée observation live |
-| **SQLite → diagnostic** | Inspection passive, transaction et WAL cohérents | Réparation destructrice ou réinitialisation silencieuse |
-| **CI → publication** | Commit, SHA-256, provenance et signature si annoncée | Badges verts considérés comme certification |
-| **Paper → live** | Séparation de capacité et autorisation indépendante | Ordre réel déclenché depuis un test synthétique |
-
-### Contrôles non négociables
-
-![PassFail](https://img.shields.io/badge/REPORTS-PASS%20%2F%20WARN%20%2F%20FAIL%20%2F%20SKIP-788DF6?style=flat-square)
-![Offline](https://img.shields.io/badge/DOCTOR-NO%20NETWORK-25CEE9?style=flat-square)
-![Storage](https://img.shields.io/badge/SQLite-NO%20DESTRUCTIVE%20REPAIR-48D5B0?style=flat-square)
-![NoBypass](https://img.shields.io/badge/DEFENDER%20%2F%20SMARTSCREEN-NO%20BYPASS-FC678C?style=flat-square)
-
-- Le **Doctor** ne récupère aucun mot de passe, compte financier ou clé d'exchange ; les rapports sont expurgés et leur partage reste manuel.
-- Le **Harness** utilise des fixtures **synthétiques** : un test PASS ne prouve pas que Kraken ou Binance répondent.
-- Un état **SKIP** signale un contrôle non exécuté et ne peut jamais être converti en PASS.
-- Aucun test de diagnostic ne peut lancer de transaction réelle, corriger une base personnelle sans autorisation ou contourner Windows Defender.
-
-## 🧱 Dépendances / RustSec
-
-Le lock desktop a révélé historiquement la chaîne **reqwest 0.11.27 → hyper 0.14.32 → h2 0.3.27**, associée à l'avis **RUSTSEC-2026-0258**, ainsi que des avertissements relatifs à des bibliothèques non maintenues.
-
-L'audit doit inspecter **le Cargo.lock du bureau**, et pas seulement le lock de l'espace de travail racine. Toute suppression ou mise à jour de dépendance exige une régénération du lockfile **avec Cargo**, suivie des tests Rust et Windows au SHA exact. Les advisories doivent être triés avant d'autoriser une publication signée, sans simple masquage des erreurs.
-
-[![RustSec Registry](https://img.shields.io/badge/RUSTSEC-DESKTOP%20TRIAGE%20REQUIRED-FF9859?style=for-the-badge)](https://github.com/suvorovpravda/Pravda-Bot/issues/160)
-[![Known Advisory](https://img.shields.io/badge/RUSTSEC--2026--0258-INVESTIGATE-F96284?style=for-the-badge)](https://rustsec.org/advisories/RUSTSEC-2026-0258.html)
-
-## 🚦 Release security gate
-
-Aucune release de production ne reçoit le statut GO sans des **preuves cohérentes sur le même commit et le même artefact** :
-
-- [ ] Rust fmt, clippy, tests Linux/Windows, tests IPC et CodeQL validés.
-- [ ] RustSec desktop examiné, vulnérabilités bloquantes traitées.
-- [ ] Bureau Windows en sous-système graphique, sans console dépendante de l'application.
-- [x] MSI et NSIS réellement installés en **CI indépendante** : mot de passe, initialisation complète, reconnexion et désinstallation testés ([run 42349767279](https://github.com/suvorovpravda/Pravda-Bot/actions/runs/42349767279)) ; à répéter sur le futur artefact de publication.
-- [ ] SQLite et ses données préservés au redémarrage, à la désinstallation et à la réinstallation **en CI** ; la **mise à niveau signée** reste à qualifier (pas de case cochée avant cette preuve).
-- [ ] Rapport de diagnostic local et expurgé ; une seule instance et arrêt propre.
-- [ ] SHA-256 et provenance des binaires vérifiés ; Authenticode et timestamp vérifiés pour toute édition prétendue signée.
-- [ ] Installation VM sans WebView2 ni réseau confirmée si revendiquée.
-- [ ] Mise à jour signée vérifiée, anti-downgrade et rollback testés avant toute activation.
-- [ ] Aucune capacité de trading réel activée.
-
-Le packaging Tauri prévoit le prérequis WebView2 via **offlineInstaller** : **cela ne prouve pas** que l'installation sur une VM vierge hors réseau est homologuée.
-
-**Édition unsigned-test ≠ édition Enterprise.** Ne jamais désactiver antivirus, SmartScreen, UAC ou pare-feu pour diffuser un paquet.
-
-## 📩 Signaler une vulnérabilité
-
-Privilégier le [centre GitHub Security](https://github.com/suvorovpravda/Pravda-Bot/security) et les signalements privés lorsqu'ils sont activés. Ne jamais publier un exploit contenant un secret dans une Issue publique.
-
-Préciser la version ou le commit affecté, l'impact, le scénario minimal reproductible et les résultats de test **expurgés**. Ne transmettre **aucun** mot de passe, clé, token, PFX, base SQLite, fichier WAL/SHM, donnée de compte ou journal privé.
-
-## 📚 Navigation
-
-[![README](https://img.shields.io/badge/README-MARKET%20CONTROL-36D8F1?style=for-the-badge)](README.md)
-[![REVIEWING](https://img.shields.io/badge/REVIEWING-CODE%20%2B%20EVIDENCE-A17AFF?style=for-the-badge)](docs/REVIEWING.md)
-[![ISSUE 160](https://img.shields.io/badge/SECURITY%20REGISTER-OPEN%20BLOCKERS-FE648A?style=for-the-badge)](https://github.com/suvorovpravda/Pravda-Bot/issues/160)
-
----
-
-**EN** — Production release NO-GO. The percentage gauges are **historical workstream milestones, not a cybersecurity score**. Desktop RustSec, Windows onboarding, signing and updater gates require exact-build evidence. Live orders OFF.
-
-**RU** — Релиз в продакшен пока не разрешён. Проценты — **исторические инженерные этапы, а не рейтинг безопасности**. Торговля реальными средствами отключена.
+- [README — présentation de Pravda-Bot](README.md)
+- [Guide central — architecture et validation](docs/PRAVDA-GUIDE.md)
+- [Actions — résultats CI](https://github.com/suvorovpravda/Pravda-Bot/actions)
+- [Versions publiées](https://github.com/suvorovpravda/Pravda-Bot/releases)
+- [Créer un signalement privé](https://github.com/suvorovpravda/Pravda-Bot/security/advisories/new)
