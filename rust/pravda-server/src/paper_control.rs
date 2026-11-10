@@ -275,9 +275,10 @@ impl PaperControl {
         let mut connection = Connection::open(path).map_err(|_| ControlError::Unavailable)?;
         connection
             .execute_batch(
-                "PRAGMA journal_mode=WAL;
+                "PRAGMA busy_timeout=1000;
+                 PRAGMA locking_mode=EXCLUSIVE;
+                 PRAGMA journal_mode=WAL;
                  PRAGMA synchronous=FULL;
-                 PRAGMA busy_timeout=5000;
                  CREATE TABLE IF NOT EXISTS paper_control_log(
                     seq INTEGER PRIMARY KEY NOT NULL,
                     at_sec INTEGER NOT NULL,
@@ -577,6 +578,28 @@ mod tests {
         );
         assert_eq!(resets.load(Ordering::SeqCst), 0);
         assert!(control.status().unwrap().stopped);
+    }
+
+    #[test]
+    fn second_instance_cannot_reset_a_live_paper_intent() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        let first = test_control(&path).unwrap();
+        first.rearm_with_reset(|| ()).unwrap();
+        let second = test_control(&path);
+        assert!(
+            matches!(second, Err(ControlError::Unavailable)),
+            "another SQLite connection must not acquire journal ownership"
+        );
+        assert_eq!(
+            first.with_paper_trade(|| Ok::<_, &'static str>(7)),
+            Ok(7)
+        );
+        let status = first.status().unwrap();
+        assert!(!status.stopped);
+        drop(first);
+        let reopened = test_control(&path).unwrap();
+        assert!(reopened.status().unwrap().stopped);
     }
 
 }
