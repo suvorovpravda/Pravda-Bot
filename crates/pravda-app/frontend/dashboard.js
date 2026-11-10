@@ -1346,9 +1346,13 @@ const translations = {
         $("paper-positions").textContent = "Positions fictives non chargées.";
         $("paper-events").textContent = "Aucune transaction simulée chargée.";
         $("paper-notice").textContent = "Simulation disponible après authentification.";
+        $("paper-control-status").textContent = "ARRÊTÉ · reconnexion requise.";
+        $("paper-trade").disabled = true;
+        paperStopped = true;
     }
     window.pravdaClearPaper = clearPaperUi;
     let paperBusy = false;
+    let paperStopped = true;
     function paperMessage(error) {
         const messages = {
             INVALID_PAPER_INSTRUMENT:"Instrument fictif non autorisé.",
@@ -1358,7 +1362,13 @@ const translations = {
             PAPER_INSUFFICIENT_FUNDS:"Solde fictif insuffisant.",
             PAPER_INSUFFICIENT_POSITION:"Position fictive insuffisante.",
             PAPER_ARITHMETIC_ERROR:"Opération bloquée : contrôle arithmétique.",
-            UNAUTHORIZED:"Session expirée : reconnectez-vous."
+            UNAUTHORIZED:"Session expirée : reconnectez-vous.",
+            PAPER_KILL_SWITCH_ACTIVE:"Arrêt d’urgence actif : aucune simulation autorisée.",
+            PAPER_REARM_COOLDOWN:"Réarmement indisponible pendant 5 minutes.",
+            CONTROL_AUDIT_INTEGRITY_FAILURE:"Journal altéré : reprise interdite.",
+            CONTROL_STORAGE_UNAVAILABLE:"Journal de sécurité indisponible.",
+            CONTROL_AUDIT_CAPACITY_REACHED:"Journal plein : simulation bloquée.",
+            INVALID_CREDENTIALS:"Mot de passe incorrect."
         };
         return messages[String(error)] || "Simulation locale indisponible.";
     }
@@ -1369,11 +1379,22 @@ const translations = {
             const rows = await window.pravdaInvoke("ipc_paper_snapshot");
             if (generation !== window.pravdaAuthGeneration) return;
             renderPaper(rows);
-            $("paper-notice").textContent =
-                "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
+            const control = await window.pravdaInvoke("ipc_paper_control_status");
+            if (generation !== window.pravdaAuthGeneration) return;
+            paperStopped = !control.includes("stopped|false");
+            $("paper-trade").disabled = paperStopped;
+            $("paper-control-status").textContent = paperStopped
+                ? "ARRÊTÉ · nouveau trade interdit."
+                : "RÉARMÉ · opérations de simulation uniquement.";
+            $("paper-notice").textContent = paperStopped
+                ? "Simulation suspendue par le coupe-circuit Rust."
+                : "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
         } catch (error) {
             if (generation !== window.pravdaAuthGeneration) return;
             $("paper-notice").textContent = paperMessage(error);
+            paperStopped = true;
+            $("paper-trade").disabled = true;
+            $("paper-control-status").textContent = "INCONNU · simulation bloquée.";
         }
     }
     async function paperAction(command, args = {}) {
@@ -1394,7 +1415,7 @@ const translations = {
             $("paper-notice").textContent = paperMessage(error);
         } finally {
             paperBusy = false;
-            $("paper-trade").disabled = false;
+            $("paper-trade").disabled = paperStopped;
             $("paper-reset").disabled = false;
             // An old response may finish after a new Rust login reset the portfolio.
             // Fetch the current session snapshot instead of leaving a blank/stale view.
