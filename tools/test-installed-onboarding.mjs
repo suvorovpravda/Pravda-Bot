@@ -64,7 +64,7 @@ const ui = () => evaluate(
   "startupCode:document.querySelector('.ipc-startup-recovery input')?.value || ''," +
   "startupPhase:document.querySelector('.ipc-bootstrap-phase')?.value || ''," +
   "startupCause:document.querySelector('.ipc-startup-cause')?.value || ''," +
-  "setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
+  " setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe'," +
   "confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true};"
 );
 function failOnStartupError(view, label) {
