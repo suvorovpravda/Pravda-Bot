@@ -432,25 +432,40 @@ pub fn ipc_paper_control_status(
     ])
 }
 
-/// Fresh password verification and explicit user action are required.
-/// The paper portfolio is reset before rearming; no live order path exists.
+/// A fresh password is checked off the Tauri event thread. Once it succeeds,
+/// the original authenticated session is rechecked under the native session
+/// mutex, then the journal transition and paper reset run together.
 #[tauri::command]
-pub fn ipc_paper_rearm(
+pub async fn ipc_paper_rearm(
     window: Window,
     session: State<'_, IpcAuth>,
     paper: State<'_, PaperSandbox>,
     control: State<'_, PaperControl>,
     password: String,
 ) -> Result<Vec<String>, String> {
-    let _session_guard = paper_session_guard(&session, window.label())?;
-    let token = session
-        .authority
-        .login(&password)
-        .map_err(safe_auth_error)?;
-    session.authority.logout(&token);
-    paper.reset();
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let authority = session.authority.clone();
+    let verified = tauri::async_runtime::spawn_blocking(move || -> Result<(), AuthError> {
+        // Freshly authenticate without replacing the active desktop session.
+        // The one-time token is immediately revoked, even though no token
+        // reaches the untrusted WebView.
+        let token = authority.login(&password)?;
+        authority.logout(&token);
+        Ok(())
+    })
+    .await
+    .map_err(|_| "STORAGE_FAILURE".to_owned())?;
+    verified.map_err(safe_auth_error)?;
+
+    let session_guard = paper_session_guard(&session, window.label())?;
+    if session_guard.as_deref() != Some(issued_to.as_str()) {
+        return Err("UNAUTHORIZED".to_owned());
+    }
+    // Resetting before the transition used to erase a portfolio on rejected
+    // rearms (already armed, cooldown or corrupt audit). The closure executes
+    // only after a successful, verified, durable REARM_PAPER append.
     control
-        .rearm_after_fresh_auth()
+        .rearm_with_reset(|| paper.reset())
         .map_err(|error| error.code().to_owned())?;
     Ok(vec![
         "mode|PAPER_ONLY".to_owned(),
