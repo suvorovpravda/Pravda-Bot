@@ -19,17 +19,28 @@ use std::sync::Arc;
 const COOKIE_NAME: &str = "pravda_session";
 
 fn cookie_token(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get_all(header::COOKIE)
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .flat_map(|value| value.split(';'))
-        .find_map(|part| {
-            part.trim()
-                .strip_prefix(COOKIE_NAME)
-                .and_then(|rest| rest.strip_prefix('='))
-                .map(str::to_owned)
-        })
+    // Reject ambiguous credentials instead of trusting the first cookie.
+    // Browsers can send same-name cookies with different Path/Domain scopes.
+    // A conflicting cookie must never choose which session gets authorized.
+    let mut found = None;
+    for header_value in headers.get_all(header::COOKIE).iter() {
+        let raw = header_value.to_str().ok()?;
+        for part in raw.split(';') {
+            let part = part.trim();
+            let (name, value) = match part.split_once('=') {
+                Some(pair) => pair,
+                None if part == COOKIE_NAME => return None,
+                None => continue,
+            };
+            if name == COOKIE_NAME {
+                if found.is_some() || value.is_empty() {
+                    return None;
+                }
+                found = Some(value.to_owned());
+            }
+        }
+    }
+    found
 }
 
 fn session_cookie(token: &str, max_age: u64) -> HeaderValue {
@@ -242,6 +253,48 @@ mod tests {
     }
 
     #[test]
+    fn duplicate_session_cookies_fail_closed_regardless_of_header_order() {
+        let mut headers = HeaderMap::new();
+        headers.append(
+            header::COOKIE,
+            HeaderValue::from_static("other=1; pravda_session=valid"),
+        );
+        assert_eq!(cookie_token(&headers).as_deref(), Some("valid"));
+
+        headers.append(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=attacker"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=attacker; pravda_session=valid"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=; other=1"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+
+        // A malformed same-name cookie must not be silently ignored when a
+        // valid credential is also present, regardless of its position.
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=valid; pravda_session"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session; pravda_session=valid"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+    }
+
+    #[test]
     fn short_passwords_are_rejected_and_hash_is_salted_and_not_plaintext() {
         let (auth, path) = auth("store");
         let password = test_password();
@@ -413,6 +466,35 @@ mod tests {
                 .status(),
             StatusCode::OK
         );
+        // Exercise the real auth middleware: even a valid session must not
+        // authorize a request with ambiguous same-name cookies.
+        let duplicate = format!("{cookie}; pravda_session=attacker");
+        assert_eq!(
+            call(&app, "GET", "/api/metrics", Some(&duplicate), "")
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let duplicate = format!("pravda_session=attacker; {cookie}");
+        assert_eq!(
+            call(&app, "GET", "/api/metrics", Some(&duplicate), "")
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        // A malformed same-name cookie must also fail closed at the HTTP
+        // authorization boundary, even alongside a valid session.
+        for malformed in [
+            format!("{cookie}; pravda_session"),
+            format!("pravda_session; {cookie}"),
+        ] {
+            assert_eq!(
+                call(&app, "GET", "/api/metrics", Some(&malformed), "")
+                    .await
+                    .status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
         let response = call(&app, "POST", "/logout", Some(&cookie), "").await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         assert_eq!(
