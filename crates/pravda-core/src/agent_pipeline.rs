@@ -374,6 +374,9 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
         .map_err(|_| reject("GMO_CONTRACT_REJECTED"))?;
     let timestamp = DateTime::parse_from_rfc3339(&reply.timestamp_utc)
         .map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
+    if timestamp.offset().local_minus_utc() != 0 {
+        return Err(reject("GMO_TIMESTAMP_INVALID"));
+    }
     let timestamp_ms =
         u64::try_from(timestamp.timestamp_millis()).map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
     let age = input
@@ -691,6 +694,16 @@ mod tests {
         assert_eq!(r.verdict, PipelineVerdict::NoAction);
         assert_eq!(r.stages[4].status, StageStatus::Skipped);
         assert_eq!(r.reg_checks_performed, 0);
+    }
+
+    #[test]
+    fn gmo_rejects_non_utc_offset_even_when_instant_matches() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = json!("2026-11-10T11:00:00+01:00");
+        let result = run(reply);
+        assert_eq!(result.reason_code, "GMO_TIMESTAMP_INVALID");
+        assert_eq!(result.reg_checks_performed, 0);
+        assert_eq!(result.stages[4].status, StageStatus::Skipped);
     }
 
     #[test]
