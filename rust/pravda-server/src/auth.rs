@@ -19,17 +19,25 @@ use std::sync::Arc;
 const COOKIE_NAME: &str = "pravda_session";
 
 fn cookie_token(headers: &HeaderMap) -> Option<String> {
-    headers
-        .get_all(header::COOKIE)
-        .iter()
-        .filter_map(|value| value.to_str().ok())
-        .flat_map(|value| value.split(';'))
-        .find_map(|part| {
-            part.trim()
-                .strip_prefix(COOKIE_NAME)
-                .and_then(|rest| rest.strip_prefix('='))
-                .map(str::to_owned)
-        })
+    // Reject ambiguous credentials instead of trusting the first cookie.
+    // Browsers can send same-name cookies with different Path/Domain scopes.
+    // A conflicting cookie must never choose which session gets authorized.
+    let mut found = None;
+    for header_value in headers.get_all(header::COOKIE) {
+        let raw = header_value.to_str().ok()?;
+        for part in raw.split(';') {
+            let Some((name, value)) = part.trim().split_once('=') else {
+                continue;
+            };
+            if name == COOKIE_NAME {
+                if found.is_some() || value.is_empty() {
+                    return None;
+                }
+                found = Some(value.to_owned());
+            }
+        }
+    }
+    found
 }
 
 fn session_cookie(token: &str, max_age: u64) -> HeaderValue {
@@ -239,6 +247,23 @@ mod tests {
     fn auth(label: &str) -> (Arc<Auth>, PathBuf) {
         let path = temp_path(label);
         (Arc::new(Auth::load(&path, 1_000).unwrap()), path)
+    }
+
+    #[test]
+    fn duplicate_session_cookies_fail_closed_regardless_of_header_order() {
+        let mut headers = HeaderMap::new();
+        headers.append(header::COOKIE, HeaderValue::from_static("other=1; pravda_session=valid"));
+        assert_eq!(cookie_token(&headers).as_deref(), Some("valid"));
+
+        headers.append(header::COOKIE, HeaderValue::from_static("pravda_session=attacker"));
+        assert_eq!(cookie_token(&headers), None);
+
+        let mut headers = HeaderMap::new();
+        headers.insert(header::COOKIE, HeaderValue::from_static("pravda_session=attacker; pravda_session=valid"));
+        assert_eq!(cookie_token(&headers), None);
+
+        headers.insert(header::COOKIE, HeaderValue::from_static("pravda_session=; other=1"));
+        assert_eq!(cookie_token(&headers), None);
     }
 
     #[test]
