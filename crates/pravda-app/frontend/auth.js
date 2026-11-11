@@ -156,9 +156,13 @@ function activateDashboard() {
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     if (typeof window.pravdaClearUpdateReadiness === "function") window.pravdaClearUpdateReadiness();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
-    screen.hidden = true;
-    shell.hidden = false;
+    // Keep the authenticated shell hidden until dashboard initialization is verified.
+    // A script load event alone is not proof of a usable logout control.
+    screen.hidden = false;
+    shell.hidden = true;
     if (dashboardLoaded) {
+        screen.hidden = true;
+        shell.hidden = false;
         if (typeof window.refreshRevolutConsent === "function") void window.refreshRevolutConsent();
         if (typeof window.refreshAll === "function") void window.refreshAll();
         if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
@@ -199,6 +203,8 @@ function activateDashboard() {
             showLogin();
         });
         dashboardLoaded = true;
+        screen.hidden = true;
+        shell.hidden = false;
     });
     script.addEventListener("error", () => {
         dashboardLoading = false;
