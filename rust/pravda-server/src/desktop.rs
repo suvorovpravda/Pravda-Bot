@@ -3,7 +3,11 @@
 //! changes the paper simulator's trading behavior.
 use crate::{config::ServerConfig, history::HistoryQuery, runtime_policy, Auth};
 use chrono::Utc;
-use pravda_core::PravdaRuntime;
+use pravda_core::{
+    agent_contract::{PaperSymbol, PaperVenue},
+    agent_pipeline::{evidence_from_native_market_snapshot, MarketEvidence},
+    PravdaRuntime,
+};
 use pravda_store::{HistoryTick, PravdaStore};
 use serde::Serialize;
 use serde_json::{json, Value};
@@ -119,6 +123,33 @@ impl DesktopRuntime {
             fields.insert("stream_state".to_string(), json!(state));
         }
         DesktopPayload(payload)
+    }
+
+    /// Read the SAME trusted native feed cache used by the desktop, then
+    /// strictly normalize one observed quote for MDA. This does NOT verify
+    /// a portfolio, budget, margin or model answer and cannot permit an order.
+    pub async fn native_agent_market_evidence(
+        &self,
+        symbol: PaperSymbol,
+        venue: PaperVenue,
+        max_quote_age_ms: u64,
+        max_price_deviation_bps: u16,
+    ) -> Result<MarketEvidence, &'static str> {
+        if self.diagnostic_offline || !self.market_feeds_enabled {
+            return Err("MDA_STREAM_UNAVAILABLE");
+        }
+        let payload = self.market_snapshot().await;
+        let now_ms = u64::try_from(Utc::now().timestamp_millis())
+            .map_err(|_| "MDA_QUOTE_CLOCK_INVALID")?;
+        evidence_from_native_market_snapshot(
+            &payload.0,
+            symbol,
+            venue,
+            now_ms,
+            max_quote_age_ms,
+            max_price_deviation_bps,
+        )
+        .map_err(|error| error.code())
     }
 
     pub async fn alerts_snapshot(&self) -> DesktopPayload {
