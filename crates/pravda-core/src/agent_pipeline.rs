@@ -1112,9 +1112,14 @@ mod tests {
             }}}
         });
         let evidence = evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            now_ms, 2_000, 50,
-        ).expect("cache observation may be parsed but cannot attest itself");
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("cache observation may be parsed but cannot attest itself");
         assert!(!evidence.provenance_verified);
         assert!(!evidence.portfolio_verified);
         let reply = good_reply().to_string();
@@ -1127,7 +1132,6 @@ mod tests {
         assert_eq!(report.stages[4].status, StageStatus::Skipped);
         assert_eq!(report.reg_checks_performed, 0);
     }
-
 
     #[test]
     fn untrusted_gmo_attestation_flags_cannot_bypass_native_mda() {
@@ -1155,7 +1159,10 @@ mod tests {
     fn gmo_no_action_never_evaluates_reg_even_with_invalid_risk_state() {
         let mut reply = good_reply();
         reply["status"] = json!("NO_ACTION");
-        reply.as_object_mut().expect("fixture object").remove("decision");
+        reply
+            .as_object_mut()
+            .expect("fixture object")
+            .remove("decision");
         let raw = reply.to_string();
         let mut input = good(&raw);
         input.reg_candidate.available_margin_micros = None;
@@ -1166,7 +1173,6 @@ mod tests {
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
     }
-
 
     #[test]
     fn native_mda_refuses_cross_venue_quote_substitution() {
@@ -1186,15 +1192,25 @@ mod tests {
         // when untrusted cache fields claim both independent attestations.
         assert_eq!(
             evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                now_ms, 2_000, 50
-            ).err(),
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                2_000,
+                50
+            )
+            .err(),
             Some(NativeMarketRefusal::QuoteUnavailable)
         );
         let kraken = evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
-            now_ms, 2_000, 50
-        ).expect("matching venue observation is parseable, not attested");
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Kraken,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("matching venue observation is parseable, not attested");
         assert!(!kraken.provenance_verified);
         assert!(!kraken.portfolio_verified);
     }
