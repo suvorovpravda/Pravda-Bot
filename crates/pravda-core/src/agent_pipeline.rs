@@ -1152,6 +1152,22 @@ mod tests {
     }
 
     #[test]
+    fn gmo_no_action_never_evaluates_reg_even_with_invalid_risk_state() {
+        let mut reply = good_reply();
+        reply["status"] = json!("no_action");
+        reply.as_object_mut().expect("fixture object").remove("decision");
+        let raw = reply.to_string();
+        let mut input = good(&raw);
+        input.reg_candidate.available_margin_micros = None;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::NoAction);
+        assert_eq!(report.reason_code, "GMO_NO_ACTION");
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
     fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
         let now_ms = reference_clock();
         let mut snapshot = json!({
