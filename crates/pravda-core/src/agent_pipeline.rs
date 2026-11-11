@@ -721,6 +721,27 @@ mod tests {
         assert_eq!(r.reason_code, "REG_INCOMPLETE_EVIDENCE");
     }
     #[test]
+    fn cached_market_and_unverified_portfolio_never_reach_reg() {
+        let raw = good_reply().to_string();
+        let mut input = good(&raw);
+        // A synthetic quote is not independently attested market data.
+        input.market.provenance_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+
+        input.market.provenance_verified = true;
+        input.market.portfolio_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
     fn native_quote_evidence_is_fresh_exact_and_never_verifies_portfolio() {
         let now_ms = reference_clock();
         let snapshot = json!({
