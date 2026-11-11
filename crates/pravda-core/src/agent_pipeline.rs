@@ -396,6 +396,11 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
     if age > input.reg_policy.max_quote_age_ms {
         return Err(escalate("GMO_STALE_RESPONSE"));
     }
+    // A model response created before the independently supplied quote cannot
+    // validate that quote. Refuse replay even when both timestamps are fresh.
+    if timestamp_ms < input.market.quote_received_at_ms {
+        return Err(escalate("GMO_PREDATES_MARKET_QUOTE"));
+    }
     match reply.status {
         AnalysisStatus::Decision => {
             let proposal = reply
@@ -540,6 +545,23 @@ mod tests {
                 stage.role == role && stage.status == StageStatus::Skipped
             ));
         }
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn gmo_reply_predating_market_quote_cannot_reach_reg() {
+        let raw = good_reply().to_string();
+        let mut input = good(&raw);
+        // The quote is newer than the model's analysis, though both are
+        // within the ordinary freshness window.
+        input.market.quote_received_at_ms = input.now_ms;
+        input.reg_candidate.quote_received_at_ms = input.now_ms;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "GMO_PREDATES_MARKET_QUOTE");
+        assert_eq!(report.stages[3].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
     }
