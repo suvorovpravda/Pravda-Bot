@@ -522,6 +522,29 @@ mod tests {
     }
 
     #[test]
+    fn architect_veto_prevents_parsing_untrusted_gmo_and_running_reg() {
+        let mut input = good("{malformed-gmo-json");
+        input.security.artifact_integrity_verified = false;
+        input.reg_candidate.available_margin_micros = None;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "ARCH_UNVERIFIED_CONFIGURATION");
+        assert_eq!(report.stages[0].status, StageStatus::Blocked);
+        for role in [
+            Role::SecuritySentinel,
+            Role::MarketDataAnalyst,
+            Role::GrandMasterOrchestrator,
+            Role::RiskEngineGuardian,
+        ] {
+            assert!(report.stages.iter().any(|stage|
+                stage.role == role && stage.status == StageStatus::Skipped
+            ));
+        }
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
     fn future_gmo_timestamp_never_reaches_reg() {
         let mut reply = good_reply();
         reply["timestamp_utc"] = serde_json::Value::String(
