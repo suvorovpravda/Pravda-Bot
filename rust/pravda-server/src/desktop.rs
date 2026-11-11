@@ -139,8 +139,8 @@ impl DesktopRuntime {
             return Err("MDA_STREAM_UNAVAILABLE");
         }
         let payload = self.market_snapshot().await;
-        let now_ms = u64::try_from(Utc::now().timestamp_millis())
-            .map_err(|_| "MDA_QUOTE_CLOCK_INVALID")?;
+        let now_ms =
+            u64::try_from(Utc::now().timestamp_millis()).map_err(|_| "MDA_QUOTE_CLOCK_INVALID")?;
         evidence_from_native_market_snapshot(
             &payload.0,
             symbol,
