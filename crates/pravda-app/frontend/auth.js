@@ -181,7 +181,11 @@ function activateDashboard() {
         // A loaded script can still leave an incomplete DOM or fail initialization.
         // Fail closed before binding logout or exposing an interactive shell.
         const logoutForm = document.getElementById("ipc-logout-form");
-        if (window.pravdaDashboardReady !== true || !logoutForm) {
+        if (window.pravdaDashboardReady !== true) {
+            showDashboardStartupFailure(dashboardFaultCode);
+            return;
+        }
+        if (!logoutForm) {
             showDashboardStartupFailure(dashboardFaultCode);
             return;
         }
