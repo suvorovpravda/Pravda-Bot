@@ -128,7 +128,9 @@ fn native_decimal_price_micros(value: &serde_json::Value) -> Option<u128> {
     let minor: u128 = if fraction.is_empty() {
         0
     } else {
-        fraction.parse::<u128>().ok()?
+        fraction
+            .parse::<u128>()
+            .ok()?
             .checked_mul(10_u128.checked_pow(u32::try_from(6 - fraction.len()).ok()?)?)?
     };
     let micros = major.checked_mul(1_000_000)?.checked_add(minor)?;
@@ -151,13 +153,12 @@ pub fn evidence_from_native_market_snapshot(
     max_quote_age_ms: u64,
     max_price_deviation_bps: u16,
 ) -> Result<MarketEvidence, NativeMarketRefusal> {
-    if max_quote_age_ms == 0
-        || max_price_deviation_bps == 0
-        || max_price_deviation_bps > 1_000
-    {
+    if max_quote_age_ms == 0 || max_price_deviation_bps == 0 || max_price_deviation_bps > 1_000 {
         return Err(NativeMarketRefusal::PolicyInvalid);
     }
-    if snapshot.get("stream_state").and_then(serde_json::Value::as_str)
+    if snapshot
+        .get("stream_state")
+        .and_then(serde_json::Value::as_str)
         != Some("observations_recent")
     {
         return Err(NativeMarketRefusal::StreamUnavailable);
@@ -183,10 +184,7 @@ pub fn evidence_from_native_market_snapshot(
         .get("age_seconds")
         .and_then(serde_json::Value::as_f64)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if !seconds.is_finite()
-        || seconds < 0.0
-        || seconds * 1_000.0 > max_quote_age_ms as f64
-    {
+    if !seconds.is_finite() || seconds < 0.0 || seconds * 1_000.0 > max_quote_age_ms as f64 {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let timestamp = quote
@@ -719,9 +717,14 @@ mod tests {
             }}}
         });
         let r = evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            now_ms, 2_000, 50
-        ).unwrap();
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .unwrap();
         assert_eq!(r.reference_price_micros, 10_125_678);
         assert_eq!(r.quote_received_at_ms, now_ms);
         assert!(r.provenance_verified);
@@ -741,25 +744,53 @@ mod tests {
                 "timestamp":TIMESTAMP
             }}}
         });
-        let check = |v: &serde_json::Value| evidence_from_native_market_snapshot(
-            v, PaperSymbol::BtcUsdt, PaperVenue::Kraken, now_ms, 2_000, 50
-        );
+        let check = |v: &serde_json::Value| {
+            evidence_from_native_market_snapshot(
+                v,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Kraken,
+                now_ms,
+                2_000,
+                50,
+            )
+        };
         assert!(check(&snapshot).is_ok());
         snapshot["stream_state"] = json!("diagnostic_offline");
-        assert_eq!(check(&snapshot).err(), Some(NativeMarketRefusal::StreamUnavailable));
+        assert_eq!(
+            check(&snapshot).err(),
+            Some(NativeMarketRefusal::StreamUnavailable)
+        );
         snapshot["stream_state"] = json!("observations_recent");
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["status"] = json!("stale");
-        assert_eq!(check(&snapshot).err(), Some(NativeMarketRefusal::QuoteStaleOrUntrusted));
+        assert_eq!(
+            check(&snapshot).err(),
+            Some(NativeMarketRefusal::QuoteStaleOrUntrusted)
+        );
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["status"] = json!("live");
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["age_seconds"] = json!(3.0);
-        assert_eq!(check(&snapshot).err(), Some(NativeMarketRefusal::ClockOrAgeInvalid));
+        assert_eq!(
+            check(&snapshot).err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["age_seconds"] = json!(0.2);
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["timestamp"] = json!("2026-11-10T11:00:00+01:00");
-        assert_eq!(check(&snapshot).err(), Some(NativeMarketRefusal::ClockOrAgeInvalid));
+        assert_eq!(
+            check(&snapshot).err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["timestamp"] = json!(TIMESTAMP);
-        assert_eq!(evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::SolUsdt, PaperVenue::Kraken, now_ms, 2_000, 50
-        ).err(), Some(NativeMarketRefusal::QuoteUnavailable));
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::SolUsdt,
+                PaperVenue::Kraken,
+                now_ms,
+                2_000,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::QuoteUnavailable)
+        );
     }
 
     #[test]
@@ -774,21 +805,53 @@ mod tests {
                 "timestamp":TIMESTAMP
             }}}
         });
-        let check = |v: &serde_json::Value| evidence_from_native_market_snapshot(
-            v, PaperSymbol::BtcUsdt, PaperVenue::Binance, now_ms, 2_000, 50
-        );
-        for invalid in [json!(0.0), json!(-1), json!("10.25"), json!(10.1234567), json!(1e50)] {
+        let check = |v: &serde_json::Value| {
+            evidence_from_native_market_snapshot(
+                v,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                2_000,
+                50,
+            )
+        };
+        for invalid in [
+            json!(0.0),
+            json!(-1),
+            json!("10.25"),
+            json!(10.1234567),
+            json!(1e50),
+        ] {
             snapshot["symbols"]["BTC/USDT"]["Binance"]["price"] = invalid;
-            assert_eq!(check(&snapshot).err(), Some(NativeMarketRefusal::PriceInvalid));
+            assert_eq!(
+                check(&snapshot).err(),
+                Some(NativeMarketRefusal::PriceInvalid)
+            );
         }
         snapshot["symbols"]["BTC/USDT"]["Binance"]["price"] = json!(10.25);
-        assert_eq!(evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, now_ms, 0, 50
-        ).err(), Some(NativeMarketRefusal::PolicyInvalid));
-        assert_eq!(evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, now_ms, 2_000, 2_000
-        ).err(), Some(NativeMarketRefusal::PolicyInvalid));
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                0,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::PolicyInvalid)
+        );
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                2_000,
+                2_000
+            )
+            .err(),
+            Some(NativeMarketRefusal::PolicyInvalid)
+        );
     }
-
-
 }
