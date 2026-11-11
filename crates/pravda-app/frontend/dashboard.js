@@ -1346,9 +1346,21 @@ const translations = {
         $("paper-positions").textContent = "Positions fictives non chargées.";
         $("paper-events").textContent = "Aucune transaction simulée chargée.";
         $("paper-notice").textContent = "Simulation disponible après authentification.";
+        $("paper-control-status").textContent = "ARRÊTÉ · reconnexion requise.";
+        $("paper-trade").disabled = true;
+        paperStopped = true;
+        paperControlGeneration += 1;
+        paperStopInFlight = false;
     }
     window.pravdaClearPaper = clearPaperUi;
     let paperBusy = false;
+    let paperStopped = true;
+    // Independent of authentication changes: invalidates stale native
+    // status responses when STOP or REARM starts.
+    let paperControlGeneration = 0;
+    let paperStopInFlight = false;
+    let paperRearmInFlight = false;
+    let paperRefreshNumber = 0;
     function paperMessage(error) {
         const messages = {
             INVALID_PAPER_INSTRUMENT:"Instrument fictif non autorisé.",
@@ -1358,47 +1370,75 @@ const translations = {
             PAPER_INSUFFICIENT_FUNDS:"Solde fictif insuffisant.",
             PAPER_INSUFFICIENT_POSITION:"Position fictive insuffisante.",
             PAPER_ARITHMETIC_ERROR:"Opération bloquée : contrôle arithmétique.",
-            UNAUTHORIZED:"Session expirée : reconnectez-vous."
+            UNAUTHORIZED:"Session expirée : reconnectez-vous.",
+            PAPER_KILL_SWITCH_ACTIVE:"Arrêt d’urgence actif : aucune simulation autorisée.",
+            PAPER_REARM_COOLDOWN:"Réarmement indisponible pendant 5 minutes.",
+            PAPER_ALREADY_ARMED:"Le moteur papier est déjà réarmé : aucun portefeuille modifié.",
+            CONTROL_AUDIT_INTEGRITY_FAILURE:"Journal altéré : reprise interdite.",
+            CONTROL_STORAGE_UNAVAILABLE:"Journal de sécurité indisponible.",
+            CONTROL_AUDIT_CAPACITY_REACHED:"Journal plein : simulation bloquée.",
+            INVALID_CREDENTIALS:"Mot de passe incorrect."
         };
         return messages[String(error)] || "Simulation locale indisponible.";
     }
     async function refreshPaper(explicit = false) {
         const generation = window.pravdaAuthGeneration;
-        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy) return;
+        const controlGeneration = paperControlGeneration;
+        const refreshNumber = ++paperRefreshNumber;
+        const isCurrent = () => generation === window.pravdaAuthGeneration
+            && controlGeneration === paperControlGeneration && !paperStopInFlight
+            && refreshNumber === paperRefreshNumber;
+        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) return;
         try {
             const rows = await window.pravdaInvoke("ipc_paper_snapshot");
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (!isCurrent()) return;
             renderPaper(rows);
-            $("paper-notice").textContent =
-                "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
+            const control = await window.pravdaInvoke("ipc_paper_control_status");
+            if (!isCurrent()) return;
+            paperStopped = !control.includes("stopped|false");
+            $("paper-trade").disabled = paperStopped;
+            $("paper-control-status").textContent = paperStopped
+                ? "ARRÊTÉ · nouveau trade interdit."
+                : "RÉARMÉ · opérations de simulation uniquement.";
+            $("paper-notice").textContent = paperStopped
+                ? "Simulation suspendue par le coupe-circuit Rust."
+                : "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
         } catch (error) {
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (!isCurrent()) return;
             $("paper-notice").textContent = paperMessage(error);
+            paperStopped = true;
+            $("paper-trade").disabled = true;
+            $("paper-control-status").textContent = "INCONNU · simulation bloquée.";
         }
     }
     async function paperAction(command, args = {}) {
-        if (paperBusy) return;
+        if (paperBusy || paperStopInFlight
+            || (command === "ipc_paper_trade" && (paperStopped || paperRearmInFlight))) return;
         const generation = window.pravdaAuthGeneration;
+        const controlGeneration = paperControlGeneration;
         paperBusy = true;
         $("paper-trade").disabled = true;
         $("paper-reset").disabled = true;
         try {
             const rows = await window.pravdaInvoke(command, args);
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
             renderPaper(rows);
             $("paper-notice").textContent = command === "ipc_paper_reset"
                 ? "Portefeuille fictif remis à zéro. Aucun compte réel affecté."
                 : "Opération PAPER simulée en mémoire. Aucun ordre réel envoyé.";
         } catch (error) {
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
             $("paper-notice").textContent = paperMessage(error);
         } finally {
             paperBusy = false;
-            $("paper-trade").disabled = false;
+            $("paper-trade").disabled = paperStopped;
             $("paper-reset").disabled = false;
             // An old response may finish after a new Rust login reset the portfolio.
             // Fetch the current session snapshot instead of leaving a blank/stale view.
-            if (generation !== window.pravdaAuthGeneration) void refreshPaper(true);
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) void refreshPaper(true);
         }
     }
     window.pravdaDashboardPhase = "P03";
@@ -1414,6 +1454,63 @@ const translations = {
         });
     });
     $("paper-reset").addEventListener("click", () => { void paperAction("ipc_paper_reset"); });
+    // Safety actions invalidate all in-flight status and paper responses.
+    // The STOP command never waits behind PBKDF2 or paperBusy.
+    $("paper-stop").addEventListener("click", async () => {
+        const controlGeneration = ++paperControlGeneration;
+        const authGeneration = window.pravdaAuthGeneration;
+        paperStopInFlight = true;
+        paperStopped = true;
+        $("paper-trade").disabled = true;
+        $("paper-control-status").textContent = "ARRÊT EN COURS · nouveaux trades bloqués.";
+        try {
+            await window.pravdaInvoke("ipc_paper_emergency_stop");
+            if (controlGeneration !== paperControlGeneration
+                || authGeneration !== window.pravdaAuthGeneration) return;
+            $("paper-control-status").textContent = "ARRÊT D'URGENCE ACTIVÉ · réarmement humain requis.";
+            $("paper-notice").textContent = "Arrêt journalisé localement.";
+        } catch (error) {
+            if (controlGeneration !== paperControlGeneration
+                || authGeneration !== window.pravdaAuthGeneration) return;
+            $("paper-control-status").textContent = "ÉTAT INCONNU · simulation bloquée.";
+            $("paper-notice").textContent = paperMessage(error);
+        } finally {
+            if (controlGeneration === paperControlGeneration) paperStopInFlight = false;
+        }
+    });
+    $("paper-rearm").addEventListener("click", async () => {
+        if (!securitySessionReady() || paperBusy || paperStopInFlight || paperRearmInFlight) return;
+        const field = $("paper-rearm-password");
+        const password = field.value;
+        field.value = "";
+        if (!password) {
+            $("paper-notice").textContent = "Mot de passe requis pour réarmer.";
+            return;
+        }
+        const generation = window.pravdaAuthGeneration;
+        const controlGeneration = ++paperControlGeneration;
+        paperRearmInFlight = true;
+        paperStopped = true;
+        $("paper-trade").disabled = true;
+        try {
+            await window.pravdaInvoke("ipc_paper_rearm", {password});
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
+            paperStopped = false;
+            $("paper-control-status").textContent = "RÉARMÉ · simulation uniquement.";
+            $("paper-notice").textContent = "Mot de passe vérifié ; portefeuille fictif remis à zéro.";
+            void refreshPaper(true);
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration
+                || controlGeneration !== paperControlGeneration) return;
+            $("paper-control-status").textContent = "ÉTAT À VÉRIFIER · nouveaux trades bloqués.";
+            $("paper-notice").textContent = paperMessage(error);
+            // Rejected rearms are not necessarily STOPPED: reread Rust state.
+            void refreshPaper(true);
+        } finally {
+            paperRearmInFlight = false;
+        }
+    });
     window.refreshPaper = () => refreshPaper(true);
     window.pravdaDashboardPhase = "P03B";
 

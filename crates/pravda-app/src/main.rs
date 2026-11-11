@@ -119,6 +119,17 @@ async fn main() {
         }
         return;
     }
+    // A separate user-scoped control journal starts STOPPED on every launch.
+    // Its HMAC key resides in Windows Credential Manager, never in this DB.
+    let control_path =
+        std::path::PathBuf::from(auth_path.clone()).with_file_name("pravda_paper_control.sqlite3");
+    let paper_control = match pravda_server::paper_control::PaperControl::open(&control_path) {
+        Ok(value) => value,
+        Err(error) => {
+            eprintln!("Pravda-Bot paper control unavailable: {}", error.code());
+            std::process::exit(1);
+        }
+    };
     let public_consent = consent::RevolutPublicConsent::load(std::path::Path::new(&auth_path));
     let shared_auth = match pravda_server::Auth::load(
         std::path::PathBuf::from(auth_path),
@@ -148,6 +159,7 @@ async fn main() {
         .manage(public_consent)
         .manage(ipc::SecurityEvents::default())
         .manage(paper::PaperSandbox::default())
+        .manage(paper_control)
         .manage(desktop)
         .invoke_handler(tauri::generate_handler![
             ipc::ipc_auth_status,
@@ -163,6 +175,9 @@ async fn main() {
             ipc::ipc_paper_snapshot,
             ipc::ipc_paper_trade,
             ipc::ipc_paper_reset,
+            ipc::ipc_paper_emergency_stop,
+            ipc::ipc_paper_control_status,
+            ipc::ipc_paper_rearm,
             ipc::ipc_runtime_metrics,
             ipc::ipc_update_status,
             ipc::ipc_security_report,

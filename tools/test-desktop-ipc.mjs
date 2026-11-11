@@ -285,7 +285,7 @@ assert.match(auth,/window\.pravdaClearPaper\(\)/,
   "Logout and reauthentication must erase previous paper values from the DOM");
 assert.match(js,/window\.pravdaClearPaper\s*=\s*clearPaperUi/,
   "Paper UI must expose a local clear method without contacting exchanges");
-assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\) void refreshPaper\(true\);/,
+assert.match(js,/if \(generation !== window\.pravdaAuthGeneration\s*\|\|\s*controlGeneration !== paperControlGeneration\) void refreshPaper\(true\);/,
   "Stale paper action completion must refresh after a new login");
 assert.match(js,/window\.pravdaInvoke\(command, args\)/,
   "Paper trading adapter must call native Rust IPC, never fetch or WebSocket");
@@ -293,6 +293,28 @@ assert.match(js,/paperAction\("ipc_paper_trade"/,
   "Paper order submit must be wired");
 assert.match(js,/paperAction\("ipc_paper_reset"\)/,
   "Paper reset must be wired");
+for(const element of ["paper-stop","paper-control-status","paper-rearm","paper-rearm-password"]) {
+  assert.ok(html.includes('id="'+element+'"'),"Missing explicit paper safety control: "+element);
+}
+assert.match(js,/ipc_paper_emergency_stop/,"Emergency stop must be connected to native IPC");
+assert.match(js,/ipc_paper_rearm/,"Rearm must require an explicit UI interaction");
+assert.match(ipc,/control\s*\.with_paper_trade\(/,"Paper trades must pass through native persistent kill switch");
+assert.match(html,/id="paper-rearm-password"[^>]+type="password"[^>]*>/,
+  "Rearm must use a hidden password field");
+assert.doesNotMatch(html,/id="paper-rearm-password"[^>]+maxlength=/,
+  "Rearm input must support the same password lengths as initial authentication");
+assert.match(ipc,/pub async fn ipc_paper_rearm\(/,
+  "PBKDF2 rearm verification must not block the Tauri event thread");
+assert.match(ipc,/spawn_blocking\(move \|\| -> Result<\(\), AuthError>/,
+  "Fresh password verifier must run on a blocking worker");
+assert.match(ipc,/let session_guard = paper_session_guard\(&session, window.label\(\)\)/,
+  "After verification, rearm must lock the current native session");
+assert.match(ipc,/session_guard.as_deref\(\) != Some\(issued_to.as_str\(\)\)/,
+  "Reject rearm if the session was replaced while PBKDF2 was running");
+assert.match(ipc,/\.rearm_with_reset\(\|\| paper\.reset\(\)\)/,
+  "Portfolio reset must happen only after successful native rearm");
+assert.doesNotMatch(ipc,/paper\.reset\(\);\s*control\s*\.rearm/,
+  "Rejected rearm must not clear a synthetic portfolio");
 assert.match(paper,/START_CENTS:\s*u64\s*=\s*1_000_000/,
   "Synthetic initial balance must be deterministic and declared");
 assert.match(paper,/FEE_BPS:\s*u64\s*=\s*36/,
@@ -368,7 +390,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,23);
+assert.equal(new Set(handlers).size,26);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -695,5 +717,33 @@ assert.match(updaterVm.$("updater-state").textContent,/non configurées/);
 assert.equal(updaterVm.$("updater-readiness").disabled,false,
   "Updater configuration action must recover after stale IPC resolves");
 assert.match(updaterVm.$("updater-checked").textContent,/aucun appel réseau/);
+
+// Security contract for the PAPER stop/state race. Never execute source
+// slices dynamically: SonarCloud javascript:S1523 correctly rejects the
+// previous vm.runInContext source-injection harness. Native Rust WebView2 E2E
+// and the signed local journal checks remain independent tests.
+const paperStart = js.indexOf("    let paperBusy = false;");
+const paperEnd = js.indexOf('    window.pravdaDashboardPhase = "P03B";',paperStart);
+assert.ok(paperStart >= 0 && paperEnd > paperStart,
+  "Paper safety controller must remain within the guarded desktop phase");
+const paperController = js.slice(paperStart,paperEnd);
+assert.match(paperController,/let paperControlGeneration = 0;/,
+  "Paper state must have an independent revision counter");
+assert.match(paperController,/const controlGeneration = paperControlGeneration;/,
+  "A status request must capture the paper control revision");
+assert.match(paperController,/const isCurrent = \(\) => generation === window\.pravdaAuthGeneration\s*&& controlGeneration === paperControlGeneration && !paperStopInFlight\s*&& refreshNumber === paperRefreshNumber;/,
+  "Status refresh must reject obsolete auth, stop and refresh revisions");
+assert.match(paperController,/const control = await window\.pravdaInvoke\("ipc_paper_control_status"\);\s*if \(!isCurrent\(\)\) return;/,
+  "A delayed state reply must be discarded before updating the safety UI");
+assert.match(paperController,/\$\("paper-stop"\)\.addEventListener\("click", async \(\) => \{\s*const controlGeneration = \+\+paperControlGeneration;/,
+  "STOP must invalidate prior status requests synchronously");
+assert.match(paperController,/paperStopInFlight = true;\s*paperStopped = true;\s*\$\("paper-trade"\)\.disabled = true;/,
+  "The stop button must disable PAPER trading before awaiting IPC");
+assert.match(paperController,/\$\("paper-rearm"\)\.addEventListener\("click", async \(\) => \{/,
+  "The user must explicitly initiate rearm");
+assert.equal((paperController.match(/const controlGeneration = \+\+paperControlGeneration;/g)||[]).length,2,
+  "STOP and REARM must each invalidate obsolete state responses");
+assert.doesNotMatch(paperController,/\bfetch\s*\(|\bWebSocket\s*\(/,
+  "Paper-only stop/rearm must not cross into a market-network path");
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");

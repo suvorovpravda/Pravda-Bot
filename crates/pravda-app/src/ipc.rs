@@ -3,7 +3,7 @@
 //! The frontend transport switch is a separate, reviewed PR.
 use crate::consent::RevolutPublicConsent;
 use crate::paper::PaperSandbox;
-use pravda_server::{Auth, AuthError};
+use pravda_server::{paper_control::PaperControl, Auth, AuthError};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tauri::{State, Window};
@@ -383,13 +383,14 @@ pub fn ipc_paper_trade(
     window: Window,
     session: State<'_, IpcAuth>,
     paper: State<'_, PaperSandbox>,
+    control: State<'_, PaperControl>,
     symbol: String,
     side: String,
     quantity_milli: u32,
 ) -> Result<Vec<String>, String> {
     let _session_guard = paper_session_guard(&session, window.label())?;
-    paper
-        .trade(&symbol, &side, quantity_milli)
+    control
+        .with_paper_trade(|| paper.trade(&symbol, &side, quantity_milli))
         .map_err(str::to_string)
 }
 
@@ -401,6 +402,75 @@ pub fn ipc_paper_reset(
 ) -> Result<Vec<String>, String> {
     let _session_guard = paper_session_guard(&session, window.label())?;
     Ok(paper.reset())
+}
+
+/// Available even when signed out: stopping is safe and never places orders.
+#[tauri::command]
+pub fn ipc_paper_emergency_stop(
+    window: Window,
+    control: State<'_, PaperControl>,
+) -> Result<(), String> {
+    require_main(window.label()).map_err(str::to_string)?;
+    control
+        .emergency_stop()
+        .map_err(|error| error.code().to_owned())
+}
+
+/// Authenticated read returns only state and bounded event count.
+#[tauri::command]
+pub fn ipc_paper_control_status(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    control: State<'_, PaperControl>,
+) -> Result<Vec<String>, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    let status = control.status().map_err(|error| error.code().to_owned())?;
+    Ok(vec![
+        format!("stopped|{}", status.stopped),
+        format!("audit_records|{}", status.audit_records),
+        "mode|PAPER_ONLY".to_owned(),
+    ])
+}
+
+/// A fresh password is checked off the Tauri event thread. Once it succeeds,
+/// the original authenticated session is rechecked under the native session
+/// mutex, then the journal transition and paper reset run together.
+#[tauri::command]
+pub async fn ipc_paper_rearm(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    paper: State<'_, PaperSandbox>,
+    control: State<'_, PaperControl>,
+    password: String,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let authority = session.authority.clone();
+    let verified = tauri::async_runtime::spawn_blocking(move || -> Result<(), AuthError> {
+        // Freshly authenticate without replacing the active desktop session.
+        // The one-time token is immediately revoked, even though no token
+        // reaches the untrusted WebView.
+        let token = authority.login(&password)?;
+        authority.logout(&token);
+        Ok(())
+    })
+    .await
+    .map_err(|_| "STORAGE_FAILURE".to_owned())?;
+    verified.map_err(safe_auth_error)?;
+
+    let session_guard = paper_session_guard(&session, window.label())?;
+    if session_guard.as_deref() != Some(issued_to.as_str()) {
+        return Err("UNAUTHORIZED".to_owned());
+    }
+    // Resetting before the transition used to erase a portfolio on rejected
+    // rearms (already armed, cooldown or corrupt audit). The closure executes
+    // only after a successful, verified, durable REARM_PAPER append.
+    control
+        .rearm_with_reset(|| paper.reset())
+        .map_err(|error| error.code().to_owned())?;
+    Ok(vec![
+        "mode|PAPER_ONLY".to_owned(),
+        "stopped|false".to_owned(),
+    ])
 }
 
 #[tauri::command]

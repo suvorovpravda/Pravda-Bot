@@ -10,6 +10,7 @@ pub mod secret_store;
 pub use desktop::{DesktopPayload, DesktopRuntime};
 pub use history::HistoryQuery as DesktopHistoryQuery;
 mod http_security;
+pub mod paper_control;
 use axum::{
     extract::State,
     extract::WebSocketUpgrade,

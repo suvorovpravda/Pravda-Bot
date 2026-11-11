@@ -26,6 +26,9 @@ on:
       - "README.md"
       - "SECURITY.md"
       - "docs/PRAVDA-GUIDE.md"
+      # A change in the native audit/kill-switch boundary must expose exact
+      # SonarCloud PR issues through the already read-only diagnostic job.
+      - "rust/pravda-server/src/paper_control.rs"
 
 permissions:
   contents: read
