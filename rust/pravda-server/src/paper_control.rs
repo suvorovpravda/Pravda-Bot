@@ -334,7 +334,7 @@ impl PaperControl {
         Self::open_locked(connection, key)
     }
 
-    fn open_locked(mut connection: Connection, key: SecretValue) -> Result<Self, ControlError> {
+    fn open_locked(connection: Connection, key: SecretValue) -> Result<Self, ControlError> {
         if key.expose().len() != 32 {
             return Err(ControlError::Corrupt);
         }
