@@ -1216,6 +1216,36 @@ mod tests {
     }
 
     #[test]
+    fn native_mda_refuses_pre_epoch_and_far_future_quote_clocks() {
+        let now_ms = reference_clock();
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        for invalid_timestamp in ["1969-12-31T23:59:59Z", "9999-12-31T23:59:59Z"] {
+            snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
+                json!(invalid_timestamp);
+            assert_eq!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    now_ms,
+                    2_000,
+                    50,
+                ).err(),
+                Some(NativeMarketRefusal::ClockOrAgeInvalid),
+                "invalid timestamp must not become trusted evidence: {invalid_timestamp}"
+            );
+        }
+    }
+
+    #[test]
     fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
         let now_ms = reference_clock();
         let mut snapshot = json!({
