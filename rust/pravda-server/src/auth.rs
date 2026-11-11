@@ -252,17 +252,29 @@ mod tests {
     #[test]
     fn duplicate_session_cookies_fail_closed_regardless_of_header_order() {
         let mut headers = HeaderMap::new();
-        headers.append(header::COOKIE, HeaderValue::from_static("other=1; pravda_session=valid"));
+        headers.append(
+            header::COOKIE,
+            HeaderValue::from_static("other=1; pravda_session=valid"),
+        );
         assert_eq!(cookie_token(&headers).as_deref(), Some("valid"));
 
-        headers.append(header::COOKIE, HeaderValue::from_static("pravda_session=attacker"));
+        headers.append(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=attacker"),
+        );
         assert_eq!(cookie_token(&headers), None);
 
         let mut headers = HeaderMap::new();
-        headers.insert(header::COOKIE, HeaderValue::from_static("pravda_session=attacker; pravda_session=valid"));
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=attacker; pravda_session=valid"),
+        );
         assert_eq!(cookie_token(&headers), None);
 
-        headers.insert(header::COOKIE, HeaderValue::from_static("pravda_session=; other=1"));
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=; other=1"),
+        );
         assert_eq!(cookie_token(&headers), None);
     }
 
