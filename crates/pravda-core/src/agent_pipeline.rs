@@ -1009,4 +1009,38 @@ mod tests {
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
     }
+    #[test]
+    fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
+        let now_ms = reference_clock();
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        let future = chrono::DateTime::parse_from_rfc3339(TIMESTAMP)
+            .expect("fixture timestamp") + chrono::Duration::seconds(2);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
+            json!(future.to_rfc3339());
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                now_ms, 5_000, 50
+            ).err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
+        snapshot["symbols"]["BTC/USDT"]["Binance"]
+            .as_object_mut().expect("fixture quote").remove("timestamp");
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                now_ms, 5_000, 50
+            ).err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
+    }
+
 }
