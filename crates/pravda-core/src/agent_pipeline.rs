@@ -205,6 +205,12 @@ pub fn evidence_from_native_market_snapshot(
     if wall_age > max_quote_age_ms {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
+    // The reported age is untrusted metadata. Refuse snapshots whose two
+    // clocks disagree by more than one second (rounding/transport tolerance).
+    // Neither clock comparison constitutes independent feed attestation.
+    if (seconds * 1_000.0 - wall_age as f64).abs() > 1_000.0 {
+        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
+    }
     let reference_price_micros = quote
         .get("price")
         .and_then(native_decimal_price_micros)
@@ -934,6 +940,43 @@ mod tests {
             )
             .err(),
             Some(NativeMarketRefusal::PolicyInvalid)
+        );
+    }
+
+    #[test]
+    fn native_mda_refuses_inconsistent_reported_age_and_observed_timestamp() {
+        let now_ms = reference_clock();
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        // A quote stamped at the current time cannot be two seconds old.
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                now_ms, 5_000, 50
+            ).err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
+        // A claimed fresh quote cannot carry a timestamp three seconds old.
+        let older = chrono::DateTime::parse_from_rfc3339(TIMESTAMP)
+            .expect("fixture timestamp")
+            - chrono::Duration::seconds(3);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
+            json!(older.to_rfc3339());
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                now_ms, 5_000, 50
+            ).err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
     }
 
