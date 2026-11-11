@@ -684,6 +684,24 @@ mod tests {
     }
 
     #[test]
+    fn security_veto_does_not_parse_malicious_gmo_or_evaluate_reg() {
+        // Even malformed or hostile model content cannot bypass the native
+        // security gate. This is PAPER research, never an order authorization.
+        let mut input = good("{not valid JSON and not an order}");
+        input.security.sentinel_clear = false;
+        input.reg_candidate.daily_loss_micros = u128::MAX;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "SS_INCIDENT_OR_EMERGENCY_STOP");
+        assert_eq!(report.stages[1].status, StageStatus::Blocked);
+        assert_eq!(report.stages[2].status, StageStatus::Skipped);
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
     fn mda_rejects_stale_provenance_and_mismatched_clocks() {
         let raw = good_reply().to_string();
         let mut v = good(&raw);
