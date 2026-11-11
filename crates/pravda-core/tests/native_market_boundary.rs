@@ -77,3 +77,20 @@ fn venue_substitution_and_clock_regression_fail_closed() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn missing_or_unparseable_quote_timestamp_never_creates_market_evidence() {
+    for timestamp in [
+        json!(null),
+        json!(""),
+        json!("not-a-timestamp"),
+        json!("9999-12-31T23:59:59Z"),
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = timestamp;
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
