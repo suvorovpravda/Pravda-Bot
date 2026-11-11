@@ -2,7 +2,7 @@
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "34ea6d446464d1fbed615dd7e89e2ef99ae6a993",
   "latest_evidence_at": "2026-11-11T14:27:51Z",
-  "refreshed_at_utc": "2026-11-11T14:28:03.547Z",
+  "refreshed_at_utc": "2026-11-11T17:57:23.675Z",
   "historical": {
     "rows": [
       {
@@ -152,7 +152,7 @@
   "open_prs": 1,
   "active_pr": {
     "number": 197,
-    "head_sha": "3e67008658f31f9f6d0d014e5d95b4977f401ce7",
+    "head_sha": "63c06f58e57959466e63bb25a22b4904ec1abef0",
     "draft": true,
     "evidence_scope": "PR_ONLY_NOT_MAIN"
   },
