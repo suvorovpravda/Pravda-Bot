@@ -23,7 +23,7 @@ fn cookie_token(headers: &HeaderMap) -> Option<String> {
     // Browsers can send same-name cookies with different Path/Domain scopes.
     // A conflicting cookie must never choose which session gets authorized.
     let mut found = None;
-    for header_value in headers.get_all(header::COOKIE) {
+    for header_value in headers.get_all(header::COOKIE).iter() {
         let raw = header_value.to_str().ok()?;
         for part in raw.split(';') {
             let Some((name, value)) = part.trim().split_once('=') else {
