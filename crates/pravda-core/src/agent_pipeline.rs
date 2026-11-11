@@ -1137,4 +1137,5 @@ mod tests {
             .err(),
             Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
-    }}
+    }
+}
