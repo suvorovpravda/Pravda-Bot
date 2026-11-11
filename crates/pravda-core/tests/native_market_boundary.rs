@@ -6,7 +6,7 @@ use pravda_core::agent_pipeline::{
 };
 use serde_json::json;
 
-const NOW_MS: u64 = 1_762_769_600_000;
+const NOW_MS: u64 = 1_762_768_800_000;
 
 fn quote(price: serde_json::Value) -> serde_json::Value {
     json!({
