@@ -237,8 +237,7 @@ fn append(
         "STARTUP_STOP" | "EMERGENCY_STOP" => {}
         "REARM_PAPER" if !previous.armed && !previous.pending_intent => {}
         "PAPER_INTENT" if previous.armed && !previous.pending_intent => {}
-        "PAPER_ACCEPTED" | "PAPER_REFUSED"
-            if previous.armed && previous.pending_intent => {}
+        "PAPER_ACCEPTED" | "PAPER_REFUSED" if previous.armed && previous.pending_intent => {}
         _ => return Err(ControlError::Corrupt),
     }
     let seq = previous.seq.checked_add(1).ok_or(ControlError::Capacity)?;
