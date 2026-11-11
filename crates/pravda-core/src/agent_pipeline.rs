@@ -915,4 +915,34 @@ mod tests {
             Some(NativeMarketRefusal::PolicyInvalid)
         );
     }
+
+    #[test]
+    fn native_snapshot_never_promotes_a_fresh_quote_to_trusted_portfolio_evidence() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        let evidence = evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+            now_ms, 2_000, 50,
+        ).expect("fresh cached observation is parseable, not attested");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.market = evidence;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
 }
