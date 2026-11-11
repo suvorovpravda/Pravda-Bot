@@ -718,61 +718,32 @@ assert.equal(updaterVm.$("updater-readiness").disabled,false,
   "Updater configuration action must recover after stale IPC resolves");
 assert.match(updaterVm.$("updater-checked").textContent,/aucun appel réseau/);
 
-// Exercise the real paper-control event handlers with a delayed native status
-// completion. An old "stopped|false" response must never re-enable trading
-// after the user has pressed emergency STOP.
-assert.match(js,/let paperControlGeneration = 0;/,
-  "A dedicated safety epoch must invalidate stale paper status reads");
-assert.match(js,/controlGeneration === paperControlGeneration && !paperStopInFlight/,
-  "A refresh cannot override STOP while an emergency command is pending");
-const paperPendingStatus = [];
-const paperUiNodes = new Map();
-const paperVm = {
-  window:{
-    pravdaAuthGeneration:1,
-    pravdaInvoke:(command) => {
-      if(command === "ipc_paper_snapshot") return Promise.resolve([]);
-      if(command === "ipc_paper_control_status") {
-        return new Promise(resolve => { paperPendingStatus.push(resolve); });
-      }
-      if(command === "ipc_paper_emergency_stop") return Promise.resolve();
-      return Promise.resolve([]);
-    }
-  },
-  securitySessionReady:()=>true,
-  securityVisible:()=>true,
-  renderPaper:()=>{},
-  $:id => {
-    if (!paperUiNodes.has(id)) {
-      paperUiNodes.set(id,{
-        textContent:"",
-        disabled:false,
-        value:"",
-        handlers:{},
-        addEventListener(event,callback){ this.handlers[event]=callback; }
-      });
-    }
-    return paperUiNodes.get(id);
-  }
-};
+// Security contract for the PAPER stop/state race. Never execute source
+// slices dynamically: SonarCloud javascript:S1523 correctly rejects the
+// previous vm.runInContext source-injection harness. Native Rust WebView2 E2E
+// and the signed local journal checks remain independent tests.
 const paperStart = js.indexOf("    let paperBusy = false;");
 const paperEnd = js.indexOf('    window.pravdaDashboardPhase = "P03B";',paperStart);
 assert.ok(paperStart >= 0 && paperEnd > paperStart,
-  "Actual native paper-status handlers must remain testable");
-vm.createContext(paperVm);
-vm.runInContext(js.slice(paperStart,paperEnd),paperVm,{
-  filename:"pravda-paper-control-status-race.js"
-});
-const oldPaperRefresh = paperVm.window.refreshPaper();
-await new Promise(setImmediate);
-assert.equal(paperPendingStatus.length,1,
-  "A native paper-control status request must be pending");
-await paperVm.$("paper-stop").handlers.click();
-paperPendingStatus[0](["stopped|false"]);
-await oldPaperRefresh;
-assert.equal(paperVm.$("paper-trade").disabled,true,
-  "Late pre-stop native status must never re-enable the trade button");
-assert.match(paperVm.$("paper-control-status").textContent,/ARRÊT D.URGENCE ACTIVÉ/,
-  "Late pre-stop status must not hide the acknowledged emergency stop");
+  "Paper safety controller must remain within the guarded desktop phase");
+const paperController = js.slice(paperStart,paperEnd);
+assert.match(paperController,/let paperControlGeneration = 0;/,
+  "Paper state must have an independent revision counter");
+assert.match(paperController,/const controlGeneration = paperControlGeneration;/,
+  "A status request must capture the paper control revision");
+assert.match(paperController,/const isCurrent = \(\) => generation === window\.pravdaAuthGeneration\s*&& controlGeneration === paperControlGeneration && !paperStopInFlight\s*&& refreshNumber === paperRefreshNumber;/,
+  "Status refresh must reject obsolete auth, stop and refresh revisions");
+assert.match(paperController,/const control = await window\.pravdaInvoke\("ipc_paper_control_status"\);\s*if \(!isCurrent\(\)\) return;/,
+  "A delayed state reply must be discarded before updating the safety UI");
+assert.match(paperController,/\$\("paper-stop"\)\.addEventListener\("click", async \(\) => \{\s*const controlGeneration = \+\+paperControlGeneration;/,
+  "STOP must invalidate prior status requests synchronously");
+assert.match(paperController,/paperStopInFlight = true;\s*paperStopped = true;\s*\$\("paper-trade"\)\.disabled = true;/,
+  "The stop button must disable PAPER trading before awaiting IPC");
+assert.match(paperController,/\$\("paper-rearm"\)\.addEventListener\("click", async \(\) => \{/,
+  "The user must explicitly initiate rearm");
+assert.equal((paperController.match(/const controlGeneration = \+\+paperControlGeneration;/g)||[]).length,2,
+  "STOP and REARM must each invalidate obsolete state responses");
+assert.doesNotMatch(paperController,/\bfetch\s*\(|\bWebSocket\s*\(/,
+  "Paper-only stop/rearm must not cross into a market-network path");
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
