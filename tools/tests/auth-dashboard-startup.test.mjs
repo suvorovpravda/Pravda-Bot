@@ -45,6 +45,9 @@ async function boot({ready, logoutForm}) {
   await loginSubmit({ preventDefault() {} });
   const script = body.children.find(child => child.src === "./dashboard.js");
   assert.ok(script, "dashboard script must be inserted");
+  // The shell must not flash into view while dashboard.js is still loading.
+  assert.equal(shell.hidden, true, "shell must remain hidden before dashboard readiness");
+  assert.equal(screen.hidden, false, "auth screen must remain visible during loading");
   window.pravdaDashboardReady = ready;
   script.listeners.get("load")();
   return { shell, screen, card, logoutForm, window };
