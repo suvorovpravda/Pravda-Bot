@@ -1167,6 +1167,38 @@ mod tests {
         assert!(report.reg_rules_violated.is_empty());
     }
 
+
+    #[test]
+    fn native_mda_refuses_cross_venue_quote_substitution() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Kraken": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP,
+                "provenance_verified": true,
+                "portfolio_verified": true
+            }}}
+        });
+        // A quote from Kraken must not satisfy a Binance request, even
+        // when untrusted cache fields claim both independent attestations.
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                now_ms, 2_000, 50
+            ).err(),
+            Some(NativeMarketRefusal::QuoteUnavailable)
+        );
+        let kraken = evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
+            now_ms, 2_000, 50
+        ).expect("matching venue observation is parseable, not attested");
+        assert!(!kraken.provenance_verified);
+        assert!(!kraken.portfolio_verified);
+    }
+
     #[test]
     fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
         let now_ms = reference_clock();
