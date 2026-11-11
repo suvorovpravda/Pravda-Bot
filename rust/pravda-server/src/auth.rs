@@ -450,6 +450,22 @@ mod tests {
                 .status(),
             StatusCode::OK
         );
+        // Exercise the real auth middleware: even a valid session must not
+        // authorize a request with ambiguous same-name cookies.
+        let duplicate = format!("{cookie}; pravda_session=attacker");
+        assert_eq!(
+            call(&app, "GET", "/api/metrics", Some(&duplicate), "")
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let duplicate = format!("pravda_session=attacker; {cookie}");
+        assert_eq!(
+            call(&app, "GET", "/api/metrics", Some(&duplicate), "")
+                .await
+                .status(),
+            StatusCode::UNAUTHORIZED
+        );
         let response = call(&app, "POST", "/logout", Some(&cookie), "").await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         assert_eq!(
