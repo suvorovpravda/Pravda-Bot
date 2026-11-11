@@ -1154,7 +1154,7 @@ mod tests {
     #[test]
     fn gmo_no_action_never_evaluates_reg_even_with_invalid_risk_state() {
         let mut reply = good_reply();
-        reply["status"] = json!("no_action");
+        reply["status"] = json!("NO_ACTION");
         reply.as_object_mut().expect("fixture object").remove("decision");
         let raw = reply.to_string();
         let mut input = good(&raw);
