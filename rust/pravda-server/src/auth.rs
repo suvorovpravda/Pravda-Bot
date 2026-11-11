@@ -26,8 +26,11 @@ fn cookie_token(headers: &HeaderMap) -> Option<String> {
     for header_value in headers.get_all(header::COOKIE).iter() {
         let raw = header_value.to_str().ok()?;
         for part in raw.split(';') {
-            let Some((name, value)) = part.trim().split_once('=') else {
-                continue;
+            let part = part.trim();
+            let (name, value) = match part.split_once('=') {
+                Some(pair) => pair,
+                None if part == COOKIE_NAME => return None,
+                None => continue,
             };
             if name == COOKIE_NAME {
                 if found.is_some() || value.is_empty() {
@@ -274,6 +277,19 @@ mod tests {
         headers.insert(
             header::COOKIE,
             HeaderValue::from_static("pravda_session=; other=1"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+
+        // A malformed same-name cookie must not be silently ignored when a
+        // valid credential is also present, regardless of its position.
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session=valid; pravda_session"),
+        );
+        assert_eq!(cookie_token(&headers), None);
+        headers.insert(
+            header::COOKIE,
+            HeaderValue::from_static("pravda_session; pravda_session=valid"),
         );
         assert_eq!(cookie_token(&headers), None);
     }
