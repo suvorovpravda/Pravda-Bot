@@ -482,6 +482,19 @@ mod tests {
                 .status(),
             StatusCode::UNAUTHORIZED
         );
+        // A malformed same-name cookie must also fail closed at the HTTP
+        // authorization boundary, even alongside a valid session.
+        for malformed in [
+            format!("{cookie}; pravda_session"),
+            format!("pravda_session; {cookie}"),
+        ] {
+            assert_eq!(
+                call(&app, "GET", "/api/metrics", Some(&malformed), "")
+                    .await
+                    .status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
         let response = call(&app, "POST", "/logout", Some(&cookie), "").await;
         assert_eq!(response.status(), StatusCode::SEE_OTHER);
         assert_eq!(
