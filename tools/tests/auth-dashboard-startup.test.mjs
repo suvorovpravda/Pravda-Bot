@@ -21,8 +21,7 @@ function element() {
 }
 
 async function boot({ready, logoutForm}) {
-  const shell = element(), body = element(), form = element();
-  const password = element();
+  const shell = element(), body = element();
   const document = {
     body,
     querySelector(selector) { return selector === "main.shell" ? shell : null; },
