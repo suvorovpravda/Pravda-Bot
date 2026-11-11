@@ -541,9 +541,10 @@ mod tests {
             Role::GrandMasterOrchestrator,
             Role::RiskEngineGuardian,
         ] {
-            assert!(report.stages.iter().any(|stage|
-                stage.role == role && stage.status == StageStatus::Skipped
-            ));
+            assert!(report
+                .stages
+                .iter()
+                .any(|stage| stage.role == role && stage.status == StageStatus::Skipped));
         }
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
@@ -571,9 +572,7 @@ mod tests {
     #[test]
     fn future_gmo_timestamp_never_reaches_reg() {
         let mut reply = good_reply();
-        reply["timestamp_utc"] = serde_json::Value::String(
-            "2026-11-10T10:00:01Z".to_owned(),
-        );
+        reply["timestamp_utc"] = serde_json::Value::String("2026-11-10T10:00:01Z".to_owned());
         let raw = reply.to_string();
         let input = good(&raw);
         let report = review_paper_cycle(&input);
@@ -581,12 +580,14 @@ mod tests {
         assert_eq!(report.reason_code, "GMO_TIMESTAMP_IN_FUTURE");
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
-        assert!(report.stages.iter().any(|s|
-            s.role == Role::GrandMasterOrchestrator && s.status == StageStatus::Blocked
-        ));
-        assert!(report.stages.iter().any(|s|
-            s.role == Role::RiskEngineGuardian && s.status == StageStatus::Skipped
-        ));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::GrandMasterOrchestrator && s.status == StageStatus::Blocked));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::RiskEngineGuardian && s.status == StageStatus::Skipped));
     }
 
     #[test]
@@ -599,12 +600,18 @@ mod tests {
         assert_eq!(report.reason_code, "MDA_LIVE_DISABLED");
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
-        assert!(report.stages.iter().any(|s| s.role == Role::MarketDataAnalyst
-            && s.status == StageStatus::Blocked));
-        assert!(report.stages.iter().any(|s| s.role == Role::GrandMasterOrchestrator
-            && s.status == StageStatus::Skipped));
-        assert!(report.stages.iter().any(|s| s.role == Role::RiskEngineGuardian
-            && s.status == StageStatus::Skipped));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::MarketDataAnalyst && s.status == StageStatus::Blocked));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::GrandMasterOrchestrator && s.status == StageStatus::Skipped));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::RiskEngineGuardian && s.status == StageStatus::Skipped));
     }
 
     fn good_reply() -> Value {
@@ -1024,23 +1031,31 @@ mod tests {
         snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
         assert_eq!(
             evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                now_ms, 5_000, 50
-            ).err(),
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
             Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
         // A claimed fresh quote cannot carry a timestamp three seconds old.
-        let older = chrono::DateTime::parse_from_rfc3339(TIMESTAMP)
-            .expect("fixture timestamp")
+        let older = chrono::DateTime::parse_from_rfc3339(TIMESTAMP).expect("fixture timestamp")
             - chrono::Duration::seconds(3);
-        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
-            json!(older.to_rfc3339());
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(older.to_rfc3339());
         snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
         assert_eq!(
             evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                now_ms, 5_000, 50
-            ).err(),
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
             Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
     }
@@ -1058,9 +1073,14 @@ mod tests {
             }}}
         });
         let evidence = evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            now_ms, 2_000, 50,
-        ).expect("fresh cached observation is parseable, not attested");
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("fresh cached observation is parseable, not attested");
         assert!(!evidence.provenance_verified);
         assert!(!evidence.portfolio_verified);
         let reply = good_reply().to_string();
@@ -1086,26 +1106,35 @@ mod tests {
                 "timestamp": TIMESTAMP
             }}}
         });
-        let future = chrono::DateTime::parse_from_rfc3339(TIMESTAMP)
-            .expect("fixture timestamp") + chrono::Duration::seconds(2);
-        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
-            json!(future.to_rfc3339());
+        let future = chrono::DateTime::parse_from_rfc3339(TIMESTAMP).expect("fixture timestamp")
+            + chrono::Duration::seconds(2);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(future.to_rfc3339());
         assert_eq!(
             evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                now_ms, 5_000, 50
-            ).err(),
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
             Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
         snapshot["symbols"]["BTC/USDT"]["Binance"]
-            .as_object_mut().expect("fixture quote").remove("timestamp");
+            .as_object_mut()
+            .expect("fixture quote")
+            .remove("timestamp");
         assert_eq!(
             evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                now_ms, 5_000, 50
-            ).err(),
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
             Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
-    }
-
-}
+    }}
