@@ -25,7 +25,7 @@
 <text x="584" y="239" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="500" >Pas un score release</text>
 <text x="818" y="186" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" >PULL REQUESTS</text>
 <text x="818" y="253" fill="#FF579C" font-family="Segoe UI,Arial,sans-serif" font-size="73" font-weight="800" >1</text>
-<text x="817" y="279" fill="#BBC5E8" font-family="Segoe UI,Arial,sans-serif" font-size="13" font-weight="600" >#189 · e289c8ed1a · REVIEW</text>
+<text x="817" y="279" fill="#BBC5E8" font-family="Segoe UI,Arial,sans-serif" font-size="13" font-weight="600" >#189 · 3a720ebfb0 · REVIEW</text>
 <text x="1175" y="186" fill="#ABB4D0" font-family="Segoe UI,Arial,sans-serif" font-size="17" font-weight="700" >ISSUES OUVERTES</text>
 <text x="1175" y="253" fill="#6BDDFC" font-family="Segoe UI,Arial,sans-serif" font-size="73" font-weight="800" >10</text>
 <rect x="73" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
@@ -44,6 +44,6 @@
 <circle cx="1222" cy="352" r="5" fill="#B39AFC"/>
 <text x="1237" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >RUSTSEC / AUDIT BLOQUANT</text>
 <text x="1221" y="385" fill="#B39AFC" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >STALE SHA · 087804636e</text>
-<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-10 23:38 UTC   ·   LATEST MAIN EVIDENCE  2026-11-10 21:29 UTC   ·   MAIN SHA  36952c3f01</text>
+<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-11 02:58 UTC   ·   LATEST MAIN EVIDENCE  2026-11-10 21:29 UTC   ·   MAIN SHA  36952c3f01</text>
 <text x="1316" y="448" fill="#65DDBA" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="730" >LIVE ORDERS  OFF</text>
 </svg>
