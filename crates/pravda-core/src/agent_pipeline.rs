@@ -139,11 +139,12 @@ fn native_decimal_price_micros(value: &serde_json::Value) -> Option<u128> {
 
 /// Interpret ONLY a snapshot generated inside Rust by DesktopRuntime;
 /// do not expose this as an IPC parser of JS or AI-origin market evidence.
-/// This attests the source name and freshness of an observed quote, not its
-/// exchange execution price, provenance signature or portfolio/risk state.
+/// This checks a source label and freshness of an observed quote, but does NOT
+/// attest exchange provenance, execution price, or portfolio/risk state.
+/// A cache entry or a test fixture is never sufficient to certify provenance.
 ///
-/// Important: portfolio_verified is *always false* until a separate trusted
-/// portfolio adapter independently checks positions, equity and margin.
+/// Important: provenance_verified and portfolio_verified are *always false*
+/// until independent trusted adapters attest the feed and portfolio state.
 /// Consequently this evidence alone CANNOT make REG approve a paper proposal.
 pub fn evidence_from_native_market_snapshot(
     snapshot: &serde_json::Value,
@@ -209,7 +210,7 @@ pub fn evidence_from_native_market_snapshot(
         .and_then(native_decimal_price_micros)
         .ok_or(NativeMarketRefusal::PriceInvalid)?;
     Ok(MarketEvidence {
-        provenance_verified: true,
+        provenance_verified: false,
         portfolio_verified: false,
         symbol,
         venue,
@@ -727,7 +728,9 @@ mod tests {
         .unwrap();
         assert_eq!(r.reference_price_micros, 10_125_678);
         assert_eq!(r.quote_received_at_ms, now_ms);
-        assert!(r.provenance_verified);
+        // A source label and a fresh timestamp are NOT cryptographic or
+        // independent exchange attestation, even for an in-process cache.
+        assert!(!r.provenance_verified);
         assert!(!r.portfolio_verified);
         assert_eq!(r.max_price_deviation_bps, 50);
     }
