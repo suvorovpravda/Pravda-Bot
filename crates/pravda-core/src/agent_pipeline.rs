@@ -697,11 +697,13 @@ mod tests {
     }
 
     #[test]
-    fn gmo_rejects_non_utc_offset_even_when_instant_matches() {
+    fn gmo_non_utc_offset_is_rejected_before_reg_even_when_instant_matches() {
         let mut reply = good_reply();
         reply["timestamp_utc"] = json!("2026-11-10T11:00:00+01:00");
         let result = run(reply);
-        assert_eq!(result.reason_code, "GMO_TIMESTAMP_INVALID");
+        // The untrusted contract parser already rejects non-UTC offsets before
+        // the pipeline timestamp guard; either boundary must fail closed.
+        assert_eq!(result.reason_code, "GMO_CONTRACT_REJECTED");
         assert_eq!(result.reg_checks_performed, 0);
         assert_eq!(result.stages[4].status, StageStatus::Skipped);
     }
