@@ -551,7 +551,9 @@ mod tests {
 
     #[test]
     fn gmo_reply_predating_market_quote_cannot_reach_reg() {
-        let raw = good_reply().to_string();
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = json!("2026-11-10T09:59:59Z");
+        let raw = reply.to_string();
         let mut input = good(&raw);
         // The quote is newer than the model's analysis, though both are
         // within the ordinary freshness window.
