@@ -286,6 +286,10 @@ fn escalate(code: &'static str) -> Failure {
 }
 
 fn verify_market(input: &CycleInput<'_>) -> Result<(), Failure> {
+    // Refuse LIVE before consuming GMO input or invoking REG.
+    if input.reg_candidate.mode != reg_guard::Mode::Paper {
+        return Err(reject("MDA_LIVE_DISABLED"));
+    }
     let m = input.market;
     let c = input.reg_candidate;
     if !m.provenance_verified || !m.portfolio_verified {
@@ -509,6 +513,24 @@ mod tests {
                 .timestamp_millis(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn live_candidate_is_vetoed_before_gmo_and_reg_even_with_verified_flags() {
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.reg_candidate.mode = reg_guard::Mode::Live;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "MDA_LIVE_DISABLED");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+        assert!(report.stages.iter().any(|s| s.role == Role::MarketDataAnalyst
+            && s.status == StageStatus::Blocked));
+        assert!(report.stages.iter().any(|s| s.role == Role::GrandMasterOrchestrator
+            && s.status == StageStatus::Skipped));
+        assert!(report.stages.iter().any(|s| s.role == Role::RiskEngineGuardian
+            && s.status == StageStatus::Skipped));
     }
 
     fn good_reply() -> Value {
