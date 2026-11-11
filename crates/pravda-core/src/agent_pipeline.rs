@@ -1095,6 +1095,40 @@ mod tests {
         assert!(report.reg_rules_violated.is_empty());
     }
     #[test]
+    fn native_snapshot_cannot_self_attest_market_or_portfolio_with_injected_flags() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "provenance_verified": true,
+            "portfolio_verified": true,
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP,
+                "provenance_verified": true,
+                "portfolio_verified": true,
+                "attested": true
+            }}}
+        });
+        let evidence = evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+            now_ms, 2_000, 50,
+        ).expect("cache observation may be parsed but cannot attest itself");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.market = evidence;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
     fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
         let now_ms = reference_clock();
         let mut snapshot = json!({
