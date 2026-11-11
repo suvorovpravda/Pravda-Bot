@@ -1128,6 +1128,29 @@ mod tests {
         assert_eq!(report.reg_checks_performed, 0);
     }
 
+
+    #[test]
+    fn untrusted_gmo_attestation_flags_cannot_bypass_native_mda() {
+        let mut forged = good_reply();
+        // These fields are supplied by the untrusted GMO, not a native attestor.
+        forged["provenance_verified"] = json!(true);
+        forged["portfolio_verified"] = json!(true);
+        forged["attested"] = json!(true);
+        forged["decision"]["market_attested"] = json!(true);
+        let raw = forged.to_string();
+        let mut input = good(&raw);
+        input.market.provenance_verified = false;
+        input.market.portfolio_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
     #[test]
     fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
         let now_ms = reference_clock();
