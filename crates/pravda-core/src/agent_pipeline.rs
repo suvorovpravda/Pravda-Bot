@@ -516,6 +516,27 @@ mod tests {
     }
 
     #[test]
+    fn future_gmo_timestamp_never_reaches_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = serde_json::Value::String(
+            "2026-11-10T10:00:01Z".to_owned(),
+        );
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "GMO_TIMESTAMP_IN_FUTURE");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+        assert!(report.stages.iter().any(|s|
+            s.role == Role::GrandMasterOrchestrator && s.status == StageStatus::Blocked
+        ));
+        assert!(report.stages.iter().any(|s|
+            s.role == Role::RiskEngineGuardian && s.status == StageStatus::Skipped
+        ));
+    }
+
+    #[test]
     fn live_candidate_is_vetoed_before_gmo_and_reg_even_with_verified_flags() {
         let reply = good_reply().to_string();
         let mut input = good(&reply);
