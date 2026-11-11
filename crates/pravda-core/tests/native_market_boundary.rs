@@ -1,0 +1,79 @@
+//! Black-box boundary checks for the native PAPER market adapter.
+//! Synthetic quotes below are test fixtures, not independently attested prices.
+use pravda_core::agent_contract::{PaperSymbol, PaperVenue};
+use pravda_core::agent_pipeline::{
+    evidence_from_native_market_snapshot, NativeMarketRefusal,
+};
+use serde_json::json;
+
+const NOW_MS: u64 = 1_762_769_600_000;
+
+fn quote(price: serde_json::Value) -> serde_json::Value {
+    json!({
+        "stream_state": "observations_recent",
+        "symbols": {
+            "BTC/USDT": {
+                "Binance": {
+                    "status": "live",
+                    "age_seconds": 0.0,
+                    "timestamp": "2025-11-10T10:00:00Z",
+                    "price": price,
+                    "provenance_verified": true,
+                    "portfolio_verified": true,
+                    "attested": true
+                }
+            }
+        }
+    })
+}
+
+fn inspect(snapshot: &serde_json::Value) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
+    evidence_from_native_market_snapshot(
+        snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW_MS,
+        2_000,
+        50,
+    )
+}
+
+#[test]
+fn synthetic_quote_cannot_self_certify_market_or_portfolio() {
+    // An exact observed timestamp still does not constitute feed attestation.
+    let evidence = inspect(&quote(json!(10))).expect("well-formed observation");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+    assert_eq!(evidence.reference_price_micros, 10_000_000);
+}
+
+#[test]
+fn malformed_or_non_numeric_prices_fail_closed() {
+    for price in [
+        json!("10"),
+        json!(-1),
+        json!(0),
+        json!(null),
+        json!({"value": 10, "attested": true}),
+        json!(10.1234567),
+    ] {
+        assert!(matches!(inspect(&quote(price)), Err(NativeMarketRefusal::PriceInvalid)));
+    }
+}
+
+#[test]
+fn venue_substitution_and_clock_regression_fail_closed() {
+    let snapshot = quote(json!(10));
+    assert!(matches!(
+        evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken, NOW_MS, 2_000, 50
+        ),
+        Err(NativeMarketRefusal::QuoteUnavailable)
+    ));
+    assert!(matches!(
+        evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW_MS - 1, 2_000, 50
+        ),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
