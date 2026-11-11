@@ -49,18 +49,27 @@ pub struct ControlStatus {
 /// protects this key under the local Windows identity, not against malware
 /// executing as the same user.
 pub struct PaperControl {
-    connection: Mutex<Connection>,
+    connection: Mutex<VerifiedConnection>,
     key: SecretValue,
     // Bit 0 indicates STOPPED; upper bits increase on each emergency request.
     stop_epoch: AtomicU64,
 }
 
+#[derive(Clone, Copy)]
 struct Verified {
     seq: u64,
     previous: [u8; 32],
     armed: bool,
     pending_intent: bool,
     last_emergency_at: Option<u64>,
+}
+
+/// Startup verifies the full journal once. The lifetime-exclusive SQLite
+/// connection then owns its authenticated tail, updated only after commit.
+/// This avoids the O(N²) replay of all historical HMACs during trading.
+struct VerifiedConnection {
+    connection: Connection,
+    verified: Verified,
 }
 
 fn now_seconds() -> Result<u64, ControlError> {
@@ -215,21 +224,22 @@ fn verify(connection: &Connection, key: &[u8]) -> Result<Verified, ControlError>
 }
 
 fn append(
-    connection: &mut Connection,
+    ledger: &mut VerifiedConnection,
     key: &[u8],
     action: &'static str,
-) -> Result<Verified, ControlError> {
-    let tx = connection
-        .transaction_with_behavior(TransactionBehavior::Immediate)
-        .map_err(|_| ControlError::Unavailable)?;
-    let previous = verify(&tx, key)?;
-    // Validate transitions before committing. A transient failed stop write
-    // must not let REARM_PAPER follow a still-armed durable journal.
-    if (action == "REARM_PAPER" && (previous.armed || previous.pending_intent))
-        || (action == "PAPER_INTENT" && !previous.armed)
-        || (action == "INITIAL_STOP" && previous.seq != 0)
-    {
-        return Err(ControlError::Corrupt);
+) -> Result<(), ControlError> {
+    let previous = ledger.verified;
+    // Validate state-machine transitions against the already authenticated
+    // in-memory tail before starting the transaction. There is only one
+    // connection/owner; every write passes through this mutex.
+    match action {
+        "INITIAL_STOP" if previous.seq == 0 => {}
+        "STARTUP_STOP" | "EMERGENCY_STOP" => {}
+        "REARM_PAPER" if !previous.armed && !previous.pending_intent => {}
+        "PAPER_INTENT" if previous.armed && !previous.pending_intent => {}
+        "PAPER_ACCEPTED" | "PAPER_REFUSED"
+            if previous.armed && previous.pending_intent => {}
+        _ => return Err(ControlError::Corrupt),
     }
     let seq = previous.seq.checked_add(1).ok_or(ControlError::Capacity)?;
     if seq > MAX_AUDIT_ROWS {
@@ -237,6 +247,10 @@ fn append(
     }
     let when = now_seconds()?;
     let tag = event_mac(key, seq, when, action, &previous.previous);
+    let tx = ledger
+        .connection
+        .transaction_with_behavior(TransactionBehavior::Immediate)
+        .map_err(|_| ControlError::Unavailable)?;
     tx.execute(
         "INSERT INTO paper_control_log(seq,at_sec,action,previous_mac,mac) VALUES(?1,?2,?3,?4,?5)",
         params![
@@ -249,7 +263,27 @@ fn append(
     )
     .map_err(|_| ControlError::Unavailable)?;
     tx.commit().map_err(|_| ControlError::Unavailable)?;
-    verify(connection, key)
+
+    // Only a successful COMMIT advances the cached authenticated state.
+    // Any write failure leaves the old tail intact and the caller fails
+    // closed, without assuming the transaction was persisted.
+    let state = &mut ledger.verified;
+    state.seq = seq;
+    state.previous = tag;
+    match action {
+        "INITIAL_STOP" | "STARTUP_STOP" | "EMERGENCY_STOP" => {
+            state.armed = false;
+            state.pending_intent = false;
+            if action == "EMERGENCY_STOP" {
+                state.last_emergency_at = Some(when);
+            }
+        }
+        "REARM_PAPER" => state.armed = true,
+        "PAPER_INTENT" => state.pending_intent = true,
+        "PAPER_ACCEPTED" | "PAPER_REFUSED" => state.pending_intent = false,
+        _ => unreachable!("previously validated state-machine action"),
+    }
+    Ok(())
 }
 
 impl PaperControl {
@@ -315,15 +349,20 @@ impl PaperControl {
                  );",
             )
             .map_err(|_| ControlError::Unavailable)?;
+        // Full HMAC/sequence/state-machine replay is a mandatory STARTUP
+        // operation, not part of a synchronous PAPER trade.
         let state = verify(&connection, key.expose())?;
+        let mut ledger = VerifiedConnection {
+            connection,
+            verified: state,
+        };
         if state.seq == 0 {
-            append(&mut connection, key.expose(), "INITIAL_STOP")?;
+            append(&mut ledger, key.expose(), "INITIAL_STOP")?;
         }
-        // An open/restart NEVER restores a prior ARM. A failure opening or
-        // verifying the log aborts startup rather than silently unlocking.
-        append(&mut connection, key.expose(), "STARTUP_STOP")?;
+        // A restart must always stop, irrespective of prior arm state.
+        append(&mut ledger, key.expose(), "STARTUP_STOP")?;
         Ok(Self {
-            connection: Mutex::new(connection),
+            connection: Mutex::new(ledger),
             key,
             stop_epoch: AtomicU64::new(1),
         })
@@ -334,7 +373,7 @@ impl PaperControl {
             .connection
             .lock()
             .map_err(|_| ControlError::Unavailable)?;
-        let state = verify(&connection, self.key.expose())?;
+        let state = connection.verified;
         Ok(ControlStatus {
             stopped: self.is_stopped() || !state.armed,
             audit_records: state.seq,
@@ -374,7 +413,7 @@ impl PaperControl {
             .lock()
             .map_err(|_| ControlError::Unavailable)?;
         let expected_epoch = self.stop_epoch.load(Ordering::SeqCst);
-        let state = verify(&connection, self.key.expose())?;
+        let state = connection.verified;
         if state.pending_intent {
             return Err(ControlError::Stopped);
         }
@@ -417,7 +456,7 @@ impl PaperControl {
             .connection
             .lock()
             .map_err(|_| ControlError::Unavailable.code())?;
-        let state = verify(&connection, self.key.expose()).map_err(|e| e.code())?;
+        let state = connection.verified;
         if !state.armed || self.is_stopped() {
             let _ = self.request_stop();
             return Err(ControlError::Stopped.code());
@@ -653,6 +692,26 @@ mod tests {
         assert_eq!(control.rearm_with_reset(|| ()), Err(ControlError::Cooldown));
         drop(control);
         assert!(test_control(&path).unwrap().status().unwrap().stopped);
+    }
+
+    #[test]
+    fn cached_authenticated_tail_advances_without_replaying_history() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("control.sqlite");
+        let control = test_control(&path).unwrap();
+        control.rearm_with_reset(|| ()).unwrap();
+        let mut last_count = control.status().unwrap().audit_records;
+        for _ in 0..64 {
+            assert_eq!(control.with_paper_trade(|| Ok::<_, &'static str>(1)), Ok(1));
+            let current = control.status().unwrap().audit_records;
+            assert_eq!(current, last_count + 2);
+            last_count = current;
+        }
+        // Full verification remains mandatory on a *new* process startup.
+        drop(control);
+        let reopened = test_control(&path).unwrap();
+        assert!(reopened.status().unwrap().stopped);
+        assert_eq!(reopened.status().unwrap().audit_records, last_count + 1);
     }
 
     #[test]
