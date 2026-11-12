@@ -205,6 +205,12 @@ pub fn evidence_from_native_market_snapshot(
     if wall_age > max_quote_age_ms {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
+    // The reported age is untrusted metadata. Refuse snapshots whose two
+    // clocks disagree by more than one second (rounding/transport tolerance).
+    // Neither clock comparison constitutes independent feed attestation.
+    if (seconds * 1_000.0 - wall_age as f64).abs() > 1_000.0 {
+        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
+    }
     let reference_price_micros = quote
         .get("price")
         .and_then(native_decimal_price_micros)
@@ -286,6 +292,10 @@ fn escalate(code: &'static str) -> Failure {
 }
 
 fn verify_market(input: &CycleInput<'_>) -> Result<(), Failure> {
+    // Refuse LIVE before consuming GMO input or invoking REG.
+    if input.reg_candidate.mode != reg_guard::Mode::Paper {
+        return Err(reject("MDA_LIVE_DISABLED"));
+    }
     let m = input.market;
     let c = input.reg_candidate;
     if !m.provenance_verified || !m.portfolio_verified {
@@ -374,6 +384,9 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
         .map_err(|_| reject("GMO_CONTRACT_REJECTED"))?;
     let timestamp = DateTime::parse_from_rfc3339(&reply.timestamp_utc)
         .map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
+    if timestamp.offset().local_minus_utc() != 0 {
+        return Err(reject("GMO_TIMESTAMP_INVALID"));
+    }
     let timestamp_ms =
         u64::try_from(timestamp.timestamp_millis()).map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
     let age = input
@@ -382,6 +395,11 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
         .ok_or_else(|| reject("GMO_TIMESTAMP_IN_FUTURE"))?;
     if age > input.reg_policy.max_quote_age_ms {
         return Err(escalate("GMO_STALE_RESPONSE"));
+    }
+    // A model response created before the independently supplied quote cannot
+    // validate that quote. Refuse replay even when both timestamps are fresh.
+    if timestamp_ms < input.market.quote_received_at_ms {
+        return Err(escalate("GMO_PREDATES_MARKET_QUOTE"));
     }
     match reply.status {
         AnalysisStatus::Decision => {
@@ -508,6 +526,94 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn architect_veto_prevents_parsing_untrusted_gmo_and_running_reg() {
+        let mut input = good("{malformed-gmo-json");
+        input.security.artifact_integrity_verified = false;
+        input.reg_candidate.available_margin_micros = None;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "ARCH_UNVERIFIED_CONFIGURATION");
+        assert_eq!(report.stages[0].status, StageStatus::Blocked);
+        for role in [
+            Role::SecuritySentinel,
+            Role::MarketDataAnalyst,
+            Role::GrandMasterOrchestrator,
+            Role::RiskEngineGuardian,
+        ] {
+            assert!(report
+                .stages
+                .iter()
+                .any(|stage| stage.role == role && stage.status == StageStatus::Skipped));
+        }
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn gmo_reply_predating_market_quote_cannot_reach_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = json!("2026-11-10T09:59:59Z");
+        let raw = reply.to_string();
+        let mut input = good(&raw);
+        // The quote is newer than the model's analysis, though both are
+        // within the ordinary freshness window.
+        input.market.quote_received_at_ms = input.now_ms;
+        input.reg_candidate.quote_received_at_ms = input.now_ms;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "GMO_PREDATES_MARKET_QUOTE");
+        assert_eq!(report.stages[3].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn future_gmo_timestamp_never_reaches_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = serde_json::Value::String("2026-11-10T10:00:01Z".to_owned());
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "GMO_TIMESTAMP_IN_FUTURE");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::GrandMasterOrchestrator && s.status == StageStatus::Blocked));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::RiskEngineGuardian && s.status == StageStatus::Skipped));
+    }
+
+    #[test]
+    fn live_candidate_is_vetoed_before_gmo_and_reg_even_with_verified_flags() {
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.reg_candidate.mode = reg_guard::Mode::Live;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "MDA_LIVE_DISABLED");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::MarketDataAnalyst && s.status == StageStatus::Blocked));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::GrandMasterOrchestrator && s.status == StageStatus::Skipped));
+        assert!(report
+            .stages
+            .iter()
+            .any(|s| s.role == Role::RiskEngineGuardian && s.status == StageStatus::Skipped));
+    }
+
     fn good_reply() -> Value {
         json!({
             "schema_version":1,
@@ -632,6 +738,24 @@ mod tests {
     }
 
     #[test]
+    fn security_veto_does_not_parse_malicious_gmo_or_evaluate_reg() {
+        // Even malformed or hostile model content cannot bypass the native
+        // security gate. This is PAPER research, never an order authorization.
+        let mut input = good("{not valid JSON and not an order}");
+        input.security.sentinel_clear = false;
+        input.reg_candidate.daily_loss_micros = u128::MAX;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "SS_INCIDENT_OR_EMERGENCY_STOP");
+        assert_eq!(report.stages[1].status, StageStatus::Blocked);
+        assert_eq!(report.stages[2].status, StageStatus::Skipped);
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
     fn mda_rejects_stale_provenance_and_mismatched_clocks() {
         let raw = good_reply().to_string();
         let mut v = good(&raw);
@@ -694,6 +818,18 @@ mod tests {
     }
 
     #[test]
+    fn gmo_non_utc_offset_is_rejected_before_reg_even_when_instant_matches() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = json!("2026-11-10T11:00:00+01:00");
+        let result = run(reply);
+        // The untrusted contract parser already rejects non-UTC offsets before
+        // the pipeline timestamp guard; either boundary must fail closed.
+        assert_eq!(result.reason_code, "GMO_CONTRACT_REJECTED");
+        assert_eq!(result.reg_checks_performed, 0);
+        assert_eq!(result.stages[4].status, StageStatus::Skipped);
+    }
+
+    #[test]
     fn timestamp_replay_and_missing_margin_do_not_become_approvals() {
         let mut v = good_reply();
         v["timestamp_utc"] = json!("2026-11-10T09:00:00Z");
@@ -705,6 +841,27 @@ mod tests {
         assert_eq!(r.verdict, PipelineVerdict::Escalated);
         assert_eq!(r.reason_code, "REG_INCOMPLETE_EVIDENCE");
     }
+    #[test]
+    fn cached_market_and_unverified_portfolio_never_reach_reg() {
+        let raw = good_reply().to_string();
+        let mut input = good(&raw);
+        // A synthetic quote is not independently attested market data.
+        input.market.provenance_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+
+        input.market.provenance_verified = true;
+        input.market.portfolio_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
     #[test]
     fn native_quote_evidence_is_fresh_exact_and_never_verifies_portfolio() {
         let now_ms = reference_clock();
@@ -855,6 +1012,281 @@ mod tests {
             )
             .err(),
             Some(NativeMarketRefusal::PolicyInvalid)
+        );
+    }
+
+    #[test]
+    fn native_mda_refuses_inconsistent_reported_age_and_observed_timestamp() {
+        let now_ms = reference_clock();
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        // A quote stamped at the current time cannot be two seconds old.
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
+        // A claimed fresh quote cannot carry a timestamp three seconds old.
+        let older = chrono::DateTime::parse_from_rfc3339(TIMESTAMP).expect("fixture timestamp")
+            - chrono::Duration::seconds(3);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(older.to_rfc3339());
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
+    }
+
+    #[test]
+    fn native_snapshot_never_promotes_a_fresh_quote_to_trusted_portfolio_evidence() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        let evidence = evidence_from_native_market_snapshot(
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("fresh cached observation is parseable, not attested");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.market = evidence;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+    #[test]
+    fn native_snapshot_cannot_self_attest_market_or_portfolio_with_injected_flags() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "provenance_verified": true,
+            "portfolio_verified": true,
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP,
+                "provenance_verified": true,
+                "portfolio_verified": true,
+                "attested": true
+            }}}
+        });
+        let evidence = evidence_from_native_market_snapshot(
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("cache observation may be parsed but cannot attest itself");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.market = evidence;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
+    fn untrusted_gmo_attestation_flags_cannot_bypass_native_mda() {
+        let mut forged = good_reply();
+        // These fields are supplied by the untrusted GMO, not a native attestor.
+        forged["provenance_verified"] = json!(true);
+        forged["portfolio_verified"] = json!(true);
+        forged["attested"] = json!(true);
+        forged["decision"]["market_attested"] = json!(true);
+        let raw = forged.to_string();
+        let mut input = good(&raw);
+        input.market.provenance_verified = false;
+        input.market.portfolio_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn gmo_no_action_never_evaluates_reg_even_with_invalid_risk_state() {
+        let mut reply = good_reply();
+        reply["status"] = json!("NO_ACTION");
+        reply
+            .as_object_mut()
+            .expect("fixture object")
+            .remove("decision");
+        let raw = reply.to_string();
+        let mut input = good(&raw);
+        input.reg_candidate.available_margin_micros = None;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::NoAction);
+        assert_eq!(report.reason_code, "GMO_NO_ACTION");
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn native_mda_refuses_cross_venue_quote_substitution() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Kraken": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP,
+                "provenance_verified": true,
+                "portfolio_verified": true
+            }}}
+        });
+        // A quote from Kraken must not satisfy a Binance request, even
+        // when untrusted cache fields claim both independent attestations.
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                2_000,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::QuoteUnavailable)
+        );
+        let kraken = evidence_from_native_market_snapshot(
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Kraken,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("matching venue observation is parseable, not attested");
+        assert!(!kraken.provenance_verified);
+        assert!(!kraken.portfolio_verified);
+    }
+
+    #[test]
+    fn native_mda_refuses_pre_epoch_and_far_future_quote_clocks() {
+        let now_ms = reference_clock();
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        for invalid_timestamp in ["1969-12-31T23:59:59Z", "9999-12-31T23:59:59Z"] {
+            snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(invalid_timestamp);
+            assert_eq!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    now_ms,
+                    2_000,
+                    50,
+                )
+                .err(),
+                Some(NativeMarketRefusal::ClockOrAgeInvalid),
+                "invalid timestamp must not become trusted evidence: {invalid_timestamp}"
+            );
+        }
+    }
+
+    #[test]
+    fn native_mda_rejects_future_quote_and_missing_timestamp_without_reg_approval() {
+        let now_ms = reference_clock();
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {"BTC/USDT": {"Binance": {
+                "price": 10.0,
+                "age_seconds": 0.0,
+                "status": "live",
+                "timestamp": TIMESTAMP
+            }}}
+        });
+        let future = chrono::DateTime::parse_from_rfc3339(TIMESTAMP).expect("fixture timestamp")
+            + chrono::Duration::seconds(2);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(future.to_rfc3339());
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        );
+        snapshot["symbols"]["BTC/USDT"]["Binance"]
+            .as_object_mut()
+            .expect("fixture quote")
+            .remove("timestamp");
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                now_ms,
+                5_000,
+                50
+            )
+            .err(),
+            Some(NativeMarketRefusal::ClockOrAgeInvalid)
         );
     }
 }
