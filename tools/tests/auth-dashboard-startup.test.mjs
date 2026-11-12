@@ -20,7 +20,7 @@ function element() {
   };
 }
 
-async function boot({ready, logoutForm, revokeBeforeLoad = false}) {
+async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBeforeLoad = false, revokeAndReloginBeforeLoad = false}) {
   const shell = element(), body = element();
   const refreshCalls = [];
   const refreshHooks = [
@@ -63,7 +63,16 @@ async function boot({ready, logoutForm, revokeBeforeLoad = false}) {
     });
   }
   window.pravdaDashboardReady = ready;
-  if (revokeBeforeLoad) window.pravdaRequireLogin();
+  if (repeatLoginBeforeLoad || revokeAndReloginBeforeLoad) {
+    if (revokeAndReloginBeforeLoad) window.pravdaRequireLogin();
+    // A successful Rust login replaces the token and increments the JS
+    // authentication generation without injecting a second dashboard script.
+    await loginSubmit({ preventDefault() {} });
+    assert.equal(body.children.filter(child => child.src === "./dashboard.js").length, 1,
+      "concurrent login confirmations must reuse the single pending script");
+  } else if (revokeBeforeLoad) {
+    window.pravdaRequireLogin();
+  }
   script.listeners.get("load")();
   return { shell, screen, card, logoutForm, window, refreshCalls };
 }
@@ -114,5 +123,32 @@ test("missing logout control never triggers authenticated dashboard refresh", as
 
 test("revoked login cannot trigger delayed dashboard refresh", async () => {
   const state = await boot({ ready: true, logoutForm: element(), revokeBeforeLoad: true });
+  assert.equal(state.refreshCalls.length, 0);
+});
+
+test("two successful logins before script load complete one dashboard without duplicate binding", async () => {
+  const logoutForm = element();
+  const state = await boot({ ready: true, logoutForm, repeatLoginBeforeLoad: true });
+  assert.equal(state.shell.hidden, false);
+  assert.equal(state.screen.hidden, true);
+  assert.equal(logoutForm.listeners.has("submit"), true);
+  assert.equal(state.refreshCalls.length, 6,
+    "the single pending dashboard load refreshes latest authenticated session once");
+  assert.ok(state.refreshCalls.every(call => !call.shellHidden && call.screenHidden));
+});
+
+test("logout followed by fresh login while script loads permits only the new session", async () => {
+  const logoutForm = element();
+  const state = await boot({ ready: true, logoutForm, revokeAndReloginBeforeLoad: true });
+  assert.equal(state.shell.hidden, false);
+  assert.equal(state.screen.hidden, true);
+  assert.equal(logoutForm.listeners.has("submit"), true);
+  assert.equal(state.refreshCalls.length, 6);
+});
+
+test("two successful logins cannot bypass a missing logout control", async () => {
+  const state = await boot({ ready: true, logoutForm: null, repeatLoginBeforeLoad: true });
+  assert.equal(state.shell.hidden, true);
+  assert.equal(state.screen.hidden, false);
   assert.equal(state.refreshCalls.length, 0);
 });
