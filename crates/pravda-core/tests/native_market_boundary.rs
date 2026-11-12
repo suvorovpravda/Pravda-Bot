@@ -230,7 +230,10 @@ fn malformed_native_snapshot_shapes_cannot_supply_attested_evidence() {
         json!({"stream_state": "observations_recent", "symbols": {"BTC/USDT": null}}),
         json!({"stream_state": "observations_recent", "symbols": {"BTC/USDT": {"Binance": null}}}),
     ] {
-        assert!(inspect(&snapshot).is_err(), "malformed cache shape accepted");
+        assert!(
+            inspect(&snapshot).is_err(),
+            "malformed cache shape accepted"
+        );
     }
 }
 
@@ -245,7 +248,6 @@ fn forged_top_level_attestations_never_upgrade_native_observation() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
-
 
 #[test]
 fn native_quote_age_disagreement_boundary_is_fail_closed() {
