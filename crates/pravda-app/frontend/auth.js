@@ -43,6 +43,9 @@ shell.hidden = true;
 let setup = false;
 let dashboardLoaded = false;
 let dashboardLoading = false;
+// Updated by every successful login, including a second confirmation while
+// dashboard.js is still loading. A pending load serves the latest login only.
+let pendingDashboardActivationGeneration = 0;
 let working = false;
 let loginVisible = false;
 // Capture only a closed diagnostic category and an in-file line number.
@@ -148,23 +151,38 @@ function showLogin() {
 
 window.pravdaRequireLogin = showLogin;
 
+// dashboard.js evaluates while the authenticated shell is still hidden.
+// Visibility-gated IPC initialization is intentionally deferred until after
+// the local dashboard and logout control have both been verified.
+function refreshRevealedDashboard() {
+    if (shell.hidden || screen.hidden === false || window.pravdaDashboardReady !== true) return;
+    if (typeof window.refreshRevolutConsent === "function") void window.refreshRevolutConsent();
+    if (typeof window.refreshAll === "function") void window.refreshAll();
+    if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
+    if (typeof window.refreshUpdateReadiness === "function") void window.refreshUpdateReadiness();
+    if (typeof window.refreshSecurityEvents === "function") void window.refreshSecurityEvents();
+    if (typeof window.refreshPaper === "function") void window.refreshPaper();
+}
+
 function activateDashboard() {
     window.pravdaAuthGeneration++;
+    // Keep the IPC session epoch monotonic across repeated successful logins,
+    // but allow the ONE pending dashboard script to finish for the latest one.
+    pendingDashboardActivationGeneration = window.pravdaAuthGeneration;
     loginVisible = false;
     // Never display prior-session synthetic positions while the new snapshot loads.
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     if (typeof window.pravdaClearUpdateReadiness === "function") window.pravdaClearUpdateReadiness();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
-    screen.hidden = true;
-    shell.hidden = false;
+    // Keep the authenticated shell hidden until dashboard initialization is verified.
+    // A script load event alone is not proof of a usable logout control.
+    screen.hidden = false;
+    shell.hidden = true;
     if (dashboardLoaded) {
-        if (typeof window.refreshRevolutConsent === "function") void window.refreshRevolutConsent();
-        if (typeof window.refreshAll === "function") void window.refreshAll();
-        if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
-        if (typeof window.refreshUpdateReadiness === "function") void window.refreshUpdateReadiness();
-        if (typeof window.refreshSecurityEvents === "function") void window.refreshSecurityEvents();
-        if (typeof window.refreshPaper === "function") void window.refreshPaper();
+        screen.hidden = true;
+        shell.hidden = false;
+        refreshRevealedDashboard();
         return;
     }
     // Multiple login confirmations must not inject dashboard.js twice.
@@ -178,7 +196,22 @@ function activateDashboard() {
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
         dashboardLoading = false;
+        const activeLogin = !loginVisible &&
+            window.pravdaAuthGeneration === pendingDashboardActivationGeneration;
+        // A completed dashboard script is a one-shot asset: evaluating it twice
+        // can redeclare top-level lexical bindings. Record successful startup
+        // even when the user logged out while the script was loading.
         const logoutForm = document.getElementById("ipc-logout-form");
+        if (window.pravdaDashboardReady !== true) {
+            if (activeLogin) showDashboardStartupFailure(dashboardFaultCode);
+            return;
+        }
+        if (!logoutForm) {
+            if (activeLogin) showDashboardStartupFailure(dashboardFaultCode);
+            return;
+        }
+        // Bind logout once to the initialized DOM, never to a failed or
+        // incomplete dashboard. Binding alone cannot authenticate a session.
         logoutForm.addEventListener("submit", async event => {
             event.preventDefault();
             try {
@@ -188,14 +221,19 @@ function activateDashboard() {
             }
             showLogin();
         });
-        if (window.pravdaDashboardReady !== true) {
-            showDashboardStartupFailure(dashboardFaultCode);
-            return;
-        }
         dashboardLoaded = true;
+        // A revoked session must stay hidden. The next successful login
+        // reuses this initialized dashboard instead of reinjecting JS.
+        if (!activeLogin) return;
+        screen.hidden = true;
+        shell.hidden = false;
+        // Initial script evaluation happened while hidden. Retry the same
+        // authenticated reads as on subsequent logins, never before reveal.
+        refreshRevealedDashboard();
     });
     script.addEventListener("error", () => {
         dashboardLoading = false;
+        if (loginVisible || window.pravdaAuthGeneration !== pendingDashboardActivationGeneration) return;
         showDashboardStartupFailure("DASHBOARD_RESOURCE_UNAVAILABLE");
     });
     document.body.append(script);
