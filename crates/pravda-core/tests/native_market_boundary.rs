@@ -343,3 +343,30 @@ fn scientific_notation_and_unbounded_prices_cannot_bypass_exact_micro_units() {
         ));
     }
 }
+
+
+#[test]
+fn quote_wall_clock_age_boundary_refuses_stale_synthetic_observations() {
+    // Both timestamp and reported age agree. Freshness is still only a
+    // syntactic observation, never an independent market attestation.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
+        json!("2025-11-10T09:59:58Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+    let evidence = inspect(&snapshot).expect("exact maximum age is permitted");
+    assert_eq!(evidence.quote_received_at_ms, NOW_MS - 2_000);
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    // One millisecond beyond the policy boundary is stale, even when the
+    // untrusted cache claims independent provenance and portfolio checks.
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
+        json!("2025-11-10T09:59:57.999Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.001);
+    snapshot["provenance_verified"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
