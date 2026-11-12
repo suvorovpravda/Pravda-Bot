@@ -20,7 +20,7 @@ function element() {
   };
 }
 
-async function boot({ready, logoutForm}) {
+async function boot({ready, logoutForm, revokeBeforeLoad = false}) {
   const shell = element(), body = element();
   const document = {
     body,
@@ -49,6 +49,7 @@ async function boot({ready, logoutForm}) {
   assert.equal(shell.hidden, true, "shell must remain hidden before dashboard readiness");
   assert.equal(screen.hidden, false, "auth screen must remain visible during loading");
   window.pravdaDashboardReady = ready;
+  if (revokeBeforeLoad) window.pravdaRequireLogin();
   script.listeners.get("load")();
   return { shell, screen, card, logoutForm, window };
 }
@@ -73,3 +74,4 @@ test("ready dashboard with logout form binds logout", async () => {
   assert.equal(state.shell.hidden, false);
   assert.equal(logoutForm.listeners.has("submit"), true);
 });
+\ntest("stale dashboard load cannot reopen shell after session revocation", async () => {\n  const logoutForm = element();\n  const state = await boot({ ready: true, logoutForm, revokeBeforeLoad: true });\n  assert.equal(state.shell.hidden, true);\n  assert.equal(state.screen.hidden, false);\n  assert.equal(logoutForm.listeners.has("submit"), false);\n});\n
