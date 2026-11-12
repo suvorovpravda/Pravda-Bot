@@ -370,3 +370,27 @@ fn quote_wall_clock_age_boundary_refuses_stale_synthetic_observations() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn forged_stream_state_variants_never_promote_synthetic_quotes() {
+    // A market cache is not an authority: only the exact recognized stream
+    // state may reach quote parsing, and even then no attestation is granted.
+    for state in [
+        json!(null),
+        json!(true),
+        json!(1),
+        json!("OBSERVATIONS_RECENT"),
+        json!("observations_recent "),
+        json!("connected"),
+        json!({"state": "observations_recent"}),
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["stream_state"] = state;
+        snapshot["attested"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::StreamUnavailable)
+        ));
+    }
+}
