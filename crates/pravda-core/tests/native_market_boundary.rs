@@ -151,12 +151,7 @@ fn invalid_native_quote_policy_never_produces_market_evidence() {
     // native risk limits. Neither successful parsing nor fixture metadata
     // constitutes independent market or portfolio attestation.
     let snapshot = quote(json!(10));
-    for (max_age_ms, max_deviation_bps) in [
-        (0, 50),
-        (2_000, 0),
-        (2_000, 1_001),
-        (0, 0),
-    ] {
+    for (max_age_ms, max_deviation_bps) in [(0, 50), (2_000, 0), (2_000, 1_001), (0, 0)] {
         assert!(matches!(
             evidence_from_native_market_snapshot(
                 &snapshot,
