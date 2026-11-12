@@ -77,6 +77,8 @@ jobs:
         run: node --test tests_js/dashboard-polling.test.cjs tests_js/dashboard-security.test.cjs
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
+      - name: Authentication dashboard startup, overlapping-login and visibility regressions
+        run: node --test tools/tests/auth-dashboard-startup.test.mjs
       - name: Signed Windows updater metadata tampering contracts
         run: node tools/test-updater-release.mjs
       - name: Offline Windows VM GUI acceptance contract (source check only)
