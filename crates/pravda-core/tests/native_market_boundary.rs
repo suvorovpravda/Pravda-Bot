@@ -467,3 +467,18 @@ fn forged_age_metadata_cannot_hide_wall_clock_staleness() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn zero_offset_aliases_cannot_replace_canonical_utc_quote_timestamp() {
+    // These spellings represent the same instant, but are not canonical
+    // native-cache timestamps. They must not inherit feed attestations.
+    for timestamp in ["2025-11-10T10:00:00+00:00", "2025-11-10T10:00:00-00:00"] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
+        snapshot["attested"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
