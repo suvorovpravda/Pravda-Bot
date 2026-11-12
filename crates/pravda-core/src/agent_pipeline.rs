@@ -396,6 +396,17 @@ fn verify_proposal(input: &CycleInput<'_>, proposal: &PaperProposal) -> Result<(
 fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failure> {
     let reply = parse_untrusted_ai_reply(input.gmo_reply_json, input.expected_request_id)
         .map_err(|_| reject("GMO_CONTRACT_REJECTED"))?;
+    // The GMO response is untrusted. Canonical UTC and millisecond precision
+    // prevent alternate encodings and sub-millisecond replay at the REG clock.
+    if !reply.timestamp_utc.ends_with('Z')
+        || reply
+            .timestamp_utc
+            .split_once('T')
+            .and_then(|(_, time)| time.split_once('.'))
+            .is_some_and(|(_, fraction)| fraction.trim_end_matches('Z').len() > 3)
+    {
+        return Err(reject("GMO_TIMESTAMP_INVALID"));
+    }
     let timestamp = DateTime::parse_from_rfc3339(&reply.timestamp_utc)
         .map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
     if timestamp.offset().local_minus_utc() != 0 {
