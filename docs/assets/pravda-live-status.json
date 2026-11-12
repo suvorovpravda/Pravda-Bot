@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "d427b7e25649144c8880aec94560b5be7ad109cc",
-  "latest_evidence_at": "2026-11-12T05:41:19Z",
-  "refreshed_at_utc": "2026-11-12T05:41:31.427Z",
+  "latest_evidence_at": "2026-11-12T06:02:10Z",
+  "refreshed_at_utc": "2026-11-12T06:02:20.056Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 2,
+    "passed": 3,
     "total": 4
   },
   "p0_governance": {
@@ -125,10 +125,10 @@
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "d427b7e256",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43162045778",
-      "observedAt": "2026-11-12T05:32:27Z"
+      "observedAt": "2026-11-12T06:02:10Z"
     },
     {
       "id": "codeql.yml",
@@ -149,8 +149,13 @@
       "observedAt": "2026-11-11T14:27:39Z"
     }
   ],
-  "open_prs": 0,
-  "active_pr": null,
+  "open_prs": 1,
+  "active_pr": {
+    "number": 199,
+    "head_sha": "842dfbec64e84f215e83daf097da67d8bc795989",
+    "draft": true,
+    "evidence_scope": "PR_ONLY_NOT_MAIN"
+  },
   "open_issues": 8,
   "production": "NO-GO",
   "trading_live": "OFF",
