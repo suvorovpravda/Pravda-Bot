@@ -67,3 +67,34 @@ fn quote_from_other_venue_cannot_satisfy_requested_native_market_pair() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn quote_from_other_symbol_cannot_satisfy_requested_native_market_pair() {
+    // A plausible ETH fixture cannot become BTC market evidence merely
+    // because both symbols use the same venue and synthetic timestamp.
+    let snapshot = json!({
+        "stream_state": "observations_recent",
+        "symbols": { "ETH/USDT": { "Binance": {
+            "status": "live",
+            "age_seconds": 0.0,
+            "timestamp": "2025-11-10T10:00:00Z",
+            "price": 10,
+            "attested": true,
+            "provenance_verified": true,
+            "portfolio_verified": true
+        }}}
+    });
+    assert!(matches!(
+        evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+            NOW_MS, 2_000, 50
+        ),
+        Err(NativeMarketRefusal::QuoteUnavailable)
+    ));
+    let evidence = evidence_from_native_market_snapshot(
+        &snapshot, PaperSymbol::EthUsdt, PaperVenue::Binance,
+        NOW_MS, 2_000, 50
+    ).expect("synthetic ETH observation should parse without attestation");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
