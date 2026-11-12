@@ -98,3 +98,37 @@ fn quote_from_other_symbol_cannot_satisfy_requested_native_market_pair() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn embedded_identity_fields_cannot_override_native_quote_lookup() {
+    // A quote object's self-declared identity is not an authoritative key.
+    // Never fall back to embedded fields when the requested venue is absent.
+    let snapshot = json!({
+        "stream_state": "observations_recent",
+        "symbols": { "BTC/USDT": { "Kraken": {
+            "symbol": "BTC/USDT",
+            "venue": "Binance",
+            "status": "live",
+            "age_seconds": 0.0,
+            "timestamp": "2025-11-10T10:00:00Z",
+            "price": 10,
+            "attested": true,
+            "provenance_verified": true,
+            "portfolio_verified": true
+        }}}
+    });
+    assert!(matches!(
+        evidence_from_native_market_snapshot(
+            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+            NOW_MS, 2_000, 50
+        ),
+        Err(NativeMarketRefusal::QuoteUnavailable)
+    ));
+    let observation = evidence_from_native_market_snapshot(
+        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
+        NOW_MS, 2_000, 50
+    ).expect("synthetic quote is an observation, never an attestation");
+    assert_eq!(observation.venue, PaperVenue::Kraken);
+    assert!(!observation.provenance_verified);
+    assert!(!observation.portfolio_verified);
+}
