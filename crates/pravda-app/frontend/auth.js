@@ -150,6 +150,7 @@ window.pravdaRequireLogin = showLogin;
 
 function activateDashboard() {
     window.pravdaAuthGeneration++;
+    const activationGeneration = window.pravdaAuthGeneration;
     loginVisible = false;
     // Never display prior-session synthetic positions while the new snapshot loads.
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
@@ -182,6 +183,8 @@ function activateDashboard() {
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
         dashboardLoading = false;
+        // A session may expire while dashboard.js is loading. Ignore stale loads.
+        if (loginVisible || window.pravdaAuthGeneration !== activationGeneration) return;
         // A loaded script can still leave an incomplete DOM or fail initialization.
         // Fail closed before binding logout or exposing an interactive shell.
         const logoutForm = document.getElementById("ipc-logout-form");
@@ -208,6 +211,7 @@ function activateDashboard() {
     });
     script.addEventListener("error", () => {
         dashboardLoading = false;
+        if (loginVisible || window.pravdaAuthGeneration !== activationGeneration) return;
         showDashboardStartupFailure("DASHBOARD_RESOURCE_UNAVAILABLE");
     });
     document.body.append(script);
