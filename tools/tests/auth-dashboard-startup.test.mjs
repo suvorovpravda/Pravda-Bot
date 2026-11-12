@@ -20,7 +20,7 @@ function element() {
   };
 }
 
-async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBeforeLoad = false, revokeAndReloginBeforeLoad = false}) {
+async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBeforeLoad = false, revokeAndReloginBeforeLoad = false, reloginAfterLoad = false}) {
   const shell = element(), body = element();
   const refreshCalls = [];
   const refreshHooks = [
@@ -74,6 +74,11 @@ async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBef
     window.pravdaRequireLogin();
   }
   script.listeners.get("load")();
+  if (reloginAfterLoad) {
+    await loginSubmit({ preventDefault() {} });
+    assert.equal(body.children.filter(child => child.src === "./dashboard.js").length, 1,
+      "a loaded script must never be reinjected after session restoration");
+  }
   return { shell, screen, card, logoutForm, window, refreshCalls };
 }
 
@@ -98,12 +103,14 @@ test("ready dashboard with logout form binds logout", async () => {
   assert.equal(logoutForm.listeners.has("submit"), true);
 });
 
-test("stale dashboard load cannot reopen shell after session revocation", async () => {
+test("stale dashboard load stays hidden but records successful initialization for next login", async () => {
   const logoutForm = element();
   const state = await boot({ ready: true, logoutForm, revokeBeforeLoad: true });
   assert.equal(state.shell.hidden, true);
   assert.equal(state.screen.hidden, false);
-  assert.equal(logoutForm.listeners.has("submit"), false);
+  assert.equal(logoutForm.listeners.has("submit"), true,
+    "initialized logout control may bind while hidden; it grants no session");
+  assert.equal(state.refreshCalls.length, 0);
 });
 
 test("first authenticated dashboard refreshes gated IPC modules after reveal", async () => {
@@ -148,6 +155,24 @@ test("logout followed by fresh login while script loads permits only the new ses
 
 test("two successful logins cannot bypass a missing logout control", async () => {
   const state = await boot({ ready: true, logoutForm: null, repeatLoginBeforeLoad: true });
+  assert.equal(state.shell.hidden, true);
+  assert.equal(state.screen.hidden, false);
+  assert.equal(state.refreshCalls.length, 0);
+});
+
+test("relogin after a revoked script load reuses initialized JS without second evaluation", async () => {
+  const logoutForm = element();
+  const state = await boot({
+    ready: true, logoutForm, revokeBeforeLoad: true, reloginAfterLoad: true
+  });
+  assert.equal(state.shell.hidden, false);
+  assert.equal(state.screen.hidden, true);
+  assert.equal(logoutForm.listeners.has("submit"), true);
+  assert.equal(state.refreshCalls.length, 6);
+});
+
+test("failed readiness after revocation does not expose shell or trust the failed script", async () => {
+  const state = await boot({ ready: false, logoutForm: element(), revokeBeforeLoad: true });
   assert.equal(state.shell.hidden, true);
   assert.equal(state.screen.hidden, false);
   assert.equal(state.refreshCalls.length, 0);
