@@ -394,3 +394,34 @@ fn forged_stream_state_variants_never_promote_synthetic_quotes() {
         ));
     }
 }
+
+#[test]
+fn forged_quote_status_variants_fail_closed_before_price_parsing() {
+    // The native cache is observational only. Neither alternative status
+    // spellings nor nested trust claims may authorize PAPER market evidence.
+    for status in [
+        json!(null),
+        json!(true),
+        json!(1),
+        json!("LIVE"),
+        json!("live "),
+        json!("verified"),
+        json!("stale"),
+        json!({"state": "live"}),
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["status"] = status;
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["attested"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::QuoteStaleOrUntrusted)
+        ));
+    }
+
+    // Even the exact recognized cache status is not provenance or
+    // portfolio attestation and cannot itself authorize a PAPER order.
+    let evidence = inspect(&quote(json!(10))).expect("synthetic cache observation");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
