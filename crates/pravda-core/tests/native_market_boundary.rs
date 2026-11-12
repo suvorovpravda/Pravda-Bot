@@ -283,3 +283,26 @@ fn synthetic_price_variation_never_grants_market_or_portfolio_attestation() {
         assert!(!evidence.portfolio_verified, "price cannot attest portfolio");
     }
 }
+
+#[test]
+fn native_quote_numeric_type_confusion_never_grants_attestation() {
+    // An untrusted cache can contain JSON types that superficially resemble
+    // prices. None may be coerced into a trusted market observation.
+    for price in [
+        json!(true),
+        json!(false),
+        json!([]),
+        json!([10]),
+        json!({"price": 10}),
+        json!("10.000000"),
+        json!(0.0000001),
+    ] {
+        let mut snapshot = quote(price);
+        snapshot["provenance_verified"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::PriceInvalid)
+        ));
+    }
+}
