@@ -52,6 +52,15 @@ for (const [workflow,required] of Object.entries({
   assert.equal(source.split("- name: Enforce exact checked-out source SHA").length-1,required,
     workflow+": exact SHA must be asserted before tests");
 }
+// RustSec must run for every main commit and every PR SHA, even when the
+// change only touches frontend JS. A paths filter silently skips the audit.
+const rustsecWorkflow=readFileSync(dir+"/rustsec-audit.yml","utf8");
+const rustsecTriggers=rustsecWorkflow.slice(rustsecWorkflow.indexOf("\\non:")+1,
+  rustsecWorkflow.indexOf("\\npermissions:"));
+assert.match(rustsecTriggers,/\\n  push:\\n    branches: \\[main\\]\\n  pull_request:\\n    branches: \\[main\\]\\n/,
+  "RustSec must run on every push to main and every PR head");
+assert.doesNotMatch(rustsecTriggers,/\\n    paths(?:-ignore)?:/,
+  "RustSec path filters can silently skip a protected source SHA");
 assert.match(readFileSync(dir+"/live-docs.yml","utf8"),/ref: main/,
   "Live status publisher must remain on protected main");
 for (const workflow of ["windows-package.yml","rustsec-audit.yml"]) {
