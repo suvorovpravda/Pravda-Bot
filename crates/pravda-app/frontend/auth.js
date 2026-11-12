@@ -148,6 +148,19 @@ function showLogin() {
 
 window.pravdaRequireLogin = showLogin;
 
+// dashboard.js evaluates while the authenticated shell is still hidden.
+// Visibility-gated IPC initialization is intentionally deferred until after
+// the local dashboard and logout control have both been verified.
+function refreshRevealedDashboard() {
+    if (shell.hidden || screen.hidden === false || window.pravdaDashboardReady !== true) return;
+    if (typeof window.refreshRevolutConsent === "function") void window.refreshRevolutConsent();
+    if (typeof window.refreshAll === "function") void window.refreshAll();
+    if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
+    if (typeof window.refreshUpdateReadiness === "function") void window.refreshUpdateReadiness();
+    if (typeof window.refreshSecurityEvents === "function") void window.refreshSecurityEvents();
+    if (typeof window.refreshPaper === "function") void window.refreshPaper();
+}
+
 function activateDashboard() {
     window.pravdaAuthGeneration++;
     const activationGeneration = window.pravdaAuthGeneration;
@@ -164,12 +177,7 @@ function activateDashboard() {
     if (dashboardLoaded) {
         screen.hidden = true;
         shell.hidden = false;
-        if (typeof window.refreshRevolutConsent === "function") void window.refreshRevolutConsent();
-        if (typeof window.refreshAll === "function") void window.refreshAll();
-        if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
-        if (typeof window.refreshUpdateReadiness === "function") void window.refreshUpdateReadiness();
-        if (typeof window.refreshSecurityEvents === "function") void window.refreshSecurityEvents();
-        if (typeof window.refreshPaper === "function") void window.refreshPaper();
+        refreshRevealedDashboard();
         return;
     }
     // Multiple login confirmations must not inject dashboard.js twice.
@@ -208,6 +216,9 @@ function activateDashboard() {
         dashboardLoaded = true;
         screen.hidden = true;
         shell.hidden = false;
+        // Initial script evaluation happened while hidden. Retry the same
+        // authenticated reads as on subsequent logins, never before reveal.
+        refreshRevealedDashboard();
     });
     script.addEventListener("error", () => {
         dashboardLoading = false;
