@@ -245,3 +245,22 @@ fn forged_top_level_attestations_never_upgrade_native_observation() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+
+#[test]
+fn native_quote_age_disagreement_boundary_is_fail_closed() {
+    // Synthetic fixture clock is exactly NOW_MS. One second is the explicit
+    // rounding tolerance, not a feed attestation or an execution guarantee.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(1.0);
+    let evidence = inspect(&snapshot).expect("one-second rounding tolerance");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    // Just beyond the tolerance must refuse, even with forged trust flags.
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(1.001);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
