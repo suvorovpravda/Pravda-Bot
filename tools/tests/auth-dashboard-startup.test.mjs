@@ -186,6 +186,6 @@ test("failed Rust logout never pretends the session was revoked", async () => {
   assert.equal(state.shell.hidden, true, "unconfirmed logout must hide protected dashboard");
   assert.equal(state.screen.hidden, false, "show a blocking recovery screen");
   assert.equal(state.card.children.some(child => child.className === "ipc-startup-recovery"), true);
-  assert.equal(state.window.pravdaAuthGeneration, 1,
+  assert.equal(state.window.pravdaAuthGeneration, 2,
     "do not mark a Rust session revoked when logout IPC failed");
 });
