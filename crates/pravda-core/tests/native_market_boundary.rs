@@ -204,3 +204,15 @@ fn cross_symbol_substitution_and_untrusted_nested_quote_fail_closed() {
             | Err(NativeMarketRefusal::QuoteUnavailable)
     ));
 }
+
+#[test]
+fn native_quote_non_utc_offset_is_refused_even_for_same_instant() {
+    // A timezone-shifted timestamp encodes the same wall-clock instant as
+    // the native fixture, but is not an approved UTC quote representation.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T11:00:00+01:00");
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
