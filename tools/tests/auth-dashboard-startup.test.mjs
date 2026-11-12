@@ -22,6 +22,11 @@ function element() {
 
 async function boot({ready, logoutForm, revokeBeforeLoad = false}) {
   const shell = element(), body = element();
+  const refreshCalls = [];
+  const refreshHooks = [
+    "refreshRevolutConsent", "refreshAll", "refreshSecurity",
+    "refreshUpdateReadiness", "refreshSecurityEvents", "refreshPaper"
+  ];
   const document = {
     body,
     querySelector(selector) { return selector === "main.shell" ? shell : null; },
@@ -48,10 +53,19 @@ async function boot({ready, logoutForm, revokeBeforeLoad = false}) {
   // The shell must not flash into view while dashboard.js is still loading.
   assert.equal(shell.hidden, true, "shell must remain hidden before dashboard readiness");
   assert.equal(screen.hidden, false, "auth screen must remain visible during loading");
+  // Simulate dashboard.js installing its refresh hooks before its load event.
+  // Every hook must run only after the Rust-authenticated shell is revealed.
+  for (const name of refreshHooks) {
+    window[name] = () => refreshCalls.push({
+      name,
+      shellHidden: shell.hidden,
+      screenHidden: screen.hidden
+    });
+  }
   window.pravdaDashboardReady = ready;
   if (revokeBeforeLoad) window.pravdaRequireLogin();
   script.listeners.get("load")();
-  return { shell, screen, card, logoutForm, window };
+  return { shell, screen, card, logoutForm, window, refreshCalls };
 }
 
 test("missing logout form fails closed even if dashboard signals ready", async () => {
@@ -74,4 +88,31 @@ test("ready dashboard with logout form binds logout", async () => {
   assert.equal(state.shell.hidden, false);
   assert.equal(logoutForm.listeners.has("submit"), true);
 });
-\ntest("stale dashboard load cannot reopen shell after session revocation", async () => {\n  const logoutForm = element();\n  const state = await boot({ ready: true, logoutForm, revokeBeforeLoad: true });\n  assert.equal(state.shell.hidden, true);\n  assert.equal(state.screen.hidden, false);\n  assert.equal(logoutForm.listeners.has("submit"), false);\n});\n
+
+test("stale dashboard load cannot reopen shell after session revocation", async () => {
+  const logoutForm = element();
+  const state = await boot({ ready: true, logoutForm, revokeBeforeLoad: true });
+  assert.equal(state.shell.hidden, true);
+  assert.equal(state.screen.hidden, false);
+  assert.equal(logoutForm.listeners.has("submit"), false);
+});
+
+test("first authenticated dashboard refreshes gated IPC modules after reveal", async () => {
+  const state = await boot({ ready: true, logoutForm: element() });
+  assert.deepEqual(state.refreshCalls.map(call => call.name), [
+    "refreshRevolutConsent", "refreshAll", "refreshSecurity",
+    "refreshUpdateReadiness", "refreshSecurityEvents", "refreshPaper"
+  ]);
+  assert.ok(state.refreshCalls.every(call => !call.shellHidden && call.screenHidden),
+    "no protected refresh may run while the authenticated shell is hidden");
+});
+
+test("missing logout control never triggers authenticated dashboard refresh", async () => {
+  const state = await boot({ ready: true, logoutForm: null });
+  assert.equal(state.refreshCalls.length, 0);
+});
+
+test("revoked login cannot trigger delayed dashboard refresh", async () => {
+  const state = await boot({ ready: true, logoutForm: element(), revokeBeforeLoad: true });
+  assert.equal(state.refreshCalls.length, 0);
+});
