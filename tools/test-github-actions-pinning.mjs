@@ -54,7 +54,7 @@ for (const [workflow,required] of Object.entries({
 }
 // RustSec must run for every main commit and every PR SHA, even when the
 // change only touches frontend JS. A paths filter silently skips the audit.
-const rustsecWorkflow=readFileSync(dir+"/rustsec-audit.yml","utf8");
+const rustsecWorkflow=readFileSync(dir+"/rustsec-audit.yml","utf8").replace(/\r\n/g,"\n");
 const rustsecTriggers=rustsecWorkflow.slice(rustsecWorkflow.indexOf("\non:")+1,
   rustsecWorkflow.indexOf("\npermissions:"));
 assert.match(rustsecTriggers,/\n  push:\n    branches: \[main\]\n  pull_request:\n    branches: \[main\]\n/,
