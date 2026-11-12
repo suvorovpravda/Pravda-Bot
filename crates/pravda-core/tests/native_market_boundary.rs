@@ -306,3 +306,20 @@ fn native_quote_numeric_type_confusion_never_grants_attestation() {
         ));
     }
 }
+
+#[test]
+fn native_quote_fractional_precision_boundary_is_exact_and_unattested() {
+    // The last accepted micro-unit must remain exact; an additional decimal
+    // digit must fail closed rather than round into a PAPER risk decision.
+    let mut snapshot = quote(json!(10.123456));
+    let evidence = inspect(&snapshot).expect("six decimal places are exact");
+    assert_eq!(evidence.reference_price_micros, 10_123_456);
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["price"] = json!(10.1234567);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::PriceInvalid)
+    ));
+}
