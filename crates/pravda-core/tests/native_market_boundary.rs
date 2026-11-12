@@ -323,3 +323,23 @@ fn native_quote_fractional_precision_boundary_is_exact_and_unattested() {
         Err(NativeMarketRefusal::PriceInvalid)
     ));
 }
+
+#[test]
+fn scientific_notation_and_unbounded_prices_cannot_bypass_exact_micro_units() {
+    // Numeric JSON values can be finite yet unsuitable for exact fixed-point
+    // PAPER risk arithmetic. Never round, saturate, or trust forged flags.
+    for price in [
+        json!(1e30),
+        json!(1e-8),
+        json!(1e100),
+        json!(18446744073709551615.0),
+    ] {
+        let mut snapshot = quote(price);
+        snapshot["attested"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["provenance_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::PriceInvalid)
+        ));
+    }
+}
