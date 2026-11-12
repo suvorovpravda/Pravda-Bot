@@ -1,0 +1,39 @@
+//! Adversarial timestamp normalization tests for the native PAPER boundary.
+//! These synthetic fixtures are not certified market data or portfolio evidence.
+use pravda_core::agent_contract::{PaperSymbol, PaperVenue};
+use pravda_core::agent_pipeline::{evidence_from_native_market_snapshot, NativeMarketRefusal};
+use serde_json::json;
+
+const NOW_MS: u64 = 1_762_768_800_000;
+
+#[test]
+fn timestamp_unicode_and_whitespace_spoofing_fails_closed() {
+    for timestamp in [
+        "2025-11-10T10:00:00Z ",
+        " 2025-11-10T10:00:00Z",
+        "2025-11-10T10:00:00z",
+        "2025-11-10T10:00:00Ｚ",
+        "2025-11-10T10:00:00Z\n",
+        "2025-11-10T10:00:00Z\0",
+    ] {
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": { "BTC/USDT": { "Binance": {
+                "status": "live",
+                "age_seconds": 0.0,
+                "timestamp": timestamp,
+                "price": 10,
+                "attested": true,
+                "provenance_verified": true,
+                "portfolio_verified": true
+            }}}
+        });
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                NOW_MS, 2_000, 50
+            ),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ), "noncanonical synthetic timestamp accepted: {timestamp:?}");
+    }
+}
