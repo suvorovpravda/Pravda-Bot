@@ -194,7 +194,9 @@ pub fn evidence_from_native_market_snapshot(
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
     let observed = DateTime::parse_from_rfc3339(timestamp)
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if observed.offset().local_minus_utc() != 0 {
+    // Require the canonical Z suffix, not merely a zero-second UTC offset.
+    // An untrusted cache must not introduce alternative timestamp spellings.
+    if !timestamp.ends_with('Z') || observed.offset().local_minus_utc() != 0 {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let observed_ms = u64::try_from(observed.timestamp_millis())
