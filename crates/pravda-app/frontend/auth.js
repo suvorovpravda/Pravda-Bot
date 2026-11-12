@@ -43,6 +43,9 @@ shell.hidden = true;
 let setup = false;
 let dashboardLoaded = false;
 let dashboardLoading = false;
+// Updated by every successful login, including a second confirmation while
+// dashboard.js is still loading. A pending load serves the latest login only.
+let pendingDashboardActivationGeneration = 0;
 let working = false;
 let loginVisible = false;
 // Capture only a closed diagnostic category and an in-file line number.
@@ -163,7 +166,9 @@ function refreshRevealedDashboard() {
 
 function activateDashboard() {
     window.pravdaAuthGeneration++;
-    const activationGeneration = window.pravdaAuthGeneration;
+    // Keep the IPC session epoch monotonic across repeated successful logins,
+    // but allow the ONE pending dashboard script to finish for the latest one.
+    pendingDashboardActivationGeneration = window.pravdaAuthGeneration;
     loginVisible = false;
     // Never display prior-session synthetic positions while the new snapshot loads.
     if (typeof window.pravdaClearPaper === "function") window.pravdaClearPaper();
@@ -192,7 +197,7 @@ function activateDashboard() {
     script.addEventListener("load", () => {
         dashboardLoading = false;
         // A session may expire while dashboard.js is loading. Ignore stale loads.
-        if (loginVisible || window.pravdaAuthGeneration !== activationGeneration) return;
+        if (loginVisible || window.pravdaAuthGeneration !== pendingDashboardActivationGeneration) return;
         // A loaded script can still leave an incomplete DOM or fail initialization.
         // Fail closed before binding logout or exposing an interactive shell.
         const logoutForm = document.getElementById("ipc-logout-form");
@@ -222,7 +227,7 @@ function activateDashboard() {
     });
     script.addEventListener("error", () => {
         dashboardLoading = false;
-        if (loginVisible || window.pravdaAuthGeneration !== activationGeneration) return;
+        if (loginVisible || window.pravdaAuthGeneration !== pendingDashboardActivationGeneration) return;
         showDashboardStartupFailure("DASHBOARD_RESOURCE_UNAVAILABLE");
     });
     document.body.append(script);
