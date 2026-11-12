@@ -144,3 +144,29 @@ fn stale_stream_and_quote_status_refuse_synthetic_attestation_flags() {
         Err(NativeMarketRefusal::QuoteStaleOrUntrusted)
     ));
 }
+
+#[test]
+fn invalid_native_quote_policy_never_produces_market_evidence() {
+    // Even a syntactically valid synthetic quote cannot bypass invalid
+    // native risk limits. Neither successful parsing nor fixture metadata
+    // constitutes independent market or portfolio attestation.
+    let snapshot = quote(json!(10));
+    for (max_age_ms, max_deviation_bps) in [
+        (0, 50),
+        (2_000, 0),
+        (2_000, 1_001),
+        (0, 0),
+    ] {
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                NOW_MS,
+                max_age_ms,
+                max_deviation_bps,
+            ),
+            Err(NativeMarketRefusal::PolicyInvalid)
+        ));
+    }
+}
