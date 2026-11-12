@@ -278,9 +278,18 @@ fn synthetic_price_variation_never_grants_market_or_portfolio_attestation() {
         snapshot["symbols"]["BTC/USDT"]["Binance"]["attested"] = json!(true);
 
         let evidence = inspect(&snapshot).expect("synthetic observation must parse");
-        assert_eq!(evidence.reference_price_micros, u128::from(price) * 1_000_000);
-        assert!(!evidence.provenance_verified, "price cannot attest provenance");
-        assert!(!evidence.portfolio_verified, "price cannot attest portfolio");
+        assert_eq!(
+            evidence.reference_price_micros,
+            u128::from(price) * 1_000_000
+        );
+        assert!(
+            !evidence.provenance_verified,
+            "price cannot attest provenance"
+        );
+        assert!(
+            !evidence.portfolio_verified,
+            "price cannot attest portfolio"
+        );
     }
 }
 
@@ -344,14 +353,12 @@ fn scientific_notation_and_unbounded_prices_cannot_bypass_exact_micro_units() {
     }
 }
 
-
 #[test]
 fn quote_wall_clock_age_boundary_refuses_stale_synthetic_observations() {
     // Both timestamp and reported age agree. Freshness is still only a
     // syntactic observation, never an independent market attestation.
     let mut snapshot = quote(json!(10));
-    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
-        json!("2025-11-10T09:59:58Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T09:59:58Z");
     snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
     let evidence = inspect(&snapshot).expect("exact maximum age is permitted");
     assert_eq!(evidence.quote_received_at_ms, NOW_MS - 2_000);
@@ -360,8 +367,7 @@ fn quote_wall_clock_age_boundary_refuses_stale_synthetic_observations() {
 
     // One millisecond beyond the policy boundary is stale, even when the
     // untrusted cache claims independent provenance and portfolio checks.
-    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
-        json!("2025-11-10T09:59:57.999Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T09:59:57.999Z");
     snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.001);
     snapshot["provenance_verified"] = json!(true);
     snapshot["portfolio_verified"] = json!(true);
@@ -445,4 +451,19 @@ fn future_dated_quote_cannot_be_reclassified_as_fresh_by_cache_flags() {
             Err(NativeMarketRefusal::ClockOrAgeInvalid)
         ));
     }
+}
+
+#[test]
+fn forged_age_metadata_cannot_hide_wall_clock_staleness() {
+    // An age of zero supplied by the cache is not authoritative: the native
+    // clock rejects observations older than the explicit PAPER age policy.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T09:59:57Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+    snapshot["attested"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
 }
