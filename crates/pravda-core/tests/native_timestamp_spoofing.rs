@@ -132,3 +132,52 @@ fn embedded_identity_fields_cannot_override_native_quote_lookup() {
     assert!(!observation.provenance_verified);
     assert!(!observation.portfolio_verified);
 }
+
+#[test]
+fn native_policy_zero_and_excessive_deviation_fail_before_quote_trust() {
+    // A syntactically valid synthetic quote cannot override native PAPER
+    // policy bounds, even when the cache forges independent trust flags.
+    let snapshot = json!({
+        "stream_state": "observations_recent",
+        "attested": true,
+        "portfolio_verified": true,
+        "symbols": { "BTC/USDT": { "Binance": {
+            "status": "live",
+            "age_seconds": 0.0,
+            "timestamp": "2025-11-10T10:00:00Z",
+            "price": 10,
+            "provenance_verified": true,
+            "portfolio_verified": true
+        }}}
+    });
+    for (max_age_ms, max_deviation_bps) in [
+        (0_u64, 50_u16),
+        (2_000, 0),
+        (2_000, 1_001),
+        (2_000, u16::MAX),
+    ] {
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                NOW_MS,
+                max_age_ms,
+                max_deviation_bps,
+            ),
+            Err(NativeMarketRefusal::PolicyInvalid)
+        ));
+    }
+    // The maximum allowed deviation is still merely an observation.
+    let observation = evidence_from_native_market_snapshot(
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW_MS,
+        2_000,
+        1_000,
+    )
+    .expect("synthetic quote parses but is not certified");
+    assert!(!observation.provenance_verified);
+    assert!(!observation.portfolio_verified);
+}
