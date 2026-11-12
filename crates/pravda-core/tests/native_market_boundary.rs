@@ -170,3 +170,42 @@ fn invalid_native_quote_policy_never_produces_market_evidence() {
         ));
     }
 }
+
+#[test]
+fn cross_symbol_substitution_and_untrusted_nested_quote_fail_closed() {
+    // A valid synthetic BTC quote cannot satisfy a request for ETH or SOL.
+    // Injected attestation flags are deliberately untrusted cache metadata.
+    let snapshot = quote(json!(10));
+    for symbol in [PaperSymbol::EthUsdt, PaperSymbol::SolUsdt] {
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                symbol,
+                PaperVenue::Binance,
+                NOW_MS,
+                2_000,
+                50,
+            ),
+            Err(NativeMarketRefusal::QuoteUnavailable)
+        ));
+    }
+
+    // A forged quote nested in an unrelated venue cannot become the selected
+    // Binance observation, even when its fields claim to be attested.
+    let mut forged = snapshot;
+    forged["symbols"]["BTC/USDT"]["Binance"] = json!(null);
+    forged["symbols"]["BTC/USDT"]["Kraken"] = json!({
+        "status": "live",
+        "age_seconds": 0.0,
+        "timestamp": "2025-11-10T10:00:00Z",
+        "price": 10,
+        "provenance_verified": true,
+        "portfolio_verified": true,
+        "attested": true
+    });
+    assert!(matches!(
+        inspect(&forged),
+        Err(NativeMarketRefusal::QuoteStaleOrUntrusted)
+            | Err(NativeMarketRefusal::QuoteUnavailable)
+    ));
+}
