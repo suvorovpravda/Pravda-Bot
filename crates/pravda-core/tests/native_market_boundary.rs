@@ -1,9 +1,7 @@
 //! Black-box boundary checks for the native PAPER market adapter.
 //! Synthetic quotes below are test fixtures, not independently attested prices.
 use pravda_core::agent_contract::{PaperSymbol, PaperVenue};
-use pravda_core::agent_pipeline::{
-    evidence_from_native_market_snapshot, NativeMarketRefusal,
-};
+use pravda_core::agent_pipeline::{evidence_from_native_market_snapshot, NativeMarketRefusal};
 use serde_json::json;
 
 const NOW_MS: u64 = 1_762_768_800_000;
@@ -27,7 +25,9 @@ fn quote(price: serde_json::Value) -> serde_json::Value {
     })
 }
 
-fn inspect(snapshot: &serde_json::Value) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
+fn inspect(
+    snapshot: &serde_json::Value,
+) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
     evidence_from_native_market_snapshot(
         snapshot,
         PaperSymbol::BtcUsdt,
@@ -57,7 +57,10 @@ fn malformed_or_non_numeric_prices_fail_closed() {
         json!({"value": 10, "attested": true}),
         json!(10.1234567),
     ] {
-        assert!(matches!(inspect(&quote(price)), Err(NativeMarketRefusal::PriceInvalid)));
+        assert!(matches!(
+            inspect(&quote(price)),
+            Err(NativeMarketRefusal::PriceInvalid)
+        ));
     }
 }
 
@@ -66,13 +69,23 @@ fn venue_substitution_and_clock_regression_fail_closed() {
     let snapshot = quote(json!(10));
     assert!(matches!(
         evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken, NOW_MS, 2_000, 50
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Kraken,
+            NOW_MS,
+            2_000,
+            50
         ),
         Err(NativeMarketRefusal::QuoteUnavailable)
     ));
     assert!(matches!(
         evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW_MS - 1, 2_000, 50
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            NOW_MS - 1,
+            2_000,
+            50
         ),
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
