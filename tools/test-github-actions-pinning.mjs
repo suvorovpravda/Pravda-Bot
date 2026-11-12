@@ -81,6 +81,16 @@ assert.match(signedBuild,/TAURI_SIGNING_PRIVATE_KEY: \$\{\{ secrets\.TAURI_SIGNI
   "Signed builds require the protected Tauri signing secret");
 assert.match(packaging,/environment: \$\{\{ inputs\.signed && 'windows-signing' \|\| 'unsigned-test' \}\}/,
   "Signed builds must remain isolated in the protected signing environment");
+// Every main SHA must receive Windows browser-mode authentication persistence
+// coverage, including frontend-only and CI-only changes. A paths filter on
+// push silently leaves some main commits without this regression check.
+const browserFallback=readFileSync(dir+"/browser-fallback.yml","utf8").replace(/\\r\\n/g,"\\n");
+const browserPush=browserFallback.match(/^  push:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)/m);
+assert.ok(browserPush,"Windows browser fallback must run on push to main");
+assert.match(browserPush[1],/^    branches: \\[main\\]$/m,
+  "Windows browser fallback must target main");
+assert.doesNotMatch(browserPush[1],/^    paths(?:-ignore)?:/m,
+  "Windows browser fallback must not skip main SHAs via path filters");
 // All PR checkouts must avoid writing the repository token to Git config.
 for (const [workflow,count] of Object.entries({
   "rust.yml":7, "rustsec-audit.yml":2, "codeql.yml":1,
