@@ -196,19 +196,18 @@ function activateDashboard() {
     script.src = "./dashboard.js";
     script.addEventListener("load", () => {
         dashboardLoading = false;
-        // A session may expire while dashboard.js is loading. Ignore stale loads.
-        if (loginVisible || window.pravdaAuthGeneration !== pendingDashboardActivationGeneration) return;
-        // A loaded script can still leave an incomplete DOM or fail initialization.
-        // Fail closed before binding logout or exposing an interactive shell.
+        const activeLogin = !loginVisible &&
+            window.pravdaAuthGeneration === pendingDashboardActivationGeneration;
+        // A completed dashboard script is a one-shot asset: evaluating it twice
+        // can redeclare top-level lexical bindings. Record successful startup
+        // even when the user logged out while the script was loading.
         const logoutForm = document.getElementById("ipc-logout-form");
-        if (window.pravdaDashboardReady !== true) {
-            showDashboardStartupFailure(dashboardFaultCode);
+        if (window.pravdaDashboardReady !== true || !logoutForm) {
+            if (activeLogin) showDashboardStartupFailure(dashboardFaultCode);
             return;
         }
-        if (!logoutForm) {
-            showDashboardStartupFailure(dashboardFaultCode);
-            return;
-        }
+        // Bind logout once to the initialized DOM, never to a failed or
+        // incomplete dashboard. Binding alone cannot authenticate a session.
         logoutForm.addEventListener("submit", async event => {
             event.preventDefault();
             try {
@@ -219,6 +218,9 @@ function activateDashboard() {
             showLogin();
         });
         dashboardLoaded = true;
+        // A revoked session must stay hidden. The next successful login
+        // reuses this initialized dashboard instead of reinjecting JS.
+        if (!activeLogin) return;
         screen.hidden = true;
         shell.hidden = false;
         // Initial script evaluation happened while hidden. Retry the same
