@@ -84,10 +84,10 @@ assert.match(packaging,/environment: \$\{\{ inputs\.signed && 'windows-signing' 
 // Every main SHA must receive Windows browser-mode authentication persistence
 // coverage, including frontend-only and CI-only changes. A paths filter on
 // push silently leaves some main commits without this regression check.
-const browserFallback=readFileSync(dir+"/browser-fallback.yml","utf8").replace(/\\r\\n/g,"\\n");
-const browserPush=browserFallback.match(/^  push:\\n([\\s\\S]*?)(?=^  [a-z_]+:|^permissions:)/m);
+const browserFallback=readFileSync(dir+"/browser-fallback.yml","utf8").replace(/\r\n/g,"\n");
+const browserPush=browserFallback.match(/^  push:\n([\s\S]*?)(?=^  [a-z_]+:|^permissions:)/m);
 assert.ok(browserPush,"Windows browser fallback must run on push to main");
-assert.match(browserPush[1],/^    branches: \\[main\\]$/m,
+assert.match(browserPush[1],/^    branches: \[main\]$/m,
   "Windows browser fallback must target main");
 assert.doesNotMatch(browserPush[1],/^    paths(?:-ignore)?:/m,
   "Windows browser fallback must not skip main SHAs via path filters");
