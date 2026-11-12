@@ -208,3 +208,38 @@ fn forged_reported_age_cannot_override_native_wall_clock() {
         ), "forged reported age accepted: {reported_age}");
     }
 }
+
+#[test]
+fn synthetic_prices_with_unsafe_numeric_representations_fail_closed() {
+    // Market-cache JSON is untrusted: never round, coerce, or overflow a
+    // synthetic price into an apparently usable PAPER reference price.
+    for price in [
+        json!(0),
+        json!(-1),
+        json!("10"),
+        json!(null),
+        json!(1.0000001),
+        json!(1e30),
+        json!(true),
+    ] {
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": { "BTC/USDT": { "Binance": {
+                "status": "live",
+                "age_seconds": 0.0,
+                "timestamp": "2025-11-10T10:00:00Z",
+                "price": price,
+                "attested": true,
+                "provenance_verified": true,
+                "portfolio_verified": true
+            }}}
+        });
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                NOW_MS, 2_000, 50
+            ),
+            Err(NativeMarketRefusal::PriceInvalid)
+        ), "unsafe synthetic price accepted: {price}");
+    }
+}
