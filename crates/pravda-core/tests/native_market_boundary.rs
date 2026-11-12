@@ -216,3 +216,32 @@ fn native_quote_non_utc_offset_is_refused_even_for_same_instant() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn malformed_native_snapshot_shapes_cannot_supply_attested_evidence() {
+    // Cache JSON is not a trusted attestation channel. Reject malformed
+    // structures without falling back to a quote at another nesting level.
+    for snapshot in [
+        json!(null),
+        json!([]),
+        json!({"stream_state": "observations_recent"}),
+        json!({"stream_state": "observations_recent", "symbols": null}),
+        json!({"stream_state": "observations_recent", "symbols": []}),
+        json!({"stream_state": "observations_recent", "symbols": {"BTC/USDT": null}}),
+        json!({"stream_state": "observations_recent", "symbols": {"BTC/USDT": {"Binance": null}}}),
+    ] {
+        assert!(inspect(&snapshot).is_err(), "malformed cache shape accepted");
+    }
+}
+
+#[test]
+fn forged_top_level_attestations_never_upgrade_native_observation() {
+    let mut snapshot = quote(json!(10));
+    snapshot["provenance_verified"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    snapshot["attested"] = json!(true);
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["market_quality"] = json!("verified");
+    let evidence = inspect(&snapshot).expect("synthetic observation is parseable");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
