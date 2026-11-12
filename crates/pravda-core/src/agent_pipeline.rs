@@ -192,6 +192,18 @@ pub fn evidence_from_native_market_snapshot(
         .get("timestamp")
         .and_then(serde_json::Value::as_str)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    // Millisecond policy clocks must not silently truncate sub-millisecond
+    // timestamps (including a future quote only microseconds ahead).
+    let time_part = timestamp
+        .split_once('T')
+        .map(|(_, time)| time)
+        .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    if time_part
+        .split_once('.')
+        .is_some_and(|(_, fraction)| fraction.trim_end_matches('Z').len() > 3)
+    {
+        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
+    }
     let observed = DateTime::parse_from_rfc3339(timestamp)
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
     // Require the canonical Z suffix, not merely a zero-second UTC offset.
