@@ -60,10 +60,10 @@ for (const workflow of ["windows-package.yml","rustsec-audit.yml"]) {
 }
 // Main must not skip Rust/MSRV/WebView2 regression gates for unrelated commits.
 // Previously a push changing only .github/workflows/codeql.yml bypassed them.
-const rustMainWorkflow=readFileSync(dir+"/rust.yml","utf8").replace(/\\r\\n/g,"\\n");
-const rustMainPush=rustMainWorkflow.match(/^  push:\\n([\\s\\S]*?)(?=^  pull_request:)/m);
+const rustMainWorkflow=readFileSync(dir+"/rust.yml","utf8").replace(/\r\n/g,"\n");
+const rustMainPush=rustMainWorkflow.match(/^  push:\n([\s\S]*?)(?=^  pull_request:)/m);
 assert.ok(rustMainPush,"Rust workflow must define a main push trigger");
-assert.match(rustMainPush[1],/^    branches: \\[main\\]$/m,
+assert.match(rustMainPush[1],/^    branches: \[main\]$/m,
   "Rust regression gates must run on main");
 assert.doesNotMatch(rustMainPush[1],/^    paths(?:-ignore)?:/m,
   "Every main SHA must trigger Rust/MSRV/Windows regression gates, regardless of changed paths");
