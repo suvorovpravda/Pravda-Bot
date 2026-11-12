@@ -3,10 +3,28 @@ $ErrorActionPreference = "Stop"
 $exe = Join-Path $PSScriptRoot "release-stage/pravda-server.exe"
 $launcher = Join-Path $PSScriptRoot "release-stage/Start-Pravda-Bot.ps1"
 if (-not (Test-Path $exe)) { throw "Server binary not packaged" }
-$probe = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Loopback, 0)
-$probe.Start()
-$port = $probe.LocalEndpoint.Port
-$probe.Stop()
+# The dynamic Windows ephemeral range can reuse a port immediately after a
+# short-lived listener closes, especially across a stop/restart sequence. Pick
+# a random non-ephemeral loopback port for EACH independent server launch.
+# Do not alter the production launcher's fail-closed occupied-port guard.
+function Get-TestLoopbackPort([int]$Exclude = 0) {
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        $candidate = Get-Random -Minimum 20000 -Maximum 45000
+        if ($candidate -eq $Exclude) { continue }
+        $probe = [System.Net.Sockets.TcpListener]::new(
+            [System.Net.IPAddress]::Loopback, $candidate)
+        try {
+            $probe.Start()
+            return $candidate
+        } catch [System.Net.Sockets.SocketException] {
+            # Another service already owns the proposed port; never connect to it.
+        } finally {
+            $probe.Stop()
+        }
+    }
+    throw "Could not reserve an unused test loopback port"
+}
+$port = Get-TestLoopbackPort
 $data = Join-Path $env:RUNNER_TEMP ("pravda-browser-" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force $data | Out-Null
 $env:PRAVDA_MARKET_FEEDS_ENABLED = "false"
@@ -87,6 +105,11 @@ try {
     $childId = 0
     # Ensure a new process, without PRAVDA_ADMIN_PASSWORD, reads the saved hash.
     Remove-Item Env:PRAVDA_ADMIN_PASSWORD -ErrorAction SilentlyContinue
+    # The second process must prove it reads the SAME persisted password state,
+    # independently of its port and without inheriting the original listener.
+    # Rebinding immediately to the first port on Windows can fail transiently.
+    $port = Get-TestLoopbackPort -Exclude $port
+    $base = "http://127.0.0.1:$port"
     $second = & $launcher -NoBrowser -DataDirectory $data -Port $port
     $ready2 = [string]($second | Where-Object { $_ -match '^PRAVDA_READY:\d+$' } | Select-Object -Last 1)
     if (-not $ready2) { throw "Server did not restart with saved data" }
