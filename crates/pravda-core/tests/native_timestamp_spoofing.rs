@@ -181,3 +181,30 @@ fn native_policy_zero_and_excessive_deviation_fail_before_quote_trust() {
     assert!(!observation.provenance_verified);
     assert!(!observation.portfolio_verified);
 }
+
+#[test]
+fn forged_reported_age_cannot_override_native_wall_clock() {
+    // A fresh synthetic timestamp and a stale reported age must disagree.
+    // Neither field is an independent market or portfolio attestation.
+    for reported_age in [2.0, 100.0, 1_000.0] {
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": { "BTC/USDT": { "Binance": {
+                "status": "live",
+                "age_seconds": reported_age,
+                "timestamp": "2025-11-10T10:00:00Z",
+                "price": 10,
+                "attested": true,
+                "provenance_verified": true,
+                "portfolio_verified": true
+            }}}
+        });
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                NOW_MS, 5_000_000, 50
+            ),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ), "forged reported age accepted: {reported_age}");
+    }
+}
