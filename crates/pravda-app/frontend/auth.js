@@ -202,7 +202,11 @@ function activateDashboard() {
         // can redeclare top-level lexical bindings. Record successful startup
         // even when the user logged out while the script was loading.
         const logoutForm = document.getElementById("ipc-logout-form");
-        if (window.pravdaDashboardReady !== true || !logoutForm) {
+        if (window.pravdaDashboardReady !== true) {
+            if (activeLogin) showDashboardStartupFailure(dashboardFaultCode);
+            return;
+        }
+        if (!logoutForm) {
             if (activeLogin) showDashboardStartupFailure(dashboardFaultCode);
             return;
         }
