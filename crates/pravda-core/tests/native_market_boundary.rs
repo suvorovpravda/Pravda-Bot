@@ -482,3 +482,24 @@ fn zero_offset_aliases_cannot_replace_canonical_utc_quote_timestamp() {
         ));
     }
 }
+
+#[test]
+fn sub_millisecond_timestamp_precision_cannot_be_truncated_into_freshness() {
+    // A timestamp 100 microseconds in the future would round down to NOW_MS
+    // if converted directly to milliseconds. Synthetic cache flags cannot
+    // make that observation independently attested or executable.
+    for timestamp in [
+        "2025-11-10T10:00:00.0001Z",
+        "2025-11-10T10:00:00.000001Z",
+        "2025-11-10T10:00:00.000000001Z",
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
+        snapshot["attested"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
