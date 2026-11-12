@@ -266,3 +266,20 @@ fn native_quote_age_disagreement_boundary_is_fail_closed() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn synthetic_price_variation_never_grants_market_or_portfolio_attestation() {
+    // Price plausibility is not evidence of independent provenance.
+    // These are deliberately synthetic fixtures, never executable quotes.
+    for price in [1_u64, 10, 100, 100_000] {
+        let mut snapshot = quote(json!(price));
+        snapshot["attested"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["attested"] = json!(true);
+
+        let evidence = inspect(&snapshot).expect("synthetic observation must parse");
+        assert_eq!(evidence.reference_price_micros, u128::from(price) * 1_000_000);
+        assert!(!evidence.provenance_verified, "price cannot attest provenance");
+        assert!(!evidence.portfolio_verified, "price cannot attest portfolio");
+    }
+}
