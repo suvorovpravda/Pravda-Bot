@@ -1228,8 +1228,7 @@ mod tests {
             }}}
         });
         for invalid_timestamp in ["1969-12-31T23:59:59Z", "9999-12-31T23:59:59Z"] {
-            snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] =
-                json!(invalid_timestamp);
+            snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(invalid_timestamp);
             assert_eq!(
                 evidence_from_native_market_snapshot(
                     &snapshot,
@@ -1238,7 +1237,8 @@ mod tests {
                     now_ms,
                     2_000,
                     50,
-                ).err(),
+                )
+                .err(),
                 Some(NativeMarketRefusal::ClockOrAgeInvalid),
                 "invalid timestamp must not become trusted evidence: {invalid_timestamp}"
             );
