@@ -107,3 +107,40 @@ fn missing_or_unparseable_quote_timestamp_never_creates_market_evidence() {
         ));
     }
 }
+
+#[test]
+fn untrusted_age_metadata_cannot_override_quote_wall_clock() {
+    // Synthetic fixture: timestamp is exactly NOW_MS, so a claimed age of
+    // 1.5 seconds conflicts with the independent timestamp beyond tolerance.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(1.5);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+
+    // A negative or nonnumeric age cannot become a trusted fresh quote.
+    for age in [json!(-0.1), json!("0"), json!(null)] {
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = age;
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
+
+#[test]
+fn stale_stream_and_quote_status_refuse_synthetic_attestation_flags() {
+    let mut snapshot = quote(json!(10));
+    snapshot["stream_state"] = json!("disconnected");
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::StreamUnavailable)
+    ));
+    snapshot["stream_state"] = json!("observations_recent");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["status"] = json!("stale");
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::QuoteStaleOrUntrusted)
+    ));
+}
