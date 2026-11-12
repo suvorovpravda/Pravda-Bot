@@ -425,3 +425,24 @@ fn forged_quote_status_variants_fail_closed_before_price_parsing() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn future_dated_quote_cannot_be_reclassified_as_fresh_by_cache_flags() {
+    // Synthetic future timestamps must never be treated as trusted market
+    // evidence, even if the untrusted cache reports zero age and attestations.
+    for timestamp in [
+        "2025-11-10T10:00:00.001Z",
+        "2025-11-10T10:00:01Z",
+        "2025-11-10T10:01:00Z",
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+        snapshot["provenance_verified"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
