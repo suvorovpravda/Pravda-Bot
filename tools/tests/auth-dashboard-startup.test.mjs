@@ -20,7 +20,7 @@ function element() {
   };
 }
 
-async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBeforeLoad = false, revokeAndReloginBeforeLoad = false, reloginAfterLoad = false}) {
+async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBeforeLoad = false, revokeAndReloginBeforeLoad = false, reloginAfterLoad = false, logoutRejects = false}) {
   const shell = element(), body = element();
   const refreshCalls = [];
   const refreshHooks = [
@@ -34,7 +34,7 @@ async function boot({ready, logoutForm, revokeBeforeLoad = false, repeatLoginBef
     getElementById(id) { return id === "ipc-logout-form" ? logoutForm : null; }
   };
   const window = {
-    __TAURI__: { core: { invoke: async command => command === "ipc_auth_status" } },
+    __TAURI__: { core: { invoke: async command => { if (command === "ipc_auth_logout" && logoutRejects) throw new Error("IPC_DOWN"); return command === "ipc_auth_status"; } } },
     addEventListener() {},
     pravdaDashboardReady: ready,
     location: { reload() {} }
@@ -176,4 +176,16 @@ test("failed readiness after revocation does not expose shell or trust the faile
   assert.equal(state.shell.hidden, true);
   assert.equal(state.screen.hidden, false);
   assert.equal(state.refreshCalls.length, 0);
+});
+
+test("failed Rust logout never pretends the session was revoked", async () => {
+  const logoutForm = element();
+  const state = await boot({ ready: true, logoutForm, logoutRejects: true });
+  assert.equal(state.shell.hidden, false);
+  await logoutForm.listeners.get("submit")({ preventDefault() {} });
+  assert.equal(state.shell.hidden, true, "unconfirmed logout must hide protected dashboard");
+  assert.equal(state.screen.hidden, false, "show a blocking recovery screen");
+  assert.equal(state.card.children.some(child => child.className === "ipc-startup-recovery"), true);
+  assert.equal(state.window.pravdaAuthGeneration, 1,
+    "do not mark a Rust session revoked when logout IPC failed");
 });
