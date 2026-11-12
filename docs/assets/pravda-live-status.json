@@ -2,7 +2,7 @@
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "d427b7e25649144c8880aec94560b5be7ad109cc",
   "latest_evidence_at": "2026-11-12T06:02:10Z",
-  "refreshed_at_utc": "2026-11-12T06:02:20.056Z",
+  "refreshed_at_utc": "2026-11-12T13:40:15.597Z",
   "historical": {
     "rows": [
       {
@@ -149,13 +149,8 @@
       "observedAt": "2026-11-11T14:27:39Z"
     }
   ],
-  "open_prs": 1,
-  "active_pr": {
-    "number": 199,
-    "head_sha": "842dfbec64e84f215e83daf097da67d8bc795989",
-    "draft": true,
-    "evidence_scope": "PR_ONLY_NOT_MAIN"
-  },
+  "open_prs": 2,
+  "active_pr": null,
   "open_issues": 8,
   "production": "NO-GO",
   "trading_live": "OFF",
