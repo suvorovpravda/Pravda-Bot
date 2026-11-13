@@ -3,7 +3,9 @@ use pravda_core::agent_contract::{PaperSymbol, PaperVenue};
 use pravda_core::agent_pipeline::{evidence_from_native_market_snapshot, NativeMarketRefusal};
 use serde_json::{json, Value};
 
-fn inspect(price: &Value) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
+fn inspect(
+    price: &Value,
+) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
     let snapshot = json!({
         "stream_state": "observations_recent",
         "provenance_verified": true,
@@ -40,7 +42,10 @@ fn invalid_native_price_values_fail_closed_even_with_forged_flags() {
         json!(1e100),
     ] {
         assert!(
-            matches!(inspect(&price), Err(NativeMarketRefusal::PriceInvalid)),
+            matches!(
+                inspect(&price),
+                Err(NativeMarketRefusal::PriceInvalid)
+            ),
             "invalid synthetic price must fail closed: {price}"
         );
     }
