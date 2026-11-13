@@ -69,6 +69,7 @@ for(const [kind,endpoint,params] of requests){
       // its first 500 files as a complete duplication inventory.
       let expected=null;
       const components=[];
+      const seenComponents=new Set();
       for(let page=1;page<=100;page++){
         url.searchParams.set('p',String(page));
         const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
@@ -86,7 +87,14 @@ for(const [kind,endpoint,params] of requests){
         const remaining=expected-components.length;
         if(data.components.length!==Math.min(Number(params.ps),remaining))
           throw Error('SonarCloud duplication page length mismatch on page '+page);
-        components.push(...data.components);
+        for(const component of data.components){
+          if(typeof component.key!=='string'||!component.key)
+            throw Error('SonarCloud duplication component missing key on page '+page);
+          if(seenComponents.has(component.key))
+            throw Error('SonarCloud duplicate component key across pages: '+component.key);
+          seenComponents.add(component.key);
+          components.push(component);
+        }
         if(components.length===expected)break;
         if(page===100)throw Error('SonarCloud duplication inventory exceeds 100 pages');
       }
