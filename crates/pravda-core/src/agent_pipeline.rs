@@ -460,6 +460,43 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
 /// No IPC permission, signature or trading capability is granted by this
 /// function. The output is deliberately not an executable order object.
 pub fn review_paper_cycle(input: &CycleInput<'_>) -> PipelineReport {
+    // The mode gate is unconditional: even an unverified ARCH/SS state or
+    // malformed GMO payload must not obscure an attempted LIVE cycle.
+    // No stage may interpret a LIVE request as PAPER review eligibility.
+    if input.reg_candidate.mode != reg_guard::Mode::Paper {
+        let stages = [
+            Role::Architect,
+            Role::SecuritySentinel,
+            Role::MarketDataAnalyst,
+            Role::GrandMasterOrchestrator,
+            Role::RiskEngineGuardian,
+            Role::IncidentResponder,
+            Role::UserCommunicationAgent,
+        ]
+        .into_iter()
+        .map(|role| StageTrace {
+            role,
+            status: if role == Role::MarketDataAnalyst {
+                StageStatus::Blocked
+            } else {
+                StageStatus::Skipped
+            },
+            code: if role == Role::MarketDataAnalyst {
+                "MDA_LIVE_DISABLED"
+            } else {
+                "LIVE_MODE_FORBIDDEN"
+            },
+        })
+        .collect();
+        return PipelineReport {
+            verdict: PipelineVerdict::Rejected,
+            reason_code: "MDA_LIVE_DISABLED",
+            stages,
+            reg_rules_violated: Vec::new(),
+            reg_checks_performed: 0,
+            summary_code: "REJECTED_NO_ORDER",
+        };
+    }
     let mut stages = Vec::with_capacity(7);
     let mut halted = None;
     let mut no_action = false;
@@ -567,6 +604,27 @@ mod tests {
                 .timestamp_millis(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn live_mode_is_refused_before_any_untrusted_or_unverified_role() {
+        let mut input = good("{malformed-model-response");
+        input.reg_candidate.mode = reg_guard::Mode::Live;
+        input.security = SecurityEvidence::default();
+        input.market.provenance_verified = false;
+        input.market.portfolio_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "MDA_LIVE_DISABLED");
+        assert_eq!(report.summary_code, "REJECTED_NO_ORDER");
+        assert_eq!(report.stages.len(), 7);
+        assert_eq!(report.stages[2].role, Role::MarketDataAnalyst);
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert!(report.stages.iter().enumerate().all(|(i, stage)| {
+            i == 2 || stage.status == StageStatus::Skipped
+        }));
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
     }
 
     #[test]
