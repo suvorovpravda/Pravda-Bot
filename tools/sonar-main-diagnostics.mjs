@@ -26,6 +26,13 @@ export async function collectIssues(endpoint,params,fetcher=fetch){
     if(expected===null)expected=data.total;
     if(data.total!==expected)throw Error('SonarCloud total changed during pagination');
     if(issues.length+data.issues.length>expected)throw Error('SonarCloud issue count exceeds total');
+    // Sonar pages use fixed offsets (p=2 begins at item 101). A short
+    // non-final page silently skips records even when the final count matches.
+    const pageSize=Number(params.ps);
+    if(!Number.isSafeInteger(pageSize)||pageSize<1)throw Error('invalid SonarCloud page size');
+    const remaining=expected-issues.length;
+    if(data.issues.length!==Math.min(pageSize,remaining))
+      throw Error('SonarCloud page length does not match fixed pagination offsets on page '+page);
     for(const issue of data.issues){
       if(typeof issue.key!=='string'||!issue.key)throw Error('SonarCloud issue missing key on page '+page);
       if(seenKeys.has(issue.key))throw Error('SonarCloud duplicate issue key across pages: '+issue.key);
