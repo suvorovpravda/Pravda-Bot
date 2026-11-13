@@ -42,10 +42,7 @@ fn invalid_native_price_values_fail_closed_even_with_forged_flags() {
         json!(1e100),
     ] {
         assert!(
-            matches!(
-                inspect(&price),
-                Err(NativeMarketRefusal::PriceInvalid)
-            ),
+            matches!(inspect(&price), Err(NativeMarketRefusal::PriceInvalid)),
             "invalid synthetic price must fail closed: {price}"
         );
     }
