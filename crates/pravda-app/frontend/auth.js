@@ -217,7 +217,10 @@ function activateDashboard() {
             try {
                 await window.pravdaInvoke("ipc_auth_logout");
             } catch {
-                // Revoked or expired sessions are already unauthenticated.
+                // An IPC failure does not prove the Rust-owned session was revoked.
+                // Never display a misleading logged-out state or keep the shell usable.
+                showDashboardStartupFailure("LOGOUT_UNCONFIRMED");
+                return;
             }
             showLogin();
         });
