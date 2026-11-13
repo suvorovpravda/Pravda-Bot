@@ -26,12 +26,20 @@ fn noncanonical_utc_and_submillisecond_quotes_fail_closed() {
                 "attested": true
             }}}
         });
-        assert!(matches!(
-            evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW, 2_000, 50
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    NOW,
+                    2_000,
+                    50
+                ),
+                Err(NativeMarketRefusal::ClockOrAgeInvalid)
             ),
-            Err(NativeMarketRefusal::ClockOrAgeInvalid)
-        ), "noncanonical timestamp must fail closed: {timestamp}");
+            "noncanonical timestamp must fail closed: {timestamp}"
+        );
     }
 }
 
@@ -49,8 +57,14 @@ fn canonical_millisecond_quote_is_only_an_unattested_observation() {
         }}}
     });
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW, 2_000, 50
-    ).expect("canonical synthetic quote can be normalized");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW,
+        2_000,
+        50,
+    )
+    .expect("canonical synthetic quote can be normalized");
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
