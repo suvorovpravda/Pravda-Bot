@@ -424,6 +424,11 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
     }
     let timestamp_ms =
         u64::try_from(timestamp.timestamp_millis()).map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
+    // An epoch-zero model timestamp is never a valid analysis observation.
+    // This is independent of market attestation and does not grant order rights.
+    if timestamp_ms == 0 {
+        return Err(reject("GMO_TIMESTAMP_UNINITIALIZED"));
+    }
     let age = input
         .now_ms
         .checked_sub(timestamp_ms)
@@ -625,6 +630,20 @@ mod tests {
         assert_eq!(report.stages[4].status, StageStatus::Skipped);
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn epoch_zero_gmo_timestamp_is_rejected_before_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = serde_json::Value::String("1970-01-01T00:00:00Z".to_owned());
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "GMO_TIMESTAMP_UNINITIALIZED");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert_eq!(report.stages[3].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
     }
 
     #[test]
