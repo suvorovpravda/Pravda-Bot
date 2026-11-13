@@ -32,19 +32,20 @@ export async function collectIssues(endpoint,params,fetcher=fetch){
   throw Error('SonarCloud issue inventory exceeds 100 pages');
 }
 
-export async function main(){
+export async function main(fetcher=fetch){
+let requiredIssuesAvailable=true;
 for(const [kind,endpoint,params] of requests){
   const url=new URL(endpoint);
   for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
   try{
     if(kind==='issues'||kind==='new_issues'){
-      const data=await collectIssues(endpoint,params);
+      const data=await collectIssues(endpoint,params,fetcher);
       console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP=200');
       console.log('SONAR_MAIN_'+kind.toUpperCase()+'_TOTAL='+data.total);
       for(const q of data.issues)console.log('SONAR_MAIN_'+(kind==='new_issues'?'NEW_ISSUE':'ISSUE')+'='+JSON.stringify({key:q.key,rule:q.rule,component:q.component,line:q.line??q.textRange?.startLine??null,severity:q.severity,type:q.type,impacts:q.impacts,message:String(q.message??'').slice(0,350)}));
       continue;
     }
-    const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
+    const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
     console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP='+response.status);
     if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');continue;}
     const data=await response.json();
@@ -57,7 +58,13 @@ for(const [kind,endpoint,params] of requests){
       const qualified=list.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
       for(const q of qualified.slice(0,100))console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
     }
-  }catch(e){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.message||e?.name||'error'));}
+  }catch(e){
+    console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.message||e?.name||'error'));
+    if(kind==='issues'||kind==='new_issues')requiredIssuesAvailable=false;
+  }
 }
+return requiredIssuesAvailable;
 }
-if(process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href)await main();
+if(process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href){
+  if(!await main())process.exitCode=1;
+}
