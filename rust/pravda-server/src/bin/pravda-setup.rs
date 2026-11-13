@@ -16,10 +16,18 @@ use std::{
 
 #[cfg(windows)]
 const MSI: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/pravda-embedded-installer.msi"));
+#[cfg(windows)]
+const TEST_CENTER: &[u8] =
+    include_bytes!(concat!(env!("OUT_DIR"), "/pravda-embedded-test-center.exe"));
 #[cfg(any(windows, test))]
 fn valid_msi(bytes: &[u8]) -> bool {
     const HEADER: [u8; 8] = [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1];
     bytes.len() > 100_000 && bytes.starts_with(&HEADER)
+}
+
+#[cfg(any(windows, test))]
+fn valid_test_center(bytes: &[u8]) -> bool {
+    bytes.len() > 1_000_000 && bytes.starts_with(b"MZ")
 }
 
 #[cfg(windows)]
@@ -151,15 +159,85 @@ fn install(bundle: &TemporaryBundle) -> Result<ExitStatus, &'static str> {
 }
 
 #[cfg(windows)]
+fn run_embedded_tests(automated: bool) -> Result<(), &'static str> {
+    // The independent test center itself embeds Doctor, Harness and an
+    // isolated desktop smoke test. The only executable the user receives is
+    // pravda-setup.exe; no download, real profile or broker is needed.
+    if !valid_test_center(TEST_CENTER) {
+        return Err("Embedded Test Center missing or invalid");
+    }
+    let bundle =
+        TemporaryBundle::create().map_err(|_| "Cannot create isolated Test Center workspace")?;
+    let center = bundle
+        .write("pravda-test-center.exe", TEST_CENTER)
+        .map_err(|_| "Cannot verify extracted Test Center")?;
+    let reports = if automated {
+        std::env::var_os("PRAVDA_SETUP_TEST_REPORT_DIR")
+            .map(PathBuf::from)
+            .ok_or("Automated report directory not configured")?
+    } else {
+        PathBuf::from(std::env::var_os("LOCALAPPDATA").ok_or("LOCALAPPDATA unavailable")?)
+            .join("Pravda-Bot")
+            .join("Test-Reports")
+    };
+    fs::create_dir_all(&reports).map_err(|_| "Cannot create offline test report directory")?;
+    // --ci executes one finite offline campaign and does not start a monitor.
+    // The embedded Test Center isolates all subprocess profiles and records
+    // SKIP for anything it cannot verify (live APIs, GUI, physical airgap).
+    let status = Command::new(center)
+        .arg("--ci")
+        .env("PRAVDA_TEST_CENTER_REPORT_DIR", &reports)
+        .env("PRAVDA_MARKET_FEEDS_ENABLED", "false")
+        .env("PRAVDA_LIVE_TRADING_ENABLED", "false")
+        .status()
+        .map_err(|_| "Embedded Test Center could not start")?;
+    if !status.success() {
+        if !automated {
+            dialog(
+                "Pravda-Bot — Test non valide",
+                &format!(
+                    "Un test hors ligne a echoue. Ne pas declarer la version acceptee.\n\nRapports JSON et HTML :\n{}",
+                    reports.display()
+                ),
+                false,
+            );
+        }
+        return Err("Embedded Test Center failed; inspect the local redacted report");
+    }
+    if !automated {
+        dialog(
+            "Pravda-Bot — Tests termines",
+            &format!(
+                "Tests hors ligne termines. Les mentions SKIP/WARN ne certifient pas l'installation sur VM vierge ni le trading reel.\n\nRapports JSON et HTML :\n{}",
+                reports.display()
+            ),
+            false,
+        );
+    }
+    Ok(())
+}
+
+#[cfg(windows)]
 fn run() -> Result<(), &'static str> {
-    use windows_sys::Win32::UI::WindowsAndMessaging::IDYES;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IDNO, IDYES};
     if !valid_msi(MSI) {
         return Err("The embedded Windows installer is missing or invalid");
     }
+    if !valid_test_center(TEST_CENTER) {
+        return Err("The embedded Test Center is missing or invalid");
+    }
     let arguments: Vec<_> = std::env::args_os().skip(1).collect();
-    if arguments.len() == 1 && arguments[0] == "--verify-only" {
-        // Used by independent CI: no writes, installs, profiles or network.
-        return Ok(());
+    if arguments.len() == 1 {
+        if arguments[0] == "--verify-only" {
+            // Check BOTH embedded payloads without writes or networking.
+            return Ok(());
+        }
+        if arguments[0] == "--test-center" {
+            return run_embedded_tests(false);
+        }
+        if arguments[0] == "--test-center-ci" {
+            return run_embedded_tests(true);
+        }
     }
     if !arguments.is_empty() {
         return Err("Unsupported argument");
@@ -172,14 +250,17 @@ fn run() -> Result<(), &'static str> {
         "Pravda-Bot — Installation Windows",
         "Un seul installateur pour Pravda-Bot avec WebView2 hors ligne.\n\
          \n\
-         OUI : installer l'application. Le centre de tests pre/postproduction\n\
-         est ensuite accessible dans Parametres, apres connexion.\n\
-         NON / ANNULER : quitter sans modifier le PC.\n\
+         OUI : installer l'application.\n\
+         NON : executer Doctor, Harness et tous les tests hors ligne.\n\
+         ANNULER : quitter sans modifier le PC.\n\
          \n\
          Ce candidat de test n'est pas une edition Enterprise signee.\n\
          Le choix de modules facultatifs reste a qualifier.",
         true,
     );
+    if choice == IDNO {
+        return run_embedded_tests(false);
+    }
     if choice != IDYES {
         return Ok(());
     }
@@ -204,7 +285,7 @@ fn run() -> Result<(), &'static str> {
         "L'installation est terminee.\n\
          \n\
          OUI : ouvrir l'application sans limite de duree.\n\
-         NON / ANNULER : terminer ; utiliser ensuite le menu Demarrer.\n\
+         NON : lancer les tests hors ligne ; ANNULER : terminer.\n\
          \n\
          Une fois connecte, ouvrir Parametres > Securite et depannage\n\
          pour acceder aux campagnes de tests pre/postproduction.",
@@ -222,15 +303,19 @@ fn run() -> Result<(), &'static str> {
                 false,
             );
         }
+    } else if choice == IDNO {
+        return run_embedded_tests(false);
     }
     Ok(())
 }
 
 #[cfg(windows)]
 fn main() {
-    let is_verify = std::env::args_os().skip(1).any(|s| s == "--verify-only");
+    let is_noninteractive = std::env::args_os()
+        .skip(1)
+        .any(|s| s == "--verify-only" || s == "--test-center-ci");
     if let Err(reason) = run() {
-        if !is_verify {
+        if !is_noninteractive {
             dialog("Pravda-Bot — Erreur", reason, false);
         }
         std::process::exit(2);
@@ -250,6 +335,16 @@ mod tests {
     fn rejects_invalid_and_empty_installation_payloads() {
         assert!(!valid_msi(b"MZ"));
         assert!(!valid_msi(b""));
+    }
+
+    #[test]
+    fn test_center_validation_requires_full_embedded_windows_binary() {
+        let mut valid = vec![0u8; 1_000_001];
+        valid[..2].copy_from_slice(b"MZ");
+        assert!(super::valid_test_center(&valid));
+        assert!(!super::valid_test_center(b"MZ"));
+        valid[..2].copy_from_slice(b"NO");
+        assert!(!super::valid_test_center(&valid));
     }
 
     #[test]
