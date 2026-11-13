@@ -28,13 +28,20 @@ fn timestamp_unicode_and_whitespace_spoofing_fails_closed() {
                 "portfolio_verified": true
             }}}
         });
-        assert!(matches!(
-            evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                NOW_MS, 2_000, 50
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    NOW_MS,
+                    2_000,
+                    50
+                ),
+                Err(NativeMarketRefusal::ClockOrAgeInvalid)
             ),
-            Err(NativeMarketRefusal::ClockOrAgeInvalid)
-        ), "noncanonical synthetic timestamp accepted: {timestamp:?}");
+            "noncanonical synthetic timestamp accepted: {timestamp:?}"
+        );
     }
 }
 
@@ -55,15 +62,24 @@ fn quote_from_other_venue_cannot_satisfy_requested_native_market_pair() {
     });
     assert!(matches!(
         evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            NOW_MS, 2_000, 50
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            NOW_MS,
+            2_000,
+            50
         ),
         Err(NativeMarketRefusal::QuoteUnavailable)
     ));
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
-        NOW_MS, 2_000, 50
-    ).expect("synthetic observation should parse without attestation");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Kraken,
+        NOW_MS,
+        2_000,
+        50,
+    )
+    .expect("synthetic observation should parse without attestation");
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
@@ -86,15 +102,24 @@ fn quote_from_other_symbol_cannot_satisfy_requested_native_market_pair() {
     });
     assert!(matches!(
         evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            NOW_MS, 2_000, 50
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            NOW_MS,
+            2_000,
+            50
         ),
         Err(NativeMarketRefusal::QuoteUnavailable)
     ));
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::EthUsdt, PaperVenue::Binance,
-        NOW_MS, 2_000, 50
-    ).expect("synthetic ETH observation should parse without attestation");
+        &snapshot,
+        PaperSymbol::EthUsdt,
+        PaperVenue::Binance,
+        NOW_MS,
+        2_000,
+        50,
+    )
+    .expect("synthetic ETH observation should parse without attestation");
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
@@ -119,15 +144,24 @@ fn embedded_identity_fields_cannot_override_native_quote_lookup() {
     });
     assert!(matches!(
         evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            NOW_MS, 2_000, 50
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            NOW_MS,
+            2_000,
+            50
         ),
         Err(NativeMarketRefusal::QuoteUnavailable)
     ));
     let observation = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
-        NOW_MS, 2_000, 50
-    ).expect("synthetic quote is an observation, never an attestation");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Kraken,
+        NOW_MS,
+        2_000,
+        50,
+    )
+    .expect("synthetic quote is an observation, never an attestation");
     assert_eq!(observation.venue, PaperVenue::Kraken);
     assert!(!observation.provenance_verified);
     assert!(!observation.portfolio_verified);
@@ -199,13 +233,20 @@ fn forged_reported_age_cannot_override_native_wall_clock() {
                 "portfolio_verified": true
             }}}
         });
-        assert!(matches!(
-            evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                NOW_MS, 5_000_000, 50
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    NOW_MS,
+                    5_000_000,
+                    50
+                ),
+                Err(NativeMarketRefusal::ClockOrAgeInvalid)
             ),
-            Err(NativeMarketRefusal::ClockOrAgeInvalid)
-        ), "forged reported age accepted: {reported_age}");
+            "forged reported age accepted: {reported_age}"
+        );
     }
 }
 
@@ -234,12 +275,19 @@ fn synthetic_prices_with_unsafe_numeric_representations_fail_closed() {
                 "portfolio_verified": true
             }}}
         });
-        assert!(matches!(
-            evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                NOW_MS, 2_000, 50
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    NOW_MS,
+                    2_000,
+                    50
+                ),
+                Err(NativeMarketRefusal::PriceInvalid)
             ),
-            Err(NativeMarketRefusal::PriceInvalid)
-        ), "unsafe synthetic price accepted: {price}");
+            "unsafe synthetic price accepted: {price}"
+        );
     }
 }
