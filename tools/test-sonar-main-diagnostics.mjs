@@ -57,6 +57,19 @@ try{
     return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0}})};
   });
   assert.equal(succeeded,true,'complete issue inventory must pass');
+  // Missing coverage/duplication measures must not leave a misleading green diagnostic.
+  const missingMeasures=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component_tree')return {ok:false,status:503};
+    return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+  });
+  assert.equal(missingMeasures,false,'unavailable duplication measures must fail the diagnostic');
+  const missingAggregate=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:false,status:503};
+    return {ok:true,status:200,json:async()=>({components:[],paging:{total:0}})};
+  });
+  assert.equal(missingAggregate,false,'unavailable aggregate measures must fail the diagnostic');
 }finally{
   console.log=originalLog;
 }
