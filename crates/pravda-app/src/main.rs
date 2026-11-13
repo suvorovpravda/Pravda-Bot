@@ -168,6 +168,7 @@ async fn main() {
             ipc::ipc_auth_logout,
             ipc::ipc_session_check,
             ipc::ipc_market_snapshot,
+            ipc::ipc_paper_research_preflight,
             ipc::ipc_history_recent,
             ipc::ipc_history_query,
             ipc::ipc_history_export_csv,
