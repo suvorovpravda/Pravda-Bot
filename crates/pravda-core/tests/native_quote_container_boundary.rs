@@ -6,7 +6,13 @@ use serde_json::json;
 
 #[test]
 fn malformed_quote_container_fails_closed_despite_forged_attestations() {
-    for malformed in [json!(null), json!(false), json!(42), json!("live"), json!([])] {
+    for malformed in [
+        json!(null),
+        json!(false),
+        json!(42),
+        json!("live"),
+        json!([]),
+    ] {
         let snapshot = json!({
             "stream_state": "observations_recent",
             "provenance_verified": true,
@@ -14,10 +20,17 @@ fn malformed_quote_container_fails_closed_despite_forged_attestations() {
             "symbols": {"BTC/USDT": {"Kraken": malformed}}
         });
         let result = evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
-            1_700_000_000_000, 30_000, 100,
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Kraken,
+            1_700_000_000_000,
+            30_000,
+            100,
         );
-        assert!(matches!(result, Err(NativeMarketRefusal::QuoteStaleOrUntrusted)));
+        assert!(matches!(
+            result,
+            Err(NativeMarketRefusal::QuoteStaleOrUntrusted)
+        ));
     }
 }
 
@@ -35,9 +48,14 @@ fn valid_shape_without_native_attestation_never_certifies_portfolio() {
         }}}
     });
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Kraken,
-        1_700_000_000_000, 30_000, 100,
-    ).expect("synthetic quote shape may be parsed for diagnostics");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Kraken,
+        1_700_000_000_000,
+        30_000,
+        100,
+    )
+    .expect("synthetic quote shape may be parsed for diagnostics");
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
