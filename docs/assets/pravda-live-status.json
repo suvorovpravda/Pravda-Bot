@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "61233a4c191eafd0f0c632837d17375d2017c97a",
-  "latest_evidence_at": "2026-11-13T23:22:38Z",
-  "refreshed_at_utc": "2026-11-13T23:23:07.349Z",
+  "source_sha": "3c4e00b7d85d9dd7db06a31caed6957f070c5401",
+  "latest_evidence_at": "2026-11-13T23:43:42Z",
+  "refreshed_at_utc": "2026-11-13T23:43:59.333Z",
   "historical": {
     "rows": [
       {
@@ -91,7 +91,7 @@
   },
   "p0_governance": {
     "state": "PENDING",
-    "source_sha": "61233a4c191eafd0f0c632837d17375d2017c97a",
+    "source_sha": "3c4e00b7d85d9dd7db06a31caed6957f070c5401",
     "policy_active": true,
     "strict_main_checks": true,
     "pr_required": true,
@@ -117,27 +117,27 @@
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
       "state": "RUNNING",
-      "sha": "61233a4c19",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43526254663",
-      "observedAt": "2026-11-13T23:19:33Z"
+      "sha": "3c4e00b7d8",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43529251335",
+      "observedAt": "2026-11-13T23:43:41Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
       "state": "RUNNING",
-      "sha": "61233a4c19",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43526254631",
-      "observedAt": "2026-11-13T23:22:10Z"
+      "sha": "3c4e00b7d8",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43529251166",
+      "observedAt": "2026-11-13T23:43:42Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
       "state": "RUNNING",
-      "sha": "61233a4c19",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43526254641",
-      "observedAt": "2026-11-13T23:22:07Z"
+      "sha": "3c4e00b7d8",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43529251268",
+      "observedAt": "2026-11-13T23:43:41Z"
     },
     {
       "id": "rustsec-audit.yml",
@@ -149,7 +149,7 @@
       "observedAt": "2026-11-13T23:22:38Z"
     }
   ],
-  "open_prs": 7,
+  "open_prs": 6,
   "active_pr": null,
   "open_issues": 11,
   "production": "NO-GO",
