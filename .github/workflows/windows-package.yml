@@ -354,11 +354,16 @@ jobs:
           $folder = Join-Path $env:RUNNER_TEMP 'pravda-unified-input'
           New-Item -ItemType Directory -Force -Path $folder | Out-Null
           Copy-Item -LiteralPath $msi[0].FullName -Destination (Join-Path $folder 'pravda-installer.msi') -ErrorAction Stop
+          $centerPayload = Get-Item -LiteralPath 'crates/pravda-app/target/release/pravda-test-center.exe' -ErrorAction Stop
+          if ($centerPayload.Length -le 1000000) { throw 'Standalone Test Center build missing or incomplete' }
+          Copy-Item -LiteralPath $centerPayload.FullName -Destination (Join-Path $folder 'pravda-test-center.exe') -ErrorAction Stop
           $env:PRAVDA_SETUP_PAYLOAD_DIR = $folder
           cargo build --locked --release -p pravda-server --bin pravda-setup
           if ($LASTEXITCODE -ne 0) { throw 'Unified Windows setup compilation failed' }
           $setup = Get-Item 'target/release/pravda-setup.exe' -ErrorAction Stop
-          if ($setup.Length -le $msi[0].Length) { throw 'Unified setup does not embed the MSI payload' }
+          if ($setup.Length -le ($msi[0].Length + $centerPayload.Length)) {
+            throw 'Unified setup must embed both MSI and the self-contained Test Center'
+          }
           Copy-Item -LiteralPath $setup.FullName -Destination 'crates/pravda-app/target/release/pravda-setup.exe' -Force
           $process = Start-Process -FilePath 'crates/pravda-app/target/release/pravda-setup.exe' -ArgumentList '--verify-only' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Unified setup payload verification failed' }
@@ -688,6 +693,47 @@ jobs:
           }
           $process = Start-Process -FilePath $setup -ArgumentList '--verify-only' -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw 'Unified setup payload self-test failed' }
+      - name: Run downloaded one-file setup's embedded full offline Test Center
+        shell: pwsh
+        timeout-minutes: 7
+        env:
+          PRAVDA_EXPECTED_BUILD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          # Test the exact downloaded setup, not a separate CI tester.
+          $setup = (Resolve-Path './downloaded-release/pravda-setup.exe' -ErrorAction Stop).Path
+          $env:PRAVDA_SETUP_TEST_REPORT_DIR = Join-Path $env:RUNNER_TEMP 'pravda-single-setup-acceptance'
+          New-Item -ItemType Directory -Force $env:PRAVDA_SETUP_TEST_REPORT_DIR | Out-Null
+          $process = Start-Process -FilePath $setup -ArgumentList '--test-center-ci' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'One-file embedded Test Center reported failure' }
+          $reports = @(Get-ChildItem -LiteralPath $env:PRAVDA_SETUP_TEST_REPORT_DIR -Recurse -File -Filter 'PRAVDA-TEST-REPORT.json')
+          if ($reports.Count -ne 1) { throw 'Exactly one embedded Test Center report is required' }
+          $report = Get-Content -LiteralPath $reports[0].FullName -Raw | ConvertFrom-Json
+          if ($report.product -cne 'Pravda-Bot' -or $report.schema_version -ne 1 -or
+              $report.commit -cne $env:PRAVDA_EXPECTED_BUILD_SHA -or $report.signed_release -ne $false) {
+            throw 'Embedded diagnostic is not the expected unsigned exact-SHA candidate'
+          }
+          if (@($report.findings | Where-Object status -EQ 'FAIL').Count -ne 0) {
+            throw 'Embedded Test Center has failed checks'
+          }
+          foreach ($check in @('doctor_startup','harness_smoke','desktop_process','synthetic_sqlite_health')) {
+            $matches = @($report.findings | Where-Object check -EQ $check)
+            if ($matches.Count -ne 1 -or $matches[0].status -cne 'PASS') {
+              throw "Embedded Test Center missing required PASS: $check"
+            }
+          }
+          if (@($report.findings | Where-Object check -EQ 'desktop_gui' | Where-Object status -EQ 'SKIP').Count -ne 1) {
+            throw 'Synthetic desktop process must not claim interactive GUI acceptance'
+          }
+          Write-Host "PASS: one downloaded pravda-setup.exe ran embedded Doctor, Harness and desktop from $env:PRAVDA_EXPECTED_BUILD_SHA"
+      - name: Retain one-file embedded Test Center evidence even on failure
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7
+        with:
+          name: pravda-windows-unified-setup-offline-report
+          path: ${{ runner.temp }}/pravda-single-setup-acceptance/**/PRAVDA-TEST-REPORT.*
+          if-no-files-found: warn
+          retention-days: 30
       - name: Download standalone production test application
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333  # v8
         with:
