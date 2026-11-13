@@ -64,6 +64,39 @@ for(const [kind,endpoint,params] of requests){
       for(const q of data.issues)console.log('SONAR_MAIN_'+(kind==='new_issues'?'NEW_ISSUE':'ISSUE')+'='+JSON.stringify({key:q.key,rule:q.rule,component:q.component,line:q.line??q.textRange?.startLine??null,severity:q.severity,type:q.type,impacts:q.impacts,message:String(q.message??'').slice(0,350)}));
       continue;
     }
+    if(kind==='duplication'){
+      // component_tree is paginated independently of issues/search. Never treat
+      // its first 500 files as a complete duplication inventory.
+      let expected=null;
+      const components=[];
+      for(let page=1;page<=100;page++){
+        url.searchParams.set('p',String(page));
+        const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
+        if(!response.ok)throw Error('SonarCloud duplication HTTP '+response.status+' on page '+page);
+        const data=await response.json();
+        const paging=data.paging;
+        if(!Array.isArray(data.components)||!paging||!Number.isSafeInteger(paging.total)||paging.total<0)
+          throw Error('invalid SonarCloud duplication measures schema');
+        if(paging.pageIndex!==undefined && paging.pageIndex!==page)
+          throw Error('SonarCloud duplication page index mismatch');
+        if(paging.pageSize!==undefined && paging.pageSize!==Number(params.ps))
+          throw Error('SonarCloud duplication page size mismatch');
+        if(expected===null)expected=paging.total;
+        if(paging.total!==expected)throw Error('SonarCloud duplication total changed during pagination');
+        const remaining=expected-components.length;
+        if(data.components.length!==Math.min(Number(params.ps),remaining))
+          throw Error('SonarCloud duplication page length mismatch on page '+page);
+        components.push(...data.components);
+        if(components.length===expected)break;
+        if(page===100)throw Error('SonarCloud duplication inventory exceeds 100 pages');
+      }
+      console.log('SONAR_MAIN_DUPLICATION_HTTP=200');
+      console.log('SONAR_MAIN_COMPONENTS_TOTAL='+components.length);
+      for(const q of components.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
+      const qualified=components.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
+      for(const q of qualified)console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
+      continue;
+    }
     const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
     console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP='+response.status);
     if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');requiredDiagnosticsAvailable=false;continue;}
@@ -71,13 +104,7 @@ for(const [kind,endpoint,params] of requests){
     if(kind==='aggregate'){
       if(!data.component||!Array.isArray(data.component.measures))throw Error('invalid SonarCloud aggregate measures schema');
       console.log('SONAR_MAIN_AGGREGATE='+JSON.stringify(data.component?.measures??[]));
-    }else{
-      if(!Array.isArray(data.components)||!data.paging||!Number.isSafeInteger(data.paging.total)||data.paging.total<0)throw Error('invalid SonarCloud duplication measures schema');
-      const list=data.components;
-      console.log('SONAR_MAIN_COMPONENTS_TOTAL='+data.paging?.total);
-      for(const q of list.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
-      const qualified=list.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
-      for(const q of qualified.slice(0,100))console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
+
     }
   }catch(e){
     console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.message||e?.name||'error'));
