@@ -84,6 +84,23 @@ try{
     return {ok:true,status:200,json:async()=>({paging:{total:1,pageIndex:1,pageSize:500},components:[{measures:[]}]})};
   });
   assert.equal(missingComponentKey,false,'component without stable identity must fail closed');
+  // An HTTP 200 with a nonnumeric duplicated-lines value must not claim zero duplicates.
+  const invalidDuplicationMetric=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:1,pageIndex:1,pageSize:500},components:[
+      {key:'broken-file',measures:[{metric:'new_duplicated_lines',value:'not-a-number'}]}
+    ]})};
+  });
+  assert.equal(invalidDuplicationMetric,false,'malformed duplication metric must fail closed');
+  const malformedMeasures=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:1,pageIndex:1,pageSize:500},components:[
+      {key:'broken-file',measures:{metric:'new_duplicated_lines',value:'12'}}
+    ]})};
+  });
+  assert.equal(malformedMeasures,false,'malformed component measures must fail closed');
   const shortDuplication=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
     if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
