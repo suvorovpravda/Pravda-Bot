@@ -2028,22 +2028,36 @@ const translations = {
     // Route existing authenticated modules without reloading the Rust/WebView session.
     const tabButtons = document.querySelectorAll(".tab-btn");
     const allCards = () => Array.from(document.querySelectorAll(".card[data-category]"));
+    // A bounded, allowlisted bootstrap phase identifies which synchronous
+    // DOM/navigation step fails in installed WebView2. Never emit user data,
+    // exception messages, or a call stack; phases change only during P14.
+    function markNavigationBootPhase(phase) {
+        if (window.pravdaDashboardReady !== true &&
+            /^P14(?:[A-H])?$/.test(window.pravdaDashboardPhase)) {
+            window.pravdaDashboardPhase = phase;
+        }
+    }
     function applyTab(requestedTab) {
+        markNavigationBootPhase("P14A"); // route validation
         const tab = requestedTab === "all" ? "home" : requestedTab;
         if (!Object.hasOwn(uiPageMeta, tab)) return;
+        markNavigationBootPhase("P14B"); // page title and placeholders
         document.querySelector(".shell").dataset.activeTab = tab;
         const [title, description] = uiPageMeta[tab];
         $("ui-page-title").textContent = title;
         $("ui-page-description").textContent = description;
         $("ui-agents-placeholder").hidden = tab !== "agents";
         $("ui-risk-placeholder").hidden = tab !== "risk-review";
+        markNavigationBootPhase("P14C"); // sidebar links
         sidebarButtons.forEach(btn => {
             const active = btn.dataset.navTab === tab;
             btn.classList.toggle("active", active);
             if (active) btn.setAttribute("aria-current", "page");
             else btn.removeAttribute("aria-current");
         });
+        markNavigationBootPhase("P14D"); // legacy tab buttons
         tabButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
+        markNavigationBootPhase("P14E"); // card filtering
         const securitySubroute = ["paper", "tests", "journals", "settings"].includes(tab);
         const targetCategory = securitySubroute ? "security" : tab;
         allCards().forEach(card => {
@@ -2052,7 +2066,9 @@ const translations = {
                 (category === targetCategory || (tab === "markets" && category === "revolut"));
             card.classList.toggle("hidden", !visible);
         });
+        markNavigationBootPhase("P14F"); // chart request
         if (tab === "markets") requestAnimationFrame(drawPriceChart);
+        markNavigationBootPhase("P14G"); // authenticated read-only refresh
         // Preserve the legacy security route and its complete IPC refresh
         // contract while the new category-specific pages are introduced.
         if (tab === "security") {
@@ -2065,6 +2081,7 @@ const translations = {
             if (tab === "journals") void refreshSecurityEvents();
         }
         if (tab === "revolut") void refreshRevolut();
+        markNavigationBootPhase("P14H"); // reached end of first navigation
         // No physical installation/upgrade test is claimed by this navigation.
     }
     const knownTabs = new Set([...Object.keys(uiPageMeta), "all"]);
