@@ -23,13 +23,20 @@ fn forged_attestations_cannot_bypass_native_stream_state() {
                 "portfolio_verified": true
             }}}
         });
-        assert!(matches!(
-            evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                NOW_MS, 2_000, 50
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    NOW_MS,
+                    2_000,
+                    50
+                ),
+                Err(NativeMarketRefusal::StreamUnavailable)
             ),
-            Err(NativeMarketRefusal::StreamUnavailable)
-        ), "untrusted stream state accepted: {state}");
+            "untrusted stream state accepted: {state}"
+        );
     }
 }
 
@@ -50,9 +57,14 @@ fn valid_synthetic_stream_state_does_not_attest_market_or_portfolio() {
         }}}
     });
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-        NOW_MS, 2_000, 50
-    ).expect("synthetic quote should parse without conferring trust");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW_MS,
+        2_000,
+        50,
+    )
+    .expect("synthetic quote should parse without conferring trust");
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
@@ -85,13 +97,20 @@ fn missing_native_quote_paths_fail_closed_despite_forged_global_attestations() {
             "attested": true,
             "symbols": symbols,
         });
-        assert!(matches!(
-            evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                NOW_MS, 2_000, 50
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(
+                    &snapshot,
+                    PaperSymbol::BtcUsdt,
+                    PaperVenue::Binance,
+                    NOW_MS,
+                    2_000,
+                    50
+                ),
+                Err(NativeMarketRefusal::QuoteUnavailable)
             ),
-            Err(NativeMarketRefusal::QuoteUnavailable)
-        ), "missing exact symbol/venue quote must refuse");
+            "missing exact symbol/venue quote must refuse"
+        );
     }
 }
 
@@ -119,9 +138,14 @@ fn malformed_native_stream_state_types_fail_closed() {
         });
         assert_eq!(
             evidence_from_native_market_snapshot(
-                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-                NOW_MS, 2_000, 50
-            ).expect_err("malformed stream state must refuse"),
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                NOW_MS,
+                2_000,
+                50
+            )
+            .expect_err("malformed stream state must refuse"),
             NativeMarketRefusal::StreamUnavailable
         );
     }
