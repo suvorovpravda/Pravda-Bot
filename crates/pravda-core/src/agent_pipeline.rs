@@ -599,17 +599,12 @@ mod tests {
         let raw = reply.to_string();
         let input = good(&raw);
         let report = review_paper_cycle(&input);
-        if report.verdict == PipelineVerdict::NoAction {
-            assert_eq!(report.reason_code, "GMO_NO_ACTION");
-            assert_eq!(report.summary_code, "NO_ACTION");
-            assert_eq!(report.reg_checks_performed, 0);
-            assert_eq!(report.stages[5].code, "IR_NO_ACTION_NO_INCIDENT");
-            assert_eq!(report.stages[4].status, StageStatus::Skipped);
-        } else {
-            // A stricter GMO schema may reject the synthetic fixture before
-            // reaching the no-action path. It must still never reach REG.
-            assert_eq!(report.reg_checks_performed, 0);
-        }
+        assert_eq!(report.verdict, PipelineVerdict::NoAction);
+        assert_eq!(report.reason_code, "GMO_NO_ACTION");
+        assert_eq!(report.summary_code, "NO_ACTION");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert_eq!(report.stages[5].code, "IR_NO_ACTION_NO_INCIDENT");
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
     }
 
     #[test]
