@@ -46,3 +46,17 @@ fn native_quote_clock_rejects_reported_age_outside_policy_despite_fresh_timestam
     );
     assert!(matches!(result, Err(NativeMarketRefusal::ClockOrAgeInvalid)));
 }
+
+#[test]
+fn epoch_zero_quote_and_uninitialized_clock_fail_closed() {
+    // A synthetic epoch-zero quote with a zero-age claim must not be
+    // mistaken for fresh native evidence, even with forged trust flags.
+    for now_ms in [0_u64, 1_u64] {
+        let result = evidence_from_native_market_snapshot(
+            &snapshot("1970-01-01T00:00:00Z", 0.0),
+            PaperSymbol::BtcUsdt, PaperVenue::Binance,
+            now_ms, 2_000, 50,
+        );
+        assert!(matches!(result, Err(NativeMarketRefusal::ClockOrAgeInvalid)));
+    }
+}
