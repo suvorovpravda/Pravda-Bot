@@ -101,6 +101,17 @@ for(const [kind,endpoint,params] of requests){
       console.log('SONAR_MAIN_DUPLICATION_HTTP=200');
       console.log('SONAR_MAIN_COMPONENTS_TOTAL='+components.length);
       for(const q of components.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
+      // A malformed numeric metric must not silently become a zero finding.
+      for(const component of components){
+        if(component.measures!==undefined && !Array.isArray(component.measures))
+          throw Error('SonarCloud component measures must be an array: '+component.key);
+        for(const measure of component.measures??[]){
+          if(measure.metric!=='new_duplicated_lines')continue;
+          const raw=measure.period?.value??measure.periods?.[0]?.value??measure.value;
+          if(raw!==undefined && (raw===null || String(raw).trim()==='' || !Number.isFinite(Number(raw)) || Number(raw)<0))
+            throw Error('SonarCloud invalid duplicated lines metric: '+component.key);
+        }
+      }
       const qualified=components.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
       for(const q of qualified)console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
       continue;
