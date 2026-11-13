@@ -2,7 +2,7 @@
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "d427b7e25649144c8880aec94560b5be7ad109cc",
   "latest_evidence_at": "2026-11-12T20:31:08Z",
-  "refreshed_at_utc": "2026-11-13T01:47:21.416Z",
+  "refreshed_at_utc": "2026-11-13T08:47:46.627Z",
   "historical": {
     "rows": [
       {
@@ -149,7 +149,7 @@
       "observedAt": "2026-11-12T15:19:38Z"
     }
   ],
-  "open_prs": 5,
+  "open_prs": 7,
   "active_pr": null,
   "open_issues": 8,
   "production": "NO-GO",
