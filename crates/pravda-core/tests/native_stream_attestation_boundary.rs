@@ -94,3 +94,35 @@ fn missing_native_quote_paths_fail_closed_despite_forged_global_attestations() {
         ), "missing exact symbol/venue quote must refuse");
     }
 }
+
+#[test]
+fn malformed_native_stream_state_types_fail_closed() {
+    // JSON cache values are untrusted: non-string states must never be coerced.
+    for state in [
+        serde_json::Value::Null,
+        json!(true),
+        json!(1),
+        json!([]),
+        json!({ "state": "observations_recent" }),
+    ] {
+        let snapshot = json!({
+            "stream_state": state,
+            "provenance_verified": true,
+            "portfolio_verified": true,
+            "symbols": {"BTC/USDT": {"Binance": {
+                "status": "live",
+                "timestamp": "2025-11-10T10:00:00Z",
+                "age_seconds": 0,
+                "price": 100,
+                "attested": true
+            }}}
+        });
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                NOW_MS, 2_000, 50
+            ).expect_err("malformed stream state must refuse"),
+            NativeMarketRefusal::StreamUnavailable
+        );
+    }
+}
