@@ -320,6 +320,11 @@ fn verify_market(input: &CycleInput<'_>) -> Result<(), Failure> {
     if !m.provenance_verified || !m.portfolio_verified {
         return Err(escalate("MDA_PROVENANCE_OR_PORTFOLIO_MISSING"));
     }
+    // Epoch-zero clocks and quote timestamps cannot establish freshness,
+    // even when upstream booleans claim independently verified evidence.
+    if input.now_ms == 0 || m.quote_received_at_ms == 0 {
+        return Err(escalate("MDA_INVALID_MARKET_CLOCK"));
+    }
     if c.market_quality != FeedQuality::Verified
         || m.reference_price_micros == 0
         || m.max_price_deviation_bps == 0
@@ -554,6 +559,29 @@ mod tests {
                 .timestamp_millis(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn epoch_zero_market_clock_cannot_be_approved_by_forged_evidence() {
+        let reply = good_reply().to_string();
+        for invalid_quote_clock in [false, true] {
+            let mut input = good(&reply);
+            if invalid_quote_clock {
+                input.market.quote_received_at_ms = 0;
+                input.reg_candidate.quote_received_at_ms = 0;
+            } else {
+                input.now_ms = 0;
+                input.reg_candidate.now_ms = 0;
+                input.reg_candidate.now_sec = 0;
+            }
+            let report = review_paper_cycle(&input);
+            assert_eq!(report.verdict, PipelineVerdict::Escalated);
+            assert_eq!(report.reason_code, "MDA_INVALID_MARKET_CLOCK");
+            assert_eq!(report.reg_checks_performed, 0);
+            assert_eq!(report.stages[2].status, StageStatus::Blocked);
+            assert_eq!(report.stages[3].status, StageStatus::Skipped);
+            assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        }
     }
 
     #[test]
