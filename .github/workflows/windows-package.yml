@@ -1,26 +1,8 @@
 name: Windows installer packaging (manual; optional Authenticode)
 on:
+  # Every main commit must receive Windows packaging and installed-app checks.
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/windows-package.yml'
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - 'crates/**'
-      - 'rust/**'
-      - 'tools/Verify-Pravda-Installer.ps1'
-      - 'tools/test-windows-installer-verifier.ps1'
-      - 'tools/Test-Pravda-Msi-Install.ps1'
-      - 'tools/Test-Pravda-Nsis-Install.ps1'
-      - 'tools/Invoke-Pravda-Installed-Onboarding.ps1'
-      - 'tools/test-installed-onboarding.mjs'
-      - 'tools/Test-Pravda-Airgap-Install.ps1'
-      - 'tools/Initialize-Pravda-Airgap-Gui.ps1'
-      - 'tools/test-airgap-acceptance-contract.mjs'
-      - 'tools/prepare-updater-release.mjs'
-      - 'tools/verify-updater-signature.mjs'
-      - 'tools/test-updater-release.mjs'
-      - 'tools/test-tauri-signer-integration.mjs'
   pull_request:
     paths:
       - '.github/workflows/windows-package.yml'
