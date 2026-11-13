@@ -18,6 +18,8 @@ url = "2"
 pravda-server = { path = "../../rust/pravda-server" }
 pravda-core = { path = "../pravda-core" }
 serde_json = "1"
+pravda-core = { path = "../pravda-core" }
+serde_json = "1"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
