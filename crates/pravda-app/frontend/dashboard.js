@@ -388,6 +388,10 @@ const translations = {
     }
     function clearMarketSession() {
         clearMarketSnapshot();
+        $("home-runtime").textContent = "Runtime non vérifié";
+        $("home-source-count").textContent = "Connecteurs : en attente d’une réponse Rust";
+        $("home-infra-summary").textContent = "Sources non vérifiées";
+        setSidebarState("sources", "unknown", "Nouvelle session : sources non relues");
         latestFx = null;
         historicalPoints = [];
         $("fx-rates").textContent = t("fxFailure");
@@ -1112,6 +1116,7 @@ const translations = {
     };
     function clearAcceptanceUi() {
         acceptanceRuns = 0;
+        setSidebarState("tests", "unknown", "Campagne non exécutée pendant cette session");
         $("acceptance-results").textContent = "Aucun résultat disponible.";
         $("acceptance-status").textContent = "Aucune campagne lancée.";
         $("acceptance-json").value = "Aucun rapport généré.";
