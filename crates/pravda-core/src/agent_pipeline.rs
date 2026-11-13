@@ -570,6 +570,46 @@ mod tests {
     }
 
     #[test]
+    fn native_snapshot_cannot_attest_market_or_portfolio_even_when_fresh() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {
+                "BTC/USDT": {
+                    "Binance": {
+                        "status": "live",
+                        "age_seconds": 0.0,
+                        "timestamp": TIMESTAMP,
+                        "price": 10
+                    }
+                }
+            }
+        });
+        let native = evidence_from_native_market_snapshot(
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("synthetic observation parses but is not independently attested");
+        assert!(!native.provenance_verified);
+        assert!(!native.portfolio_verified);
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.market = native;
+        input.reg_candidate.quote_received_at_ms = native.quote_received_at_ms;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
     fn gmo_lowercase_timestamp_separator_is_rejected_before_reg() {
         let mut reply = good_reply();
         reply["timestamp_utc"] = json!("2026-11-10t10:00:00Z");
