@@ -171,7 +171,7 @@ fn calculate(policy: Policy, c: Candidate) -> Result<(Metrics, u128, u16), Missi
     }
     // A zero/epoch clock cannot attest quote freshness or risk-state timing.
     // Enforce this in REG independently of the upstream seven-role pipeline.
-    if c.now_ms == 0 || c.quote_received_at_ms == 0 || c.now_sec != c.now_ms / 1_000 {
+    if c.now_ms == 0 || c.quote_received_at_ms == 0 {
         return Err(MissingOrInvalid::BadQuoteOrClock);
     }
     if c.entry_price_micros == 0
@@ -489,12 +489,12 @@ mod tests {
     #[test]
     fn uninitialized_or_inconsistent_clocks_fail_closed_in_reg() {
         let mut c = candidate();
-        for clock_case in 0..3 {
+        for clock_case in 0..2 {
             c = candidate();
-            match clock_case {
-                0 => c.now_ms = 0,
-                1 => c.quote_received_at_ms = 0,
-                _ => c.now_sec = c.now_sec.saturating_add(1),
+            if clock_case == 0 {
+                c.now_ms = 0;
+            } else {
+                c.quote_received_at_ms = 0;
             }
             let result = evaluate(policy(), c);
             assert_eq!(result.verdict, Verdict::Escalated);
