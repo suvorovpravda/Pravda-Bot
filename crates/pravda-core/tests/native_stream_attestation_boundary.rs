@@ -56,3 +56,41 @@ fn valid_synthetic_stream_state_does_not_attest_market_or_portfolio() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn missing_native_quote_paths_fail_closed_despite_forged_global_attestations() {
+    // A cache-level trust claim must not substitute for a venue-specific quote.
+    // These fixtures contain no independently attested market or portfolio data.
+    for symbols in [
+        json!(null),
+        json!({}),
+        json!({"BTC/USDT": {}}),
+        json!({"BTC/USDT": {"Kraken": {
+            "status": "live",
+            "timestamp": "2025-11-10T10:00:00Z",
+            "age_seconds": 0.0,
+            "price": 100
+        }}}),
+        json!({"ETH/USDT": {"Binance": {
+            "status": "live",
+            "timestamp": "2025-11-10T10:00:00Z",
+            "age_seconds": 0.0,
+            "price": 100
+        }}}),
+    ] {
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "provenance_verified": true,
+            "portfolio_verified": true,
+            "attested": true,
+            "symbols": symbols,
+        });
+        assert!(matches!(
+            evidence_from_native_market_snapshot(
+                &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
+                NOW_MS, 2_000, 50
+            ),
+            Err(NativeMarketRefusal::QuoteUnavailable)
+        ), "missing exact symbol/venue quote must refuse");
+    }
+}
