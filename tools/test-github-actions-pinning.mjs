@@ -106,8 +106,8 @@ assert.ok(codeqlWorkflow.includes("name: Analyze ${{ matrix.language == 'rust' &
   "Branch protection expects CodeQL Rust check named exactly Analyze Rust");
 // Packaging must exercise every exact main SHA, including JS-only changes.
 // A push.paths filter silently skips installed-Windows regression checks.
-const packageEvents=packaging.replace(/\\r\\n/g,"\\n").split(/^  pull_request:/m)[0];
-assert.match(packageEvents,/^  push:\\n    branches: \\[main\\]/m,
+const packageEvents=packaging.replace(/\r\n/g,"\n").split(/^  pull_request:/m)[0];
+assert.match(packageEvents,/^  push:\n    branches: \[main\]/m,
   "Windows packaging must run on main pushes");
 assert.doesNotMatch(packageEvents,/^    paths(?:-ignore)?:/m,
   "Windows packaging main pushes must not be filtered by file paths");
