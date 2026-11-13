@@ -29,11 +29,17 @@ fn native_quote_clock_rejects_future_and_epoch_overflow_even_with_forged_attesta
         ("9999-12-31T23:59:59Z", 0.0),
     ] {
         let result = evidence_from_native_market_snapshot(
-            &snapshot(timestamp, age), PaperSymbol::BtcUsdt,
-            PaperVenue::Binance, NOW, 2_000, 50,
+            &snapshot(timestamp, age),
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            NOW,
+            2_000,
+            50,
         );
-        assert!(matches!(result, Err(NativeMarketRefusal::ClockOrAgeInvalid)),
-            "invalid clock accepted: {timestamp}");
+        assert!(
+            matches!(result, Err(NativeMarketRefusal::ClockOrAgeInvalid)),
+            "invalid clock accepted: {timestamp}"
+        );
     }
 }
 
@@ -42,9 +48,16 @@ fn native_quote_clock_rejects_reported_age_outside_policy_despite_fresh_timestam
     const NOW: u64 = 1_762_768_800_000;
     let result = evidence_from_native_market_snapshot(
         &snapshot("2025-11-10T10:00:00Z", 2.001),
-        PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW, 2_000, 50,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW,
+        2_000,
+        50,
     );
-    assert!(matches!(result, Err(NativeMarketRefusal::ClockOrAgeInvalid)));
+    assert!(matches!(
+        result,
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
 }
 
 #[test]
@@ -54,9 +67,15 @@ fn epoch_zero_quote_and_uninitialized_clock_fail_closed() {
     for now_ms in [0_u64, 1_u64] {
         let result = evidence_from_native_market_snapshot(
             &snapshot("1970-01-01T00:00:00Z", 0.0),
-            PaperSymbol::BtcUsdt, PaperVenue::Binance,
-            now_ms, 2_000, 50,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
         );
-        assert!(matches!(result, Err(NativeMarketRefusal::ClockOrAgeInvalid)));
+        assert!(matches!(
+            result,
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
     }
 }
