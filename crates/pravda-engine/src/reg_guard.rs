@@ -169,6 +169,11 @@ fn calculate(policy: Policy, c: Candidate) -> Result<(Metrics, u128, u16), Missi
     if c.market_quality != FeedQuality::Verified {
         return Err(MissingOrInvalid::UnverifiedMarket);
     }
+    // A zero/epoch clock cannot attest quote freshness or risk-state timing.
+    // Enforce this in REG independently of the upstream seven-role pipeline.
+    if c.now_ms == 0 || c.quote_received_at_ms == 0 || c.now_sec != c.now_ms / 1_000 {
+        return Err(MissingOrInvalid::BadQuoteOrClock);
+    }
     if c.entry_price_micros == 0
         || c.target_price_micros == 0
         || c.underlying_units == 0
@@ -479,6 +484,24 @@ mod tests {
         let result = evaluate(policy(), c);
         assert_eq!(result.verdict, Verdict::Rejected);
         assert_eq!(result.error, Some(MissingOrInvalid::LiveDisabled));
+    }
+
+    #[test]
+    fn uninitialized_or_inconsistent_clocks_fail_closed_in_reg() {
+        let mut c = candidate();
+        for clock_case in 0..3 {
+            c = candidate();
+            match clock_case {
+                0 => c.now_ms = 0,
+                1 => c.quote_received_at_ms = 0,
+                _ => c.now_sec = c.now_sec.saturating_add(1),
+            }
+            let result = evaluate(policy(), c);
+            assert_eq!(result.verdict, Verdict::Escalated);
+            assert_eq!(result.error, Some(MissingOrInvalid::BadQuoteOrClock));
+            assert_eq!(result.checks_performed, 0);
+            assert!(result.metrics.is_none());
+        }
     }
 
     #[test]
