@@ -49,8 +49,8 @@ console.log('Sonar main pagination and required-inventory failure regression OK'
 // The historical main inventory must be checked on every main SHA, not only PRs
 // that touch a limited set of paths. A PR-only workflow cannot monitor main.
 const workflow=readFileSync(new URL('../.github/workflows/sonar-main-diagnostics.yml',import.meta.url),'utf8');
-assert.match(workflow,/^  push:\\n    branches: \\[main\\]/m,'main pushes must trigger the diagnostic');
-assert.match(workflow,/^  pull_request:\\n    branches: \\[main\\]/m,'PRs must retain diagnostics');
-assert.doesNotMatch(workflow,/^    paths(?:-ignore)?:/m,'no paths filters may skip main commits');
-assert.match(workflow,/github\\.event_name == 'push'/,'main push job must not be skipped by PR-only guard');
-assert.match(workflow,/run: node tools\\/test-sonar-main-diagnostics\\.mjs/,'offline regression must run in CI');
+assert.ok(workflow.includes("  push:\n    branches: [main]"),'main pushes must trigger the diagnostic');
+assert.ok(workflow.includes("  pull_request:\n    branches: [main]"),'PRs must retain diagnostics');
+assert.ok(!workflow.includes('    paths:') && !workflow.includes('    paths-ignore:'),'path filters may not skip main commits');
+assert.ok(workflow.includes("github.event_name == 'push'"),'main push job must not be skipped by PR-only guard');
+assert.ok(workflow.includes('run: node tools/test-sonar-main-diagnostics.mjs'),'offline regression must run in CI');
