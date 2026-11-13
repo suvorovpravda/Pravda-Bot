@@ -2,7 +2,7 @@
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "bfdadd75063cf600015fa8e263cb00aa1c42c09b",
   "latest_evidence_at": "2026-11-13T19:52:56Z",
-  "refreshed_at_utc": "2026-11-13T19:53:04.743Z",
+  "refreshed_at_utc": "2026-11-13T22:12:53.866Z",
   "historical": {
     "rows": [
       {
@@ -102,11 +102,11 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PASS"
+        "state": "MISSING"
       },
       {
         "name": "Windows desktop build and startup",
-        "state": "PASS"
+        "state": "MISSING"
       }
     ],
     "reason": "SHA_SCOPED_REQUIRED_CHECKS"
@@ -149,7 +149,7 @@
       "observedAt": "2026-11-13T14:39:48Z"
     }
   ],
-  "open_prs": 7,
+  "open_prs": 8,
   "active_pr": null,
   "open_issues": 8,
   "production": "NO-GO",
