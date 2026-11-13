@@ -60,7 +60,7 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    const NOW_MS: u64 = 1_762_769_600_000;
+    const NOW_MS: u64 = 1_794_304_800_000;
 
     fn observed() -> serde_json::Value {
         json!({
