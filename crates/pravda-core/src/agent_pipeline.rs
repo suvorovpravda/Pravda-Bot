@@ -185,7 +185,7 @@ pub fn evidence_from_native_market_snapshot(
         .get("age_seconds")
         .and_then(serde_json::Value::as_f64)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if !seconds.is_finite() || seconds < 0.0 || seconds * 1_000.0 > max_quote_age_ms as f64 {
+    if !seconds.is_finite() || seconds.is_sign_negative() || seconds * 1_000.0 > max_quote_age_ms as f64 {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let timestamp = quote
