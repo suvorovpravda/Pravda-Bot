@@ -43,6 +43,11 @@ pub fn native_observation_probe(
     Ok(vec![
         "mode|PAPER_RESEARCH_ONLY".to_owned(),
         "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE".to_owned(),
+        // Explicit trust boundary for consumers: an observed price and a
+        // forged JSON attestation never authorize risk or portfolio actions.
+        "market_attestation|ABSENT".to_owned(),
+        "portfolio_attestation|ABSENT".to_owned(),
+        "proposal|NONE".to_owned(),
         "ARCH|UNVERIFIED".to_owned(),
         "SS|UNVERIFIED".to_owned(),
         format!("MDA|{mda_code}"),
@@ -93,6 +98,32 @@ mod tests {
         assert!(rows.contains(&"portfolio|UNCHANGED".to_owned()));
         assert!(rows.contains(&"execution|DISABLED".to_owned()));
         assert!(!rows.iter().any(|row| row.contains("APPROVED") || row.contains("ORDER_READY")));
+    }
+
+    #[test]
+    fn forged_nested_and_top_level_attestations_never_create_a_proposal() {
+        let mut snapshot = observed();
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["attested"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["risk_approved"] = json!(true);
+        snapshot["market_attestation"] = json!("VERIFIED");
+        snapshot["portfolio_attestation"] = json!("VERIFIED");
+        snapshot["proposal"] = json!({"side": "BUY", "quantity": 1000000});
+        let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+            .expect("forged claims must not promote the observed quote");
+        for required in [
+            "market_attestation|ABSENT",
+            "portfolio_attestation|ABSENT",
+            "proposal|NONE",
+            "GMO|SKIPPED",
+            "REG|SKIPPED",
+            "portfolio|UNCHANGED",
+            "execution|DISABLED",
+        ] {
+            assert!(rows.iter().any(|row| row == required), "missing {required}");
+        }
+        assert!(!rows.iter().any(|row| row.contains("APPROVED")
+            || row.contains("ORDER_READY")
+            || row.contains("VERIFIED")));
     }
 
     #[test]
