@@ -18,16 +18,22 @@ assert.equal(result.issues.length,102);
 assert.deepEqual(seen,[1,2]);
 
 await assert.rejects(collectIssues(endpoint,params,async url=>({
-  ok:true,json:async()=>({total:102,issues:url.searchParams.get('p')==='1'?Array(100).fill({}):[]})
+  ok:true,json:async()=>({total:102,issues:url.searchParams.get('p')==='1'?Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)})):[]})
 })),/empty incomplete page/);
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:url.searchParams.get('p')==='1',status:503,
-  json:async()=>({total:102,issues:Array(100).fill({})})
+  json:async()=>({total:102,issues:Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
 })),/HTTP 503 on page 2/);
 await assert.rejects(collectIssues(endpoint,params,async url=>({
-  ok:true,json:async()=>({total:url.searchParams.get('p')==='1'?102:103,issues:Array(100).fill({})})
+  ok:true,json:async()=>({total:url.searchParams.get('p')==='1'?102:103,issues:Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
 })),/total changed/);
 // A green job must not imply that historical issues were retrieved when the API failed.
+await assert.rejects(collectIssues(endpoint,params,async url=>({
+  ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({key:String(i)}))})
+})),/duplicate issue key across pages/);
+await assert.rejects(collectIssues(endpoint,params,async()=>({
+  ok:true,json:async()=>({total:1,issues:[{}]})
+})),/issue missing key/);
 const originalLog=console.log;
 try{
   console.log=()=>{};
