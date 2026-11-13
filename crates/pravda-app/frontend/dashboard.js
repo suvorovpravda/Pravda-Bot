@@ -375,7 +375,7 @@ const translations = {
         // the cached payload: applyLanguage() can otherwise replay its old
         // freshness flags and make an unavailable quote look recent again.
         latestMarket = null;
-        clearHomeMarket();
+        if (typeof clearHomeMarket === "function") clearHomeMarket();
         document.querySelectorAll(".watchlist-row").forEach(button => {
             button.dataset.freshness = "unavailable";
             button.querySelector(".watch-price").textContent = "—";
@@ -391,7 +391,8 @@ const translations = {
         $("home-runtime").textContent = "Runtime non vérifié";
         $("home-source-count").textContent = "Connecteurs : en attente d’une réponse Rust";
         $("home-infra-summary").textContent = "Sources non vérifiées";
-        setSidebarState("sources", "unknown", "Nouvelle session : sources non relues");
+        if (typeof setSidebarState === "function")
+            setSidebarState("sources", "unknown", "Nouvelle session : sources non relues");
         latestFx = null;
         historicalPoints = [];
         $("fx-rates").textContent = t("fxFailure");
