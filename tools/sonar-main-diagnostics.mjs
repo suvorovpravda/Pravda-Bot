@@ -69,9 +69,11 @@ for(const [kind,endpoint,params] of requests){
     if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');requiredDiagnosticsAvailable=false;continue;}
     const data=await response.json();
     if(kind==='aggregate'){
+      if(!data.component||!Array.isArray(data.component.measures))throw Error('invalid SonarCloud aggregate measures schema');
       console.log('SONAR_MAIN_AGGREGATE='+JSON.stringify(data.component?.measures??[]));
     }else{
-      const list=Array.isArray(data.components)?data.components:[];
+      if(!Array.isArray(data.components)||!data.paging||!Number.isSafeInteger(data.paging.total)||data.paging.total<0)throw Error('invalid SonarCloud duplication measures schema');
+      const list=data.components;
       console.log('SONAR_MAIN_COMPONENTS_TOTAL='+data.paging?.total);
       for(const q of list.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
       const qualified=list.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
