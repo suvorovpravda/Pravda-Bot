@@ -346,6 +346,30 @@ fn paper_research_preflight_rows(snapshot: &serde_json::Value) -> Vec<String> {
     ]
 }
 
+/// Read-only native PAPER research probe. Authorization is captured before
+/// the async feed read and rechecked after it, including login replacement.
+/// Neither the request nor this response can modify the synthetic portfolio.
+#[tauri::command]
+pub async fn ipc_paper_pipeline_probe(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    symbol: String,
+    venue: String,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let snapshot = desktop.market_snapshot().await;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "PAPER_CLOCK_UNAVAILABLE".to_owned())?
+        .as_millis();
+    let now_ms = u64::try_from(now_ms).map_err(|_| "PAPER_CLOCK_UNAVAILABLE".to_owned())?;
+    let result =
+        crate::paper_pipeline::native_observation_probe(&snapshot.0, &symbol, &venue, now_ms)
+            .map_err(str::to_string);
+    finish_authorized_read(&session, &issued_to, result)
+}
+
 #[tauri::command]
 pub async fn ipc_history_recent(
     window: Window,
