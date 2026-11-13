@@ -32,6 +32,11 @@ await assert.rejects(collectIssues(endpoint,params,async url=>({
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?50:52},(_,i)=>({key:String((url.searchParams.get('p')==='1'?0:100)+i)}))})
 })),/page length does not match fixed pagination offsets/);
+// A successful HTTP response with the wrong page metadata must not be trusted.
+await assert.rejects(collectIssues(endpoint,params,async url=>({
+  ok:true,json:async()=>({total:102,paging:{pageIndex:1,pageSize:100,total:102},
+    issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
+})),/paging metadata mismatch on page 2/);
 // A green job must not imply that historical issues were retrieved when the API failed.
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({key:String(i)}))})
