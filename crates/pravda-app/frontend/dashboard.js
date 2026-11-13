@@ -2030,8 +2030,7 @@ const translations = {
     function applyTab(requestedTab) {
         const tab = requestedTab === "all" ? "home" : requestedTab;
         if (!Object.hasOwn(uiPageMeta, tab)) return;
-        const shellNode = document.querySelector(".shell");
-        shellNode.dataset.activeTab = tab;
+        document.querySelector(".shell").dataset.activeTab = tab;
         const [title, description] = uiPageMeta[tab];
         $("ui-page-title").textContent = title;
         $("ui-page-description").textContent = description;
@@ -2053,12 +2052,16 @@ const translations = {
             card.classList.toggle("hidden", !visible);
         });
         if (tab === "markets") requestAnimationFrame(drawPriceChart);
-        if (["paper", "tests", "journals", "settings", "security", "home"].includes(tab)) {
-            // Local reads are authorized by the existing Rust session, and
-            // the authentication epoch is rechecked inside each IPC method.
+        // Preserve the legacy security route and its complete IPC refresh
+        // contract while the new category-specific pages are introduced.
+        if (tab === "security") {
+            void refreshSecurity(true);
+            void refreshSecurityEvents();
+            void refreshPaper(true);
+        } else {
             if (tab === "paper" || tab === "home") void refreshPaper(true);
-            if (tab === "tests" || tab === "security") void refreshSecurity(true);
-            if (tab === "journals" || tab === "security") void refreshSecurityEvents();
+            if (tab === "tests") void refreshSecurity(true);
+            if (tab === "journals") void refreshSecurityEvents();
         }
         if (tab === "revolut") void refreshRevolut();
         // No physical installation/upgrade test is claimed by this navigation.
