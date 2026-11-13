@@ -68,6 +68,22 @@ try{
   });
   assert.equal(paginated,true,'all duplication pages must be retrieved');
   assert.deepEqual(pages,[1,2]);
+  // Repeated component identities across fixed-offset pages must not be counted
+  // as a complete 501-file inventory (the omitted file could carry duplication).
+  const repeatedComponents=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    const page=Number(url.searchParams.get('p'));
+    return {ok:true,status:200,json:async()=>({paging:{total:501,pageIndex:page,pageSize:500},
+      components:Array.from({length:page===1?500:1},(_,i)=>({key:String(page===1?i:0),measures:[]}))})};
+  });
+  assert.equal(repeatedComponents,false,'duplicate component keys across pages must fail closed');
+  const missingComponentKey=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:1,pageIndex:1,pageSize:500},components:[{measures:[]}]})};
+  });
+  assert.equal(missingComponentKey,false,'component without stable identity must fail closed');
   const shortDuplication=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
     if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
