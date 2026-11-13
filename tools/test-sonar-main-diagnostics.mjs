@@ -19,7 +19,7 @@ assert.deepEqual(seen,[1,2]);
 
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:102,issues:url.searchParams.get('p')==='1'?Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)})):[]})
-})),/empty incomplete page/);
+})),/page length does not match fixed pagination offsets/);
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:url.searchParams.get('p')==='1',status:503,
   json:async()=>({total:102,issues:Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
@@ -27,6 +27,11 @@ await assert.rejects(collectIssues(endpoint,params,async url=>({
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:url.searchParams.get('p')==='1'?102:103,issues:Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
 })),/total changed/);
+// Sonar uses fixed page offsets. Fifty issues on page 1 and 52 on page 2
+// must not masquerade as all 102 unique issues: entries 51-100 were skipped.
+await assert.rejects(collectIssues(endpoint,params,async url=>({
+  ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?50:52},(_,i)=>({key:String((url.searchParams.get('p')==='1'?0:100)+i)}))})
+})),/page length does not match fixed pagination offsets/);
 // A green job must not imply that historical issues were retrieved when the API failed.
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({key:String(i)}))})
