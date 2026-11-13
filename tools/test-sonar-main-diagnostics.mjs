@@ -70,6 +70,19 @@ try{
     return {ok:true,status:200,json:async()=>({components:[],paging:{total:0}})};
   });
   assert.equal(missingAggregate,false,'unavailable aggregate measures must fail the diagnostic');
+  // HTTP 200 with malformed measures must fail closed, not be logged as zero findings.
+  const malformedDuplication=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component_tree')return {ok:true,status:200,json:async()=>({paging:{total:4}})};
+    return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+  });
+  assert.equal(malformedDuplication,false,'malformed duplication HTTP 200 must fail');
+  const malformedAggregate=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{}})};
+    return {ok:true,status:200,json:async()=>({components:[],paging:{total:0}})};
+  });
+  assert.equal(malformedAggregate,false,'malformed aggregate HTTP 200 must fail');
 }finally{
   console.log=originalLog;
 }
