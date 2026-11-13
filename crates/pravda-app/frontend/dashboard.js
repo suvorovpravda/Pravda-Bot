@@ -684,7 +684,9 @@ const translations = {
     async function refreshSources() {
         const requestGeneration = window.pravdaAuthGeneration;
         try {
-            renderSources(await fetchJson("/api/sources"));
+            const snapshot = await fetchJson("/api/sources");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            renderSources(snapshot);
         } catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("sources-status"), "error", t("sourceUnavailable"));
@@ -963,6 +965,7 @@ const translations = {
         const requestGeneration = window.pravdaAuthGeneration;
         try {
             const d = await fetchJson("/api/metrics");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             const fmt=(v,unit="")=>Number.isFinite(v)?numericFormat(v)+unit:"—";
             $("runtime-cpu").textContent=fmt(d.cpu_percent,"%");
             $("runtime-ram").textContent=fmt(d.memory_usage_mb," MiB");
