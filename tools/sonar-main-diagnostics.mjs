@@ -41,6 +41,8 @@ export async function collectIssues(endpoint,params,fetcher=fetch){
       throw Error('SonarCloud page length does not match fixed pagination offsets on page '+page);
     for(const issue of data.issues){
       if(typeof issue.key!=='string'||!issue.key)throw Error('SonarCloud issue missing key on page '+page);
+      if(typeof issue.rule!=='string'||!issue.rule||typeof issue.component!=='string'||!issue.component)
+        throw Error('SonarCloud issue missing rule or component on page '+page);
       if(seenKeys.has(issue.key))throw Error('SonarCloud duplicate issue key across pages: '+issue.key);
       seenKeys.add(issue.key);
       issues.push(issue);
