@@ -409,6 +409,7 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
     // The GMO response is untrusted. Canonical UTC and millisecond precision
     // prevent alternate encodings and sub-millisecond replay at the REG clock.
     if !reply.timestamp_utc.ends_with('Z')
+        || !reply.timestamp_utc.contains('T')
         || reply
             .timestamp_utc
             .split_once('T')
@@ -566,6 +567,20 @@ mod tests {
                 .timestamp_millis(),
         )
         .unwrap()
+    }
+
+    #[test]
+    fn gmo_lowercase_timestamp_separator_is_rejected_before_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = json!("2026-11-10t10:00:00Z");
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "GMO_TIMESTAMP_INVALID");
+        assert_eq!(report.stages[3].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
     }
 
     #[test]
