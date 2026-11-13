@@ -205,6 +205,28 @@ fn cross_symbol_substitution_and_untrusted_nested_quote_fail_closed() {
     ));
 }
 
+
+#[test]
+fn negative_zero_quote_age_is_not_valid_freshness_evidence() {
+    // IEEE-754 negative zero is not a trustworthy elapsed-time measurement.
+    // Reject rather than normalize it to a fresh zero-second observation.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(-0.0_f64);
+    snapshot["attested"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+
+    // Positive zero remains a parseable synthetic observation, never
+    // independent provenance or permission for PAPER execution.
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0_f64);
+    let evidence = inspect(&snapshot).expect("positive zero-age synthetic fixture");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
+
 #[test]
 fn native_quote_non_utc_offset_is_refused_even_for_same_instant() {
     // A timezone-shifted timestamp encodes the same wall-clock instant as
