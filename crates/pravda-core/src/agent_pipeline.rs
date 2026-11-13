@@ -213,6 +213,11 @@ pub fn evidence_from_native_market_snapshot(
     }
     let observed_ms = u64::try_from(observed.timestamp_millis())
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
+    // An uninitialized native clock or epoch-zero quote cannot establish
+    // freshness, even if attacker-controlled age_seconds claims zero age.
+    if now_ms == 0 || observed_ms == 0 {
+        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
+    }
     let wall_age = now_ms
         .checked_sub(observed_ms)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
