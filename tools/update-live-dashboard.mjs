@@ -269,7 +269,7 @@ export async function fetchGovernanceChecks(policy, fetchPage) {
       const rows=response?.check_runs;
       if(!Number.isSafeInteger(count) || count<0 || count>1000 ||
         !Array.isArray(rows) || rows.length>100 ||
-        (page===1 && rows.length!==Math.min(count,100)) ||
+        rows.length!==Math.min(100,Math.max(0,count-(page-1)*100)) ||
         (expectedTotal!==null && expectedTotal!==count)) {
         throw Error("INCOMPLETE_GOVERNANCE_CHECK_EVIDENCE");
       }
