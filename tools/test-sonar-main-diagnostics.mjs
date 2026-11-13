@@ -57,6 +57,23 @@ try{
     return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0}})};
   });
   assert.equal(succeeded,true,'complete issue inventory must pass');
+  // A 501-file duplication inventory must retrieve the second page.
+  const pages=[];
+  const paginated=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    const page=Number(url.searchParams.get('p'));
+    pages.push(page);
+    return {ok:true,status:200,json:async()=>({paging:{total:501,pageIndex:page,pageSize:500},components:Array.from({length:page===1?500:1},(_,i)=>({key:String((page-1)*500+i),measures:[]}))})};
+  });
+  assert.equal(paginated,true,'all duplication pages must be retrieved');
+  assert.deepEqual(pages,[1,2]);
+  const shortDuplication=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:501},components:[]})};
+  });
+  assert.equal(shortDuplication,false,'short duplication page must fail closed');
   // Missing coverage/duplication measures must not leave a misleading green diagnostic.
   const missingMeasures=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
