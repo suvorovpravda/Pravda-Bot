@@ -33,12 +33,24 @@ fn main() {
     println!("cargo:rerun-if-env-changed=PRAVDA_SETUP_REQUIRE_PAYLOADS");
     let setup_dir = env::var_os("PRAVDA_SETUP_PAYLOAD_DIR").map(PathBuf::from);
     let setup_required = env::var("PRAVDA_SETUP_REQUIRE_PAYLOADS").as_deref() == Ok("1");
-    {
-        let (name, file_name, header) = (
+    // A single executable must contain BOTH the fully offline MSI and the
+    // independent self-contained diagnostic center (Doctor + Harness + GUI
+    // smoke tests). A missing payload is a hard release-build failure.
+    // Development cargo check can still use empty placeholders.
+    for (name, file_name, header, minimum_size) in [
+        (
             "pravda-embedded-installer.msi",
             "pravda-installer.msi",
             b"\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1".as_slice(),
-        );
+            100_000,
+        ),
+        (
+            "pravda-embedded-test-center.exe",
+            "pravda-test-center.exe",
+            b"MZ".as_slice(),
+            1_000_000,
+        ),
+    ] {
         let destination_file = destination.join(name);
         let origin = setup_dir.as_ref().map(|dir| dir.join(file_name));
         if let Some(file) = &origin {
@@ -46,7 +58,7 @@ fn main() {
         }
         if let Some(file) = origin.filter(|file| file.is_file()) {
             let bytes = fs::read(&file).expect("Cannot read unified setup payload");
-            if setup_required && (bytes.len() < 100_000 || !bytes.starts_with(header)) {
+            if setup_required && (bytes.len() < minimum_size || !bytes.starts_with(header)) {
                 panic!("Required Windows setup payload invalid: {file_name}");
             }
             fs::write(destination_file, bytes).expect("Cannot embed Windows setup payload");
