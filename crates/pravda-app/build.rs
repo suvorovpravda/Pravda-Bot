@@ -8,6 +8,8 @@ fn main() {
         "ipc_auth_logout",
         "ipc_session_check",
         "ipc_market_snapshot",
+        "ipc_paper_pipeline_probe",
+        "ipc_paper_research_preflight",
         "ipc_history_recent",
         "ipc_history_query",
         "ipc_history_export_csv",
