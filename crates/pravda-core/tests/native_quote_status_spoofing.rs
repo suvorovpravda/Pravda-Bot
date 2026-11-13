@@ -44,8 +44,13 @@ fn native_quote_status_requires_exact_live_string() {
             NOW_MS,
             2_000,
             50,
-        ).expect_err("spoofed quote status must fail closed");
-        assert_eq!(refusal, NativeMarketRefusal::QuoteStaleOrUntrusted, "{status}");
+        )
+        .expect_err("spoofed quote status must fail closed");
+        assert_eq!(
+            refusal,
+            NativeMarketRefusal::QuoteStaleOrUntrusted,
+            "{status}"
+        );
     }
 }
 
@@ -58,7 +63,8 @@ fn synthetically_live_status_is_not_market_attestation() {
         NOW_MS,
         2_000,
         50,
-    ).expect("synthetic observation may be parsed, never attested");
+    )
+    .expect("synthetic observation may be parsed, never attested");
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
