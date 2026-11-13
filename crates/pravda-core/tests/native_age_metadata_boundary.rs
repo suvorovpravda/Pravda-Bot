@@ -19,20 +19,31 @@ fn inspect(age: Value) -> Result<pravda_core::agent_pipeline::MarketEvidence, Na
         }}}
     });
     evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance,
-        1_762_768_800_000, 2_000, 50
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        1_762_768_800_000,
+        2_000,
+        50,
     )
 }
 
 #[test]
 fn malformed_native_age_metadata_cannot_claim_quote_freshness() {
     for age in [
-        Value::Null, json!(true), json!("0"), json!([]), json!({}),
-        json!(-0.001), json!(2.001), json!(1e100),
+        Value::Null,
+        json!(true),
+        json!("0"),
+        json!([]),
+        json!({}),
+        json!(-0.001),
+        json!(2.001),
+        json!(1e100),
     ] {
-        assert!(matches!(
-            inspect(age), Err(NativeMarketRefusal::ClockOrAgeInvalid)
-        ), "malformed synthetic age must fail closed");
+        assert!(
+            matches!(inspect(age), Err(NativeMarketRefusal::ClockOrAgeInvalid)),
+            "malformed synthetic age must fail closed"
+        );
     }
 }
 
