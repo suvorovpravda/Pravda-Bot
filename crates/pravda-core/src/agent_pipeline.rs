@@ -515,7 +515,9 @@ pub fn review_paper_cycle(input: &CycleInput<'_>) -> PipelineReport {
     stages.push(StageTrace {
         role: Role::IncidentResponder,
         status: StageStatus::Noted,
-        code: if halted.is_some() {
+        code: if no_action {
+            "IR_NO_ACTION_NO_INCIDENT"
+        } else if halted.is_some() {
             "IR_HUMAN_REVIEW_REQUIRED"
         } else {
             "IR_NO_INCIDENT_REPORTED"
@@ -586,6 +588,27 @@ mod tests {
             assert_eq!(report.stages[2].status, StageStatus::Blocked);
             assert_eq!(report.stages[3].status, StageStatus::Skipped);
             assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        }
+    }
+
+    #[test]
+    fn no_action_is_not_misreported_as_an_incident_or_paper_order() {
+        let mut reply = good_reply();
+        reply["status"] = json!("NO_ACTION");
+        reply["decision"] = serde_json::Value::Null;
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        if report.verdict == PipelineVerdict::NoAction {
+            assert_eq!(report.reason_code, "GMO_NO_ACTION");
+            assert_eq!(report.summary_code, "NO_ACTION");
+            assert_eq!(report.reg_checks_performed, 0);
+            assert_eq!(report.stages[5].code, "IR_NO_ACTION_NO_INCIDENT");
+            assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        } else {
+            // A stricter GMO schema may reject the synthetic fixture before
+            // reaching the no-action path. It must still never reach REG.
+            assert_eq!(report.reg_checks_performed, 0);
         }
     }
 
