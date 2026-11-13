@@ -8,19 +8,47 @@ const requests=[
   ['duplication','https://sonarcloud.io/api/measures/component_tree',{component:project,metricKeys:'new_duplicated_lines_density,new_duplicated_lines,new_lines',qualifiers:'FIL',ps:'500'}],
   ['aggregate','https://sonarcloud.io/api/measures/component',{component:project,metricKeys:'new_duplicated_lines_density,new_duplicated_lines,new_lines,duplicated_lines_density,duplicated_lines'}],
 ];
+// SonarCloud returns at most one page per request. A partial response must never
+// be reported as a complete historical issue inventory.
+export async function collectIssues(endpoint,params,fetcher=fetch){
+  const issues=[];
+  let expected=null;
+  for(let page=1;page<=100;page++){
+    const url=new URL(endpoint);
+    for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
+    url.searchParams.set('p',String(page));
+    const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
+    if(!response.ok)throw Error('SonarCloud HTTP '+response.status+' on page '+page);
+    const data=await response.json();
+    if(!Array.isArray(data.issues)||!Number.isSafeInteger(data.total)||data.total<0)
+      throw Error('invalid SonarCloud issue schema on page '+page);
+    if(expected===null)expected=data.total;
+    if(data.total!==expected)throw Error('SonarCloud total changed during pagination');
+    if(issues.length+data.issues.length>expected)throw Error('SonarCloud issue count exceeds total');
+    issues.push(...data.issues);
+    if(issues.length===expected)return {issues,total:expected};
+    if(data.issues.length===0)throw Error('SonarCloud returned empty incomplete page');
+  }
+  throw Error('SonarCloud issue inventory exceeds 100 pages');
+}
+
+export async function main(){
 for(const [kind,endpoint,params] of requests){
   const url=new URL(endpoint);
   for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
   try{
+    if(kind==='issues'||kind==='new_issues'){
+      const data=await collectIssues(endpoint,params);
+      console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP=200');
+      console.log('SONAR_MAIN_'+kind.toUpperCase()+'_TOTAL='+data.total);
+      for(const q of data.issues)console.log('SONAR_MAIN_'+(kind==='new_issues'?'NEW_ISSUE':'ISSUE')+'='+JSON.stringify({key:q.key,rule:q.rule,component:q.component,line:q.line??q.textRange?.startLine??null,severity:q.severity,type:q.type,impacts:q.impacts,message:String(q.message??'').slice(0,350)}));
+      continue;
+    }
     const response=await fetch(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
     console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP='+response.status);
     if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');continue;}
     const data=await response.json();
-    if(kind==='issues'||kind==='new_issues'){
-      if(!Array.isArray(data.issues))throw Error('unexpected response schema');
-      console.log('SONAR_MAIN_ISSUES_TOTAL='+data.total);
-      for(const q of data.issues)console.log('SONAR_MAIN_'+(kind==='new_issues'?'NEW_ISSUE':'ISSUE')+'='+JSON.stringify({key:q.key,rule:q.rule,component:q.component,line:q.line??q.textRange?.startLine??null,severity:q.severity,type:q.type,impacts:q.impacts,message:String(q.message??'').slice(0,350)}));
-    }else if(kind==='aggregate'){
+    if(kind==='aggregate'){
       console.log('SONAR_MAIN_AGGREGATE='+JSON.stringify(data.component?.measures??[]));
     }else{
       const list=Array.isArray(data.components)?data.components:[];
@@ -29,5 +57,7 @@ for(const [kind,endpoint,params] of requests){
       const qualified=list.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
       for(const q of qualified.slice(0,100))console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
     }
-  }catch(e){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.name||'error'));}
+  }catch(e){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.message||e?.name||'error'));}
 }
+}
+if(process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href)await main();
