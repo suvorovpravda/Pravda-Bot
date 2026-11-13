@@ -10,7 +10,7 @@ const fetcher=async url=>{
   const page=Number(url.searchParams.get('p'));
   seen.push(page);
   assert.equal(url.searchParams.get('branch'),'main');
-  return {ok:true,json:async()=>({total:102,issues:Array.from({length:page===1?100:2},(_,i)=>({key:String((page-1)*100+i)}))})};
+  return {ok:true,json:async()=>({total:102,issues:Array.from({length:page===1?100:2},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((page-1)*100+i)}))})};
 };
 const result=await collectIssues(endpoint,params,fetcher);
 assert.equal(result.total,102);
@@ -18,32 +18,39 @@ assert.equal(result.issues.length,102);
 assert.deepEqual(seen,[1,2]);
 
 await assert.rejects(collectIssues(endpoint,params,async url=>({
-  ok:true,json:async()=>({total:102,issues:url.searchParams.get('p')==='1'?Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)})):[]})
+  ok:true,json:async()=>({total:102,issues:url.searchParams.get('p')==='1'?Array.from({length:100},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((Number(url.searchParams.get('p'))-1)*100+i)})):[]})
 })),/page length does not match fixed pagination offsets/);
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:url.searchParams.get('p')==='1',status:503,
-  json:async()=>({total:102,issues:Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
+  json:async()=>({total:102,issues:Array.from({length:100},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
 })),/HTTP 503 on page 2/);
 await assert.rejects(collectIssues(endpoint,params,async url=>({
-  ok:true,json:async()=>({total:url.searchParams.get('p')==='1'?102:103,issues:Array.from({length:100},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
+  ok:true,json:async()=>({total:url.searchParams.get('p')==='1'?102:103,issues:Array.from({length:100},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
 })),/total changed/);
 // Sonar uses fixed page offsets. Fifty issues on page 1 and 52 on page 2
 // must not masquerade as all 102 unique issues: entries 51-100 were skipped.
 await assert.rejects(collectIssues(endpoint,params,async url=>({
-  ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?50:52},(_,i)=>({key:String((url.searchParams.get('p')==='1'?0:100)+i)}))})
+  ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?50:52},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((url.searchParams.get('p')==='1'?0:100)+i)}))})
 })),/page length does not match fixed pagination offsets/);
 // A successful HTTP response with the wrong page metadata must not be trusted.
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:102,paging:{pageIndex:1,pageSize:100,total:102},
-    issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
+    issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((Number(url.searchParams.get('p'))-1)*100+i)}))})
 })),/paging metadata mismatch on page 2/);
 // A green job must not imply that historical issues were retrieved when the API failed.
 await assert.rejects(collectIssues(endpoint,params,async url=>({
-  ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({key:String(i)}))})
+  ok:true,json:async()=>({total:102,issues:Array.from({length:url.searchParams.get('p')==='1'?100:2},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String(i)}))})
 })),/duplicate issue key across pages/);
 await assert.rejects(collectIssues(endpoint,params,async()=>({
   ok:true,json:async()=>({total:1,issues:[{}]})
 })),/issue missing key/);
+// A response with issue keys but no rule/file is not a usable Sonar triage inventory.
+await assert.rejects(collectIssues(endpoint,params,async()=>({
+  ok:true,json:async()=>({total:1,issues:[{key:'k1',component:'test:file.js'}]})
+})),/missing rule or component/);
+await assert.rejects(collectIssues(endpoint,params,async()=>({
+  ok:true,json:async()=>({total:1,issues:[{key:'k1',rule:'javascript:S1234'}]})
+})),/missing rule or component/);
 const originalLog=console.log;
 try{
   console.log=()=>{};
@@ -64,7 +71,7 @@ try{
     if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
     const page=Number(url.searchParams.get('p'));
     pages.push(page);
-    return {ok:true,status:200,json:async()=>({paging:{total:501,pageIndex:page,pageSize:500},components:Array.from({length:page===1?500:1},(_,i)=>({key:String((page-1)*500+i),measures:[]}))})};
+    return {ok:true,status:200,json:async()=>({paging:{total:501,pageIndex:page,pageSize:500},components:Array.from({length:page===1?500:1},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String((page-1)*500+i),measures:[]}))})};
   });
   assert.equal(paginated,true,'all duplication pages must be retrieved');
   assert.deepEqual(pages,[1,2]);
@@ -75,7 +82,7 @@ try{
     if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
     const page=Number(url.searchParams.get('p'));
     return {ok:true,status:200,json:async()=>({paging:{total:501,pageIndex:page,pageSize:500},
-      components:Array.from({length:page===1?500:1},(_,i)=>({key:String(page===1?i:0),measures:[]}))})};
+      components:Array.from({length:page===1?500:1},(_,i)=>({rule:'javascript:S1234',component:'test:file.js',key:String(page===1?i:0),measures:[]}))})};
   });
   assert.equal(repeatedComponents,false,'duplicate component keys across pages must fail closed');
   const missingComponentKey=await main(async url=>{
