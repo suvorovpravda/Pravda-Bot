@@ -12,6 +12,7 @@ const requests=[
 // be reported as a complete historical issue inventory.
 export async function collectIssues(endpoint,params,fetcher=fetch){
   const issues=[];
+  const seenKeys=new Set();
   let expected=null;
   for(let page=1;page<=100;page++){
     const url=new URL(endpoint);
@@ -25,7 +26,12 @@ export async function collectIssues(endpoint,params,fetcher=fetch){
     if(expected===null)expected=data.total;
     if(data.total!==expected)throw Error('SonarCloud total changed during pagination');
     if(issues.length+data.issues.length>expected)throw Error('SonarCloud issue count exceeds total');
-    issues.push(...data.issues);
+    for(const issue of data.issues){
+      if(typeof issue.key!=='string'||!issue.key)throw Error('SonarCloud issue missing key on page '+page);
+      if(seenKeys.has(issue.key))throw Error('SonarCloud duplicate issue key across pages: '+issue.key);
+      seenKeys.add(issue.key);
+      issues.push(issue);
+    }
     if(issues.length===expected)return {issues,total:expected};
     if(data.issues.length===0)throw Error('SonarCloud returned empty incomplete page');
   }
