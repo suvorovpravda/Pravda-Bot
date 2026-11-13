@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import {collectIssues} from './sonar-main-diagnostics.mjs';
+import {collectIssues,main} from './sonar-main-diagnostics.mjs';
 
 const endpoint='https://sonarcloud.io/api/issues/search';
 const params={componentKeys:'test',branch:'main',ps:'100'};
@@ -26,4 +26,21 @@ await assert.rejects(collectIssues(endpoint,params,async url=>({
 await assert.rejects(collectIssues(endpoint,params,async url=>({
   ok:true,json:async()=>({total:url.searchParams.get('p')==='1'?102:103,issues:Array(100).fill({})})
 })),/total changed/);
-console.log('Sonar main pagination regression OK');
+// A green job must not imply that historical issues were retrieved when the API failed.
+const originalLog=console.log;
+try{
+  console.log=()=>{};
+  const failed=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:false,status:503};
+    return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0}})};
+  });
+  assert.equal(failed,false,'required issue API failure must fail the diagnostic');
+  const succeeded=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0}})};
+  });
+  assert.equal(succeeded,true,'complete issue inventory must pass');
+}finally{
+  console.log=originalLog;
+}
+console.log('Sonar main pagination and required-inventory failure regression OK');
