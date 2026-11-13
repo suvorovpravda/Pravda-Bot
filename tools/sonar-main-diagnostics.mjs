@@ -52,7 +52,7 @@ export async function collectIssues(endpoint,params,fetcher=fetch){
 }
 
 export async function main(fetcher=fetch){
-let requiredIssuesAvailable=true;
+let requiredDiagnosticsAvailable=true;
 for(const [kind,endpoint,params] of requests){
   const url=new URL(endpoint);
   for(const [key,value] of Object.entries(params))url.searchParams.set(key,value);
@@ -66,7 +66,7 @@ for(const [kind,endpoint,params] of requests){
     }
     const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
     console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP='+response.status);
-    if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');continue;}
+    if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');requiredDiagnosticsAvailable=false;continue;}
     const data=await response.json();
     if(kind==='aggregate'){
       console.log('SONAR_MAIN_AGGREGATE='+JSON.stringify(data.component?.measures??[]));
@@ -79,10 +79,10 @@ for(const [kind,endpoint,params] of requests){
     }
   }catch(e){
     console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE='+String(e?.message||e?.name||'error'));
-    if(kind==='issues'||kind==='new_issues')requiredIssuesAvailable=false;
+    requiredDiagnosticsAvailable=false;
   }
 }
-return requiredIssuesAvailable;
+return requiredDiagnosticsAvailable;
 }
 if(process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href){
   if(!await main())process.exitCode=1;
