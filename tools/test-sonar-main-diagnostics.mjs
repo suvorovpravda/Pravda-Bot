@@ -65,3 +65,7 @@ assert.ok(workflow.includes("  pull_request:\n    branches: [main]"),'PRs must r
 assert.ok(!workflow.includes('    paths:') && !workflow.includes('    paths-ignore:'),'path filters may not skip main commits');
 assert.ok(workflow.includes("github.event_name == 'push'"),'main push job must not be skipped by PR-only guard');
 assert.ok(workflow.includes('run: node tools/test-sonar-main-diagnostics.mjs'),'offline regression must run in CI');
+
+// PR checks must test the exact submitted head, not GitHub's synthetic merge SHA.
+assert.ok(workflow.includes("github.event.pull_request.head.sha || github.sha"),
+  'PR checkout must use exact head SHA while push uses event SHA');
