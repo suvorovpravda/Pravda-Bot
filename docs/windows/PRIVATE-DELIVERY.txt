@@ -13,6 +13,37 @@ Le client a demandé la remise de l'application sans certificat Authenticode ni 
 - **Updater automatique désactivé** : aucune installation de mise à jour non signée ; ne pas basculer vers un updater artisanal.
 - Pas de certificat de signature de production supposé, aucune demande de PFX ni secret d'utilisateur. Les avertissements éventuels de Windows concernant l'absence de signature ne doivent pas être contournés par la désactivation de Defender ou SmartScreen.
 
+## Un seul exécutable remis au client
+
+L'artefact **pravda-windows-single-file-setup** contient un fichier
+`pravda-setup.exe`. Ce même EXE embarque désormais :
+- le MSI Tauri/Rust et les prérequis WebView2 hors ligne ;
+- le Test Center autonome, lui-même composé du Doctor, du Harness et du
+  contrôle de démarrage de l'application en profil synthétique isolé.
+
+Dans la première fenêtre : **OUI** installe l'application, **NON** exécute
+le Test Center sans installation et **ANNULER** quitte. Après installation :
+**OUI** lance l'application, **NON** exécute les tests. Le client n'a pas à
+télécharger séparément Doctor, Harness ou Test Center.
+
+Pour vérifier le paquet sans aucune installation :
+`pravda-setup.exe --verify-only`
+
+Pour lancer une campagne hors ligne de tests à partir du même EXE :
+`pravda-setup.exe --test-center`
+
+Les rapports expurgés JSON/HTML sont écrits sous
+`%LOCALAPPDATA%\\Pravda-Bot\\Test-Reports`. Le Test Center lancé par
+le setup exécute **une seule campagne**, sans surveillance en arrière-plan.
+Le mode `--test-center-ci` est réservé à la recette automatisée et vérifie
+les mêmes programmes intégrés sur un runner Windows indépendant.
+
+Ce Test Center vérifie la simulation hors ligne, Doctor, Harness, le
+démarrage et la base SQLite synthétique. Il **ne valide pas** à lui seul
+une connexion WebView2 interactive, un flux exchange réel ou une
+installation sur VM hors réseau. Ces résultats restent explicitement
+`SKIP` tant qu'une preuve indépendante n'est pas jointe.
+
 ## Paquet privé et vérification avant lancement
 
 Utiliser le paquet **pravda-windows-single-file-setup** téléchargé à partir d'une exécution GitHub Actions liée au SHA exact de la branche de livraison, avec l'empreinte SHA-256 jointe à la remise. Vérifier le hachage dans PowerShell :
