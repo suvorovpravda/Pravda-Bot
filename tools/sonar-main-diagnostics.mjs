@@ -23,6 +23,12 @@ export async function collectIssues(endpoint,params,fetcher=fetch){
     const data=await response.json();
     if(!Array.isArray(data.issues)||!Number.isSafeInteger(data.total)||data.total<0)
       throw Error('invalid SonarCloud issue schema on page '+page);
+    // An HTTP 200 can still contain an unexpected server-side page. Reject it
+    // rather than silently treating repeated or skipped offsets as complete.
+    if(data.paging){
+      if(data.paging.pageIndex!==page||data.paging.pageSize!==Number(params.ps)||data.paging.total!==data.total)
+        throw Error('SonarCloud paging metadata mismatch on page '+page);
+    }
     if(expected===null)expected=data.total;
     if(data.total!==expected)throw Error('SonarCloud total changed during pagination');
     if(issues.length+data.issues.length>expected)throw Error('SonarCloud issue count exceeds total');
