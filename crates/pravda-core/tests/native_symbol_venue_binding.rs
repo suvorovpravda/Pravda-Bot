@@ -31,14 +31,23 @@ fn native_market_evidence_is_bound_to_requested_symbol_and_venue() {
         (PaperSymbol::BtcUsdt, PaperVenue::Kraken),
         (PaperSymbol::EthUsdt, PaperVenue::Kraken),
     ] {
-        assert!(matches!(
-            evidence_from_native_market_snapshot(&snapshot, symbol, venue, NOW, 2_000, 50),
-            Err(NativeMarketRefusal::QuoteUnavailable)
-        ), "a different symbol or venue must never inherit the BTC/Binance quote");
+        assert!(
+            matches!(
+                evidence_from_native_market_snapshot(&snapshot, symbol, venue, NOW, 2_000, 50),
+                Err(NativeMarketRefusal::QuoteUnavailable)
+            ),
+            "a different symbol or venue must never inherit the BTC/Binance quote"
+        );
     }
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW, 2_000, 50,
-    ).expect("synthetic observation can be normalized");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW,
+        2_000,
+        50,
+    )
+    .expect("synthetic observation can be normalized");
     assert_eq!(evidence.reference_price_micros, 100_000_000);
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
