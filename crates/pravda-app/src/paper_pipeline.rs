@@ -53,6 +53,21 @@ pub fn native_observation_probe(
             Err(refusal) => refusal.code(),
         };
 
+    // A newly introduced core refusal must not silently become an accepted
+    // IPC status. Keep the native Rust/UI contract closed until reviewed.
+    if !matches!(
+        mda_code,
+        "MDA_UNATTESTED_OBSERVATION"
+            | "MDA_STREAM_UNAVAILABLE"
+            | "MDA_QUOTE_UNAVAILABLE"
+            | "MDA_QUOTE_UNTRUSTED_OR_STALE"
+            | "MDA_QUOTE_CLOCK_INVALID"
+            | "MDA_PRICE_INVALID"
+            | "MDA_POLICY_INVALID"
+    ) {
+        return Err("PAPER_UNKNOWN_MDA_DIAGNOSTIC");
+    }
+
     // ARCH/SS have no independent attestation here. Subsequent roles are
     // explicitly skipped, not presented as having reviewed an order.
     Ok(vec![
