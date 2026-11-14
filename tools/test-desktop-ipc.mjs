@@ -746,4 +746,34 @@ assert.equal((paperController.match(/const controlGeneration = \+\+paperControlG
 assert.doesNotMatch(paperController,/\bfetch\s*\(|\bWebSocket\s*\(/,
   "Paper-only stop/rearm must not cross into a market-network path");
 
+// Regression: a tampered/stale alert form must never persist values that the
+// startup localStorage validator will reject on the next application launch.
+const alertFormStart=js.indexOf('    $("price-alert-form").addEventListener("submit", event => {');
+const alertFormEnd=js.indexOf('    $("history-export").addEventListener(',alertFormStart);
+assert.ok(alertFormStart>=0 && alertFormEnd>alertFormStart,
+  "Local price alert submission must remain explicitly bounded");
+const alertForm=js.slice(alertFormStart,alertFormEnd);
+const alertStorageStart=js.indexOf('    const alertStorageKey = "pravda-local-price-alerts-v1";');
+const alertStorageEnd=js.indexOf('    const storeLocalAlerts =',alertStorageStart);
+assert.ok(alertStorageStart>=0 && alertStorageEnd>alertStorageStart,
+  "Local alert storage validation must remain present");
+const alertStorage=js.slice(alertStorageStart,alertStorageEnd);
+for(const [field,values] of [
+  ["symbol",["BTC/USDT","ETH/USDT","SOL/USDT"]],
+  ["exchange",["Kraken","Binance"]],
+  ["direction",["above","below"]],
+  ["currency",["EUR","CHF"]]
+]){
+  const allowed=JSON.stringify(values);
+  assert.ok(alertForm.includes(allowed+".includes("+field+")"),
+    field+": form must reject unsupported values before persistence");
+  assert.ok(alertStorage.includes(allowed+".includes(a."+field+")"),
+    field+": persisted allowlist must agree with form allowlist");
+}
+assert.match(alertForm,/if\(!Number\.isFinite\(target\)\|\|target<=0\)/,
+  "Local alert form must reject nonfinite or nonpositive thresholds");
+assert.ok(alertForm.indexOf("Paramètres d'alerte non pris en charge.") <
+  alertForm.indexOf("localAlerts.push(alert)"),
+  "Unsupported local alert values must be rejected before mutation");
+
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
