@@ -475,7 +475,7 @@ assert.ok(revolutBody.includes("const consentVersion = revolutConsentVersion;"),
 const revokedConsentGuard="if (requestGeneration !== window.pravdaAuthGeneration || consentVersion !== revolutConsentVersion || !revolutOptIn || shell.hidden) return;";
 // Compare adjacent statements, not platform-specific newline/indentation bytes.
 // Both paths must guard before any rendering after the awaited request.
-const revolutLines = revolutBody.split(/\\r?\\n/).map(line => line.trim()).filter(Boolean);
+const revolutLines = revolutBody.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
 const hasAdjacentGuard = statement => revolutLines.some((line, index) =>
   line === statement && revolutLines[index + 1] === revokedConsentGuard);
 assert.ok(hasAdjacentGuard('const data = await fetchJson("/api/revolut/public");'),
