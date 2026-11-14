@@ -473,11 +473,11 @@ const revolutBody=js.slice(revolutStart,revolutEnd);
 assert.ok(revolutBody.includes("const consentVersion = revolutConsentVersion;"),
   "Capture the consent epoch before the optional public request");
 const revokedConsentGuard="if (requestGeneration !== window.pravdaAuthGeneration || consentVersion !== revolutConsentVersion || !revolutOptIn || shell.hidden) return;";
-assert.ok(revolutBody.includes('const data = await fetchJson("/api/revolut/public");\\n            '+revokedConsentGuard),
+assert.ok(revolutBody.includes('const data = await fetchJson("/api/revolut/public");\n            '+revokedConsentGuard),
   "Discard successful order-book data after consent revocation or logout");
-assert.ok(revolutBody.includes('} catch (error) {\\n            '+revokedConsentGuard),
+assert.ok(revolutBody.includes('} catch (error) {\n            '+revokedConsentGuard),
   "Late request failure must not overwrite revoked-consent UI");
-assert.ok(js.includes("function lockRevolutConsentUi() {\\n        revolutConsentVersion++;"),
+assert.ok(js.includes("function lockRevolutConsentUi() {\n        revolutConsentVersion++;"),
   "Locking optional consent must invalidate in-flight order-book requests");
 
 // Every protected asynchronous renderer must ignore a result (or a catch
