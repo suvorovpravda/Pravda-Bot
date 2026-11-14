@@ -1207,7 +1207,7 @@ const translations = {
         void refreshSecurity(true);
         void refreshSecurityEvents();
     });
-    window.refreshSecurity = () => refreshSecurity(true);
+    window.refreshSecurity = refreshSecurity.bind(null, true);
     window.refreshSecurityEvents = refreshSecurityEvents;
     window.pravdaDashboardPhase = "P02H";
     // These authenticated IPC diagnostics are deliberately optional at boot.
@@ -1558,7 +1558,7 @@ const translations = {
             paperRearmInFlight = false;
         }
     });
-    window.refreshPaper = () => refreshPaper(true);
+    window.refreshPaper = refreshPaper.bind(null, true);
     window.pravdaDashboardPhase = "P03B";
 
     // No unconditional security polling: SQLite diagnostics are only requested
