@@ -300,6 +300,27 @@ mod tests {
         assert!(rows.contains(&"REG|SKIPPED".to_owned()));
     }
     #[test]
+    fn paper_probe_emits_exactly_one_closed_diagnostic_per_role() {
+        // A frontend must never interpret duplicated or missing role rows as
+        // independent approvals. All seven roles remain non-executable.
+        let rows = native_observation_probe(&observed(), "BTC/USDT", "Binance", NOW_MS)
+            .expect("synthetic observation should produce a closed diagnostic");
+        for role in ["ARCH", "SS", "MDA", "GMO", "REG", "IR", "UCA"] {
+            assert_eq!(
+                rows.iter()
+                    .filter(|row| row.starts_with(&format!("{role}|")))
+                    .count(),
+                1,
+                "role {role} must appear exactly once"
+            );
+        }
+        assert_eq!(rows.len(), 15, "unexpected extra diagnostic fields");
+        assert!(rows.contains(&"verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE".to_owned()));
+        assert!(rows.contains(&"order_intent|NONE".to_owned()));
+        assert!(rows.contains(&"execution|DISABLED".to_owned()));
+    }
+
+    #[test]
     fn forged_order_intent_and_live_mode_cannot_escape_read_only_research() {
         let mut snapshot = observed();
         snapshot["mode"] = json!("LIVE");
