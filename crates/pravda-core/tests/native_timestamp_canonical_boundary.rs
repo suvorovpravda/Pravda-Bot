@@ -21,7 +21,9 @@ fn snapshot(timestamp: &str) -> serde_json::Value {
     })
 }
 
-fn inspect(snapshot: &serde_json::Value) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
+fn inspect(
+    snapshot: &serde_json::Value,
+) -> Result<pravda_core::agent_pipeline::MarketEvidence, NativeMarketRefusal> {
     evidence_from_native_market_snapshot(
         snapshot,
         PaperSymbol::BtcUsdt,
