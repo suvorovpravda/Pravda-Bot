@@ -1408,15 +1408,28 @@ const translations = {
         return messages[String(error)] || "Simulation locale indisponible.";
     }
     async function refreshPaper(explicit = false) {
+        // Bounded, sensitive-data-free markers only while initial P14 navigation
+        // is active. No retries, awaits, IPC payloads, or auth decisions added.
+        markNavigationBootPhase("P14G-paper1a");
         const generation = window.pravdaAuthGeneration;
+        markNavigationBootPhase("P14G-paper1b");
         const controlGeneration = paperControlGeneration;
+        markNavigationBootPhase("P14G-paper1c");
         const refreshNumber = ++paperRefreshNumber;
+        markNavigationBootPhase("P14G-paper1d");
         const isCurrent = () => generation === window.pravdaAuthGeneration
             && controlGeneration === paperControlGeneration && !paperStopInFlight
             && refreshNumber === paperRefreshNumber;
-        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) return;
+        markNavigationBootPhase("P14G-paper1e");
+        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) {
+            markNavigationBootPhase("P14G-paper1f");
+            return;
+        }
+        markNavigationBootPhase("P14G-paper1g");
         try {
+            markNavigationBootPhase("P14G-paper1h");
             const rows = await window.pravdaInvoke("ipc_paper_snapshot");
+            markNavigationBootPhase("P14G-paper1i");
             if (!isCurrent()) return;
             renderPaper(rows);
             const control = await window.pravdaInvoke("ipc_paper_control_status");
@@ -1435,6 +1448,7 @@ const translations = {
                 ? "Simulation suspendue par le coupe-circuit Rust."
                 : "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
         } catch (error) {
+            markNavigationBootPhase("P14G-paper1j");
             if (!isCurrent()) return;
             $("paper-notice").textContent = paperMessage(error);
             paperStopped = true;
@@ -2033,7 +2047,7 @@ const translations = {
     // exception messages, or a call stack; phases change only during P14.
     function markNavigationBootPhase(phase) {
         if (window.pravdaDashboardReady !== true &&
-            /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper[1-2]|tests[1-2]|journals[1-2]|revolut))?$/.test(window.pravdaDashboardPhase)) {
+            /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper(?:[1-2]|1[a-j])|tests[1-2]|journals[1-2]|revolut))?$/.test(window.pravdaDashboardPhase)) {
             window.pravdaDashboardPhase = phase;
         }
     }
