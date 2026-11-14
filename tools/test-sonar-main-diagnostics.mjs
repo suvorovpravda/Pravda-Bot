@@ -100,6 +100,15 @@ try{
     ]})};
   });
   assert.equal(invalidDuplicationMetric,false,'malformed duplication metric must fail closed');
+  // A file without measures must not be treated as a verified zero-duplication file.
+  const omittedFileMeasures=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:1,pageIndex:1,pageSize:500},components:[
+      {key:'file-with-unknown-duplication'}
+    ]})};
+  });
+  assert.equal(omittedFileMeasures,false,'omitted file measures must fail closed');
   const malformedMeasures=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
     if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
