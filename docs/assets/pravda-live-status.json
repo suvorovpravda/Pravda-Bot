@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "835c83bf9fe6a930419fd9991f2badcddd8593ba",
-  "latest_evidence_at": "2026-11-14T21:42:12Z",
-  "refreshed_at_utc": "2026-11-14T21:42:29.096Z",
+  "latest_evidence_at": "2026-11-14T21:48:34Z",
+  "refreshed_at_utc": "2026-11-14T21:48:44.323Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 1,
+    "passed": 2,
     "total": 4
   },
   "p0_governance": {
@@ -102,7 +102,7 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PENDING"
+        "state": "PASS"
       },
       {
         "name": "Windows desktop build and startup",
@@ -134,10 +134,10 @@
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "835c83bf9f",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43644160035",
-      "observedAt": "2026-11-14T21:41:43Z"
+      "observedAt": "2026-11-14T21:48:34Z"
     },
     {
       "id": "rustsec-audit.yml",
