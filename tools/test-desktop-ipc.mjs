@@ -340,6 +340,29 @@ for(const cmd of ["ipc_paper_snapshot","ipc_paper_trade","ipc_paper_reset"]) {
 }
 
 assert.match(html,/id="revolut-consent"[^>]*disabled/,"Optional network module must default disabled");
+assert.equal((html.match(/id="revolut-consent"/g)||[]).length,1,
+  "Revolut has exactly one native-consent checkbox");
+assert.equal((html.match(/id="revolut-refresh"/g)||[]).length,1,
+  "Revolut has exactly one native-refresh button");
+const revolutControls = html.match(/<article class="feature-tile revolut-controls"[^>]*>[\s\S]*?<\/article>/)?.[0];
+assert.ok(revolutControls && /id="revolut-consent"/.test(revolutControls)
+  && /id="revolut-refresh"/.test(revolutControls),
+  "The original Revolut consent and refresh controls must remain together");
+assert.match(html,/data-nav-tab="markets"/,
+  "Markets must be available from the sidebar");
+assert.match(js,/tab === "markets" && category === "revolut"/,
+  "Markets must show the Revolut order-book card");
+assert.ok(css.includes('.shell[data-active-tab]:not([data-active-tab="all"]):not([data-active-tab="markets"]) .terminal-cockpit .feature-grid {'),
+  "The shared feature-grid hide rule must explicitly exclude Markets");
+assert.match(css,/\.shell\[data-active-tab="markets"\] \.terminal-cockpit \.feature-grid \{\s*display: grid;/,
+  "Markets must show the existing Revolut consent controls");
+assert.match(css,/\.shell\[data-active-tab="markets"\] \.terminal-cockpit \.feature-grid > :not\(\.revolut-controls\) \{\s*display: none;/,
+  "Unrelated legacy quick-access modules stay hidden in Markets");
+assert.match(js,/\$\("revolut-refresh"\)\.addEventListener\("click",refreshRevolut\)/,
+  "The original Revolut refresh handler must remain bound");
+assert.match(js,/if \(!revolutOptIn\) \{/,
+  "No Revolut network read without a confirmed Rust consent");
+
 assert.match(js,/ipc_revolut_consent_get/,"UI must read native persisted consent");
 assert.match(js,/ipc_revolut_consent_set/,"UI must persist opt-in through Rust IPC");
 assert.match(ipc,/source == "revolut" && !consent\.enabled\(\)/,"Revolut feed must be gated in Rust");
