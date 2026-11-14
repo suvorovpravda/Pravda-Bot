@@ -36,7 +36,15 @@ pub fn native_observation_probe(
     // The adapter deliberately sets both independent trust flags to false.
     let mda_code =
         match evidence_from_native_market_snapshot(snapshot, symbol, venue, now_ms, 5_000, 50) {
-            Ok(evidence) if !evidence.provenance_verified && !evidence.portfolio_verified => {
+            Ok(evidence)
+                if !evidence.provenance_verified
+                    && !evidence.portfolio_verified
+                    && evidence.symbol == symbol
+                    && evidence.venue == venue
+                    && evidence.reference_price_micros > 0
+                    && evidence.quote_received_at_ms > 0
+                    && evidence.quote_received_at_ms <= now_ms =>
+            {
                 "MDA_UNATTESTED_OBSERVATION"
             }
             // A future adapter must never silently turn a native cache quote
@@ -94,6 +102,34 @@ mod tests {
             "provenance_verified": true,
             "portfolio_verified": true
         })
+    }
+
+    #[test]
+    fn cross_venue_or_symbol_cache_quotes_never_become_attested_evidence() {
+        // A valid observation for one selector cannot be silently reused as
+        // evidence for another symbol or venue, even with forged trust flags.
+        for (symbol, venue) in [
+            ("BTC/USDT", "Kraken"),
+            ("ETH/USDT", "Binance"),
+            ("ETH/USDT", "Kraken"),
+            ("SOL/USDT", "Binance"),
+            ("SOL/USDT", "Kraken"),
+        ] {
+            let rows = native_observation_probe(&observed(), symbol, venue, NOW_MS)
+                .expect("missing selector must return a closed research diagnostic");
+            assert!(rows.contains(&"MDA|MDA_QUOTE_UNAVAILABLE".to_owned()));
+            for expected in [
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "order_intent|NONE",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED",
+            ] {
+                assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+            }
+        }
     }
 
     #[test]
