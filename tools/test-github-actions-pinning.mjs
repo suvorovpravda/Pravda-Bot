@@ -67,6 +67,15 @@ for (const workflow of ["windows-package.yml","rustsec-audit.yml"]) {
   assert.ok(!readFileSync(dir+"/"+workflow,"utf8").includes("${{ github.sha }}"),
     workflow+": artifact labels must not use the synthetic merge commit");
 }
+// Main must not skip Rust/MSRV/WebView2 regression gates for unrelated commits.
+// Previously a push changing only .github/workflows/codeql.yml bypassed them.
+const rustMainWorkflow=readFileSync(dir+"/rust.yml","utf8").replace(/\r\n/g,"\n");
+const rustMainPush=rustMainWorkflow.match(/^  push:\n([\s\S]*?)(?=^  pull_request:)/m);
+assert.ok(rustMainPush,"Rust workflow must define a main push trigger");
+assert.match(rustMainPush[1],/^    branches: \[main\]$/m,
+  "Rust regression gates must run on main");
+assert.doesNotMatch(rustMainPush[1],/^    paths(?:-ignore)?:/m,
+  "Every main SHA must trigger Rust/MSRV/Windows regression gates, regardless of changed paths");
 assert.match(readFileSync(dir+"/rust.yml","utf8"),
   /\$checkedOutSha = \(git rev-parse HEAD\)\.Trim\(\)/,
   "Native WebView2 evidence must match the checked-out source commit");
