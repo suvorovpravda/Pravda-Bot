@@ -32,6 +32,16 @@ pub fn native_observation_probe(
         return Err("PAPER_INVALID_NATIVE_SNAPSHOT");
     }
 
+    // Bound untrusted native-cache payloads before parsing nested quote evidence.
+    // A bloated cache must not consume unbounded work in an authenticated IPC.
+    const MAX_SNAPSHOT_BYTES: usize = 1_048_576;
+    let encoded_len = serde_json::to_vec(snapshot)
+        .map_err(|_| "PAPER_INVALID_NATIVE_SNAPSHOT")?
+        .len();
+    if encoded_len > MAX_SNAPSHOT_BYTES {
+        return Err("PAPER_NATIVE_SNAPSHOT_TOO_LARGE");
+    }
+
     // This checks structure, age, symbol, venue and numeric precision only.
     // The adapter deliberately sets both independent trust flags to false.
     let mda_code =
@@ -145,6 +155,17 @@ mod tests {
                 assert!(rows.iter().any(|row| row == expected), "missing {expected}");
             }
         }
+    }
+
+    #[test]
+    fn oversized_native_cache_is_rejected_before_mda_or_role_processing() {
+        let mut snapshot = observed();
+        snapshot["roles"] = json!({"REG": "APPROVED", "GMO": "BUY"});
+        snapshot["untrusted_padding"] = json!("X".repeat(1_048_576));
+        assert_eq!(
+            native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS),
+            Err("PAPER_NATIVE_SNAPSHOT_TOO_LARGE")
+        );
     }
 
     #[test]
