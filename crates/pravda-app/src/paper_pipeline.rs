@@ -243,6 +243,31 @@ mod tests {
     }
 
     #[test]
+    fn future_native_quote_clock_never_promotes_market_evidence() {
+        // A source clock ahead of the trusted Rust clock is not fresh evidence.
+        // Forged approval fields must not change the fail-closed diagnostic.
+        let mut snapshot = observed();
+        snapshot["market_attestation"] = json!("VERIFIED");
+        snapshot["portfolio_attestation"] = json!("VERIFIED");
+        snapshot["proposal"] = json!({"side": "BUY", "quantity": 1});
+        let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS - 1_000)
+            .expect("future source clock must yield a closed research diagnostic");
+        for expected in [
+            "MDA|MDA_QUOTE_CLOCK_INVALID",
+            "market_attestation|ABSENT",
+            "portfolio_attestation|ABSENT",
+            "proposal|NONE",
+            "order_intent|NONE",
+            "GMO|SKIPPED",
+            "REG|SKIPPED",
+            "portfolio|UNCHANGED",
+            "execution|DISABLED",
+        ] {
+            assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+        }
+    }
+
+    #[test]
     fn stale_or_unavailable_quotes_cannot_authorize_a_paper_decision() {
         let mut snapshot = observed();
         snapshot["stream_state"] = json!("offline");
