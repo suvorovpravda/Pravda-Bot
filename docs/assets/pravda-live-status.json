@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "0cb5f18554d637fe39b9f8f1609fec49a583c80e",
-  "latest_evidence_at": "2026-11-14T21:05:59Z",
-  "refreshed_at_utc": "2026-11-14T21:06:01.261Z",
+  "latest_evidence_at": "2026-11-14T21:06:22Z",
+  "refreshed_at_utc": "2026-11-14T21:06:36.228Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 1,
     "total": 4
   },
   "p0_governance": {
@@ -137,16 +137,16 @@
       "state": "RUNNING",
       "sha": "0cb5f18554",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978671",
-      "observedAt": "2026-11-14T21:05:55Z"
+      "observedAt": "2026-11-14T21:06:04Z"
     },
     {
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / AUDIT BLOQUANT",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "0cb5f18554",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978685",
-      "observedAt": "2026-11-14T21:05:58Z"
+      "observedAt": "2026-11-14T21:06:22Z"
     }
   ],
   "open_prs": 9,
