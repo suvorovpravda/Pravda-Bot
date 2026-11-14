@@ -494,8 +494,17 @@ for (const name of [
   const body = js.slice(start,end+6);
   assert.match(body,/const requestGeneration = window\.pravdaAuthGeneration;/,
     "UI refresh must identify initial authenticated generation: "+name);
-  assert.match(body,/if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/,
-    "Stale UI refresh must not mutate the new login's dashboard: "+name);
+  if (name === "runAcceptance") {
+    assert.match(body,/if \(requestGeneration !== window\.pravdaAuthGeneration \|\|\s*requestEpoch !== acceptanceRequestEpoch\) return;/,
+      "Stale acceptance reports must check both auth generation and request epoch");
+    assert.match(body,/catch \(_error\) \{\s*if \(requestGeneration !== window\.pravdaAuthGeneration \|\|\s*requestEpoch !== acceptanceRequestEpoch\) return;/,
+      "Stale acceptance failures must not mutate a new session");
+    assert.match(body,/finally \{\s*\/\/[^\n]*\n\s*if \(requestEpoch === acceptanceRequestEpoch\)/,
+      "Stale acceptance cleanup must not unlock a newer campaign");
+  } else {
+    assert.match(body,/if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/,
+      "Stale UI refresh must not mutate the new login's dashboard: "+name);
+  }
 }
 const nodes = new Map();
 ui.$ = id => {
