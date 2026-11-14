@@ -120,12 +120,12 @@ for(const [kind,endpoint,params] of requests){
       continue;
     }
     const response=await fetcher(url,{headers:{Accept:'application/json'},signal:AbortSignal.timeout(20000)});
-    console.log('SONAR_MAIN_'+kind.toUpperCase()+'_HTTP='+response.status);
     if(!response.ok){console.log('SONAR_MAIN_'+kind.toUpperCase()+'_UNAVAILABLE');requiredDiagnosticsAvailable=false;continue;}
     const data=await response.json();
     if(kind==='aggregate'){
       if(!data.component||!Array.isArray(data.component.measures))throw Error('invalid SonarCloud aggregate measures schema');
-      console.log('SONAR_MAIN_AGGREGATE='+JSON.stringify(data.component?.measures??[]));
+      console.log('SONAR_MAIN_AGGREGATE_HTTP=200');
+      console.log('SONAR_MAIN_AGGREGATE='+JSON.stringify(data.component.measures));
 
     }
   }catch(e){
