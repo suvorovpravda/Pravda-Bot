@@ -388,6 +388,35 @@ mod tests {
     }
 
     #[test]
+    fn non_object_symbol_entries_cannot_be_reinterpreted_as_market_evidence() {
+        // The selector map is untrusted cache data, not an attestation source.
+        // Corruption at the symbol level must not fall through to a proposal.
+        for malformed in [json!(null), json!(false), json!(17), json!("BUY"), json!([])] {
+            let mut snapshot = observed();
+            snapshot["symbols"]["BTC/USDT"] = malformed;
+            snapshot["market_attestation"] = json!("VERIFIED");
+            snapshot["portfolio_attestation"] = json!("VERIFIED");
+            snapshot["proposal"] = json!({"side": "BUY", "quantity": 1});
+            let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+                .expect("corrupt symbol map must yield closed diagnostics");
+            assert!(!rows.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()));
+            for expected in [
+                "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "proposal|NONE",
+                "order_intent|NONE",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED",
+            ] {
+                assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+            }
+        }
+    }
+
+    #[test]
     fn malformed_nested_quote_containers_never_reach_gmo_or_reg() {
         // A corrupted native cache shape must not be interpreted as an
         // independently verified market feed, even with forged approvals.
