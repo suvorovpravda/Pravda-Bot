@@ -421,8 +421,8 @@ mod tests {
             symbol: Symbol::BTCUSDT,
             price: 123.456,
             exchange: Exchange::Binance,
-            timestamp: Utc::now(),
-            observed_at: Instant::now(),
+            timestamp: Utc::now() - chrono::Duration::milliseconds(100),
+            observed_at: Instant::now() - Duration::from_millis(100),
         };
         runtime
             .prices
