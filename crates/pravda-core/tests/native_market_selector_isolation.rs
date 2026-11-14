@@ -25,8 +25,14 @@ fn forged_cross_venue_attestation_does_not_upgrade_selected_observation() {
         }}
     });
     let evidence = evidence_from_native_market_snapshot(
-        &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW_MS, 2_000, 50
-    ).expect("synthetic selected observation is parseable");
+        &snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        NOW_MS,
+        2_000,
+        50,
+    )
+    .expect("synthetic selected observation is parseable");
     assert_eq!(evidence.reference_price_micros, 10_000_000);
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
@@ -45,7 +51,12 @@ fn attacker_controlled_selector_fallback_cannot_supply_missing_quote() {
     });
     assert!(matches!(
         evidence_from_native_market_snapshot(
-            &snapshot, PaperSymbol::BtcUsdt, PaperVenue::Binance, NOW_MS, 2_000, 50
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            NOW_MS,
+            2_000,
+            50,
         ),
         Err(NativeMarketRefusal::QuoteUnavailable)
     ));
