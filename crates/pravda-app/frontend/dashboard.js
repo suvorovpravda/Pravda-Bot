@@ -2083,6 +2083,13 @@ const translations = {
         markNavigationBootPhase("P14F"); // chart request
         if (tab === "markets") requestAnimationFrame(drawPriceChart);
         markNavigationBootPhase("P14G"); // authenticated read-only refresh
+        // auth.js loads this script while the shell is still hidden. Never
+        // start protected/consent-dependent reads from the unfinished bootstrap:
+        // refreshRevealedDashboard() performs them after ready + authenticated reveal.
+        if (window.pravdaDashboardReady !== true) {
+            markNavigationBootPhase("P14H");
+            return;
+        }
         // Bounded, non-sensitive trace of the synchronous call sites. These
         // markers do not await, retry, or change any PAPER/auth decision.
         // Preserve the legacy security route and its complete IPC refresh
