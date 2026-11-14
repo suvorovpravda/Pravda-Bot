@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
-  "source_sha": "50cfc793bff992e235965b3a4b02e74c38adcabf",
-  "latest_evidence_at": "2026-11-14T13:35:55Z",
-  "refreshed_at_utc": "2026-11-14T20:09:30.993Z",
+  "source_sha": "0cb5f18554d637fe39b9f8f1609fec49a583c80e",
+  "latest_evidence_at": "2026-11-14T21:05:59Z",
+  "refreshed_at_utc": "2026-11-14T21:06:01.261Z",
   "historical": {
     "rows": [
       {
@@ -86,12 +86,12 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 3,
+    "passed": 0,
     "total": 4
   },
   "p0_governance": {
     "state": "PENDING",
-    "source_sha": "50cfc793bff992e235965b3a4b02e74c38adcabf",
+    "source_sha": "0cb5f18554d637fe39b9f8f1609fec49a583c80e",
     "policy_active": true,
     "strict_main_checks": true,
     "pr_required": true,
@@ -102,11 +102,11 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PASS"
+        "state": "PENDING"
       },
       {
         "name": "Windows desktop build and startup",
-        "state": "PASS"
+        "state": "PENDING"
       }
     ],
     "reason": "SHA_SCOPED_REQUIRED_CHECKS"
@@ -116,40 +116,40 @@
       "id": "rust.yml",
       "name": "RUST / WINDOWS + LINUX",
       "kind": "required",
-      "state": "PASS",
-      "sha": "50cfc793bf",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43553612400",
-      "observedAt": "2026-11-14T03:58:51Z"
+      "state": "RUNNING",
+      "sha": "0cb5f18554",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978718",
+      "observedAt": "2026-11-14T21:05:58Z"
     },
     {
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "FAIL",
-      "sha": "50cfc793bf",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43553612353",
-      "observedAt": "2026-11-14T04:15:08Z"
+      "state": "RUNNING",
+      "sha": "0cb5f18554",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978670",
+      "observedAt": "2026-11-14T21:05:59Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "PASS",
-      "sha": "50cfc793bf",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43553612466",
-      "observedAt": "2026-11-14T03:58:24Z"
+      "state": "RUNNING",
+      "sha": "0cb5f18554",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978671",
+      "observedAt": "2026-11-14T21:05:55Z"
     },
     {
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / AUDIT BLOQUANT",
       "kind": "required",
-      "state": "PASS",
-      "sha": "50cfc793bf",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43600531957",
-      "observedAt": "2026-11-14T13:35:55Z"
+      "state": "RUNNING",
+      "sha": "0cb5f18554",
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978685",
+      "observedAt": "2026-11-14T21:05:58Z"
     }
   ],
-  "open_prs": 10,
+  "open_prs": 9,
   "active_pr": null,
   "open_issues": 11,
   "production": "NO-GO",
