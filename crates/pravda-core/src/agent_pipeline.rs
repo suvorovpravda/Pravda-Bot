@@ -227,7 +227,7 @@ pub fn evidence_from_native_market_snapshot(
     // The reported age is untrusted metadata. Refuse snapshots whose two
     // clocks disagree by more than one second (rounding/transport tolerance).
     // Neither clock comparison constitutes independent feed attestation.
-    if (seconds * 1_000.0 - wall_age as f64).abs() > 1_000.0 {
+    if (seconds * 1_000.0 - wall_age_ms).abs() > 1_000.0 {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let reference_price_micros = quote
