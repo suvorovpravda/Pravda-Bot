@@ -6,10 +6,44 @@
     <meta name="theme-color" content="#091426">
     <title>Pravda | Terminal marchés & énergie</title>
     <link rel="stylesheet" href="./styles.css">
+    <link rel="stylesheet" href="./navigation.css">
 <script src="./auth.js" defer></script>
 </head>
 <body>
 <main class="shell" hidden>
+
+    <!-- Read-only navigation shell: no session token or remote origin. -->
+    <aside class="pravda-sidebar" id="pravda-sidebar" data-collapsed="false" aria-label="Navigation principale">
+        <div class="sidebar-brand"><span class="sidebar-brand-mark" aria-hidden="true">P</span><strong class="sidebar-wordmark">PRAVDA</strong><span class="sidebar-pilot">PAPER</span></div>
+        <nav class="sidebar-groups" aria-label="Modules Pravda">
+            <details class="sidebar-group" open>
+                <summary><span aria-hidden="true">▦</span><span class="sidebar-group-name">TRADING</span></summary>
+                <button class="sidebar-link active" type="button" data-nav-tab="home" aria-current="page" title="Accueil"><span aria-hidden="true">⌂</span><span class="sidebar-label">Accueil</span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="markets" title="Marchés"><span aria-hidden="true">▥</span><span class="sidebar-label">Marchés</span><span class="sidebar-state" data-module="markets" data-state="unknown" title="Non vérifié"></span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="paper" title="PAPER Trading"><span aria-hidden="true">◇</span><span class="sidebar-label">PAPER Trading</span><span class="sidebar-state" data-module="paper" data-state="unknown" title="Non vérifié"></span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="risk-review" title="Risques"><span aria-hidden="true">⚑</span><span class="sidebar-label">Risques</span><span class="sidebar-state" data-module="risk-review" data-state="unknown" title="Non vérifié"></span></button>
+            </details>
+            <details class="sidebar-group" open>
+                <summary><span aria-hidden="true">✧</span><span class="sidebar-group-name">INTELLIGENCE</span></summary>
+                <button class="sidebar-link" type="button" data-nav-tab="agents" title="Agents IA"><span aria-hidden="true">◎</span><span class="sidebar-label">Agents IA</span><span class="sidebar-state" data-module="agents" data-state="unknown" title="Non vérifié"></span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="risks" title="Veille"><span aria-hidden="true">▤</span><span class="sidebar-label">Veille</span><span class="sidebar-state" data-module="risks" data-state="unknown" title="Non vérifié"></span></button>
+            </details>
+            <details class="sidebar-group" open>
+                <summary><span aria-hidden="true">⌁</span><span class="sidebar-group-name">INFRASTRUCTURE</span></summary>
+                <button class="sidebar-link" type="button" data-nav-tab="energy" title="Énergie"><span aria-hidden="true">ϟ</span><span class="sidebar-label">Énergie</span><span class="sidebar-state" data-module="energy" data-state="unknown" title="Non vérifié"></span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="ais" title="Maritime AIS"><span aria-hidden="true">≋</span><span class="sidebar-label">Maritime AIS</span><span class="sidebar-state" data-module="ais" data-state="unknown" title="Non vérifié"></span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="sources" title="Sources"><span aria-hidden="true">⌘</span><span class="sidebar-label">Sources</span><span class="sidebar-state" data-module="sources" data-state="unknown" title="Non vérifié"></span></button>
+            </details>
+            <details class="sidebar-group" open>
+                <summary><span aria-hidden="true">⚙</span><span class="sidebar-group-name">SYSTÈME</span></summary>
+                <button class="sidebar-link" type="button" data-nav-tab="tests" title="Tests"><span aria-hidden="true">✓</span><span class="sidebar-label">Tests</span><span class="sidebar-state" data-module="tests" data-state="unknown" title="Non vérifié"></span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="journals" title="Journaux"><span aria-hidden="true">☷</span><span class="sidebar-label">Journaux</span></button>
+                <button class="sidebar-link" type="button" data-nav-tab="settings" title="Paramètres"><span aria-hidden="true">⚙</span><span class="sidebar-label">Paramètres</span></button>
+            </details>
+        </nav>
+        <div class="sidebar-bottom"><span class="sidebar-bottom-note">Pilote PAPER · LIVE interdit</span><button id="sidebar-collapse" class="sidebar-collapse" type="button" aria-label="Réduire la navigation" aria-pressed="false" title="Réduire la navigation">◀ <span class="sidebar-label">Réduire</span></button></div>
+    </aside>
+
     <header class="topbar">
         <div class="brand">
             <div class="brand-mark">P</div>
@@ -51,6 +85,48 @@
         <button class="tab-btn" data-tab="security" type="button">Paramètres · Sécurité &amp; dépannage</button>
     </nav>
 
+
+
+    <header class="ui-page-header">
+        <div><p class="eyebrow">PRAVDA · PILOTE PAPER</p><h1 id="ui-page-title">Accueil</h1><p id="ui-page-description">Synthèse locale · aucune donnée de démonstration</p></div>
+    </header>
+    <section id="home-dashboard" class="home-dashboard" aria-label="Accueil — synthèse du pilote PAPER">
+        <article class="home-card" aria-labelledby="home-system-title">
+            <div class="home-card-header"><h2 id="home-system-title">État général</h2><a href="#/system">Détails système</a></div>
+            <strong id="home-runtime">Runtime non vérifié</strong><p id="home-source-count">Connecteurs : en attente d'une réponse Rust</p>
+            <small>Une source non attestée n'est jamais affichée comme opérationnelle.</small>
+        </article>
+        <article class="home-card" aria-labelledby="home-paper-title">
+            <div class="home-card-header"><h2 id="home-paper-title">PAPER Trading</h2><a href="#/paper">Ouvrir la simulation</a></div>
+            <strong id="home-paper-value">Portefeuille fictif non chargé</strong><p id="home-paper-state">État du coupe-circuit à vérifier</p>
+            <small>Capital virtuel et cours synthétiques · aucune exécution réelle.</small>
+        </article>
+        <article class="home-card" aria-labelledby="home-alerts-title">
+            <div class="home-card-header"><h2 id="home-alerts-title">Alertes prioritaires</h2><a href="#/risk-review">Consulter les risques</a></div>
+            <strong id="home-alerts-summary">Alertes non vérifiées</strong><p>Les veto REG/SS/ARCH ne sont pas certifiés tant que le pipeline complet n'est pas raccordé.</p>
+        </article>
+        <article class="home-card" aria-labelledby="home-markets-title">
+            <div class="home-card-header"><h2 id="home-markets-title">Marchés observés</h2><a href="#/markets">Voir les marchés</a></div>
+            <div id="home-market-rows" class="home-market-rows" role="status">Aucune observation reçue depuis cette session.</div>
+            <small>Prix publics indicatifs, non attestés pour la prise de décision PAPER.</small>
+        </article>
+        <article class="home-card" aria-labelledby="home-agents-title">
+            <div class="home-card-header"><h2 id="home-agents-title">Agents IA · sept rôles</h2><a href="#/agents">Voir les agents</a></div>
+            <strong>Non vérifié</strong><p>ARCH, SS, MDA, GMO, REG, IR et UCA : aucune décision ou confiance inventée.</p>
+        </article>
+        <article class="home-card" aria-labelledby="home-infra-title">
+            <div class="home-card-header"><h2 id="home-infra-title">Infrastructure</h2><a href="#/sources">Voir les sources</a></div>
+            <strong id="home-infra-summary">Sources non vérifiées</strong><p>Énergie, AIS et veille conservent leurs pages et leurs états séparés.</p>
+        </article>
+    </section>
+    <section class="ui-empty-view" id="ui-agents-placeholder" aria-label="Agents IA" hidden>
+        <h2>Agents IA — intégration en cours</h2><p>Aucune exécution attestée des sept rôles n'est disponible sur cette version. Aucune décision ou confiance fabriquée.</p>
+        <a href="#/tests">Consulter les contrôles de préproduction</a>
+    </section>
+    <section class="ui-empty-view" id="ui-risk-placeholder" aria-label="Risques" hidden>
+        <h2>Risques — garde-fous PAPER</h2><p>REG, SS et ARCH doivent disposer d'attestations indépendantes. Aucun feu vert ou ordre exécutable n'est délivré par cet écran.</p>
+        <a href="#/tests">Consulter les contrôles de préproduction</a>
+    </section>
 
     <section class="terminal-cockpit" aria-label="Terminal de marché, surveillance et sécurité">
     <section class="feature-grid" aria-label="Accès rapides et connexions">
