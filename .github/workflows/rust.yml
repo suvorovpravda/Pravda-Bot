@@ -3,21 +3,6 @@ name: Rust migration
 on:
   push:
     branches: [main]
-    paths:
-      - 'Cargo.toml'
-      - 'Cargo.lock'
-      - '.github/workflows/rust.yml'
-      - 'dashboard.html'
-      - 'tests_js/**'
-      - '**/rust/**'
-      - 'crates/**'
-      - 'tools/**'
-      - 'archive/**'
-      - '.gitattributes'
-      - '.github/dependabot.yml'
-      - 'README.md'
-      - 'SECURITY.md'
-      - 'docs/**'
   pull_request:
     branches: [main]
 
