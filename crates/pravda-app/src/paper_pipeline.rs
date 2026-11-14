@@ -26,6 +26,11 @@ pub fn native_observation_probe(
     if now_ms == 0 {
         return Err("PAPER_CLOCK_UNAVAILABLE");
     }
+    // A malformed native snapshot is not a market observation. Refuse it
+    // before passing data to the MDA adapter or reporting role diagnostics.
+    if !snapshot.is_object() {
+        return Err("PAPER_INVALID_NATIVE_SNAPSHOT");
+    }
 
     // This checks structure, age, symbol, venue and numeric precision only.
     // The adapter deliberately sets both independent trust flags to false.
@@ -87,6 +92,16 @@ mod tests {
             "provenance_verified": true,
             "portfolio_verified": true
         })
+    }
+
+    #[test]
+    fn malformed_native_snapshot_fails_closed_before_any_role_diagnostic() {
+        for invalid in [json!(null), json!([]), json!(true), json!(42), json!("BUY")] {
+            assert_eq!(
+                native_observation_probe(&invalid, "BTC/USDT", "Binance", NOW_MS),
+                Err("PAPER_INVALID_NATIVE_SNAPSHOT")
+            );
+        }
     }
 
     #[test]
