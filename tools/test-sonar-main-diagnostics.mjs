@@ -100,6 +100,20 @@ try{
     ]})};
   });
   assert.equal(invalidDuplicationMetric,false,'malformed duplication metric must fail closed');
+  // A malformed response must never print the success marker before failing.
+  const diagnosticLogs=[];
+  console.log=(...args)=>diagnosticLogs.push(args.join(' '));
+  const malformedMetricLogged=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:1,pageIndex:1,pageSize:500},components:[
+      {key:'broken-file',measures:[{metric:'new_duplicated_lines',value:'NaN'}]}
+    ]})};
+  });
+  assert.equal(malformedMetricLogged,false);
+  assert.ok(!diagnosticLogs.includes('SONAR_MAIN_DUPLICATION_HTTP=200'),
+    'invalid duplication inventory must not emit a success marker');
+  console.log=()=>{};
   // A file without measures must not be treated as a verified zero-duplication file.
   const omittedFileMeasures=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
