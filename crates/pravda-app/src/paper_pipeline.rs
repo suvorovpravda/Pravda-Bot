@@ -243,6 +243,26 @@ mod tests {
     }
 
     #[test]
+    fn selector_aliases_and_whitespace_cannot_bypass_native_allowlist() {
+        // Selectors are exact Rust allowlist entries, not user-controlled
+        // aliases or normalized identifiers from an untrusted IPC caller.
+        for (symbol, venue, expected) in [
+            ("btc/usdt", "Binance", "PAPER_UNSUPPORTED_SYMBOL"),
+            (" BTC/USDT", "Binance", "PAPER_UNSUPPORTED_SYMBOL"),
+            ("BTC/USDT ", "Binance", "PAPER_UNSUPPORTED_SYMBOL"),
+            ("BTC/USDT", "binance", "PAPER_UNSUPPORTED_VENUE"),
+            ("BTC/USDT", "Binance ", "PAPER_UNSUPPORTED_VENUE"),
+            ("BTC/USDT", " Binance", "PAPER_UNSUPPORTED_VENUE"),
+        ] {
+            assert_eq!(
+                native_observation_probe(&observed(), symbol, venue, NOW_MS),
+                Err(expected),
+                "noncanonical selector must fail before native market evaluation"
+            );
+        }
+    }
+
+    #[test]
     fn future_native_quote_clock_never_promotes_market_evidence() {
         // A source clock ahead of the trusted Rust clock is not fresh evidence.
         // Forged approval fields must not change the fail-closed diagnostic.
