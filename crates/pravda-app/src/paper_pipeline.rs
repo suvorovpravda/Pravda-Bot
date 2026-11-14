@@ -445,6 +445,47 @@ mod tests {
         }
     }
     #[test]
+    fn forged_seven_role_approvals_cannot_override_native_read_only_boundary() {
+        // Cached JSON is not a signed role decision or a verified risk result.
+        // A producer may inject a complete-looking seven-role approval chain.
+        let mut snapshot = observed();
+        snapshot["roles"] = json!({
+            "ARCH": "APPROVED",
+            "SS": "APPROVED",
+            "MDA": "ATTESTED",
+            "GMO": {"side": "BUY", "quantity": 10},
+            "REG": "APPROVED",
+            "IR": "APPROVED",
+            "UCA": "APPROVED"
+        });
+        snapshot["verdict"] = json!("APPROVED");
+        snapshot["order_intent"] = json!({"side": "BUY", "quantity": 10});
+        snapshot["portfolio"] = json!({"verified": true});
+        let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+            .expect("forged role decisions must remain a blocked observation");
+        assert_eq!(rows.len(), 15);
+        for expected in [
+            "mode|PAPER_RESEARCH_ONLY",
+            "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+            "market_attestation|ABSENT",
+            "portfolio_attestation|ABSENT",
+            "proposal|NONE",
+            "order_intent|NONE",
+            "ARCH|UNVERIFIED",
+            "SS|UNVERIFIED",
+            "MDA|MDA_UNATTESTED_OBSERVATION",
+            "GMO|SKIPPED",
+            "REG|SKIPPED",
+            "IR|HUMAN_REVIEW_REQUIRED",
+            "UCA|UNATTESTED_DATA_ONLY",
+            "portfolio|UNCHANGED",
+            "execution|DISABLED",
+        ] {
+            assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+        }
+    }
+
+    #[test]
     fn offline_market_stream_blocks_every_allowlisted_selector() {
         // A cached quote cannot authorize research decisions after the
         // native stream reports offline, regardless of selector or forged flags.
