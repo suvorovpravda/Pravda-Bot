@@ -169,7 +169,7 @@ assert.match(paperBootScript,/\$\("paper-order-form"\)\.addEventListener\("submi
   "Paper form submission must be handled only through its event listener");
 assert.match(paperBootScript,/\$\("paper-reset"\)\.addEventListener\("click"/,
   "Paper reset must remain a user-initiated event");
-assert.match(paperBootScript,/window\.refreshPaper\s*=\s*\(\)\s*=>\s*refreshPaper\(true\)/,
+assert.match(paperBootScript,/window\.refreshPaper\s*=\s*refreshPaper\.bind\(null,\s*true\)/,
   "Paper snapshot must remain manually callable after successful onboarding");
 assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
   "Authenticated security tab must still fetch paper state on demand");
@@ -379,8 +379,10 @@ assert.match(securityReportParser,/seenChecks\.add\(parts\[0\]\)/,
 assert.ok(securityReportParser.indexOf('seenChecks.has(parts[0])') <
   securityReportParser.indexOf('if (parts[1] === "verified") verified++'),
   "Duplicate checks must be rejected before displaying verified counts");
-assert.match(js,/window\.refreshSecurity = \(\) => refreshSecurity\(true\);/,
+assert.match(js,/window\.refreshSecurity\s*=\s*refreshSecurity\.bind\(null,\s*true\);/,
   "User-driven security checks must not be silently skipped because of visibilityState");
+assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
+  "Self-referential global refresh exports overflow the WebView2 stack");
 assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
   "Manual acceptance controls must never silently ignore a click for document.hidden");
 assert.match(js,/if \(tab === "security"\)/,
