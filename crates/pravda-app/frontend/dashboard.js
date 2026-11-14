@@ -1480,10 +1480,23 @@ const translations = {
                 "portfolio|UNCHANGED",
                 "execution|DISABLED"
             ];
+            // Accept only MDA outcomes emitted by the native Rust adapter.
+            // A future or compromised IPC reply must not smuggle an approval
+            // through the previously permissive MDA_* diagnostic pattern.
+            const allowedMda = new Set([
+                "MDA|MDA_UNATTESTED_OBSERVATION",
+                "MDA|MDA_STREAM_UNAVAILABLE",
+                "MDA|MDA_QUOTE_UNAVAILABLE",
+                "MDA|MDA_QUOTE_UNTRUSTED_OR_STALE",
+                "MDA|MDA_QUOTE_CLOCK_INVALID",
+                "MDA|MDA_PRICE_INVALID",
+                "MDA|MDA_POLICY_INVALID"
+            ]);
             if (!Array.isArray(rows) || rows.length !== 15
                 || rows.some(row => typeof row !== "string" || row.length > 100)
                 || required.some(code => rows.filter(row => row === code).length !== 1)
-                || rows.filter(row => /^MDA\\|MDA_[A-Z_]+$/.test(row)).length !== 1) {
+                || rows.filter(row => allowedMda.has(row)).length !== 1
+                || rows.some(row => !required.includes(row) && !allowedMda.has(row))) {
                 throw new Error("INVALID_PAPER_PROBE");
             }
             status.textContent = rows.join(" · ");
