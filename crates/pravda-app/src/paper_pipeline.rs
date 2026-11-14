@@ -362,7 +362,13 @@ mod tests {
     fn forged_approval_with_invalid_market_container_never_promotes_mda() {
         // Root snapshot can be an object while its symbols map is corrupted.
         // No untrusted approval flag may repair an invalid market observation.
-        for malformed in [json!(null), json!(false), json!(42), json!("BUY"), json!([])] {
+        for malformed in [
+            json!(null),
+            json!(false),
+            json!(42),
+            json!("BUY"),
+            json!([]),
+        ] {
             let mut snapshot = observed();
             snapshot["symbols"] = malformed;
             snapshot["market_attestation"] = json!("VERIFIED");
@@ -510,10 +516,12 @@ mod tests {
                     "portfolio|UNCHANGED",
                     "execution|DISABLED",
                 ] {
-                    assert!(rows.iter().any(|row| row == expected), "{symbol} {venue}: missing {expected}");
+                    assert!(
+                        rows.iter().any(|row| row == expected),
+                        "{symbol} {venue}: missing {expected}"
+                    );
                 }
             }
         }
     }
-
 }
