@@ -488,9 +488,8 @@ mod tests {
 
     #[test]
     fn uninitialized_or_inconsistent_clocks_fail_closed_in_reg() {
-        let mut c = candidate();
         for clock_case in 0..2 {
-            c = candidate();
+            let mut c = candidate();
             if clock_case == 0 {
                 c.now_ms = 0;
             } else {
