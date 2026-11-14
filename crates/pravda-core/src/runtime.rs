@@ -411,6 +411,42 @@ mod tests {
             observed_at,
         }
     }
+
+    #[tokio::test]
+    async fn runtime_market_snapshot_timestamp_is_accepted_by_native_adapter() {
+        let store = PravdaStore::open(":memory:").unwrap();
+        let (tx, _) = broadcast::channel(1);
+        let runtime = PravdaRuntime::new(store, tx);
+        let tick = Tick {
+            symbol: Symbol::BTCUSDT,
+            price: 123.456,
+            exchange: Exchange::Binance,
+            timestamp: Utc::now(),
+            observed_at: Instant::now(),
+        };
+        runtime
+            .prices
+            .write()
+            .await
+            .entry(Symbol::BTCUSDT)
+            .or_default()
+            .insert(Exchange::Binance, tick);
+
+        let mut snapshot = runtime.market_snapshot(Duration::from_secs(5)).await;
+        snapshot["stream_state"] = json!("observations_recent");
+        let now_ms = u64::try_from(Utc::now().timestamp_millis()).unwrap();
+        let evidence = crate::agent_pipeline::evidence_from_native_market_snapshot(
+            &snapshot,
+            crate::agent_contract::PaperSymbol::BtcUsdt,
+            crate::agent_contract::PaperVenue::Binance,
+            now_ms,
+            5_000,
+            50,
+        )
+        .expect("runtime-produced RFC3339 quote timestamp must parse");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+    }
     async fn wait_for_alert_lock_waiter(runtime: &PravdaRuntime) {
         tokio::time::timeout(Duration::from_secs(8), async {
             loop {

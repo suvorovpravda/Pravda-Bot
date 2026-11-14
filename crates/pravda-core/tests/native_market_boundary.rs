@@ -227,15 +227,14 @@ fn negative_zero_quote_age_is_not_valid_freshness_evidence() {
 }
 
 #[test]
-fn native_quote_non_utc_offset_is_refused_even_for_same_instant() {
-    // A timezone-shifted timestamp encodes the same wall-clock instant as
-    // the native fixture, but is not an approved UTC quote representation.
+fn native_quote_equivalent_rfc3339_offset_is_accepted_without_attestation() {
+    // The runtime's +00:00 (and equivalent known offsets) encode an instant.
+    // Parsing the timestamp never establishes provenance or portfolio trust.
     let mut snapshot = quote(json!(10));
     snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T11:00:00+01:00");
-    assert!(matches!(
-        inspect(&snapshot),
-        Err(NativeMarketRefusal::ClockOrAgeInvalid)
-    ));
+    let evidence = inspect(&snapshot).expect("valid equivalent RFC3339 instant");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
 }
 
 #[test]
@@ -490,18 +489,21 @@ fn forged_age_metadata_cannot_hide_wall_clock_staleness() {
 }
 
 #[test]
-fn zero_offset_aliases_cannot_replace_canonical_utc_quote_timestamp() {
-    // These spellings represent the same instant, but are not canonical
-    // native-cache timestamps. They must not inherit feed attestations.
-    for timestamp in ["2025-11-10T10:00:00+00:00", "2025-11-10T10:00:00-00:00"] {
-        let mut snapshot = quote(json!(10));
-        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
-        snapshot["attested"] = json!(true);
-        assert!(matches!(
-            inspect(&snapshot),
-            Err(NativeMarketRefusal::ClockOrAgeInvalid)
-        ));
-    }
+fn known_zero_offset_is_accepted_but_unknown_offset_is_refused() {
+    // RFC3339 +00:00 is the runtime's valid UTC spelling. The -00:00 form
+    // explicitly denotes an unknown local offset and cannot establish time.
+    let mut known = quote(json!(10));
+    known["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T10:00:00+00:00");
+    let evidence = inspect(&known).expect("runtime UTC offset must parse");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    let mut unknown = quote(json!(10));
+    unknown["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T10:00:00-00:00");
+    assert!(matches!(
+        inspect(&unknown),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
 }
 
 #[test]
