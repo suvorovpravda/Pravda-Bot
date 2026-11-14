@@ -199,9 +199,15 @@ pub fn evidence_from_native_market_snapshot(
     // serialize UTC as +00:00 and preserve sub-millisecond exchange precision.
     let observed = DateTime::parse_from_rfc3339(timestamp)
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
-    // RFC3339 -00:00 means the local offset is unknown; it is not a
-    // trustworthy absolute clock value for freshness validation.
-    if timestamp.ends_with("-00:00") {
+    // Keep this input within the explicit wire format: uppercase RFC3339
+    // separator/suffix, ASCII only, and no unknown-local-offset marker.
+    // Runtime-produced +00:00 timestamps and sub-millisecond precision remain
+    // valid; permissive parser aliases such as lowercase "z" do not.
+    if !timestamp.is_ascii()
+        || timestamp.as_bytes().get(10) != Some(&b'T')
+        || timestamp.ends_with('z')
+        || timestamp.ends_with("-00:00")
+    {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let observed_ms = u64::try_from(observed.timestamp_millis())
