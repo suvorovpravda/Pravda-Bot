@@ -61,7 +61,7 @@ try{
   assert.equal(failed,false,'required issue API failure must fail the diagnostic');
   const succeeded=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
-    return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0}})};
+    return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0,pageIndex:1,pageSize:500}})};
   });
   assert.equal(succeeded,true,'complete issue inventory must pass');
   // A 501-file duplication inventory must retrieve the second page.
