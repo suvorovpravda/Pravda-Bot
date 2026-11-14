@@ -412,7 +412,13 @@ mod tests {
     fn non_object_symbol_entries_cannot_be_reinterpreted_as_market_evidence() {
         // The selector map is untrusted cache data, not an attestation source.
         // Corruption at the symbol level must not fall through to a proposal.
-        for malformed in [json!(null), json!(false), json!(17), json!("BUY"), json!([])] {
+        for malformed in [
+            json!(null),
+            json!(false),
+            json!(17),
+            json!("BUY"),
+            json!([]),
+        ] {
             let mut snapshot = observed();
             snapshot["symbols"]["BTC/USDT"] = malformed;
             snapshot["market_attestation"] = json!("VERIFIED");
