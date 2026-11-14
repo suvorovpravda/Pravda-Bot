@@ -377,8 +377,8 @@ assert.match(acceptanceClear,/acceptanceRequestEpoch\+\+;[\s\S]*?acceptanceBusy 
   "Logout must invalidate pending acceptance requests and release single-flight lock");
 assert.match(acceptanceBody,/const requestEpoch = \+\+acceptanceRequestEpoch;/,
   "Each acceptance campaign must capture a unique epoch");
-assert.match(acceptanceBody,/requestGeneration !== window\.pravdaAuthGeneration \|\|\s*requestEpoch !== acceptanceRequestEpoch/g,
-  "Stale acceptance success and error paths must be rejected");
+assert.equal([...acceptanceBody.matchAll(/requestGeneration !== window\.pravdaAuthGeneration \|\|\s*requestEpoch !== acceptanceRequestEpoch/g)].length,2,
+  "Both stale acceptance success and error paths must be rejected");
 const acceptanceFinally=acceptanceBody.slice(acceptanceBody.lastIndexOf("} finally {"));
 assert.match(acceptanceFinally,/if \(requestEpoch === acceptanceRequestEpoch\) \{\s*acceptanceBusy = false;/,
   "Old session completions must not unlock a newer acceptance campaign");
