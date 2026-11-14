@@ -133,6 +133,18 @@ mod tests {
     }
 
     #[test]
+    fn zero_clock_refuses_even_when_snapshot_claims_independent_attestation() {
+        let mut snapshot = observed();
+        snapshot["market_attestation"] = json!("VERIFIED");
+        snapshot["portfolio_attestation"] = json!("VERIFIED");
+        snapshot["proposal"] = json!({"action": "BUY", "quantity": 100});
+        assert_eq!(
+            native_observation_probe(&snapshot, "BTC/USDT", "Binance", 0),
+            Err("PAPER_CLOCK_UNAVAILABLE")
+        );
+    }
+
+    #[test]
     fn malformed_native_snapshot_fails_closed_before_any_role_diagnostic() {
         for invalid in [json!(null), json!([]), json!(true), json!(42), json!("BUY")] {
             assert_eq!(
