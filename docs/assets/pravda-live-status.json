@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "835c83bf9fe6a930419fd9991f2badcddd8593ba",
-  "latest_evidence_at": "2026-11-14T21:49:12Z",
-  "refreshed_at_utc": "2026-11-14T21:49:20.970Z",
+  "latest_evidence_at": "2026-11-14T22:05:56Z",
+  "refreshed_at_utc": "2026-11-14T22:06:06.571Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 3,
+    "passed": 4,
     "total": 4
   },
   "p0_governance": {
@@ -125,10 +125,10 @@
       "id": "windows-package.yml",
       "name": "MSI / NSIS INSTALLER",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "835c83bf9f",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43644160049",
-      "observedAt": "2026-11-14T21:41:49Z"
+      "observedAt": "2026-11-14T22:05:56Z"
     },
     {
       "id": "codeql.yml",
