@@ -2086,7 +2086,8 @@ const translations = {
         // auth.js loads this script while the shell is still hidden. Never
         // start protected/consent-dependent reads from the unfinished bootstrap:
         // refreshRevealedDashboard() performs them after ready + authenticated reveal.
-        if (window.pravdaDashboardReady !== true) {
+        if (window.pravdaDashboardReady !== true ||
+            document.querySelector(".shell").hidden) {
             markNavigationBootPhase("P14H");
             return;
         }
