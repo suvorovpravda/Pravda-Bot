@@ -48,6 +48,8 @@ pub fn native_observation_probe(
         "market_attestation|ABSENT".to_owned(),
         "portfolio_attestation|ABSENT".to_owned(),
         "proposal|NONE".to_owned(),
+        // A research observation must not be mistaken for a portfolio order intent.
+        "order_intent|NONE".to_owned(),
         "ARCH|UNVERIFIED".to_owned(),
         "SS|UNVERIFIED".to_owned(),
         format!("MDA|{mda_code}"),
@@ -149,4 +151,28 @@ mod tests {
         assert!(rows.contains(&"MDA|MDA_QUOTE_CLOCK_INVALID".to_owned()));
         assert!(rows.contains(&"REG|SKIPPED".to_owned()));
     }
+    #[test]
+    fn forged_order_intent_and_live_mode_cannot_escape_read_only_research() {
+        let mut snapshot = observed();
+        snapshot["mode"] = json!("LIVE");
+        snapshot["order_intent"] = json!({"side": "BUY", "symbol": "BTC/USDT"});
+        snapshot["execution"] = json!("ENABLED");
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["order_intent"] = json!("APPROVED");
+        let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+            .expect("untrusted instructions must not change read-only diagnostics");
+        for expected in [
+            "mode|PAPER_RESEARCH_ONLY",
+            "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+            "order_intent|NONE",
+            "proposal|NONE",
+            "GMO|SKIPPED",
+            "REG|SKIPPED",
+            "portfolio|UNCHANGED",
+            "execution|DISABLED",
+        ] {
+            assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+        }
+        assert!(!rows.iter().any(|row| row.contains("LIVE") || row.contains("ORDER_READY")));
+    }
+
 }
