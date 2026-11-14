@@ -462,6 +462,24 @@ release.resolve({value:"current"});
 assert.equal((await currentAllowed).value, "current",
   "Current session data must remain usable");
 
+// Regression: revoking optional Revolut consent while a public order-book
+// request is in flight must prevent both a late success and a late failure
+// from changing the disabled consent UI. Authentication alone is insufficient:
+// consent may change without logging out.
+const revolutStart=js.indexOf("    async function refreshRevolut()");
+const revolutEnd=js.indexOf("    async function refreshSystem()",revolutStart);
+assert.ok(revolutStart>=0 && revolutEnd>revolutStart,
+  "Optional public order-book refresh must remain separately testable");
+const revolutBody=js.slice(revolutStart,revolutEnd);
+assert.match(revolutBody,/const consentVersion = revolutConsentVersion;/,
+  "Capture the consent epoch before the optional public request");
+assert.match(revolutBody,/await fetchJson\\("\/api\/revolut\/public"\\);\\s*if \\(requestGeneration !== window\\.pravdaAuthGeneration \\|\\| consentVersion !== revolutConsentVersion \\|\\| !revolutOptIn \\|\\| shell\\.hidden\\) return;/,
+  "Discard successful order-book data after consent revocation or logout");
+assert.match(revolutBody,/catch \\(error\\) \\{\\s*if \\(requestGeneration !== window\\.pravdaAuthGeneration \\|\\| consentVersion !== revolutConsentVersion \\|\\| !revolutOptIn \\|\\| shell\\.hidden\\) return;/,
+  "A late request failure must not overwrite the revoked-consent UI");
+assert.match(js,/function lockRevolutConsentUi\\(\\) \\{\\s*revolutConsentVersion\\+\\+;/,
+  "Locking optional consent must invalidate in-flight order-book requests");
+
 // Every protected asynchronous renderer must ignore a result (or a catch
 // handler) from an older dashboard generation before mutating the new UI.
 for (const name of [
