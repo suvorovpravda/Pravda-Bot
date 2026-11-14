@@ -130,6 +130,33 @@ mod tests {
     }
 
     #[test]
+    fn reported_quote_age_must_agree_with_native_wall_clock() {
+        // A live-labelled cached quote with a falsified zero age is not fresh
+        // once the native clock is more than the one-second tolerance ahead.
+        // The timestamp is deliberately fixed so the boundary is deterministic.
+        let within_tolerance = native_observation_probe(
+            &observed(), "BTC/USDT", "Binance", NOW_MS + 1_000,
+        ).expect("the documented one-second rounding tolerance applies");
+        assert!(within_tolerance.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()));
+
+        let beyond_tolerance = native_observation_probe(
+            &observed(), "BTC/USDT", "Binance", NOW_MS + 1_001,
+        ).expect("a contradictory age must produce a closed diagnostic");
+        for expected in [
+            "MDA|MDA_QUOTE_CLOCK_INVALID",
+            "market_attestation|ABSENT",
+            "portfolio_attestation|ABSENT",
+            "proposal|NONE",
+            "order_intent|NONE",
+            "GMO|SKIPPED",
+            "REG|SKIPPED",
+            "execution|DISABLED",
+        ] {
+            assert!(beyond_tolerance.iter().any(|row| row == expected), "missing {expected}");
+        }
+    }
+
+    #[test]
     fn attacker_controlled_market_metadata_is_never_echoed_to_ipc() {
         // Output must be a closed vocabulary even when native-cache fields
         // contain credentials, HTML or instructions masquerading as evidence.
