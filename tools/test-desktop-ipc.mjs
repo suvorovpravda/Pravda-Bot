@@ -494,7 +494,10 @@ for (const name of [
   const body = js.slice(start,end+6);
   assert.match(body,/const requestGeneration = window\.pravdaAuthGeneration;/,
     "UI refresh must identify initial authenticated generation: "+name);
-  assert.match(body,/if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/,
+  const staleGenerationGuard = name === "refreshRevolut"
+    ? /if \(requestGeneration !== window\.pravdaAuthGeneration \|\| consentVersion !== revolutConsentVersion \|\| !revolutOptIn \|\| shell\.hidden\) return;/
+    : /if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/;
+  assert.match(body,staleGenerationGuard,
     "Stale UI refresh must not mutate the new login's dashboard: "+name);
 }
 const nodes = new Map();
