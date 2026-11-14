@@ -169,8 +169,21 @@ assert.match(paperBootScript,/\$\("paper-order-form"\)\.addEventListener\("submi
   "Paper form submission must be handled only through its event listener");
 assert.match(paperBootScript,/\$\("paper-reset"\)\.addEventListener\("click"/,
   "Paper reset must remain a user-initiated event");
-assert.match(paperBootScript,/window\.refreshPaper\s*=\s*\(\)\s*=>\s*refreshPaper\(true\)/,
-  "Paper snapshot must remain manually callable after successful onboarding");
+assert.match(paperBootScript,/window\.refreshPaper\s*=\s*refreshPaper\.bind\(null,\s*true\)/,
+  "PAPER refresh must bind the original global function without recursion");
+// Classic browser scripts expose top-level functions on window. Replacing one
+// with an arrow that calls its global name causes synchronous stack overflow.
+assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
+  "A self-referential window refresh export would overflow the installed WebView2 stack");
+// Require exactly one global export per refresh handler and an explicit
+// bound reference to the original function. Never execute source assembled
+// from repository text in CI; the installed WebView2 tests check behavior.
+for (const name of ["refreshPaper", "refreshSecurity"]) {
+  const exports=js.split("\n").filter(line=>line.trim().startsWith("window."+name+" = "));
+  assert.equal(exports.length,1,name+": expected exactly one global refresh export");
+  assert.equal(exports[0].trim(),"window."+name+" = "+name+".bind(null, true);",
+    name+": exported refresh must bind the original function with explicit=true");
+}
 assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
   "Authenticated security tab must still fetch paper state on demand");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
@@ -361,8 +374,8 @@ assert.match(js,/if \(!explicit && !securityVisible\(\)\) return;/,
   "Only passive checks may be skipped for hidden WebView2 documents");
 assert.match(js,/if \(securityCheckInFlight\) \{/,
   "Security tests must be single-flight");
-assert.match(js,/window\.refreshSecurity = \(\) => refreshSecurity\(true\);/,
-  "User-driven security checks must not be silently skipped because of visibilityState");
+assert.match(js,/window\.refreshSecurity\s*=\s*refreshSecurity\.bind\(null,\s*true\);/,
+  "Security refresh must bind its original global function without recursion");
 assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
   "Manual acceptance controls must never silently ignore a click for document.hidden");
 assert.match(js,/if \(tab === "security"\)/,
