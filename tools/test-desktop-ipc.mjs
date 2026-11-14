@@ -178,7 +178,7 @@ assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s
 // Runtime regression: evaluate the actual export line as a classic browser script.
 // A self-referential wrapper would synchronously overflow before entering the body.
 for (const name of ["refreshPaper", "refreshSecurity"]) {
-  const exportLine=js.split("\\n").find(line=>line.trim().startsWith("window."+name+" = "));
+  const exportLine=js.split("\n").find(line=>line.trim().startsWith("window."+name+" = "));
   assert.ok(exportLine, name+": global refresh export must exist");
   const source="var entered = 0; async function "+name+"(explicit = false) { if (explicit) entered++; }\\n"+exportLine+"\\nwindow."+name+"();";
   const sandbox={}; sandbox.window=sandbox;
