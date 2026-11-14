@@ -9,6 +9,45 @@ const cfg=JSON.parse(read("tauri.conf.json"));
 const cap=JSON.parse(read("capabilities/main.json"));
 const main=read("src/main.rs"), ipc=read("src/ipc.rs"), paper=read("src/paper.rs"), build=read("build.rs");
 const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
+// #160: dashboard.js is evaluated while the authenticated shell is still hidden.
+// The first navigation must not synchronously start protected IPC refreshes;
+// auth.js already initiates them after dashboard readiness and reveal.
+const p14gNavStart=js.indexOf("    function applyTab(requestedTab) {");
+const p14gNavEnd=js.indexOf("    const knownTabs =",p14gNavStart);
+assert.ok(p14gNavStart>=0 && p14gNavEnd>p14gNavStart,
+  "P14G navigation function must be executable in the regression harness");
+const p14gCalls={paper:0,security:0,events:0,revolut:0};
+const p14gContext={
+  window:{pravdaDashboardReady:false},
+  uiPageMeta:{
+    home:["Home","Home"],paper:["Paper","Paper"],security:["Security","Security"],
+    tests:["Tests","Tests"],journals:["Journals","Journals"],
+    revolut:["Revolut","Revolut"]
+  },
+  document:{querySelector:()=>({dataset:{}})},
+  $:()=>({textContent:"",hidden:false}),
+  sidebarButtons:[],tabButtons:[],allCards:()=>[],
+  markNavigationBootPhase:()=>{},
+  requestAnimationFrame:()=>{},
+  drawPriceChart:()=>{},
+  refreshPaper:()=>{p14gCalls.paper++;},
+  refreshSecurity:()=>{p14gCalls.security++;},
+  refreshSecurityEvents:()=>{p14gCalls.events++;},
+  refreshRevolut:()=>{p14gCalls.revolut++;}
+};
+vm.createContext(p14gContext);
+vm.runInContext(js.slice(p14gNavStart,p14gNavEnd),p14gContext);
+for(const route of ["home","paper","security","tests","journals","revolut"])
+  vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
+assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
+  "Unready dashboard navigation must never start protected or consent-dependent IPC");
+p14gContext.window.pravdaDashboardReady=true;
+for(const route of ["home","paper","security","tests","journals","revolut"])
+  vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
+assert.deepEqual(p14gCalls,{paper:3,security:2,events:2,revolut:1},
+  "Ready navigation must preserve every existing explicit module refresh");
+assert.match(auth,/function refreshRevealedDashboard\(\) \{[\s\S]*?window\.refreshPaper\(\)/,
+  "Login reveal must still initiate the authenticated PAPER refresh");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
 const msiAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Msi-Install.ps1"),"utf8");
 const nsisAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Nsis-Install.ps1"),"utf8");
