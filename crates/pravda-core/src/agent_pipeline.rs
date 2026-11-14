@@ -1150,7 +1150,7 @@ mod tests {
     }
 
     #[test]
-    fn native_mda_rejects_offline_stale_missing_and_non_utc_quotes() {
+    fn native_mda_rejects_offline_stale_missing_and_accepts_valid_offsets() {
         let now_ms = reference_clock();
         let mut snapshot = json!({
             "stream_state":"observations_recent",
@@ -1191,9 +1191,9 @@ mod tests {
         );
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["age_seconds"] = json!(0.2);
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["timestamp"] = json!("2026-11-10T11:00:00+01:00");
-        assert_eq!(
-            check(&snapshot).err(),
-            Some(NativeMarketRefusal::ClockOrAgeInvalid)
+        assert!(
+            check(&snapshot).is_ok(),
+            "valid RFC3339 offsets must identify the same UTC instant"
         );
         snapshot["symbols"]["BTC/USDT"]["Kraken"]["timestamp"] = json!(TIMESTAMP);
         assert_eq!(
