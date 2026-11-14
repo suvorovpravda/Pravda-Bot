@@ -205,7 +205,6 @@ fn cross_symbol_substitution_and_untrusted_nested_quote_fail_closed() {
     ));
 }
 
-
 #[test]
 fn negative_zero_quote_age_is_not_valid_freshness_evidence() {
     // IEEE-754 negative zero is not a trustworthy elapsed-time measurement.
