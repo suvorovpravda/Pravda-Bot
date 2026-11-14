@@ -345,4 +345,33 @@ mod tests {
             .iter()
             .any(|row| row.contains("LIVE") || row.contains("ORDER_READY")));
     }
+
+    #[test]
+    fn malformed_nested_quote_containers_never_reach_gmo_or_reg() {
+        // A corrupted native cache shape must not be interpreted as an
+        // independently verified market feed, even with forged approvals.
+        for malformed in [json!(null), json!(true), json!(42), json!("BUY"), json!([])] {
+            let mut snapshot = observed();
+            snapshot["symbols"]["BTC/USDT"]["Binance"] = malformed;
+            snapshot["market_attestation"] = json!("VERIFIED");
+            snapshot["portfolio_attestation"] = json!("VERIFIED");
+            snapshot["proposal"] = json!({"side": "BUY", "quantity": 1});
+            let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+                .expect("malformed nested quote must remain a blocked diagnostic");
+            for expected in [
+                "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "proposal|NONE",
+                "order_intent|NONE",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED",
+            ] {
+                assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+            }
+            assert!(!rows.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()));
+        }
+    }
 }
