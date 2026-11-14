@@ -17,6 +17,7 @@ const p14gNavEnd=js.indexOf("    const knownTabs =",p14gNavStart);
 assert.ok(p14gNavStart>=0 && p14gNavEnd>p14gNavStart,
   "P14G navigation function must be executable in the regression harness");
 const p14gCalls={paper:0,security:0,events:0,revolut:0};
+const p14gShell={dataset:{},hidden:true};
 const p14gContext={
   window:{pravdaDashboardReady:false},
   uiPageMeta:{
@@ -24,7 +25,7 @@ const p14gContext={
     tests:["Tests","Tests"],journals:["Journals","Journals"],
     revolut:["Revolut","Revolut"]
   },
-  document:{querySelector:()=>({dataset:{}})},
+  document:{querySelector:()=>p14gShell},
   $:()=>({textContent:"",hidden:false}),
   sidebarButtons:[],tabButtons:[],allCards:()=>[],
   markNavigationBootPhase:()=>{},
@@ -42,6 +43,11 @@ for(const route of ["home","paper","security","tests","journals","revolut"])
 assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
   "Unready dashboard navigation must never start protected or consent-dependent IPC");
 p14gContext.window.pravdaDashboardReady=true;
+for(const route of ["home","paper","security","tests","journals","revolut"])
+  vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
+assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
+  "Dashboard marked ready but still hidden must not perform protected refreshes");
+p14gShell.hidden=false;
 for(const route of ["home","paper","security","tests","journals","revolut"])
   vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
 assert.deepEqual(p14gCalls,{paper:3,security:2,events:2,revolut:1},
