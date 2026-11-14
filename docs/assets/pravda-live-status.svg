@@ -43,6 +43,6 @@
 <circle cx="1222" cy="352" r="5" fill="#54DFC0"/>
 <text x="1237" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >RUSTSEC / AUDIT BLOQUANT</text>
 <text x="1221" y="385" fill="#54DFC0" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >PASS · e29dfbb992</text>
-<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-14 01:19 UTC   ·   LATEST MAIN EVIDENCE  2026-11-14 01:19 UTC   ·   MAIN SHA  e29dfbb992</text>
+<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-14 02:27 UTC   ·   LATEST MAIN EVIDENCE  2026-11-14 01:19 UTC   ·   MAIN SHA  e29dfbb992</text>
 <text x="1316" y="448" fill="#65DDBA" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="730" >LIVE ORDERS  OFF</text>
 </svg>
