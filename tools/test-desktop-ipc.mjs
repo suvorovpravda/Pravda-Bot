@@ -173,7 +173,7 @@ assert.match(paperBootScript,/window\.refreshPaper\s*=\s*refreshPaper\.bind\(nul
   "PAPER refresh must bind the original global function without recursion");
 // Classic browser scripts expose top-level functions on window. Replacing one
 // with an arrow that calls its global name causes synchronous stack overflow.
-assert.doesNotMatch(js,/window\\.(refreshPaper|refreshSecurity)\\s*=\\s*\\(\\)\\s*=>\\s*\\1\\(true\\);/,
+assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
   "A self-referential window refresh export would overflow the installed WebView2 stack");
 assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
   "Authenticated security tab must still fetch paper state on demand");
