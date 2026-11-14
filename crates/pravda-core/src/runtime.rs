@@ -417,12 +417,16 @@ mod tests {
         let store = PravdaStore::open(":memory:").unwrap();
         let (tx, _) = broadcast::channel(1);
         let runtime = PravdaRuntime::new(store, tx);
+        // Keep the native producer's RFC3339 serialization in this test,
+        // but use a controlled quote instant and comparison clock so
+        // millisecond truncation cannot make the quote appear future-dated.
+        let quote_time = Utc::now() - chrono::Duration::seconds(1);
         let tick = Tick {
             symbol: Symbol::BTCUSDT,
             price: 123.456,
             exchange: Exchange::Binance,
-            timestamp: Utc::now() - chrono::Duration::milliseconds(100),
-            observed_at: Instant::now() - Duration::from_millis(100),
+            timestamp: quote_time,
+            observed_at: Instant::now() - Duration::from_secs(1),
         };
         runtime
             .prices
