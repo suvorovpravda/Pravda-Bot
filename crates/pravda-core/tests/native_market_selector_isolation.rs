@@ -56,7 +56,7 @@ fn attacker_controlled_selector_fallback_cannot_supply_missing_quote() {
             PaperVenue::Binance,
             NOW_MS,
             2_000,
-            50,
+            50
         ),
         Err(NativeMarketRefusal::QuoteUnavailable)
     ));
