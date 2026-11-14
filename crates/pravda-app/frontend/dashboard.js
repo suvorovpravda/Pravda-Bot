@@ -1106,6 +1106,8 @@ const translations = {
     // desktop. No test center executable, shell invocation or HTTP endpoint.
     let acceptanceBusy = false;
     let acceptanceRuns = 0;
+    // Invalidates pending reports when the authenticated session is cleared.
+    let acceptanceRequestEpoch = 0;
     window.pravdaDashboardPhase = "P02F";
     const expectedAcceptanceChecks = [
         "session", "ipc", "paper", "sqlite", "webview",
@@ -1119,6 +1121,10 @@ const translations = {
         live: "Trading réel"
     };
     function clearAcceptanceUi() {
+        acceptanceRequestEpoch++;
+        acceptanceBusy = false;
+        $("acceptance-pre").disabled = false;
+        $("acceptance-post").disabled = false;
         acceptanceRuns = 0;
         setSidebarState("tests", "unknown", "Campagne non exécutée pendant cette session");
         $("acceptance-results").textContent = "Aucun résultat disponible.";
@@ -1138,6 +1144,7 @@ const translations = {
             return;
         }
         acceptanceBusy = true;
+        const requestEpoch = ++acceptanceRequestEpoch;
         const runNumber = ++acceptanceRuns;
         $("acceptance-pre").disabled = true;
         $("acceptance-post").disabled = true;
@@ -1145,7 +1152,8 @@ const translations = {
             "Campagne n°" + runNumber + " : contrôles Rust locaux en cours…";
         try {
             const rows = await window.pravdaInvoke("ipc_acceptance_report", {phase});
-            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestGeneration !== window.pravdaAuthGeneration ||
+                requestEpoch !== acceptanceRequestEpoch) return;
             if (!Array.isArray(rows) || rows.length !== expectedAcceptanceChecks.length)
                 throw new Error("INVALID_ACCEPTANCE_REPORT");
             let verified = 0, blocked = 0, unknown = 0;
@@ -1189,15 +1197,19 @@ const translations = {
                 verified, blocked, unknown, findings: rows
             }, null, 2);
         } catch (_error) {
-            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestGeneration !== window.pravdaAuthGeneration ||
+                requestEpoch !== acceptanceRequestEpoch) return;
             $("acceptance-results").textContent = "Rapport non disponible.";
             $("acceptance-status").textContent = "Échec de contrôle. Aucun PASS déduit.";
             $("acceptance-json").value = "Aucun rapport valide généré.";
             setSidebarState("tests", "blocked", "Rapport non disponible");
         } finally {
-            acceptanceBusy = false;
-            $("acceptance-pre").disabled = false;
-            $("acceptance-post").disabled = false;
+            // A prior session must never unlock a newer campaign's buttons.
+            if (requestEpoch === acceptanceRequestEpoch) {
+                acceptanceBusy = false;
+                $("acceptance-pre").disabled = false;
+                $("acceptance-post").disabled = false;
+            }
         }
     }
     window.pravdaDashboardPhase = "P02G";
