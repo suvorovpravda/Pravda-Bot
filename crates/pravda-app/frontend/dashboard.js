@@ -2033,7 +2033,7 @@ const translations = {
     // exception messages, or a call stack; phases change only during P14.
     function markNavigationBootPhase(phase) {
         if (window.pravdaDashboardReady !== true &&
-            /^P14(?:[A-H])?$/.test(window.pravdaDashboardPhase)) {
+            /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper[1-2]|tests[1-2]|journals[1-2]|revolut))$/.test(window.pravdaDashboardPhase)) {
             window.pravdaDashboardPhase = phase;
         }
     }
@@ -2069,17 +2069,39 @@ const translations = {
         markNavigationBootPhase("P14F"); // chart request
         if (tab === "markets") requestAnimationFrame(drawPriceChart);
         markNavigationBootPhase("P14G"); // authenticated read-only refresh
+        // Bounded, non-sensitive trace of the synchronous call sites. These
+        // markers do not await, retry, or change any PAPER/auth decision.
         // Preserve the legacy security route and its complete IPC refresh
         // contract while the new category-specific pages are introduced.
         if (tab === "security") {
+            markNavigationBootPhase("P14G-sec1");
             void refreshSecurity(true);
+            markNavigationBootPhase("P14G-sec2");
             void refreshSecurityEvents();
+            markNavigationBootPhase("P14G-sec3");
             void refreshPaper(true);
+            markNavigationBootPhase("P14G-sec4");
         } else {
-            if (tab === "paper" || tab === "home") void refreshPaper(true);
-            if (tab === "tests") void refreshSecurity(true);
-            if (tab === "journals") void refreshSecurityEvents();
+            markNavigationBootPhase("P14G-else1");
+            if (tab === "paper" || tab === "home") {
+                markNavigationBootPhase("P14G-paper1");
+                void refreshPaper(true);
+                markNavigationBootPhase("P14G-paper2");
+            }
+            markNavigationBootPhase("P14G-else2");
+            if (tab === "tests") {
+                markNavigationBootPhase("P14G-tests1");
+                void refreshSecurity(true);
+                markNavigationBootPhase("P14G-tests2");
+            }
+            markNavigationBootPhase("P14G-else3");
+            if (tab === "journals") {
+                markNavigationBootPhase("P14G-journals1");
+                void refreshSecurityEvents();
+                markNavigationBootPhase("P14G-journals2");
+            }
         }
+        markNavigationBootPhase("P14G-revolut");
         if (tab === "revolut") void refreshRevolut();
         markNavigationBootPhase("P14H"); // reached end of first navigation
         // No physical installation/upgrade test is claimed by this navigation.
