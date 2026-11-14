@@ -36,10 +36,7 @@ fn inspect(
 
 #[test]
 fn known_rfc3339_offsets_are_accepted_without_attestation() {
-    for timestamp in [
-        "2025-11-10T10:00:00+00:00",
-        "2025-11-10T11:00:00+01:00",
-    ] {
+    for timestamp in ["2025-11-10T10:00:00+00:00", "2025-11-10T11:00:00+01:00"] {
         let evidence = inspect(&snapshot(timestamp))
             .expect("known RFC3339 offset for a fresh instant should parse");
         assert!(!evidence.provenance_verified);
