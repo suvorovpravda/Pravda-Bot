@@ -482,8 +482,17 @@ assert.ok(hasAdjacentGuard('const data = await fetchJson("/api/revolut/public");
   "Discard successful order-book data after consent revocation or logout");
 assert.ok(hasAdjacentGuard('} catch (error) {'),
   "Late request failure must not overwrite revoked-consent UI");
-assert.ok(js.includes("function lockRevolutConsentUi() {\n        revolutConsentVersion++;"),
+const consentLockStart = js.indexOf("    function lockRevolutConsentUi() {");
+const consentLockEnd = js.indexOf("\n    }", consentLockStart);
+assert.ok(consentLockStart >= 0 && consentLockEnd > consentLockStart,
+  "Consent-lock handler must exist");
+const consentLockStatements = js.slice(consentLockStart, consentLockEnd).split(/\r?\n/).map(line => line.trim());
+assert.ok(consentLockStatements.includes("revolutConsentVersion++;"),
   "Locking optional consent must invalidate in-flight order-book requests");
+assert.ok(consentLockStatements.includes("revolutOptIn = false;"),
+  "Locking optional consent must revoke in-memory permission");
+assert.ok(consentLockStatements.includes("revolutReadButton.disabled = true;"),
+  "Locking optional consent must disable the public read button");
 
 // Every protected asynchronous renderer must ignore a result (or a catch
 // handler) from an older dashboard generation before mutating the new UI.
