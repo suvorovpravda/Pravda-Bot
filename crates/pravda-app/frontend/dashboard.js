@@ -1842,7 +1842,9 @@ const translations = {
             typeof a.id==="string" && ["EUR","CHF"].includes(a.currency) &&
             ["above","below"].includes(a.direction) && Number.isFinite(a.target) &&
             a.target>0 && ["BTC/USDT","ETH/USDT","SOL/USDT"].includes(a.symbol) &&
-            ["Kraken","Binance"].includes(a.exchange)).slice(0,30);
+            ["Kraken","Binance"].includes(a.exchange)).slice(0,30).map(a => ({
+                ...a, triggered: a.triggered === true
+            }));
     } catch { localAlerts=[]; }
     const storeLocalAlerts = () => {
         try { localStorage.setItem(alertStorageKey, JSON.stringify(localAlerts)); }
