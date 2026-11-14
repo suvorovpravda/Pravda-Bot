@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "0cb5f18554d637fe39b9f8f1609fec49a583c80e",
-  "latest_evidence_at": "2026-11-14T21:15:08Z",
-  "refreshed_at_utc": "2026-11-14T21:15:16.472Z",
+  "latest_evidence_at": "2026-11-14T21:25:50Z",
+  "refreshed_at_utc": "2026-11-14T21:26:02.678Z",
   "historical": {
     "rows": [
       {
@@ -128,7 +128,7 @@
       "state": "RUNNING",
       "sha": "0cb5f18554",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43640978670",
-      "observedAt": "2026-11-14T21:05:59Z"
+      "observedAt": "2026-11-14T21:25:50Z"
     },
     {
       "id": "codeql.yml",
