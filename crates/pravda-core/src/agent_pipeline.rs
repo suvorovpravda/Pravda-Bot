@@ -195,38 +195,35 @@ pub fn evidence_from_native_market_snapshot(
         .get("timestamp")
         .and_then(serde_json::Value::as_str)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
-    // Millisecond policy clocks must not silently truncate sub-millisecond
-    // timestamps (including a future quote only microseconds ahead).
-    let time_part = timestamp
-        .split_once('T')
-        .map(|(_, time)| time)
-        .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if time_part
-        .split_once('.')
-        .is_some_and(|(_, fraction)| fraction.trim_end_matches('Z').len() > 3)
-    {
-        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
-    }
+    // Parse the runtime's RFC3339 timestamp as an instant. The runtime may
+    // serialize UTC as +00:00 and preserve sub-millisecond exchange precision.
     let observed = DateTime::parse_from_rfc3339(timestamp)
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
-    // Require the canonical Z suffix, not merely a zero-second UTC offset.
-    // An untrusted cache must not introduce alternative timestamp spellings.
-    if !timestamp.ends_with('Z') || observed.offset().local_minus_utc() != 0 {
-        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
-    }
     let observed_ms = u64::try_from(observed.timestamp_millis())
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
-    // An uninitialized native clock or epoch-zero quote cannot establish
-    // freshness, even if attacker-controlled age_seconds claims zero age.
+    // Compare at nanosecond precision before projecting into the millisecond
+    // policy DTO, so a quote even slightly in the future is still rejected.
     if now_ms == 0 || observed_ms == 0 {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
-    let wall_age = now_ms
-        .checked_sub(observed_ms)
+    let now_ns = u128::from(now_ms)
+        .checked_mul(1_000_000)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if wall_age > max_quote_age_ms {
+    let observed_ns = u128::try_from(observed.timestamp())
+        .ok()
+        .and_then(|seconds| seconds.checked_mul(1_000_000_000))
+        .and_then(|nanos| nanos.checked_add(u128::from(observed.timestamp_subsec_nanos())))
+        .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    let age_ns = now_ns
+        .checked_sub(observed_ns)
+        .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    let max_age_ns = u128::from(max_quote_age_ms)
+        .checked_mul(1_000_000)
+        .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    if age_ns > max_age_ns {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
+    let wall_age_ms = age_ns as f64 / 1_000_000.0;
     // The reported age is untrusted metadata. Refuse snapshots whose two
     // clocks disagree by more than one second (rounding/transport tolerance).
     // Neither clock comparison constitutes independent feed attestation.
@@ -670,6 +667,53 @@ mod tests {
         assert_eq!(report.stages[3].status, StageStatus::Skipped);
         assert_eq!(report.stages[4].status, StageStatus::Skipped);
         assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
+    fn native_runtime_rfc3339_offset_and_fraction_keep_exact_future_check() {
+        let now_ms = reference_clock() + 124;
+        let timestamp = "2026-11-10T10:00:00.123456+00:00";
+        let mut snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {
+                "BTC/USDT": {
+                    "Binance": {
+                        "status": "live",
+                        "age_seconds": 0.000544,
+                        "timestamp": timestamp,
+                        "price": 10
+                    }
+                }
+            }
+        });
+        let evidence = evidence_from_native_market_snapshot(
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("runtime RFC3339 UTC offset and fractional timestamp should be accepted");
+        assert_eq!(evidence.quote_received_at_ms, reference_clock() + 123);
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+
+        // A quote 456 microseconds ahead of the trusted millisecond clock
+        // must not pass merely because its projected timestamp_millis is equal.
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+        assert_eq!(
+            evidence_from_native_market_snapshot(
+                &snapshot,
+                PaperSymbol::BtcUsdt,
+                PaperVenue::Binance,
+                reference_clock() + 123,
+                2_000,
+                50,
+            )
+            .unwrap_err(),
+            NativeMarketRefusal::ClockOrAgeInvalid
+        );
     }
 
     #[test]

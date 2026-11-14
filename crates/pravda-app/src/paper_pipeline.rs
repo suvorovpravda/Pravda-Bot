@@ -176,7 +176,7 @@ mod tests {
             ("age_seconds", json!(-0.0)),
             ("age_seconds", json!("0")),
             ("timestamp", json!("2026-11-10T10:00:00.0001Z")),
-            ("timestamp", json!("2026-11-10T10:00:00+00:00")),
+            ("timestamp", json!("2026-11-10T10:00:00+99:99")),
             ("price", json!(0)),
             ("price", json!("100.25")),
             ("price", json!(-1)),
