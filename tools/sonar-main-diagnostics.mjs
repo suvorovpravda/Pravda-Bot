@@ -100,9 +100,7 @@ for(const [kind,endpoint,params] of requests){
         if(components.length===expected)break;
         if(page===100)throw Error('SonarCloud duplication inventory exceeds 100 pages');
       }
-      console.log('SONAR_MAIN_DUPLICATION_HTTP=200');
-      console.log('SONAR_MAIN_COMPONENTS_TOTAL='+components.length);
-      for(const q of components.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
+      // Do not announce a successful inventory before validating every file.
       // A malformed numeric metric must not silently become a zero finding.
       for(const component of components){
         if(!Array.isArray(component.measures))
@@ -114,6 +112,9 @@ for(const [kind,endpoint,params] of requests){
             throw Error('SonarCloud invalid duplicated lines metric: '+component.key);
         }
       }
+      console.log('SONAR_MAIN_DUPLICATION_HTTP=200');
+      console.log('SONAR_MAIN_COMPONENTS_TOTAL='+components.length);
+      for(const q of components.slice(0,3))console.log('SONAR_MAIN_COMPONENT_SAMPLE='+JSON.stringify({key:q.key,measures:q.measures}));
       const qualified=components.filter(q=>(q.measures??[]).some(m=>m.metric==='new_duplicated_lines' && Number(m.period?.value??m.periods?.[0]?.value??m.value??0)>0));
       for(const q of qualified)console.log('SONAR_MAIN_DUPLICATION='+JSON.stringify({key:q.key,measures:q.measures.map(m=>({metric:m.metric,value:m.value,period:m.period?.value??m.periods?.[0]?.value}))}));
       continue;
