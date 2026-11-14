@@ -462,6 +462,38 @@ release.resolve({value:"current"});
 assert.equal((await currentAllowed).value, "current",
   "Current session data must remain usable");
 
+// Regression: revoking optional Revolut consent during an in-flight public
+// order-book request must prevent late successes AND failures from repainting
+// the disabled UI. Login generation alone cannot detect consent changes.
+const revolutStart=js.indexOf("    async function refreshRevolut()");
+const revolutEnd=js.indexOf("    async function refreshSystem()",revolutStart);
+assert.ok(revolutStart>=0 && revolutEnd>revolutStart,
+  "Optional public order-book refresh must remain separately testable");
+const revolutBody=js.slice(revolutStart,revolutEnd);
+assert.ok(revolutBody.includes("const consentVersion = revolutConsentVersion;"),
+  "Capture the consent epoch before the optional public request");
+const revokedConsentGuard="if (requestGeneration !== window.pravdaAuthGeneration || consentVersion !== revolutConsentVersion || !revolutOptIn || shell.hidden) return;";
+// Compare adjacent statements, not platform-specific newline/indentation bytes.
+// Both paths must guard before any rendering after the awaited request.
+const revolutLines = revolutBody.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+const hasAdjacentGuard = statement => revolutLines.some((line, index) =>
+  line === statement && revolutLines[index + 1] === revokedConsentGuard);
+assert.ok(hasAdjacentGuard('const data = await fetchJson("/api/revolut/public");'),
+  "Discard successful order-book data after consent revocation or logout");
+assert.ok(hasAdjacentGuard('} catch (error) {'),
+  "Late request failure must not overwrite revoked-consent UI");
+const consentLockStart = js.indexOf("    function lockRevolutConsentUi() {");
+const consentLockEnd = js.indexOf("\n    }", consentLockStart);
+assert.ok(consentLockStart >= 0 && consentLockEnd > consentLockStart,
+  "Consent-lock handler must exist");
+const consentLockStatements = js.slice(consentLockStart, consentLockEnd).split(/\r?\n/).map(line => line.trim());
+assert.ok(consentLockStatements.includes("revolutConsentVersion++;"),
+  "Locking optional consent must invalidate in-flight order-book requests");
+assert.ok(consentLockStatements.includes("revolutOptIn = false;"),
+  "Locking optional consent must revoke in-memory permission");
+assert.ok(consentLockStatements.includes("revolutReadButton.disabled = true;"),
+  "Locking optional consent must disable the public read button");
+
 // Every protected asynchronous renderer must ignore a result (or a catch
 // handler) from an older dashboard generation before mutating the new UI.
 for (const name of [
@@ -476,7 +508,10 @@ for (const name of [
   const body = js.slice(start,end+6);
   assert.match(body,/const requestGeneration = window\.pravdaAuthGeneration;/,
     "UI refresh must identify initial authenticated generation: "+name);
-  assert.match(body,/if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/,
+  const staleGenerationGuard = name === "refreshRevolut"
+    ? /if \(requestGeneration !== window\.pravdaAuthGeneration \|\| consentVersion !== revolutConsentVersion \|\| !revolutOptIn \|\| shell\.hidden\) return;/
+    : /if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/;
+  assert.match(body,staleGenerationGuard,
     "Stale UI refresh must not mutate the new login's dashboard: "+name);
 }
 const nodes = new Map();
