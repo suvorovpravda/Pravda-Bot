@@ -1886,10 +1886,23 @@ const translations = {
         if(localAlerts.length>=30){$("alert-notice").textContent="Limite de 30 alertes locales.";return;}
         const target=Number($("alert-target").value);
         if(!Number.isFinite(target)||target<=0){$("alert-notice").textContent="Seuil positif requis.";return;}
+        const symbol=$("alert-symbol").value;
+        const exchange=$("alert-exchange").value;
+        const direction=$("alert-direction").value;
+        const currency=$("alert-currency").value;
+        // The same allowlists are enforced when localStorage is reloaded.
+        // Reject tampered or stale form values instead of persisting alerts
+        // which disappear silently on the next application launch.
+        if(!["BTC/USDT","ETH/USDT","SOL/USDT"].includes(symbol) ||
+           !["Kraken","Binance"].includes(exchange) ||
+           !["above","below"].includes(direction) ||
+           !["EUR","CHF"].includes(currency)){
+            $("alert-notice").textContent="Paramètres d'alerte non pris en charge.";
+            return;
+        }
         const alert={
             id:String(Date.now())+"-"+String(Math.random()),
-            symbol:$("alert-symbol").value,exchange:$("alert-exchange").value,
-            direction:$("alert-direction").value,currency:$("alert-currency").value,
+            symbol,exchange,direction,currency,
             target,triggered:false
         };
         localAlerts.push(alert);storeLocalAlerts();showLocalAlerts();
