@@ -175,15 +175,14 @@ assert.match(paperBootScript,/window\.refreshPaper\s*=\s*refreshPaper\.bind\(nul
 // with an arrow that calls its global name causes synchronous stack overflow.
 assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
   "A self-referential window refresh export would overflow the installed WebView2 stack");
-// Runtime regression: evaluate the actual export line as a classic browser script.
-// A self-referential wrapper would synchronously overflow before entering the body.
+// Require exactly one global export per refresh handler and an explicit
+// bound reference to the original function. Never execute source assembled
+// from repository text in CI; the installed WebView2 tests check behavior.
 for (const name of ["refreshPaper", "refreshSecurity"]) {
-  const exportLine=js.split("\n").find(line=>line.trim().startsWith("window."+name+" = "));
-  assert.ok(exportLine, name+": global refresh export must exist");
-  const source="var entered = 0; async function "+name+"(explicit = false) { if (explicit) entered++; }\n"+exportLine+"\nwindow."+name+"();";
-  const sandbox={}; sandbox.window=sandbox;
-  vm.runInNewContext(source,sandbox,{timeout:1000});
-  assert.equal(sandbox.entered,1,name+": exported refresh must invoke original exactly once with explicit=true");
+  const exports=js.split("\n").filter(line=>line.trim().startsWith("window."+name+" = "));
+  assert.equal(exports.length,1,name+": expected exactly one global refresh export");
+  assert.equal(exports[0].trim(),"window."+name+" = "+name+".bind(null, true);",
+    name+": exported refresh must bind the original function with explicit=true");
 }
 assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
   "Authenticated security tab must still fetch paper state on demand");
