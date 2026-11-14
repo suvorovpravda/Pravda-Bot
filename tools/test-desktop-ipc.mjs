@@ -757,6 +757,14 @@ const alertStorageStart=js.indexOf('    const alertStorageKey = "pravda-local-pr
 const alertStorageEnd=js.indexOf('    const storeLocalAlerts =',alertStorageStart);
 assert.ok(alertStorageStart>=0 && alertStorageEnd>alertStorageStart,
   "Local alert storage validation must remain present");
+assert.match(alertStorage,/\.map\(a\s*=>\s*\(\{\s*\.\.\.a,\s*triggered:\s*a\.triggered\s*===\s*true\s*\}\)\)/,
+  "Persisted local alert trigger flags must be normalized to strict booleans");
+// A malformed persisted truthy string must not silently suppress the first
+// threshold notification; only a literal boolean true may preserve the state.
+for(const [stored, expected] of [[true,true],[false,false],["false",false],[1,false],[null,false],[undefined,false]]){
+  assert.equal(stored===true,expected,
+    "Malformed persisted alert trigger state must not count as triggered");
+}
 const alertStorage=js.slice(alertStorageStart,alertStorageEnd);
 for(const [field,values] of [
   ["symbol",["BTC/USDT","ETH/USDT","SOL/USDT"]],
