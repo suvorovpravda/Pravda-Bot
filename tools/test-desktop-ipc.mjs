@@ -365,6 +365,24 @@ assert.match(js,/window\.refreshSecurity = \(\) => refreshSecurity\(true\);/,
   "User-driven security checks must not be silently skipped because of visibilityState");
 assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
   "Manual acceptance controls must never silently ignore a click for document.hidden");
+
+const acceptanceStart=js.indexOf("async function runAcceptance(phase) {");
+const acceptanceEnd=js.indexOf('window.pravdaDashboardPhase = "P02G";',acceptanceStart);
+const acceptanceClearStart=js.indexOf("function clearAcceptanceUi() {");
+assert.ok(acceptanceStart>=0 && acceptanceEnd>acceptanceStart && acceptanceClearStart>=0,
+  "Acceptance lifecycle must be present");
+const acceptanceBody=js.slice(acceptanceStart,acceptanceEnd);
+const acceptanceClear=js.slice(acceptanceClearStart,acceptanceStart);
+assert.match(acceptanceClear,/acceptanceRequestEpoch\+\+;[\s\S]*?acceptanceBusy = false;/,
+  "Logout must invalidate pending acceptance requests and release single-flight lock");
+assert.match(acceptanceBody,/const requestEpoch = \+\+acceptanceRequestEpoch;/,
+  "Each acceptance campaign must capture a unique epoch");
+assert.match(acceptanceBody,/requestGeneration !== window\.pravdaAuthGeneration \|\|\s*requestEpoch !== acceptanceRequestEpoch/g,
+  "Stale acceptance success and error paths must be rejected");
+const acceptanceFinally=acceptanceBody.slice(acceptanceBody.lastIndexOf("} finally {"));
+assert.match(acceptanceFinally,/if \(requestEpoch === acceptanceRequestEpoch\) \{\s*acceptanceBusy = false;/,
+  "Old session completions must not unlock a newer acceptance campaign");
+
 assert.match(js,/if \(tab === "security"\)/,
   "Opening Security must refresh its local status");
 
