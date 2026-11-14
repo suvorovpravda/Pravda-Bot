@@ -2033,7 +2033,7 @@ const translations = {
     // exception messages, or a call stack; phases change only during P14.
     function markNavigationBootPhase(phase) {
         if (window.pravdaDashboardReady !== true &&
-            /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper[1-2]|tests[1-2]|journals[1-2]|revolut))$/.test(window.pravdaDashboardPhase)) {
+            /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper[1-2]|tests[1-2]|journals[1-2]|revolut))?$/.test(window.pravdaDashboardPhase)) {
             window.pravdaDashboardPhase = phase;
         }
     }
