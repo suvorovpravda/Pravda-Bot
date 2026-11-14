@@ -462,22 +462,22 @@ release.resolve({value:"current"});
 assert.equal((await currentAllowed).value, "current",
   "Current session data must remain usable");
 
-// Regression: revoking optional Revolut consent while a public order-book
-// request is in flight must prevent both a late success and a late failure
-// from changing the disabled consent UI. Authentication alone is insufficient:
-// consent may change without logging out.
+// Regression: revoking optional Revolut consent during an in-flight public
+// order-book request must prevent late successes AND failures from repainting
+// the disabled UI. Login generation alone cannot detect consent changes.
 const revolutStart=js.indexOf("    async function refreshRevolut()");
 const revolutEnd=js.indexOf("    async function refreshSystem()",revolutStart);
 assert.ok(revolutStart>=0 && revolutEnd>revolutStart,
   "Optional public order-book refresh must remain separately testable");
 const revolutBody=js.slice(revolutStart,revolutEnd);
-assert.match(revolutBody,/const consentVersion = revolutConsentVersion;/,
+assert.ok(revolutBody.includes("const consentVersion = revolutConsentVersion;"),
   "Capture the consent epoch before the optional public request");
-assert.match(revolutBody,/await fetchJson\\("\/api\/revolut\/public"\\);\\s*if \\(requestGeneration !== window\\.pravdaAuthGeneration \\|\\| consentVersion !== revolutConsentVersion \\|\\| !revolutOptIn \\|\\| shell\\.hidden\\) return;/,
+const revokedConsentGuard="if (requestGeneration !== window.pravdaAuthGeneration || consentVersion !== revolutConsentVersion || !revolutOptIn || shell.hidden) return;";
+assert.ok(revolutBody.includes('const data = await fetchJson("/api/revolut/public");\\n            '+revokedConsentGuard),
   "Discard successful order-book data after consent revocation or logout");
-assert.match(revolutBody,/catch \\(error\\) \\{\\s*if \\(requestGeneration !== window\\.pravdaAuthGeneration \\|\\| consentVersion !== revolutConsentVersion \\|\\| !revolutOptIn \\|\\| shell\\.hidden\\) return;/,
-  "A late request failure must not overwrite the revoked-consent UI");
-assert.match(js,/function lockRevolutConsentUi\\(\\) \\{\\s*revolutConsentVersion\\+\\+;/,
+assert.ok(revolutBody.includes('} catch (error) {\\n            '+revokedConsentGuard),
+  "Late request failure must not overwrite revoked-consent UI");
+assert.ok(js.includes("function lockRevolutConsentUi() {\\n        revolutConsentVersion++;"),
   "Locking optional consent must invalidate in-flight order-book requests");
 
 // Every protected asynchronous renderer must ignore a result (or a catch
