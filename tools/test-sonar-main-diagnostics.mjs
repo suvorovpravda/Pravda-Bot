@@ -170,6 +170,15 @@ try{
     return {ok:true,status:200,json:async()=>({components:[],paging:{total:0}})};
   });
   assert.equal(malformedAggregate,false,'malformed aggregate HTTP 200 must fail');
+  const aggregateLogs=[];
+  console.log=(...args)=>aggregateLogs.push(args.join(' '));
+  await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:null}})};
+    return {ok:true,status:200,json:async()=>({components:[],paging:{total:0,pageIndex:1,pageSize:500}})};
+  });
+  assert.ok(!aggregateLogs.includes('SONAR_MAIN_AGGREGATE_HTTP=200'),
+    'malformed aggregate must not emit success marker');
 }finally{
   console.log=originalLog;
 }
