@@ -185,20 +185,42 @@ pub fn evidence_from_native_market_snapshot(
         .get("age_seconds")
         .and_then(serde_json::Value::as_f64)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if !seconds.is_finite() || seconds < 0.0 || seconds * 1_000.0 > max_quote_age_ms as f64 {
+    if !seconds.is_finite()
+        || seconds.is_sign_negative()
+        || seconds * 1_000.0 > max_quote_age_ms as f64
+    {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let timestamp = quote
         .get("timestamp")
         .and_then(serde_json::Value::as_str)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    // Millisecond policy clocks must not silently truncate sub-millisecond
+    // timestamps (including a future quote only microseconds ahead).
+    let time_part = timestamp
+        .split_once('T')
+        .map(|(_, time)| time)
+        .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
+    if time_part
+        .split_once('.')
+        .is_some_and(|(_, fraction)| fraction.trim_end_matches('Z').len() > 3)
+    {
+        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
+    }
     let observed = DateTime::parse_from_rfc3339(timestamp)
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
-    if observed.offset().local_minus_utc() != 0 {
+    // Require the canonical Z suffix, not merely a zero-second UTC offset.
+    // An untrusted cache must not introduce alternative timestamp spellings.
+    if !timestamp.ends_with('Z') || observed.offset().local_minus_utc() != 0 {
         return Err(NativeMarketRefusal::ClockOrAgeInvalid);
     }
     let observed_ms = u64::try_from(observed.timestamp_millis())
         .map_err(|_| NativeMarketRefusal::ClockOrAgeInvalid)?;
+    // An uninitialized native clock or epoch-zero quote cannot establish
+    // freshness, even if attacker-controlled age_seconds claims zero age.
+    if now_ms == 0 || observed_ms == 0 {
+        return Err(NativeMarketRefusal::ClockOrAgeInvalid);
+    }
     let wall_age = now_ms
         .checked_sub(observed_ms)
         .ok_or(NativeMarketRefusal::ClockOrAgeInvalid)?;
@@ -301,6 +323,11 @@ fn verify_market(input: &CycleInput<'_>) -> Result<(), Failure> {
     if !m.provenance_verified || !m.portfolio_verified {
         return Err(escalate("MDA_PROVENANCE_OR_PORTFOLIO_MISSING"));
     }
+    // Epoch-zero clocks and quote timestamps cannot establish freshness,
+    // even when upstream booleans claim independently verified evidence.
+    if input.now_ms == 0 || m.quote_received_at_ms == 0 {
+        return Err(escalate("MDA_INVALID_MARKET_CLOCK"));
+    }
     if c.market_quality != FeedQuality::Verified
         || m.reference_price_micros == 0
         || m.max_price_deviation_bps == 0
@@ -382,6 +409,18 @@ fn verify_proposal(input: &CycleInput<'_>, proposal: &PaperProposal) -> Result<(
 fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failure> {
     let reply = parse_untrusted_ai_reply(input.gmo_reply_json, input.expected_request_id)
         .map_err(|_| reject("GMO_CONTRACT_REJECTED"))?;
+    // The GMO response is untrusted. Canonical UTC and millisecond precision
+    // prevent alternate encodings and sub-millisecond replay at the REG clock.
+    if !reply.timestamp_utc.ends_with('Z')
+        || !reply.timestamp_utc.contains('T')
+        || reply
+            .timestamp_utc
+            .split_once('T')
+            .and_then(|(_, time)| time.split_once('.'))
+            .is_some_and(|(_, fraction)| fraction.trim_end_matches('Z').len() > 3)
+    {
+        return Err(reject("GMO_TIMESTAMP_INVALID"));
+    }
     let timestamp = DateTime::parse_from_rfc3339(&reply.timestamp_utc)
         .map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
     if timestamp.offset().local_minus_utc() != 0 {
@@ -389,6 +428,11 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
     }
     let timestamp_ms =
         u64::try_from(timestamp.timestamp_millis()).map_err(|_| reject("GMO_TIMESTAMP_INVALID"))?;
+    // An epoch-zero model timestamp is never a valid analysis observation.
+    // This is independent of market attestation and does not grant order rights.
+    if timestamp_ms == 0 {
+        return Err(reject("GMO_TIMESTAMP_UNINITIALIZED"));
+    }
     let age = input
         .now_ms
         .checked_sub(timestamp_ms)
@@ -419,6 +463,43 @@ fn verify_gmo(input: &CycleInput<'_>) -> Result<Option<UntrustedAiReply>, Failur
 /// No IPC permission, signature or trading capability is granted by this
 /// function. The output is deliberately not an executable order object.
 pub fn review_paper_cycle(input: &CycleInput<'_>) -> PipelineReport {
+    // The mode gate is unconditional: even an unverified ARCH/SS state or
+    // malformed GMO payload must not obscure an attempted LIVE cycle.
+    // No stage may interpret a LIVE request as PAPER review eligibility.
+    if input.reg_candidate.mode != reg_guard::Mode::Paper {
+        let stages = [
+            Role::Architect,
+            Role::SecuritySentinel,
+            Role::MarketDataAnalyst,
+            Role::GrandMasterOrchestrator,
+            Role::RiskEngineGuardian,
+            Role::IncidentResponder,
+            Role::UserCommunicationAgent,
+        ]
+        .into_iter()
+        .map(|role| StageTrace {
+            role,
+            status: if role == Role::MarketDataAnalyst {
+                StageStatus::Blocked
+            } else {
+                StageStatus::Skipped
+            },
+            code: if role == Role::MarketDataAnalyst {
+                "MDA_LIVE_DISABLED"
+            } else {
+                "LIVE_MODE_FORBIDDEN"
+            },
+        })
+        .collect();
+        return PipelineReport {
+            verdict: PipelineVerdict::Rejected,
+            reason_code: "MDA_LIVE_DISABLED",
+            stages,
+            reg_rules_violated: Vec::new(),
+            reg_checks_performed: 0,
+            summary_code: "REJECTED_NO_ORDER",
+        };
+    }
     let mut stages = Vec::with_capacity(7);
     let mut halted = None;
     let mut no_action = false;
@@ -475,7 +556,9 @@ pub fn review_paper_cycle(input: &CycleInput<'_>) -> PipelineReport {
     stages.push(StageTrace {
         role: Role::IncidentResponder,
         status: StageStatus::Noted,
-        code: if halted.is_some() {
+        code: if no_action {
+            "IR_NO_ACTION_NO_INCIDENT"
+        } else if halted.is_some() {
             "IR_HUMAN_REVIEW_REQUIRED"
         } else {
             "IR_NO_INCIDENT_REPORTED"
@@ -527,6 +610,122 @@ mod tests {
     }
 
     #[test]
+    fn live_mode_is_refused_before_any_untrusted_or_unverified_role() {
+        let mut input = good("{malformed-model-response");
+        input.reg_candidate.mode = reg_guard::Mode::Live;
+        input.security = SecurityEvidence::default();
+        input.market.provenance_verified = false;
+        input.market.portfolio_verified = false;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "MDA_LIVE_DISABLED");
+        assert_eq!(report.summary_code, "REJECTED_NO_ORDER");
+        assert_eq!(report.stages.len(), 7);
+        assert_eq!(report.stages[2].role, Role::MarketDataAnalyst);
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert!(report
+            .stages
+            .iter()
+            .enumerate()
+            .all(|(i, stage)| { i == 2 || stage.status == StageStatus::Skipped }));
+        assert_eq!(report.reg_checks_performed, 0);
+        assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn native_snapshot_cannot_attest_market_or_portfolio_even_when_fresh() {
+        let now_ms = reference_clock();
+        let snapshot = json!({
+            "stream_state": "observations_recent",
+            "symbols": {
+                "BTC/USDT": {
+                    "Binance": {
+                        "status": "live",
+                        "age_seconds": 0.0,
+                        "timestamp": TIMESTAMP,
+                        "price": 10
+                    }
+                }
+            }
+        });
+        let native = evidence_from_native_market_snapshot(
+            &snapshot,
+            PaperSymbol::BtcUsdt,
+            PaperVenue::Binance,
+            now_ms,
+            2_000,
+            50,
+        )
+        .expect("synthetic observation parses but is not independently attested");
+        assert!(!native.provenance_verified);
+        assert!(!native.portfolio_verified);
+        let reply = good_reply().to_string();
+        let mut input = good(&reply);
+        input.market = native;
+        input.reg_candidate.quote_received_at_ms = native.quote_received_at_ms;
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Escalated);
+        assert_eq!(report.reason_code, "MDA_PROVENANCE_OR_PORTFOLIO_MISSING");
+        assert_eq!(report.stages[2].status, StageStatus::Blocked);
+        assert_eq!(report.stages[3].status, StageStatus::Skipped);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
+    fn gmo_lowercase_timestamp_separator_is_rejected_before_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = json!("2026-11-10t10:00:00Z");
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "GMO_TIMESTAMP_INVALID");
+        assert_eq!(report.stages[3].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        assert_eq!(report.reg_checks_performed, 0);
+    }
+
+    #[test]
+    fn epoch_zero_market_clock_cannot_be_approved_by_forged_evidence() {
+        let reply = good_reply().to_string();
+        for invalid_quote_clock in [false, true] {
+            let mut input = good(&reply);
+            if invalid_quote_clock {
+                input.market.quote_received_at_ms = 0;
+                input.reg_candidate.quote_received_at_ms = 0;
+            } else {
+                input.now_ms = 0;
+                input.reg_candidate.now_ms = 0;
+                input.reg_candidate.now_sec = 0;
+            }
+            let report = review_paper_cycle(&input);
+            assert_eq!(report.verdict, PipelineVerdict::Escalated);
+            assert_eq!(report.reason_code, "MDA_INVALID_MARKET_CLOCK");
+            assert_eq!(report.reg_checks_performed, 0);
+            assert_eq!(report.stages[2].status, StageStatus::Blocked);
+            assert_eq!(report.stages[3].status, StageStatus::Skipped);
+            assert_eq!(report.stages[4].status, StageStatus::Skipped);
+        }
+    }
+
+    #[test]
+    fn no_action_is_not_misreported_as_an_incident_or_paper_order() {
+        let mut reply = good_reply();
+        reply["status"] = json!("NO_ACTION");
+        reply["decision"] = serde_json::Value::Null;
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::NoAction);
+        assert_eq!(report.reason_code, "GMO_NO_ACTION");
+        assert_eq!(report.summary_code, "NO_ACTION");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert_eq!(report.stages[5].code, "IR_NO_ACTION_NO_INCIDENT");
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
+    }
+
+    #[test]
     fn architect_veto_prevents_parsing_untrusted_gmo_and_running_reg() {
         let mut input = good("{malformed-gmo-json");
         input.security.artifact_integrity_verified = false;
@@ -567,6 +766,20 @@ mod tests {
         assert_eq!(report.stages[4].status, StageStatus::Skipped);
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
+    }
+
+    #[test]
+    fn epoch_zero_gmo_timestamp_is_rejected_before_reg() {
+        let mut reply = good_reply();
+        reply["timestamp_utc"] = serde_json::Value::String("1970-01-01T00:00:00Z".to_owned());
+        let raw = reply.to_string();
+        let input = good(&raw);
+        let report = review_paper_cycle(&input);
+        assert_eq!(report.verdict, PipelineVerdict::Rejected);
+        assert_eq!(report.reason_code, "GMO_TIMESTAMP_UNINITIALIZED");
+        assert_eq!(report.reg_checks_performed, 0);
+        assert_eq!(report.stages[3].status, StageStatus::Blocked);
+        assert_eq!(report.stages[4].status, StageStatus::Skipped);
     }
 
     #[test]

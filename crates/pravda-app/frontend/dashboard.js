@@ -1492,6 +1492,39 @@ const translations = {
     // A paper snapshot is optional until its authenticated tab is opened.
     // Avoid starting a native IPC request before the dashboard script is ready.
     window.pravdaDashboardPhase = "P03A";
+    // Research observations are not signals and cannot call ipc_paper_trade.
+    // Render only bounded, static Rust diagnostic codes as text (never HTML).
+    let paperProbeBusy = false;
+    $("paper-probe-button").addEventListener("click", async () => {
+        if (!securitySessionReady() || paperProbeBusy) return;
+        const generation = window.pravdaAuthGeneration;
+        const button = $("paper-probe-button");
+        const status = $("paper-probe-status");
+        paperProbeBusy = true;
+        button.disabled = true;
+        status.textContent = "Lecture de l'observation native en cours…";
+        try {
+            const rows = await window.pravdaInvoke("ipc_paper_pipeline_probe", {
+                symbol: "BTC/USDT",
+                venue: "Binance"
+            });
+            if (generation !== window.pravdaAuthGeneration) return;
+            if (!Array.isArray(rows) || rows.length !== 11
+                || rows.some(row => typeof row !== "string" || row.length > 100)
+                || !rows.includes("execution|DISABLED")
+                || !rows.includes("verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE")) {
+                throw new Error("INVALID_PAPER_PROBE");
+            }
+            status.textContent = rows.join(" · ");
+        } catch (_) {
+            if (generation === window.pravdaAuthGeneration) {
+                status.textContent = "Diagnostic non vérifié. Analyse et ordres restent bloqués.";
+            }
+        } finally {
+            paperProbeBusy = false;
+            button.disabled = false;
+        }
+    });
     $("paper-order-form").addEventListener("submit", event => {
         event.preventDefault();
         void paperAction("ipc_paper_trade", {

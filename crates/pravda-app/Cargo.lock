@@ -2709,7 +2709,9 @@ dependencies = [
 name = "pravda-app"
 version = "0.3.4"
 dependencies = [
+ "pravda-core",
  "pravda-server",
+ "serde_json",
  "tauri",
  "tauri-build",
  "tokio",

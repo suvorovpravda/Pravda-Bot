@@ -16,6 +16,8 @@ tauri = { version = "2", features = [] }
 tokio = { version = "1", features = ["full"] }
 url = "2"
 pravda-server = { path = "../../rust/pravda-server" }
+pravda-core = { path = "../pravda-core" }
+serde_json = "1"
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

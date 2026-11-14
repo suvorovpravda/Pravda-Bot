@@ -206,6 +206,27 @@ fn cross_symbol_substitution_and_untrusted_nested_quote_fail_closed() {
 }
 
 #[test]
+fn negative_zero_quote_age_is_not_valid_freshness_evidence() {
+    // IEEE-754 negative zero is not a trustworthy elapsed-time measurement.
+    // Reject rather than normalize it to a fresh zero-second observation.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(-0.0_f64);
+    snapshot["attested"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+
+    // Positive zero remains a parseable synthetic observation, never
+    // independent provenance or permission for PAPER execution.
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0_f64);
+    let evidence = inspect(&snapshot).expect("positive zero-age synthetic fixture");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
+
+#[test]
 fn native_quote_non_utc_offset_is_refused_even_for_same_instant() {
     // A timezone-shifted timestamp encodes the same wall-clock instant as
     // the native fixture, but is not an approved UTC quote representation.
@@ -265,4 +286,241 @@ fn native_quote_age_disagreement_boundary_is_fail_closed() {
         inspect(&snapshot),
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
+}
+
+#[test]
+fn synthetic_price_variation_never_grants_market_or_portfolio_attestation() {
+    // Price plausibility is not evidence of independent provenance.
+    // These are deliberately synthetic fixtures, never executable quotes.
+    for price in [1_u64, 10, 100, 100_000] {
+        let mut snapshot = quote(json!(price));
+        snapshot["attested"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["attested"] = json!(true);
+
+        let evidence = inspect(&snapshot).expect("synthetic observation must parse");
+        assert_eq!(
+            evidence.reference_price_micros,
+            u128::from(price) * 1_000_000
+        );
+        assert!(
+            !evidence.provenance_verified,
+            "price cannot attest provenance"
+        );
+        assert!(
+            !evidence.portfolio_verified,
+            "price cannot attest portfolio"
+        );
+    }
+}
+
+#[test]
+fn native_quote_numeric_type_confusion_never_grants_attestation() {
+    // An untrusted cache can contain JSON types that superficially resemble
+    // prices. None may be coerced into a trusted market observation.
+    for price in [
+        json!(true),
+        json!(false),
+        json!([]),
+        json!([10]),
+        json!({"price": 10}),
+        json!("10.000000"),
+        json!(0.0000001),
+    ] {
+        let mut snapshot = quote(price);
+        snapshot["provenance_verified"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::PriceInvalid)
+        ));
+    }
+}
+
+#[test]
+fn native_quote_fractional_precision_boundary_is_exact_and_unattested() {
+    // The last accepted micro-unit must remain exact; an additional decimal
+    // digit must fail closed rather than round into a PAPER risk decision.
+    let mut snapshot = quote(json!(10.123456));
+    let evidence = inspect(&snapshot).expect("six decimal places are exact");
+    assert_eq!(evidence.reference_price_micros, 10_123_456);
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["price"] = json!(10.1234567);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::PriceInvalid)
+    ));
+}
+
+#[test]
+fn scientific_notation_and_unbounded_prices_cannot_bypass_exact_micro_units() {
+    // Numeric JSON values can be finite yet unsuitable for exact fixed-point
+    // PAPER risk arithmetic. Never round, saturate, or trust forged flags.
+    for price in [
+        json!(1e30),
+        json!(1e-8),
+        json!(1e100),
+        json!(18446744073709551615.0),
+    ] {
+        let mut snapshot = quote(price);
+        snapshot["attested"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["provenance_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::PriceInvalid)
+        ));
+    }
+}
+
+#[test]
+fn quote_wall_clock_age_boundary_refuses_stale_synthetic_observations() {
+    // Both timestamp and reported age agree. Freshness is still only a
+    // syntactic observation, never an independent market attestation.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T09:59:58Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+    let evidence = inspect(&snapshot).expect("exact maximum age is permitted");
+    assert_eq!(evidence.quote_received_at_ms, NOW_MS - 2_000);
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    // One millisecond beyond the policy boundary is stale, even when the
+    // untrusted cache claims independent provenance and portfolio checks.
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T09:59:57.999Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.001);
+    snapshot["provenance_verified"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
+
+#[test]
+fn forged_stream_state_variants_never_promote_synthetic_quotes() {
+    // A market cache is not an authority: only the exact recognized stream
+    // state may reach quote parsing, and even then no attestation is granted.
+    for state in [
+        json!(null),
+        json!(true),
+        json!(1),
+        json!("OBSERVATIONS_RECENT"),
+        json!("observations_recent "),
+        json!("connected"),
+        json!({"state": "observations_recent"}),
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["stream_state"] = state;
+        snapshot["attested"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::StreamUnavailable)
+        ));
+    }
+}
+
+#[test]
+fn forged_quote_status_variants_fail_closed_before_price_parsing() {
+    // The native cache is observational only. Neither alternative status
+    // spellings nor nested trust claims may authorize PAPER market evidence.
+    for status in [
+        json!(null),
+        json!(true),
+        json!(1),
+        json!("LIVE"),
+        json!("live "),
+        json!("verified"),
+        json!("stale"),
+        json!({"state": "live"}),
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["status"] = status;
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["attested"] = json!(true);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::QuoteStaleOrUntrusted)
+        ));
+    }
+
+    // Even the exact recognized cache status is not provenance or
+    // portfolio attestation and cannot itself authorize a PAPER order.
+    let evidence = inspect(&quote(json!(10))).expect("synthetic cache observation");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
+
+#[test]
+fn future_dated_quote_cannot_be_reclassified_as_fresh_by_cache_flags() {
+    // Synthetic future timestamps must never be treated as trusted market
+    // evidence, even if the untrusted cache reports zero age and attestations.
+    for timestamp in [
+        "2025-11-10T10:00:00.001Z",
+        "2025-11-10T10:00:01Z",
+        "2025-11-10T10:01:00Z",
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+        snapshot["provenance_verified"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
+
+#[test]
+fn forged_age_metadata_cannot_hide_wall_clock_staleness() {
+    // An age of zero supplied by the cache is not authoritative: the native
+    // clock rejects observations older than the explicit PAPER age policy.
+    let mut snapshot = quote(json!(10));
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!("2025-11-10T09:59:57Z");
+    snapshot["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0.0);
+    snapshot["attested"] = json!(true);
+    snapshot["portfolio_verified"] = json!(true);
+    assert!(matches!(
+        inspect(&snapshot),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
+
+#[test]
+fn zero_offset_aliases_cannot_replace_canonical_utc_quote_timestamp() {
+    // These spellings represent the same instant, but are not canonical
+    // native-cache timestamps. They must not inherit feed attestations.
+    for timestamp in ["2025-11-10T10:00:00+00:00", "2025-11-10T10:00:00-00:00"] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
+        snapshot["attested"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
+}
+
+#[test]
+fn sub_millisecond_timestamp_precision_cannot_be_truncated_into_freshness() {
+    // A timestamp 100 microseconds in the future would round down to NOW_MS
+    // if converted directly to milliseconds. Synthetic cache flags cannot
+    // make that observation independently attested or executable.
+    for timestamp in [
+        "2025-11-10T10:00:00.0001Z",
+        "2025-11-10T10:00:00.000001Z",
+        "2025-11-10T10:00:00.000000001Z",
+    ] {
+        let mut snapshot = quote(json!(10));
+        snapshot["symbols"]["BTC/USDT"]["Binance"]["timestamp"] = json!(timestamp);
+        snapshot["attested"] = json!(true);
+        snapshot["portfolio_verified"] = json!(true);
+        assert!(matches!(
+            inspect(&snapshot),
+            Err(NativeMarketRefusal::ClockOrAgeInvalid)
+        ));
+    }
 }

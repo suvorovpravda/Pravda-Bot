@@ -293,6 +293,83 @@ pub async fn ipc_market_snapshot(
     finish_authorized_read(&session, &issued_to, Ok(desktop.market_snapshot().await))
 }
 
+/// Authenticated, read-only native PAPER research preflight. This is not a
+/// trading signal: an observed exchange quote is never portfolio attestation.
+#[tauri::command]
+pub async fn ipc_paper_research_preflight(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let snapshot = desktop.market_snapshot().await;
+    // Revalidate after the await; a replaced or expired session cannot read results.
+    finish_authorized_read(
+        &session,
+        &issued_to,
+        Ok(paper_research_preflight_rows(&snapshot.0)),
+    )
+}
+
+/// Fixed, non-executable diagnostic; no JS-provided flags, market claims,
+/// portfolio balances, or model output are accepted as trusted evidence.
+fn paper_research_preflight_rows(snapshot: &serde_json::Value) -> Vec<String> {
+    use pravda_core::agent_contract::{PaperSymbol, PaperVenue};
+    use pravda_core::agent_pipeline::evidence_from_native_market_snapshot;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| u64::try_from(duration.as_millis()).unwrap_or(0))
+        .unwrap_or(0);
+    let observation = evidence_from_native_market_snapshot(
+        snapshot,
+        PaperSymbol::BtcUsdt,
+        PaperVenue::Binance,
+        now_ms,
+        5_000,
+        100,
+    );
+    let observation_code = match observation {
+        Ok(evidence) if !evidence.provenance_verified && !evidence.portfolio_verified => {
+            "MDA_OBSERVATION_ONLY"
+        }
+        Ok(_) => "MDA_ATTESTATION_UNEXPECTED",
+        Err(reason) => reason.code(),
+    };
+    vec![
+        "mode|PAPER_RESEARCH_ONLY".to_owned(),
+        format!("observation|{observation_code}"),
+        "provenance|not_attested".to_owned(),
+        "portfolio|not_attested".to_owned(),
+        "reg|not_executed".to_owned(),
+        "order|disabled".to_owned(),
+        "live|disabled".to_owned(),
+    ]
+}
+
+/// Read-only native PAPER research probe. Authorization is captured before
+/// the async feed read and rechecked after it, including login replacement.
+/// Neither the request nor this response can modify the synthetic portfolio.
+#[tauri::command]
+pub async fn ipc_paper_pipeline_probe(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    desktop: State<'_, pravda_server::DesktopRuntime>,
+    symbol: String,
+    venue: String,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let snapshot = desktop.market_snapshot().await;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "PAPER_CLOCK_UNAVAILABLE".to_owned())?
+        .as_millis();
+    let now_ms = u64::try_from(now_ms).map_err(|_| "PAPER_CLOCK_UNAVAILABLE".to_owned())?;
+    let result =
+        crate::paper_pipeline::native_observation_probe(&snapshot.0, &symbol, &venue, now_ms)
+            .map_err(str::to_string);
+    finish_authorized_read(&session, &issued_to, result)
+}
+
 #[tauri::command]
 pub async fn ipc_history_recent(
     window: Window,
@@ -834,6 +911,22 @@ mod tests {
         ));
         let authority = Arc::new(Auth::load(&path, 1_000).unwrap());
         (IpcAuth::new(authority), path)
+    }
+
+    #[test]
+    fn paper_research_preflight_cannot_turn_synthetic_quote_into_attestation() {
+        let snapshot = serde_json::json!({
+            "stream_state": "observations_recent",
+            "symbols": {}
+        });
+        let rows = paper_research_preflight_rows(&snapshot);
+        assert_eq!(rows[0], "mode|PAPER_RESEARCH_ONLY");
+        assert!(rows[1].starts_with("observation|MDA_QUOTE_UNAVAILABLE"));
+        assert_eq!(rows[2], "provenance|not_attested");
+        assert_eq!(rows[3], "portfolio|not_attested");
+        assert_eq!(rows[4], "reg|not_executed");
+        assert_eq!(rows[5], "order|disabled");
+        assert_eq!(rows[6], "live|disabled");
     }
 
     #[test]

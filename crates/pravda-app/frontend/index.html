@@ -273,6 +273,14 @@
                         </div>
                     </form>
                     <p class="fine-print" id="paper-notice" role="status" aria-live="polite">Les transactions restent en mémoire pendant cette session uniquement.</p>
+                    <div class="maintenance-notice" role="group" aria-label="Recherche PAPER en lecture seule">
+                        <h4>Recherche PAPER native · diagnostic uniquement</h4>
+                        <p class="fine-print">BTC/USDT sur Binance : contrôle Rust des observations de marché. Une cotation reçue ne prouve ni sa provenance ni le portefeuille. Aucun passage d'ordre, même fictif, depuis cette analyse.</p>
+                        <div class="feature-actions">
+                            <button class="button" id="paper-probe-button" type="button">Analyser la disponibilité des preuves</button>
+                        </div>
+                        <p class="fine-print" id="paper-probe-status" role="status" aria-live="polite">Diagnostic non exécuté. Les rôles non vérifiés restent bloqués.</p>
+                    </div>
                     <h4>Journal des 20 dernières opérations fictives</h4>
                     <div id="paper-events" class="paper-events" role="list">Aucune transaction simulée.</div>
                 </section>
