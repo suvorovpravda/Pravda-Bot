@@ -440,6 +440,19 @@ textarea:focus-visible, input:focus-visible {
 .shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .feature-grid {
     display: none;
 }
+
+/* Markets exposes the existing, Rust-consent-gated Revolut controls.
+   Never duplicate the checkbox or button: both have one native IPC handler. */
+.shell[data-active-tab="markets"] .terminal-cockpit .feature-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+}
+.shell[data-active-tab="markets"] .terminal-cockpit .feature-grid > :not(.revolut-controls) {
+    display: none;
+}
+.shell[data-active-tab="markets"] .terminal-cockpit .feature-grid .revolut-controls {
+    grid-column: 1 / -1;
+}
 .shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .terminal-extras {
     max-height: none;
     overflow: visible;
