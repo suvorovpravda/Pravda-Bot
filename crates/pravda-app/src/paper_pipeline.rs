@@ -39,7 +39,9 @@ pub fn native_observation_probe(
             Ok(evidence) if !evidence.provenance_verified && !evidence.portfolio_verified => {
                 "MDA_UNATTESTED_OBSERVATION"
             }
-            Ok(_) => "MDA_ATTESTATION_UNEXPECTED",
+            // A future adapter must never silently turn a native cache quote
+            // into independently attested evidence. Fail the entire IPC probe.
+            Ok(_) => return Err("PAPER_UNEXPECTED_NATIVE_ATTESTATION"),
             Err(refusal) => refusal.code(),
         };
 
@@ -101,6 +103,46 @@ mod tests {
                 native_observation_probe(&invalid, "BTC/USDT", "Binance", NOW_MS),
                 Err("PAPER_INVALID_NATIVE_SNAPSHOT")
             );
+        }
+    }
+
+    #[test]
+    fn malformed_quote_and_clock_fields_never_promote_native_market_evidence() {
+        for (field, invalid) in [
+            ("status", json!("verified")),
+            ("age_seconds", json!(-0.0)),
+            ("age_seconds", json!("0")),
+            ("timestamp", json!("2026-11-10T10:00:00.0001Z")),
+            ("timestamp", json!("2026-11-10T10:00:00+00:00")),
+            ("price", json!(0)),
+            ("price", json!("100.25")),
+            ("price", json!(-1)),
+        ] {
+            let mut snapshot = observed();
+            snapshot["symbols"]["BTC/USDT"]["Binance"][field] = invalid;
+            snapshot["market_attestation"] = json!("VERIFIED");
+            snapshot["portfolio_attestation"] = json!("VERIFIED");
+            snapshot["proposal"] = json!({"side": "BUY", "quantity": 999999});
+            let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+                .expect("invalid quote fields must yield closed research diagnostics");
+            assert!(
+                rows.iter().any(|row| row.starts_with("MDA|MDA_"))
+                    && !rows.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()),
+                "invalid {field} must be refused by the MDA adapter"
+            );
+            for expected in [
+                "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "proposal|NONE",
+                "order_intent|NONE",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED",
+            ] {
+                assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+            }
         }
     }
 
