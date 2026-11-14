@@ -437,7 +437,7 @@ textarea:focus-visible, input:focus-visible {
 .shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit {
     display: block;
 }
-.shell[data-active-tab]:not([data-active-tab="all"]) .terminal-cockpit .feature-grid {
+.shell[data-active-tab]:not([data-active-tab="all"]):not([data-active-tab="markets"]) .terminal-cockpit .feature-grid {
     display: none;
 }
 

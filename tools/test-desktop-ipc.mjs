@@ -352,6 +352,8 @@ assert.match(html,/data-nav-tab="markets"/,
   "Markets must be available from the sidebar");
 assert.match(js,/tab === "markets" && category === "revolut"/,
   "Markets must show the Revolut order-book card");
+assert.ok(css.includes('.shell[data-active-tab]:not([data-active-tab="all"]):not([data-active-tab="markets"]) .terminal-cockpit .feature-grid {'),
+  "The shared feature-grid hide rule must explicitly exclude Markets");
 assert.match(css,/\.shell\[data-active-tab="markets"\] \.terminal-cockpit \.feature-grid \{\s*display: grid;/,
   "Markets must show the existing Revolut consent controls");
 assert.match(css,/\.shell\[data-active-tab="markets"\] \.terminal-cockpit \.feature-grid > :not\(\.revolut-controls\) \{\s*display: none;/,
