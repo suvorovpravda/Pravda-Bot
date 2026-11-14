@@ -245,6 +245,43 @@ async function api(path) {
   return response.json();
 }
 
+/**
+ * Read exactly the status contexts configured in the active ruleset.
+ * The whole check-runs collection is polluted by skipped status/live workflow
+ * runs: requesting only its first 100 entries creates false MISSING states.
+ * A failed or incomplete page must produce UNKNOWN, never a fabricated PASS.
+ * fetchPage is injected to unit-test pagination without GitHub credentials.
+ */
+export async function fetchGovernanceChecks(policy, fetchPage) {
+  if(!policy) return null;
+  const required=policy.rules?.find(rule=>rule.type==="required_status_checks")
+    ?.parameters?.required_status_checks;
+  if(!Array.isArray(required)) return {check_runs:[]};
+  const names=[...new Set(required.map(item=>item?.context))];
+  if(names.length>32 || names.some(name=>typeof name!=="string" ||
+    !name.trim() || name.length>200)) throw Error("INVALID_REQUIRED_CHECK_CONTEXTS");
+  const collected=[];
+  for(const name of names) {
+    let expectedTotal=null;
+    for(let page=1; page<=10; page++) {
+      const response=await fetchPage(name,page);
+      const count=response?.total_count;
+      const rows=response?.check_runs;
+      if(!Number.isSafeInteger(count) || count<0 || count>1000 ||
+        !Array.isArray(rows) || rows.length>100 ||
+        rows.length!==Math.min(100,Math.max(0,count-(page-1)*100)) ||
+        (expectedTotal!==null && expectedTotal!==count)) {
+        throw Error("INCOMPLETE_GOVERNANCE_CHECK_EVIDENCE");
+      }
+      expectedTotal=count;
+      collected.push(...rows);
+      if(page*100>=count) break;
+      if(rows.length!==100 || page===10) throw Error("INCOMPLETE_GOVERNANCE_CHECK_EVIDENCE");
+    }
+  }
+  return {check_runs:collected};
+}
+
 async function loadGithub(repo, branch) {
   assert.match(repo,/^[\w.-]+\/[\w.-]+$/);
   assert.equal(branch,"main","Live status always reads canonical main");
@@ -254,6 +291,7 @@ async function loadGithub(repo, branch) {
   assert.ok(commits.length,"Cannot infer source SHA without canonical commit history");
   const source=commits.find(c=>!/^docs\(live\):/.test(c.commit?.message||""));
   assert.ok(source?.sha && /^[a-f0-9]{40}$/.test(source.sha),"No verifiable non-status main source commit");
+  const policyPromise=api(prefix+"/rulesets/26400957").catch(()=>null);
   const requests=[
     ...WORKFLOWS.map(w=>api(prefix+"/actions/workflows/"+encodeURIComponent(w.id)+"/runs?branch=main&per_page=14")
       .then(x=>[w.id,x.workflow_runs||[]])),
@@ -261,9 +299,11 @@ async function loadGithub(repo, branch) {
     api(prefix+"/issues?state=open&per_page=100").then(x=>["issues",x]),
     // Public ruleset and Checks API are read-only. If permissions or an API
     // endpoint are unavailable, the published state becomes UNKNOWN, not PASS.
-    api(prefix+"/rulesets/26400957").catch(()=>null).then(x=>["policy",x]),
-    api(prefix+"/commits/"+source.sha+"/check-runs?per_page=100").catch(()=>null)
-      .then(x=>["checkRuns",x])
+    policyPromise.then(x=>["policy",x]),
+    policyPromise.then(policy=>fetchGovernanceChecks(policy,(name,page)=>
+      api(prefix+"/commits/"+source.sha+"/check-runs?check_name="+
+        encodeURIComponent(name)+"&per_page=100&page="+page)))
+      .catch(()=>null).then(x=>["checkRuns",x])
   ];
   const entries=await Promise.all(requests);
   const data=Object.fromEntries(entries);
@@ -293,7 +333,7 @@ function put(path,content) {
   }
   return true;
 }
-function runTests(){
+async function runTests(){
   // Validate atomic replacement, idempotence and cleanup with local fixtures.
   const sandbox=mkdtempSync(join(tmpdir(),"pravda-live-status-test-"));
   try {
@@ -371,6 +411,38 @@ function runTests(){
   const checksOk={check_runs:requiredRules.rules[1].parameters.required_status_checks
     .map(x=>({name:x.context,app:{id:x.integration_id},started_at:"2026-11-10T01:00:00Z",head_sha:"a".repeat(40),
       status:"completed",conclusion:"success"}))};
+  // Regression: 204 skipped cockpit check-runs precede the actual contexts.
+  // Query required names, not the unfiltered page that returns those skips.
+  const requestedNames=[];
+  const scoped=await fetchGovernanceChecks(requiredRules,async(name,page)=>{
+    requestedNames.push([name,page]);
+    const match=checksOk.check_runs.find(row=>row.name===name);
+    return {total_count:1,check_runs:[match]};
+  });
+  assert.deepEqual(requestedNames.map(([name])=>name),
+    requiredRules.rules[1].parameters.required_status_checks.map(item=>item.context));
+  assert.equal(requestedNames.length,3);
+  assert.equal(evaluateGovernance(requiredRules,scoped,"a".repeat(40)).state,"PASS");
+  // More than 100 runs for ONE required context must also be paginated.
+  const firstHundred=Array.from({length:100},()=>({...checksOk.check_runs[0],
+    started_at:"2026-11-09T01:00:00Z",conclusion:"failure"}));
+  const pageCalls=[];
+  const multiPage=await fetchGovernanceChecks({...requiredRules,rules:[
+    requiredRules.rules[0],
+    {...requiredRules.rules[1],parameters:{
+      ...requiredRules.rules[1].parameters,
+      required_status_checks:[requiredRules.rules[1].parameters.required_status_checks[0]]
+    }}
+  ]},async(name,page)=>{
+    pageCalls.push(page);
+    return {total_count:101,check_runs:page===1?firstHundred:[checksOk.check_runs[0]]};
+  });
+  assert.deepEqual(pageCalls,[1,2]);
+  assert.equal(multiPage.check_runs.length,101);
+  await assert.rejects(()=>fetchGovernanceChecks(requiredRules,async(name,page)=>
+    name==="CodeQL"?{total_count:101,check_runs:firstHundred}:{
+      total_count:1,check_runs:checksOk.check_runs.filter(row=>row.name===name)
+    }),/INCOMPLETE_GOVERNANCE_CHECK_EVIDENCE/);
   const governance=evaluateGovernance(requiredRules,checksOk,"a".repeat(40));
   assert.equal(governance.state,"PASS");
   assert.equal(governance.checks.length,3);
