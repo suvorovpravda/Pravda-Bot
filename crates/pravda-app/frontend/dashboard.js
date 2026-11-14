@@ -375,6 +375,7 @@ const translations = {
         // the cached payload: applyLanguage() can otherwise replay its old
         // freshness flags and make an unavailable quote look recent again.
         latestMarket = null;
+        if (typeof clearHomeMarket === "function") clearHomeMarket();
         document.querySelectorAll(".watchlist-row").forEach(button => {
             button.dataset.freshness = "unavailable";
             button.querySelector(".watch-price").textContent = "—";
@@ -387,6 +388,11 @@ const translations = {
     }
     function clearMarketSession() {
         clearMarketSnapshot();
+        $("home-runtime").textContent = "Runtime non vérifié";
+        $("home-source-count").textContent = "Connecteurs : en attente d’une réponse Rust";
+        $("home-infra-summary").textContent = "Sources non vérifiées";
+        if (typeof setSidebarState === "function")
+            setSidebarState("sources", "unknown", "Nouvelle session : sources non relues");
         latestFx = null;
         historicalPoints = [];
         $("fx-rates").textContent = t("fxFailure");
@@ -439,6 +445,7 @@ const translations = {
     }
     function renderMarket(payload) {
         latestMarket = payload;
+        updateHomeMarket(payload);
         if (typeof checkLocalAlerts === "function") checkLocalAlerts();
         const symbols = payload.symbols || {};
         const rows = [];
@@ -654,6 +661,7 @@ const translations = {
         const list = $("source-status-list");
         list.replaceChildren();
         const sources = payload.sources || [];
+        updateHomeSources(payload);
         setStatus($("sources-status"), sources.some(source => source.status === "unavailable") ? "stale" : "live", `${sources.length}`);
         for (const source of sources) {
             const row = document.createElement("div");
@@ -677,11 +685,16 @@ const translations = {
     async function refreshSources() {
         const requestGeneration = window.pravdaAuthGeneration;
         try {
-            renderSources(await fetchJson("/api/sources"));
+            const snapshot = await fetchJson("/api/sources");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            renderSources(snapshot);
         } catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("sources-status"), "error", t("sourceUnavailable"));
             $("source-status-list").textContent = t("unavailableFeed");
+            $("home-source-count").textContent = "Connecteurs : lecture indisponible";
+            $("home-infra-summary").textContent = "Sources non vérifiées";
+            setSidebarState("sources", "blocked", "Lecture indisponible");
         }
     }
 
@@ -953,16 +966,21 @@ const translations = {
         const requestGeneration = window.pravdaAuthGeneration;
         try {
             const d = await fetchJson("/api/metrics");
+            if (requestGeneration !== window.pravdaAuthGeneration) return;
             const fmt=(v,unit="")=>Number.isFinite(v)?numericFormat(v)+unit:"—";
             $("runtime-cpu").textContent=fmt(d.cpu_percent,"%");
             $("runtime-ram").textContent=fmt(d.memory_usage_mb," MiB");
             $("runtime-uptime").textContent=fmt(d.uptime_seconds," s");
             $("runtime-pid").textContent=d.pid??"—";
+            $("home-runtime").textContent = d.status === "available" && Number.isFinite(d.uptime_seconds)
+                ? "Runtime Rust · " + numericFormat(d.uptime_seconds) + " s depuis démarrage"
+                : "Runtime partiellement vérifié";
             setStatus($("runtime-status"),d.status==="available"?"live":"pending",
                 d.status==="available"?"Mesures locales":"Mesures partielles");
         } catch (error) {
             if (requestGeneration !== window.pravdaAuthGeneration) return;
             setStatus($("runtime-status"),"error","Diagnostic indisponible");
+            $("home-runtime").textContent = "Runtime non vérifié";
         }
     }
     // Never request protected diagnostics in the background after logout.
@@ -1102,6 +1120,7 @@ const translations = {
     };
     function clearAcceptanceUi() {
         acceptanceRuns = 0;
+        setSidebarState("tests", "unknown", "Campagne non exécutée pendant cette session");
         $("acceptance-results").textContent = "Aucun résultat disponible.";
         $("acceptance-status").textContent = "Aucune campagne lancée.";
         $("acceptance-json").value = "Aucun rapport généré.";
@@ -1154,6 +1173,8 @@ const translations = {
                 nodes.push(item);
             }
             $("acceptance-results").replaceChildren(...nodes);
+            setSidebarState("tests", blocked > 0 ? "blocked" : unknown > 0 ? "warning" : "verified",
+                `${verified} vérifiés, ${blocked} échecs, ${unknown} non vérifiés`);
             const finishedAt = new Date();
             $("acceptance-status").textContent =
                 (phase === "preproduction" ? "Préproduction" : "Postproduction") +
@@ -1172,6 +1193,7 @@ const translations = {
             $("acceptance-results").textContent = "Rapport non disponible.";
             $("acceptance-status").textContent = "Échec de contrôle. Aucun PASS déduit.";
             $("acceptance-json").value = "Aucun rapport valide généré.";
+            setSidebarState("tests", "blocked", "Rapport non disponible");
         } finally {
             acceptanceBusy = false;
             $("acceptance-pre").disabled = false;
@@ -1321,6 +1343,7 @@ const translations = {
             state.events.length > 20) throw new Error("INVALID_PAPER_RESULT");
         $("paper-summary").textContent =
             "Solde : " + paperFormat(state.cash) + " · Équité : " + paperFormat(state.equity);
+        $("home-paper-value").textContent = "Équité : " + paperFormat(state.equity) + " · Solde : " + paperFormat(state.cash);
         const positions = ["BTC","ETH","SOL"].map(symbol => {
             const node = document.createElement("div");
             node.textContent = symbol + " · " + (state.positions[symbol] / 1000).toFixed(3)
@@ -1343,6 +1366,9 @@ const translations = {
     }
     function clearPaperUi() {
         $("paper-summary").textContent = "Portefeuille fictif non chargé.";
+        $("home-paper-value").textContent = "Portefeuille fictif non chargé";
+        $("home-paper-state").textContent = "Coupe-circuit non vérifié";
+        setSidebarState("paper", "unknown", "Session PAPER non vérifiée");
         $("paper-positions").textContent = "Positions fictives non chargées.";
         $("paper-events").textContent = "Aucune transaction simulée chargée.";
         $("paper-notice").textContent = "Simulation disponible après authentification.";
@@ -1382,20 +1408,38 @@ const translations = {
         return messages[String(error)] || "Simulation locale indisponible.";
     }
     async function refreshPaper(explicit = false) {
+        // Bounded, sensitive-data-free markers only while initial P14 navigation
+        // is active. No retries, awaits, IPC payloads, or auth decisions added.
+        markNavigationBootPhase("P14G-paper1a");
         const generation = window.pravdaAuthGeneration;
+        markNavigationBootPhase("P14G-paper1b");
         const controlGeneration = paperControlGeneration;
+        markNavigationBootPhase("P14G-paper1c");
         const refreshNumber = ++paperRefreshNumber;
+        markNavigationBootPhase("P14G-paper1d");
         const isCurrent = () => generation === window.pravdaAuthGeneration
             && controlGeneration === paperControlGeneration && !paperStopInFlight
             && refreshNumber === paperRefreshNumber;
-        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) return;
+        markNavigationBootPhase("P14G-paper1e");
+        if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) {
+            markNavigationBootPhase("P14G-paper1f");
+            return;
+        }
+        markNavigationBootPhase("P14G-paper1g");
         try {
+            markNavigationBootPhase("P14G-paper1h");
             const rows = await window.pravdaInvoke("ipc_paper_snapshot");
+            markNavigationBootPhase("P14G-paper1i");
             if (!isCurrent()) return;
             renderPaper(rows);
             const control = await window.pravdaInvoke("ipc_paper_control_status");
             if (!isCurrent()) return;
             paperStopped = !control.includes("stopped|false");
+            $("home-paper-state").textContent = paperStopped
+                ? "Moteur PAPER arrêté · aucune opération autorisée"
+                : "Simulation locale réarmée · trading réel interdit";
+            setSidebarState("paper", paperStopped ? "blocked" : "warning",
+                paperStopped ? "Moteur PAPER arrêté" : "Moteur PAPER local réarmé (non homologué)");
             $("paper-trade").disabled = paperStopped;
             $("paper-control-status").textContent = paperStopped
                 ? "ARRÊTÉ · nouveau trade interdit."
@@ -1404,11 +1448,14 @@ const translations = {
                 ? "Simulation suspendue par le coupe-circuit Rust."
                 : "Mode PAPER ONLY · prix fixes synthétiques · aucune connexion au marché.";
         } catch (error) {
+            markNavigationBootPhase("P14G-paper1j");
             if (!isCurrent()) return;
             $("paper-notice").textContent = paperMessage(error);
             paperStopped = true;
             $("paper-trade").disabled = true;
             $("paper-control-status").textContent = "INCONNU · simulation bloquée.";
+            $("home-paper-state").textContent = "État du moteur inconnu · simulation bloquée";
+            setSidebarState("paper", "blocked", "État du moteur inconnu");
         }
     }
     async function paperAction(command, args = {}) {
@@ -1896,44 +1943,196 @@ const translations = {
     void refreshSystem();
     setInterval(refreshSystem, 10000);
     
-    // Tabs filtering
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    const allCards = () => Array.from(document.querySelectorAll('.card[data-category]'));
-    function applyTab(tab){
-        // Let CSS widen the chosen module instead of keeping empty sidebars.
-        document.querySelector(".shell").dataset.activeTab = tab;
-        tabButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.tab===tab));
-        const cards = allCards();
-        if(tab==='all'){
-            cards.forEach(c=>c.classList.remove('hidden'));
-        } else {
-            cards.forEach(c=>{
-                const cat = c.dataset.category;
-                if(cat===tab) c.classList.remove('hidden');
-                else c.classList.add('hidden');
-            });
+
+    // Read-only UI helpers. Never infer independently attested provenance
+    // from an observed quote; no navigation action can place even a PAPER trade.
+    function setSidebarState(module, state, explanation) {
+        const dot = document.querySelector(`.sidebar-state[data-module="${module}"]`);
+        if (!dot) return;
+        if (!["unknown", "warning", "blocked", "verified"].includes(state)) return;
+        dot.dataset.state = state;
+        dot.title = explanation;
+        dot.setAttribute("aria-label", explanation);
+    }
+    function clearHomeMarket() {
+        $("home-market-rows").textContent = "Observations indisponibles depuis cette session.";
+        setSidebarState("markets", "blocked", "Aucune cotation récente disponible");
+    }
+    function updateHomeMarket(payload) {
+        const nodes = [];
+        let observed = false;
+        const symbols = payload && typeof payload === "object" ? payload.symbols || {} : {};
+        for (const symbol of ["BTC/USDT", "ETH/USDT", "SOL/USDT"]) {
+            const quotes = symbols[symbol] || {};
+            const selected = ["Binance", "Kraken"]
+                .map(venue => ({ venue, quote: quotes[venue] }))
+                .find(({quote}) => quote && quote.status === "live" &&
+                    Number.isFinite(quote.price) && quote.price > 0 &&
+                    Number.isFinite(quote.age_seconds) && quote.age_seconds >= 0 &&
+                    quote.age_seconds <= 60 && Number.isFinite(Date.parse(quote.timestamp)) &&
+                    Date.parse(quote.timestamp) <= Date.now() + 1000);
+            const row = document.createElement("div");
+            row.className = "home-market-row";
+            const name = document.createElement("strong");
+            name.textContent = symbol;
+            const observation = document.createElement("span");
+            if (selected) {
+                observed = true;
+                observation.textContent = numericFormat(selected.quote.price) + " USDT · " +
+                    selected.venue + " · observation récente non attestée";
+            } else {
+                observation.textContent = "Cotations absentes ou périmées";
+            }
+            row.append(name, observation);
+            nodes.push(row);
         }
-        // Keep general cards visible
-        document.querySelectorAll('.card.secondary-card:not([data-category])').forEach(c=>c.classList.remove('hidden'));
-        if (tab === "markets" || tab === "all") {
-            requestAnimationFrame(drawPriceChart);
+        $("home-market-rows").replaceChildren(...nodes);
+        setSidebarState("markets", observed ? "warning" : "blocked",
+            observed ? "Cotations observées, provenance non attestée" : "Aucune cotation récente");
+    }
+    function updateHomeSources(payload) {
+        const sources = Array.isArray(payload?.sources) ? payload.sources : [];
+        if (!sources.length) {
+            $("home-source-count").textContent = "Connecteurs : aucune liste vérifiée";
+            $("home-infra-summary").textContent = "Sources non vérifiées";
+            setSidebarState("sources", "unknown", "Aucune réponse du catalogue");
+            return;
         }
-        if (tab === "security") {
-            void refreshSecurity(true);
-            void refreshSecurityEvents();
-            void refreshPaper(true);
+        const freshEvents = sources.filter(source => {
+            const date = Date.parse(source.last_event_at);
+            return source.status === "live" && Number.isFinite(date) &&
+                date <= Date.now() && Date.now() - date <= 60_000;
+        }).length;
+        $("home-source-count").textContent = sources.length +
+            " sources listées · " + freshEvents + " publications récentes (connexion non attestée)";
+        $("home-infra-summary").textContent = sources.length +
+            " sources listées ; contrôles individuels dans Sources";
+        setSidebarState("sources", "warning", "Catalogue reçu ; fraîcheur et connexion à confirmer");
+    }
+    // Existing filtered pages are kept intact. Missing registry-backed pages
+    // remain explicitly unverified; do not create sample risk or AI data.
+    const uiPageMeta = {
+        home: ["Accueil", "État du pilote, observations et alertes sans données inventées"],
+        markets: ["Marchés", "Cotations publiques, graphiques et historique"],
+        paper: ["PAPER Trading", "Simulation fictive isolée et coupe-circuit Rust"],
+        "risk-review": ["Risques", "REG / SS / ARCH · autorisation non vérifiée"],
+        agents: ["Agents IA", "Sept rôles · décisions attestées uniquement"],
+        risks: ["Veille", "Actualités et informations publiées"],
+        energy: ["Énergie", "Gaz européen et observations ENTSOG"],
+        ais: ["Maritime AIS", "Positions uniquement si la source est disponible"],
+        sources: ["Sources", "Fournisseurs, provenance et fraîcheur"],
+        tests: ["Centre de tests", "Contrôles exécutés et vérifications manuelles distinctes"],
+        journals: ["Journaux", "Événements locaux non sensibles"],
+        settings: ["Paramètres", "Mises à jour et configuration locale"],
+        revolut: ["Revolut X", "Carnet public en lecture seule"],
+        system: ["Système", "CPU, mémoire et état local"],
+        security: ["Sécurité", "Centre de contrôle historique"]
+    };
+    const sidebarButtons = Array.from(document.querySelectorAll(".sidebar-link[data-nav-tab]"));
+    const collapseButton = $("sidebar-collapse");
+    collapseButton.addEventListener("click", () => {
+        const collapsed = document.querySelector(".shell").dataset.sidebarCollapsed !== "true";
+        document.querySelector(".shell").dataset.sidebarCollapsed = String(collapsed);
+        collapseButton.setAttribute("aria-pressed", String(collapsed));
+        collapseButton.setAttribute("aria-label",
+            collapsed ? "Déployer la navigation" : "Réduire la navigation");
+        collapseButton.title = collapsed ? "Déployer la navigation" : "Réduire la navigation";
+    });
+
+    // Route existing authenticated modules without reloading the Rust/WebView session.
+    const tabButtons = document.querySelectorAll(".tab-btn");
+    const allCards = () => Array.from(document.querySelectorAll(".card[data-category]"));
+    // A bounded, allowlisted bootstrap phase identifies which synchronous
+    // DOM/navigation step fails in installed WebView2. Never emit user data,
+    // exception messages, or a call stack; phases change only during P14.
+    function markNavigationBootPhase(phase) {
+        if (window.pravdaDashboardReady !== true &&
+            /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper(?:[1-2]|1[a-j])|tests[1-2]|journals[1-2]|revolut))?$/.test(window.pravdaDashboardPhase)) {
+            window.pravdaDashboardPhase = phase;
         }
     }
-    const knownTabs = new Set(Array.from(tabButtons,btn=>btn.dataset.tab));
-    const tabFromHash=()=>{const route=window.location.hash.slice(2);return knownTabs.has(route)?route:"all";};
-    tabButtons.forEach(btn=>btn.addEventListener("click",()=>{
-        const route=btn.dataset.tab;
-        window.location.hash="/"+route;
-        applyTab(route);
-        document.querySelector(".tabs")?.scrollIntoView({block:"nearest",behavior:"smooth"});
-        if(route==="revolut") void refreshRevolut();
-    }));
-    window.addEventListener("hashchange",()=>applyTab(tabFromHash()));
+    function applyTab(requestedTab) {
+        markNavigationBootPhase("P14A"); // route validation
+        const tab = requestedTab === "all" ? "home" : requestedTab;
+        if (!Object.hasOwn(uiPageMeta, tab)) return;
+        markNavigationBootPhase("P14B"); // page title and placeholders
+        document.querySelector(".shell").dataset.activeTab = tab;
+        const [title, description] = uiPageMeta[tab];
+        $("ui-page-title").textContent = title;
+        $("ui-page-description").textContent = description;
+        $("ui-agents-placeholder").hidden = tab !== "agents";
+        $("ui-risk-placeholder").hidden = tab !== "risk-review";
+        markNavigationBootPhase("P14C"); // sidebar links
+        sidebarButtons.forEach(btn => {
+            const active = btn.dataset.navTab === tab;
+            btn.classList.toggle("active", active);
+            if (active) btn.setAttribute("aria-current", "page");
+            else btn.removeAttribute("aria-current");
+        });
+        markNavigationBootPhase("P14D"); // legacy tab buttons
+        tabButtons.forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
+        markNavigationBootPhase("P14E"); // card filtering
+        const securitySubroute = ["paper", "tests", "journals", "settings"].includes(tab);
+        const targetCategory = securitySubroute ? "security" : tab;
+        allCards().forEach(card => {
+            const category = card.dataset.category;
+            const visible = tab !== "home" && tab !== "agents" && tab !== "risk-review" &&
+                (category === targetCategory || (tab === "markets" && category === "revolut"));
+            card.classList.toggle("hidden", !visible);
+        });
+        markNavigationBootPhase("P14F"); // chart request
+        if (tab === "markets") requestAnimationFrame(drawPriceChart);
+        markNavigationBootPhase("P14G"); // authenticated read-only refresh
+        // Bounded, non-sensitive trace of the synchronous call sites. These
+        // markers do not await, retry, or change any PAPER/auth decision.
+        // Preserve the legacy security route and its complete IPC refresh
+        // contract while the new category-specific pages are introduced.
+        if (tab === "security") {
+            markNavigationBootPhase("P14G-sec1");
+            void refreshSecurity(true);
+            markNavigationBootPhase("P14G-sec2");
+            void refreshSecurityEvents();
+            markNavigationBootPhase("P14G-sec3");
+            void refreshPaper(true);
+            markNavigationBootPhase("P14G-sec4");
+        } else {
+            markNavigationBootPhase("P14G-else1");
+            if (tab === "paper" || tab === "home") {
+                markNavigationBootPhase("P14G-paper1");
+                void refreshPaper(true);
+                markNavigationBootPhase("P14G-paper2");
+            }
+            markNavigationBootPhase("P14G-else2");
+            if (tab === "tests") {
+                markNavigationBootPhase("P14G-tests1");
+                void refreshSecurity(true);
+                markNavigationBootPhase("P14G-tests2");
+            }
+            markNavigationBootPhase("P14G-else3");
+            if (tab === "journals") {
+                markNavigationBootPhase("P14G-journals1");
+                void refreshSecurityEvents();
+                markNavigationBootPhase("P14G-journals2");
+            }
+        }
+        markNavigationBootPhase("P14G-revolut");
+        if (tab === "revolut") void refreshRevolut();
+        markNavigationBootPhase("P14H"); // reached end of first navigation
+        // No physical installation/upgrade test is claimed by this navigation.
+    }
+    const knownTabs = new Set([...Object.keys(uiPageMeta), "all"]);
+    const tabFromHash = () => {
+        const route = window.location.hash.slice(2);
+        return knownTabs.has(route) ? (route === "all" ? "home" : route) : "home";
+    };
+    const navigate = route => {
+        if (!knownTabs.has(route)) return;
+        if (window.location.hash === "#/" + route) applyTab(route);
+        else window.location.hash = "/" + route;
+    };
+    sidebarButtons.forEach(btn => btn.addEventListener("click", () => navigate(btn.dataset.navTab)));
+    tabButtons.forEach(btn => btn.addEventListener("click", () => navigate(btn.dataset.tab)));
+    window.addEventListener("hashchange", () => applyTab(tabFromHash()));
     window.pravdaDashboardPhase = "P14";
     applyTab(tabFromHash());
 

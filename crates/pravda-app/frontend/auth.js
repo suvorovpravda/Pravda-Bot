@@ -106,7 +106,7 @@ function showDashboardStartupFailure(code) {
     bootPhase.setAttribute("aria-label", "Phase de démarrage du tableau de bord");
     const phase = window.pravdaDashboardPhase;
     bootPhase.value = "PRAVDA-UI-PHASE|" +
-        (typeof phase === "string" && /^P(?:0[0-9]|1[0-5]|02[A-I]|03[A-C])$/.test(phase) ? phase : "PXX");
+        (typeof phase === "string" && /^P(?:0[0-9]|1[0-5]|02[A-I]|03[A-C]|14[A-H]|14G-(?:sec[1-4]|else[1-3]|paper(?:[1-2]|1[a-j])|tests[1-2]|journals[1-2]|revolut))$/.test(phase) ? phase : "PXX");
     bootPhase.addEventListener("focus", () => bootPhase.select());
     const safeCause = document.createElement("input");
     safeCause.className = "ipc-startup-cause";
