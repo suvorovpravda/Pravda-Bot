@@ -32,9 +32,9 @@
 <text x="106" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >RUST / WINDOWS + LINUX</text>
 <text x="90" y="385" fill="#54DFC0" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >PASS · 50cfc793bf</text>
 <rect x="450" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
-<circle cx="468" cy="352" r="5" fill="#51D9FB"/>
+<circle cx="468" cy="352" r="5" fill="#FF668D"/>
 <text x="483" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >MSI / NSIS INSTALLER</text>
-<text x="467" y="385" fill="#51D9FB" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >RUNNING · 50cfc793bf</text>
+<text x="467" y="385" fill="#FF668D" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >FAIL · 50cfc793bf</text>
 <rect x="827" y="331" width="355" height="77" rx="20" fill="#1D2443" stroke="#41476E"/>
 <circle cx="845" cy="352" r="5" fill="#54DFC0"/>
 <text x="860" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >CODEQL / ANALYSE</text>
@@ -43,6 +43,6 @@
 <circle cx="1222" cy="352" r="5" fill="#54DFC0"/>
 <text x="1237" y="358" fill="#F3F5FF" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="750" >RUSTSEC / AUDIT BLOQUANT</text>
 <text x="1221" y="385" fill="#54DFC0" font-family="Segoe UI,Arial,sans-serif" font-size="15" font-weight="700" >PASS · 50cfc793bf</text>
-<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-14 03:59 UTC   ·   LATEST MAIN EVIDENCE  2026-11-14 03:58 UTC   ·   MAIN SHA  50cfc793bf</text>
+<text x="73" y="448" fill="#A6B5D5" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="650" >SYNC  2026-11-14 04:15 UTC   ·   LATEST MAIN EVIDENCE  2026-11-14 04:15 UTC   ·   MAIN SHA  50cfc793bf</text>
 <text x="1316" y="448" fill="#65DDBA" font-family="Segoe UI,Arial,sans-serif" font-size="14" font-weight="730" >LIVE ORDERS  OFF</text>
 </svg>
