@@ -140,9 +140,14 @@ mod tests {
         ] {
             assert!(rows.iter().any(|row| row == required), "missing {required}");
         }
-        assert!(!rows.iter().any(|row| row.contains("APPROVED")
-            || row.contains("ORDER_READY")
-            || row.contains("VERIFIED")));
+        // UNVERIFIED is an intentional closed-state diagnostic; substring
+        // matching VERIFIED would incorrectly reject that safe output.
+        // Match only positive verdicts, not their negated status labels.
+        assert!(!rows.iter().any(|row| row == "verdict|APPROVED"
+            || row == "market_attestation|VERIFIED"
+            || row == "portfolio_attestation|VERIFIED"
+            || row == "proposal|ORDER_READY"
+            || row == "execution|ENABLED"));
     }
 
     #[test]
