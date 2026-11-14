@@ -80,9 +80,9 @@ for(const [kind,endpoint,params] of requests){
         const paging=data.paging;
         if(!Array.isArray(data.components)||!paging||!Number.isSafeInteger(paging.total)||paging.total<0)
           throw Error('invalid SonarCloud duplication measures schema');
-        if(paging.pageIndex!==undefined && paging.pageIndex!==page)
+        if(paging.pageIndex!==page)
           throw Error('SonarCloud duplication page index mismatch');
-        if(paging.pageSize!==undefined && paging.pageSize!==Number(params.ps))
+        if(paging.pageSize!==Number(params.ps))
           throw Error('SonarCloud duplication page size mismatch');
         if(expected===null)expected=paging.total;
         if(paging.total!==expected)throw Error('SonarCloud duplication total changed during pagination');
