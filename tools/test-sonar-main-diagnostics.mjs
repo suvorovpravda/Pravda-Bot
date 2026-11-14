@@ -56,7 +56,7 @@ try{
   console.log=()=>{};
   const failed=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:false,status:503};
-    return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0}})};
+    return {ok:true,status:200,json:async()=>({component:{measures:[]},components:[],paging:{total:0,pageIndex:1,pageSize:500}})};
   });
   assert.equal(failed,false,'required issue API failure must fail the diagnostic');
   const succeeded=await main(async url=>{
@@ -108,6 +108,13 @@ try{
     ]})};
   });
   assert.equal(malformedMeasures,false,'malformed component measures must fail closed');
+  // Missing pagination metadata can conceal a repeated first page.
+  const missingPageMetadata=await main(async url=>{
+    if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
+    if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
+    return {ok:true,status:200,json:async()=>({paging:{total:1},components:[{key:'file',measures:[]}]})};
+  });
+  assert.equal(missingPageMetadata,false,'missing duplication page index/size must fail closed');
   const shortDuplication=await main(async url=>{
     if(url.pathname==='/api/issues/search')return {ok:true,json:async()=>({total:0,issues:[]})};
     if(url.pathname==='/api/measures/component')return {ok:true,status:200,json:async()=>({component:{measures:[]}})};
