@@ -444,4 +444,35 @@ mod tests {
             assert!(!rows.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()));
         }
     }
+    #[test]
+    fn offline_market_stream_blocks_every_allowlisted_selector() {
+        // A cached quote cannot authorize research decisions after the
+        // native stream reports offline, regardless of selector or forged flags.
+        let mut snapshot = observed();
+        snapshot["stream_state"] = json!("offline");
+        snapshot["market_attestation"] = json!("VERIFIED");
+        snapshot["portfolio_attestation"] = json!("VERIFIED");
+        snapshot["proposal"] = json!({"side": "BUY", "quantity": 1});
+        for symbol in ["BTC/USDT", "ETH/USDT", "SOL/USDT"] {
+            for venue in ["Binance", "Kraken"] {
+                let rows = native_observation_probe(&snapshot, symbol, venue, NOW_MS)
+                    .expect("offline stream must return closed diagnostics");
+                for expected in [
+                    "MDA|MDA_STREAM_UNAVAILABLE",
+                    "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                    "market_attestation|ABSENT",
+                    "portfolio_attestation|ABSENT",
+                    "proposal|NONE",
+                    "order_intent|NONE",
+                    "GMO|SKIPPED",
+                    "REG|SKIPPED",
+                    "portfolio|UNCHANGED",
+                    "execution|DISABLED",
+                ] {
+                    assert!(rows.iter().any(|row| row == expected), "{symbol} {venue}: missing {expected}");
+                }
+            }
+        }
+    }
+
 }
