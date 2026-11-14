@@ -180,7 +180,7 @@ assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s
 for (const name of ["refreshPaper", "refreshSecurity"]) {
   const exportLine=js.split("\n").find(line=>line.trim().startsWith("window."+name+" = "));
   assert.ok(exportLine, name+": global refresh export must exist");
-  const source="var entered = 0; async function "+name+"(explicit = false) { if (explicit) entered++; }\\n"+exportLine+"\\nwindow."+name+"();";
+  const source="var entered = 0; async function "+name+"(explicit = false) { if (explicit) entered++; }\n"+exportLine+"\nwindow."+name+"();";
   const sandbox={}; sandbox.window=sandbox;
   vm.runInNewContext(source,sandbox,{timeout:1000});
   assert.equal(sandbox.entered,1,name+": exported refresh must invoke original exactly once with explicit=true");
