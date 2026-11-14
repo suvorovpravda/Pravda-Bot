@@ -1462,10 +1462,28 @@ const translations = {
                 venue: "Binance"
             });
             if (generation !== window.pravdaAuthGeneration) return;
-            if (!Array.isArray(rows) || rows.length !== 11
+            // The Rust probe emits 15 rows, including all seven closed role
+            // diagnostics. Reject missing, duplicated or unexpected claims.
+            const required = [
+                "mode|PAPER_RESEARCH_ONLY",
+                "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "proposal|NONE",
+                "order_intent|NONE",
+                "ARCH|UNVERIFIED",
+                "SS|UNVERIFIED",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "IR|HUMAN_REVIEW_REQUIRED",
+                "UCA|UNATTESTED_DATA_ONLY",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED"
+            ];
+            if (!Array.isArray(rows) || rows.length !== 15
                 || rows.some(row => typeof row !== "string" || row.length > 100)
-                || !rows.includes("execution|DISABLED")
-                || !rows.includes("verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE")) {
+                || required.some(code => rows.filter(row => row === code).length !== 1)
+                || rows.filter(row => /^MDA\\|MDA_[A-Z_]+$/.test(row)).length !== 1) {
                 throw new Error("INVALID_PAPER_PROBE");
             }
             status.textContent = rows.join(" · ");
