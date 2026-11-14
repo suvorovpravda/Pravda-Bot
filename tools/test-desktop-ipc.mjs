@@ -175,6 +175,16 @@ assert.match(paperBootScript,/window\.refreshPaper\s*=\s*refreshPaper\.bind\(nul
 // with an arrow that calls its global name causes synchronous stack overflow.
 assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
   "A self-referential window refresh export would overflow the installed WebView2 stack");
+// Runtime regression: evaluate the actual export line as a classic browser script.
+// A self-referential wrapper would synchronously overflow before entering the body.
+for (const name of ["refreshPaper", "refreshSecurity"]) {
+  const exportLine=js.split("\\n").find(line=>line.trim().startsWith("window."+name+" = "));
+  assert.ok(exportLine, name+": global refresh export must exist");
+  const source="var entered = 0; async function "+name+"(explicit = false) { if (explicit) entered++; }\\n"+exportLine+"\\nwindow."+name+"();";
+  const sandbox={}; sandbox.window=sandbox;
+  vm.runInNewContext(source,sandbox,{timeout:1000});
+  assert.equal(sandbox.entered,1,name+": exported refresh must invoke original exactly once with explicit=true");
+}
 assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
   "Authenticated security tab must still fetch paper state on demand");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
