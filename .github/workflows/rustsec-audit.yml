@@ -1,24 +1,12 @@
 name: RustSec dependency audit (blocking)
 
 on:
+  # Every protected-main commit and every PR head must receive a blocking
+  # audit, including JS-only changes; path filters silently skip these SHAs.
   push:
     branches: [main]
-    paths:
-      - 'Cargo.lock'
-      - 'crates/pravda-app/Cargo.lock'
-      - 'Cargo.toml'
-      - '**/Cargo.toml'
-      - '.cargo/audit.toml'
-      - '.github/workflows/rustsec-audit.yml'
   pull_request:
     branches: [main]
-    paths:
-      - 'Cargo.lock'
-      - 'crates/pravda-app/Cargo.lock'
-      - 'Cargo.toml'
-      - '**/Cargo.toml'
-      - '.cargo/audit.toml'
-      - '.github/workflows/rustsec-audit.yml'
   schedule:
     - cron: '17 6 * * *'
   workflow_dispatch:
