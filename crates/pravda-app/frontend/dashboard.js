@@ -2046,6 +2046,18 @@ const translations = {
     // DOM/navigation step fails in installed WebView2. Never emit user data,
     // exception messages, or a call stack; phases change only during P14.
     function markNavigationBootPhase(phase) {
+        // P14G-only diagnostic probe: keep the last 48 static phase attempts in
+        // memory, including calls rejected by the readiness guard. No payloads,
+        // stack traces, credentials, network requests or persistent storage.
+        const shadow = Array.isArray(window.__pravda_debug_phases)
+            ? window.__pravda_debug_phases : (window.__pravda_debug_phases = []);
+        shadow.push({
+            seq: shadow.length ? shadow[shadow.length - 1].seq + 1 : 1,
+            phase,
+            ready: window.pravdaDashboardReady === true,
+            ms: Math.floor(performance.now())
+        });
+        if (shadow.length > 48) shadow.shift();
         if (window.pravdaDashboardReady !== true &&
             /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper(?:[1-2]|1[a-j])|tests[1-2]|journals[1-2]|revolut))?$/.test(window.pravdaDashboardPhase)) {
             window.pravdaDashboardPhase = phase;

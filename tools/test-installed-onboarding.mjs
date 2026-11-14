@@ -65,12 +65,34 @@ const ui = () => evaluate(
     startupCode:document.querySelector('.ipc-startup-recovery input')?.value || '',
     startupPhase:document.querySelector('.ipc-bootstrap-phase')?.value || '',
     startupCause:document.querySelector('.ipc-startup-cause')?.value || '',
+    shadowPresent:Array.isArray(window.__pravda_debug_phases),
+    shadowTrace:Array.isArray(window.__pravda_debug_phases)
+      ? window.__pravda_debug_phases.slice(-48) : [],
     setup:document.querySelector('.ipc-auth-screen button[type=submit]')?.textContent==='Créer mon mot de passe',
     confirmHidden:document.querySelector('.ipc-auth-screen label input[autocomplete=new-password]')?.closest('label')?.hidden===true
   };`
 );
+// Only these static UI phases may enter an artifact or a CI log.
+// Data from window is untrusted: never forward raw script values.
+const allowedShadowPhase =
+  /^P14(?:[A-H]|G-(?:sec[1-4]|else[1-3]|paper(?:[1-2]|1[a-j])|tests[1-2]|journals[1-2]|revolut))?$/;
+function normalizeBootShadowTrace(view) {
+  if (view.shadowPresent !== true || !Array.isArray(view.shadowTrace))
+    return {status:"UNAVAILABLE", entries:[]};
+  const entries = view.shadowTrace.slice(-48).flatMap(entry =>
+    entry && typeof entry.phase === "string" &&
+    allowedShadowPhase.test(entry.phase) &&
+    typeof entry.ready === "boolean" &&
+    Number.isSafeInteger(entry.seq) && entry.seq >= 1 && entry.seq <= 100000 &&
+    Number.isSafeInteger(entry.ms) && entry.ms >= 0 && entry.ms <= 86400000
+      ? [{seq:entry.seq,phase:entry.phase,ready:entry.ready,ms:entry.ms}] : []);
+  return {status:entries.length ? "RECORDED" : "EMPTY", entries};
+}
 function failOnStartupError(view, label) {
   if (!view.startupFailure) return;
+  // Report only a bounded, strictly validated timeline on GUI startup failure.
+  report.bootShadowTrace = normalizeBootShadowTrace(view);
+  console.error("[P14G SHADOW TRACE] " + JSON.stringify(report.bootShadowTrace));
   // Only bounded, allowlisted diagnostics may appear in CI logs.
   const code = /^PRAVDA-UI-STARTUP\|DASHBOARD_(?:SYNTAX|REFERENCE|TYPE|RANGE|RUNTIME|INIT_UNKNOWN|RESOURCE_UNAVAILABLE)(?:_L\d{1,5})?$/.test(view.startupCode)
     ? view.startupCode : "PRAVDA-UI-STARTUP|UNKNOWN";
