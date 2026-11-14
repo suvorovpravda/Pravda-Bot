@@ -359,6 +359,35 @@ mod tests {
     }
 
     #[test]
+    fn forged_approval_with_invalid_market_container_never_promotes_mda() {
+        // Root snapshot can be an object while its symbols map is corrupted.
+        // No untrusted approval flag may repair an invalid market observation.
+        for malformed in [json!(null), json!(false), json!(42), json!("BUY"), json!([])] {
+            let mut snapshot = observed();
+            snapshot["symbols"] = malformed;
+            snapshot["market_attestation"] = json!("VERIFIED");
+            snapshot["portfolio_attestation"] = json!("VERIFIED");
+            snapshot["proposal"] = json!({"side": "BUY", "quantity": 100});
+            let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
+                .expect("corrupted market map must produce a closed diagnostic");
+            assert!(!rows.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()));
+            for expected in [
+                "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "proposal|NONE",
+                "order_intent|NONE",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED",
+            ] {
+                assert!(rows.iter().any(|row| row == expected), "missing {expected}");
+            }
+        }
+    }
+
+    #[test]
     fn malformed_nested_quote_containers_never_reach_gmo_or_reg() {
         // A corrupted native cache shape must not be interpreted as an
         // independently verified market feed, even with forged approvals.
