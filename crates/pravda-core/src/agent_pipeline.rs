@@ -623,9 +623,11 @@ mod tests {
         assert_eq!(report.stages.len(), 7);
         assert_eq!(report.stages[2].role, Role::MarketDataAnalyst);
         assert_eq!(report.stages[2].status, StageStatus::Blocked);
-        assert!(report.stages.iter().enumerate().all(|(i, stage)| {
-            i == 2 || stage.status == StageStatus::Skipped
-        }));
+        assert!(report
+            .stages
+            .iter()
+            .enumerate()
+            .all(|(i, stage)| { i == 2 || stage.status == StageStatus::Skipped }));
         assert_eq!(report.reg_checks_performed, 0);
         assert!(report.reg_rules_violated.is_empty());
     }
