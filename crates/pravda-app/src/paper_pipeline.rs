@@ -114,7 +114,9 @@ mod tests {
         assert!(rows.contains(&"REG|SKIPPED".to_owned()));
         assert!(rows.contains(&"portfolio|UNCHANGED".to_owned()));
         assert!(rows.contains(&"execution|DISABLED".to_owned()));
-        assert!(!rows.iter().any(|row| row.contains("APPROVED") || row.contains("ORDER_READY")));
+        assert!(!rows
+            .iter()
+            .any(|row| row.contains("APPROVED") || row.contains("ORDER_READY")));
     }
 
     #[test]
@@ -150,7 +152,10 @@ mod tests {
             ("BTC/USDT", "FakeVenue", NOW_MS, "PAPER_UNSUPPORTED_VENUE"),
             ("BTC/USDT", "Binance", 0, "PAPER_CLOCK_UNAVAILABLE"),
         ] {
-            assert_eq!(native_observation_probe(&observed(), symbol, venue, now), Err(expected));
+            assert_eq!(
+                native_observation_probe(&observed(), symbol, venue, now),
+                Err(expected)
+            );
         }
     }
 
@@ -161,8 +166,8 @@ mod tests {
         let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS).unwrap();
         assert!(rows.contains(&"MDA|MDA_STREAM_UNAVAILABLE".to_owned()));
         assert!(rows.contains(&"execution|DISABLED".to_owned()));
-        let rows = native_observation_probe(&observed(), "BTC/USDT", "Binance", NOW_MS + 60_000)
-            .unwrap();
+        let rows =
+            native_observation_probe(&observed(), "BTC/USDT", "Binance", NOW_MS + 60_000).unwrap();
         assert!(rows.contains(&"MDA|MDA_QUOTE_CLOCK_INVALID".to_owned()));
         assert!(rows.contains(&"REG|SKIPPED".to_owned()));
     }
@@ -187,7 +192,8 @@ mod tests {
         ] {
             assert!(rows.iter().any(|row| row == expected), "missing {expected}");
         }
-        assert!(!rows.iter().any(|row| row.contains("LIVE") || row.contains("ORDER_READY")));
+        assert!(!rows
+            .iter()
+            .any(|row| row.contains("LIVE") || row.contains("ORDER_READY")));
     }
-
 }
