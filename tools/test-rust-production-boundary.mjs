@@ -34,17 +34,24 @@ for(const path of active) {
     problems.push("Tracked Python build artifacts outside archive: "+path);
 }
 const pythonFfiDependencies=new Set(["pyo3","maturin","cpython"]);
-for(const path of active.filter(p=>p.endsWith("Cargo.toml"))) {
-  const toml=readFileSync(path,"utf8");
-  // Parse line-local assignment keys; never run a backtracking search over
-  // arbitrary-length Cargo manifests.
-  if(toml.split(/\r?\n/).some(line=>{
+// Parse line-local assignment keys; never run a backtracking search over
+// arbitrary-length Cargo manifests.
+function hasPythonFfiAssignment(toml) {
+  return toml.split(/\r?\n/).some(line=>{
     const content=line.trimStart();
     const equals=content.indexOf("=");
     return equals>=0 && pythonFfiDependencies.has(content.slice(0,equals).trimEnd());
-  }))
+  });
+}
+for(const path of active.filter(p=>p.endsWith("Cargo.toml"))) {
+  if(hasPythonFfiAssignment(readFileSync(path,"utf8")))
     problems.push("Active Cargo manifest enables Python FFI: "+path);
 }
+// Positive/adversarial scanner fixtures: comments and similar dependency
+// names must not generate false security findings.
+assert.equal(hasPythonFfiAssignment('pyo3 = "0.24"\n'),true);
+assert.equal(hasPythonFfiAssignment('  maturin = { version = "1" }\n'),true);
+assert.equal(hasPythonFfiAssignment('# pyo3 = "ignored"\nnot_pyo3 = "safe"\n'),false);
 
 // Scripts/Actions that BUILD or LAUNCH the active application must not
 // execute Python. Inspect executable statements, not archived or disabled CI.
@@ -120,6 +127,14 @@ const yamlFixture=[
 const executable=executableStatements(".github/workflows/rust.yml",yamlFixture);
 assert.equal(executable.length,2);
 assert.equal(executable.filter(({text})=>interpreter.test(text)).length,1);
+const harmlessYaml=[
+  "steps:",
+  "  - name: run: python is documentation",
+  "  - run: echo safe",
+  "  - uses: actions/checkout@v4"
+];
+assert.deepEqual(executableStatements(".github/workflows/rust.yml",harmlessYaml).map(x=>x.text),
+  ["echo safe"],"Non-executable YAML fields must not count as commands");
 
 const cap=JSON.parse(readFileSync("crates/pravda-app/capabilities/main.json","utf8"));
 requireCheck(JSON.stringify(cap.windows)==='["main"]',
