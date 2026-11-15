@@ -33,11 +33,25 @@ for(const path of active) {
   if(/(^|\/)(?:__pycache__|[^/]+\.egg-info)(?:\/|$)/i.test(path))
     problems.push("Tracked Python build artifacts outside archive: "+path);
 }
+const pythonFfiDependencies=new Set(["pyo3","maturin","cpython"]);
+// Parse line-local assignment keys; never run a backtracking search over
+// arbitrary-length Cargo manifests.
+function hasPythonFfiAssignment(toml) {
+  return toml.split(/\r?\n/).some(line=>{
+    const content=line.trimStart();
+    const equals=content.indexOf("=");
+    return equals>=0 && pythonFfiDependencies.has(content.slice(0,equals).trimEnd());
+  });
+}
 for(const path of active.filter(p=>p.endsWith("Cargo.toml"))) {
-  const toml=readFileSync(path,"utf8");
-  if(/^\s*(?:pyo3|maturin|cpython)\s*=/m.test(toml))
+  if(hasPythonFfiAssignment(readFileSync(path,"utf8")))
     problems.push("Active Cargo manifest enables Python FFI: "+path);
 }
+// Positive/adversarial scanner fixtures: comments and similar dependency
+// names must not generate false security findings.
+assert.equal(hasPythonFfiAssignment('pyo3 = "0.24"\n'),true);
+assert.equal(hasPythonFfiAssignment('  maturin = { version = "1" }\n'),true);
+assert.equal(hasPythonFfiAssignment('# pyo3 = "ignored"\nnot_pyo3 = "safe"\n'),false);
 
 // Scripts/Actions that BUILD or LAUNCH the active application must not
 // execute Python. Inspect executable statements, not archived or disabled CI.
@@ -59,10 +73,15 @@ function executableStatements(path, lines) {
   for(let index=0;index<lines.length;index++) {
     const raw=lines[index], trim=raw.trim();
     const indent=raw.length-raw.trimStart().length;
-    const match=raw.match(/^\s*(?:-\s+)?run\s*:\s*(.*)$/);
-    if(match) {
+    // Match YAML run keys with bounded string operations, avoiding
+    // overlapping whitespace quantifiers on attacker-controlled lines.
+    let statement=raw.trimStart();
+    if(statement.startsWith("-") && (statement[1]===" " || statement[1]==="\t"))
+      statement=statement.slice(1).trimStart();
+    const colon=statement.indexOf(":");
+    if(colon>=0 && statement.slice(0,colon).trimEnd()==="run") {
       blockIndent=null;
-      const value=match[1].trim();
+      const value=statement.slice(colon+1).trim();
       if(/^[|>][-+]?\s*(?:#.*)?$/.test(value)) {
         blockIndent=indent;
       } else if(value) {
@@ -108,6 +127,14 @@ const yamlFixture=[
 const executable=executableStatements(".github/workflows/rust.yml",yamlFixture);
 assert.equal(executable.length,2);
 assert.equal(executable.filter(({text})=>interpreter.test(text)).length,1);
+const harmlessYaml=[
+  "steps:",
+  "  - name: run: python is documentation",
+  "  - run: echo safe",
+  "  - uses: actions/checkout@v4"
+];
+assert.deepEqual(executableStatements(".github/workflows/rust.yml",harmlessYaml).map(x=>x.text),
+  ["echo safe"],"Non-executable YAML fields must not count as commands");
 
 const cap=JSON.parse(readFileSync("crates/pravda-app/capabilities/main.json","utf8"));
 requireCheck(JSON.stringify(cap.windows)==='["main"]',
