@@ -331,8 +331,17 @@ jobs:
 
       - name: Test desktop storage path selection (Windows)
         run: cargo test --locked --manifest-path crates/pravda-app/Cargo.toml
-      - name: Test optional public feed compiled out (Windows)
-        run: cargo test --locked --no-default-features --manifest-path crates/pravda-app/Cargo.toml public_feed_build_gate_tests
+      - name: Check, test and build desktop with Revolut compiled out (Windows)
+        shell: bash
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/pravda-no-default-features
+        run: |
+          set -euo pipefail
+          # Tauri is a separate Cargo workspace: root --workspace would miss it.
+          # Keep this target directory separate from the normal desktop executable.
+          cargo check --locked --no-default-features --all-targets --manifest-path crates/pravda-app/Cargo.toml
+          cargo test --locked --no-default-features --manifest-path crates/pravda-app/Cargo.toml
+          cargo build --locked --no-default-features --manifest-path crates/pravda-app/Cargo.toml
       - name: Build native Windows desktop application
         run: cargo build --locked --manifest-path crates/pravda-app/Cargo.toml
       - name: Verify opt-in security E2E probe compiles on Windows (not executed in ordinary app)
