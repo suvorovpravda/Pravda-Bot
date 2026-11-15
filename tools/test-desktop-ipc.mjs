@@ -16,42 +16,22 @@ const p14gNavStart=js.indexOf("    function applyTab(requestedTab) {");
 const p14gNavEnd=js.indexOf("    const knownTabs =",p14gNavStart);
 assert.ok(p14gNavStart>=0 && p14gNavEnd>p14gNavStart,
   "P14G navigation function must be executable in the regression harness");
-const p14gCalls={paper:0,security:0,events:0,revolut:0};
-const p14gShell={dataset:{},hidden:true};
-const p14gContext={
-  window:{pravdaDashboardReady:false},
-  uiPageMeta:{
-    home:["Home","Home"],paper:["Paper","Paper"],security:["Security","Security"],
-    tests:["Tests","Tests"],journals:["Journals","Journals"],
-    revolut:["Revolut","Revolut"]
-  },
-  document:{querySelector:()=>p14gShell},
-  $:()=>({textContent:"",hidden:false}),
-  sidebarButtons:[],tabButtons:[],allCards:()=>[],
-  markNavigationBootPhase:()=>{},
-  requestAnimationFrame:()=>{},
-  drawPriceChart:()=>{},
-  refreshPaper:()=>{p14gCalls.paper++;},
-  refreshSecurity:()=>{p14gCalls.security++;},
-  refreshSecurityEvents:()=>{p14gCalls.events++;},
-  refreshRevolut:()=>{p14gCalls.revolut++;}
-};
-vm.createContext(p14gContext);
-vm.runInContext(js.slice(p14gNavStart,p14gNavEnd),p14gContext);
-for(const route of ["home","paper","security","tests","journals","revolut"])
-  p14gContext.applyTab(route);
-assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
-  "Unready dashboard navigation must never start protected or consent-dependent IPC");
-p14gContext.window.pravdaDashboardReady=true;
-for(const route of ["home","paper","security","tests","journals","revolut"])
-  p14gContext.applyTab(route);
-assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
-  "Dashboard marked ready but still hidden must not perform protected refreshes");
-p14gShell.hidden=false;
-for(const route of ["home","paper","security","tests","journals","revolut"])
-  p14gContext.applyTab(route);
-assert.deepEqual(p14gCalls,{paper:3,security:2,events:2,revolut:1},
-  "Ready navigation must preserve every existing explicit module refresh");
+// Static contract for the pre-authentication navigation guard. The native
+// WebView2 suite executes dashboard.js; this offline test never evaluates
+// dynamically assembled JavaScript from source text.
+const p14gNavigation=js.slice(p14gNavStart,p14gNavEnd);
+assert.match(p14gNavigation,/window\\.pravdaDashboardReady !== true/,
+  "Navigation must reject an unfinished dashboard");
+assert.match(p14gNavigation,/document\\.querySelector\\("\\.shell"\\)\\.hidden/,
+  "Navigation must reject an unrevealed authenticated shell");
+const p14gGuard=p14gNavigation.indexOf('window.pravdaDashboardReady !== true');
+const p14gGuardReturn=p14gNavigation.indexOf('return;',p14gGuard);
+const p14gProtected=p14gNavigation.indexOf('void refreshSecurity(true);');
+assert.ok(p14gGuard>=0 && p14gGuardReturn>p14gGuard && p14gProtected>p14gGuardReturn,
+  "Readiness guard must return before the first protected refresh");
+for(const call of ['refreshPaper(true)','refreshSecurity(true)','refreshSecurityEvents()','refreshRevolut()'])
+  assert.ok(p14gNavigation.includes(call),
+    "Authenticated navigation must retain protected refresh: "+call);
 assert.match(auth,/function refreshRevealedDashboard\(\) \{[\s\S]*?window\.refreshPaper\(\)/,
   "Login reveal must still initiate the authenticated PAPER refresh");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
