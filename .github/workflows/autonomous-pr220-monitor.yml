@@ -1,0 +1,169 @@
+name: 🤖 Autonomous PR #220 Monitor
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: write
+
+concurrency:
+  group: autonomous-pr220-monitor
+  cancel-in-progress: false
+
+env:
+  GH_REPO: ${{ github.repository }}
+
+jobs:
+  monitor-pr-220:
+    runs-on: ubuntu-latest
+    outputs:
+      verdict: ${{ steps.audit.outputs.verdict }}
+      sha: ${{ steps.audit.outputs.sha }}
+    steps:
+      - name: Evaluate PR #220 workflows
+        id: audit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: '220'
+          SONAR_PROJECT_KEY: suvorovpravda_Pravda-Bot
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          HEAD_SHA="$(gh pr view "$PR_NUMBER" --json headRefOid --jq '.headRefOid')"
+          echo "SHA cible : $HEAD_SHA"
+
+          RUNS="$(gh run list --commit "$HEAD_SHA" --limit 100 --json name,conclusion,status,databaseId,url)"
+
+          required_runs=(
+            "Rust migration"
+            "Windows installer packaging (manual; optional Authenticode)"
+            "Windows browser fallback and password persistence"
+            "CodeQL Advanced"
+            "RustSec dependency audit (blocking)"
+          )
+
+          report_rows=""
+          pending=0
+          failures=0
+          successes=0
+
+          for workflow_name in "${required_runs[@]}"; do
+            run="$(jq -c --arg n "$workflow_name" '[.[] | select(.name == $n)] | first // empty' <<<"$RUNS")"
+            if [ -z "$run" ]; then
+              conclusion="en attente"
+              url="https://github.com/$GITHUB_REPOSITORY/actions"
+              pending=$((pending + 1))
+            else
+              status="$(jq -r '.status' <<<"$run")"
+              conclusion="$(jq -r '.conclusion // "en cours"' <<<"$run")"
+              url="$(jq -r '.url' <<<"$run")"
+
+              if [ "$status" != "completed" ]; then
+                pending=$((pending + 1))
+              elif [ "$conclusion" = "success" ]; then
+                successes=$((successes + 1))
+              else
+                failures=$((failures + 1))
+              fi
+            fi
+
+            report_rows+="| $workflow_name | $conclusion | [Lien]($url) |"$'\n'
+          done
+
+          # SonarCloud is one mandatory control: its diagnostic workflow must pass,
+          # then the PR quality gate must be OK with zero new issues and hotspots.
+          sonar_state="en attente"
+          sonar_run="$(jq -c --arg n "SonarCloud main diagnostic" '[.[] | select(.name == $n)] | first // empty' <<<"$RUNS")"
+
+          if [ -n "$sonar_run" ] && [ "$(jq -r '.status' <<<"$sonar_run")" = "completed" ] && [ "$(jq -r '.conclusion' <<<"$sonar_run")" != "success" ]; then
+            sonar_state="failure"
+          elif [ -n "$sonar_run" ] && [ "$(jq -r '.status' <<<"$sonar_run")" = "completed" ] && [ "$(jq -r '.conclusion' <<<"$sonar_run")" = "success" ]; then
+            sonar_json="$(curl --fail --silent --show-error --max-time 30 "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER" || true)"
+            issues_json="$(curl --fail --silent --show-error --max-time 30 "https://sonarcloud.io/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER&inNewCodePeriod=true&statuses=OPEN,CONFIRMED&ps=1" || true)"
+            hotspots_json="$(curl --fail --silent --show-error --max-time 30 "https://sonarcloud.io/api/hotspots/search?projectKey=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER&status=TO_REVIEW&ps=1" || true)"
+
+            if [ -n "$sonar_json" ] && [ -n "$issues_json" ] && [ -n "$hotspots_json" ]; then
+              sonar_gate="$(jq -r '.projectStatus.status // "UNKNOWN"' <<<"$sonar_json")"
+              sonar_issues="$(jq -r '.total // -1' <<<"$issues_json")"
+              sonar_hotspots="$(jq -r '.paging.total // .total // -1' <<<"$hotspots_json")"
+
+              if [ "$sonar_gate" = "OK" ] && [ "$sonar_issues" = "0" ] && [ "$sonar_hotspots" = "0" ]; then
+                sonar_state="success"
+              elif [ "$sonar_gate" = "ERROR" ] || [ "$sonar_issues" -gt 0 ] || [ "$sonar_hotspots" -gt 0 ]; then
+                sonar_state="failure"
+              fi
+            fi
+          fi
+
+          if [ "$sonar_state" = "en attente" ]; then
+            pending=$((pending + 1))
+          elif [ "$sonar_state" = "failure" ]; then
+            failures=$((failures + 1))
+          else
+            successes=$((successes + 1))
+          fi
+
+          total=$((${#required_runs[@]} + 1))
+          report_rows+="| SonarCloud Quality Gate (0 new issues/hotspots) | $sonar_state | [Lien](https://sonarcloud.io/dashboard?id=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER) |"$'\n'
+
+          echo "Total: $total | En attente: $pending | Échecs: $failures | Succès/Skip: $successes"
+
+          if [ "$pending" -gt 0 ]; then
+            echo "Au moins un contrôle obligatoire est en attente : aucun commentaire publié."
+            exit 0
+          fi
+
+          if [ "$failures" -gt 0 ]; then
+            verdict="🚨 ÉCHEC DÉTECTÉ"
+            verdict_key="failure"
+          else
+            verdict="✅ VERDICT DÉFINITIF : SUCCÈS COMPLET"
+            verdict_key="success"
+          fi
+
+          marker="AUTONOMOUS_PR220_MONITOR|$HEAD_SHA|$verdict_key"
+          if gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100"             --jq '.[].body' | grep -Fqx "<!-- $marker -->"; then
+            echo "Verdict déjà publié pour ce SHA : aucun doublon."
+            exit 0
+          fi
+
+          {
+            echo "<!-- $marker -->"
+            echo "### $verdict sur la PR #$PR_NUMBER"
+            echo
+            printf '**SHA évalué** : `%s`\n' "$HEAD_SHA"
+            echo "**Horodatage** : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo
+            echo "#### 📊 État des Workflows Critiques"
+            echo "| Nom du Workflow | Conclusion | Lien |"
+            echo "|---|---|---|"
+            printf '%s' "$report_rows"
+            echo "| **Total** | **$total** | |"
+            echo "| **Succès/Skip** | **$successes** | |"
+            echo "| **Échecs** | **$failures** | |"
+            echo "| **En attente** | **$pending** | |"
+            echo
+            echo "#### ⚖️ Rappel de Gouvernance"
+            echo "- **NO-GO #160** : Strictement maintenu."
+            echo "- **Action requise** : Aucune fusion, aucune release. Ce rapport est informatif."
+            echo "- **Prochaine étape** : Si ✅, procéder à la revue humaine finale et à la recette MSI installée."
+          } > report.md
+
+          gh pr comment "$PR_NUMBER" --body-file report.md
+          echo "verdict=$verdict_key" >> "$GITHUB_OUTPUT"
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  notify-slack:
+    needs: monitor-pr-220
+    if: needs.monitor-pr-220.outputs.verdict != ''
+    uses: ./.github/workflows/slack-pr220-notifier.yml
+    with:
+      verdict: ${{ needs.monitor-pr-220.outputs.verdict }}
+      sha: ${{ needs.monitor-pr-220.outputs.sha }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
