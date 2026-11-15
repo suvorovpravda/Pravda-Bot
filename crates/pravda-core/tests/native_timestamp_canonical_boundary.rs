@@ -119,8 +119,8 @@ fn reported_age_tolerance_cannot_override_wall_clock_freshness() {
 
     // A quote inside the policy window is still refused if its reported age
     // disagrees with the native wall clock by more than the 1s tolerance.
-    let mut inconsistent = snapshot("2025-11-10T09:59:59.000Z");
-    inconsistent["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.001);
+    let mut inconsistent = snapshot("2025-11-10T09:59:58.999Z");
+    inconsistent["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0);
     assert!(matches!(
         inspect(&inconsistent),
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
