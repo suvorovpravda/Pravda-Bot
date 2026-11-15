@@ -105,3 +105,31 @@ fn submillisecond_freshness_boundary_does_not_round_stale_quotes_into_policy() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn reported_age_tolerance_cannot_override_wall_clock_freshness() {
+    // The reported age is attacker-controlled cache metadata. At a 2s policy
+    // limit, a quote older than 2s is refused even if its claimed age is zero.
+    let mut stale = snapshot("2025-11-10T09:59:57.999Z");
+    stale["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0);
+    assert!(matches!(
+        inspect(&stale),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+
+    // A quote inside the policy window is still refused if its reported age
+    // disagrees with the native wall clock by more than the 1s tolerance.
+    let mut inconsistent = snapshot("2025-11-10T09:59:59.000Z");
+    inconsistent["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.001);
+    assert!(matches!(
+        inspect(&inconsistent),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+
+    // Exactly 1s of disagreement is tolerated, without attesting provenance.
+    let mut boundary = snapshot("2025-11-10T09:59:59.000Z");
+    boundary["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(0);
+    let evidence = inspect(&boundary).expect("exact tolerance remains an observation");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
