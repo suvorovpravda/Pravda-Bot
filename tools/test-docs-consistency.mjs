@@ -25,6 +25,7 @@ const approvedTechnicalRecords=[
   "docs/ADR-001-TRADING-SCOPE-RISK-GATES.md",
   "docs/THREAT-MODEL-TRADING-T002.md",
   "docs/ARCHITECTURE-AGENTS-T004.md"
+  "docs/waivers/PROPOSED-2026-11-15-P14G-REVOLUT.md"
 ];
 const expected=[
   ...canonicalDocs,
