@@ -11,6 +11,8 @@
     "allow-ipc-auth-logout",
     "allow-ipc-session-check",
     "allow-ipc-market-snapshot",
+    "allow-ipc-paper-pipeline-probe",
+    "allow-ipc-paper-research-preflight",
     "allow-ipc-history-recent",
     "allow-ipc-history-query",
     "allow-ipc-history-export-csv",
