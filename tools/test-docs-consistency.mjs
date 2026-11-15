@@ -15,6 +15,7 @@ const tracked=execFileSync("git",["ls-files","-z"],{encoding:"utf8"})
 const canonicalDocs=[
   "README.md",
   "SECURITY.md",
+  "AGENTS.md",
   "docs/PRAVDA-GUIDE.md",
   "docs/REVIEWING.md",
   ".github/pull_request_template.md"
@@ -30,6 +31,37 @@ const expected=[
   ...canonicalDocs,
   ...approvedTechnicalRecords.filter(path=>tracked.includes(path))
 ];
+// Codex Coordinator is opt-in. Its root instruction document must retain the
+// exact bounded discovery contract, and the marker must fail closed.
+const coordinatorMarkerPath=".codex/coordination/project.yaml";
+if(tracked.includes("AGENTS.md")) {
+  const instructions=readFileSync("AGENTS.md","utf8");
+  for(const required of [
+    "## Codex task-boundary board",
+    "opt-in Codex task-boundary board",
+    "Before substantial writes",
+    "no heartbeat or mandatory pull-request workflow",
+    "Reject cross-project notices",
+    "NO-GO",
+    "PAPER only",
+    "Do not merge pull requests automatically"
+  ]) assert.ok(instructions.includes(required),"AGENTS.md missing policy: "+required);
+  assert.ok(tracked.includes(coordinatorMarkerPath),
+    "Codex Coordinator instructions require a tracked schema-2 project marker");
+  const marker=readFileSync(coordinatorMarkerPath,"utf8");
+  for(const required of [
+    "schema_version: 2",
+    "coordination_enabled: true",
+    "project_id: pravda-bot",
+    "cross_project_task_access: false",
+    "cross_project_state_changes: false"
+  ]) assert.ok(marker.includes(required),"Coordinator marker missing: "+required);
+  const ignore=readFileSync(".gitignore","utf8");
+  assert.match(ignore,/^\\.codex\\/coordination\\/\\*$/m,
+    "Ephemeral Coordinator state must be ignored");
+  assert.match(ignore,/^!\\.codex\\/coordination\\/project\\.yaml$/m,
+    "Coordinator marker must remain trackable");
+}
 const deploymentPages=["README.md","SECURITY.md","docs/PRAVDA-GUIDE.md"];
 const docs=tracked.filter(p=>p.endsWith(".md")).sort((a,b)=>a.localeCompare(b));
 assert.deepEqual(docs,expected.slice().sort((a,b)=>a.localeCompare(b)),
