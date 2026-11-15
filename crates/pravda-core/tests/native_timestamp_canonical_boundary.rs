@@ -69,3 +69,21 @@ fn canonical_millisecond_quote_is_only_an_unattested_observation() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn quote_freshness_limit_is_inclusive_at_exact_millisecond_precision() {
+    // Reported age and wall-clock age agree exactly; only the strict
+    // 2_000 ms policy boundary differs between these observations.
+    let mut at_limit = snapshot("2025-11-10T09:59:58.000Z");
+    at_limit["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+    let evidence = inspect(&at_limit).expect("exactly 2_000 ms is within policy");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    let mut past_limit = snapshot("2025-11-10T09:59:57.999Z");
+    past_limit["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.001);
+    assert!(matches!(
+        inspect(&past_limit),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
