@@ -32,7 +32,10 @@ assert.ok(p14gGuard>=0 && p14gGuardReturn>p14gGuard && p14gProtected>p14gGuardRe
 for(const call of ['refreshPaper(true)','refreshSecurity(true)','refreshSecurityEvents()','refreshRevolut()'])
   assert.ok(p14gNavigation.includes(call),
     "Authenticated navigation must retain protected refresh: "+call);
-assert.match(auth,/function refreshRevealedDashboard\(\) \{[\s\S]*?window\.refreshPaper\(\)/,
+const revealStart=auth.indexOf("function refreshRevealedDashboard() {");
+const revealEnd=auth.indexOf("\n}",revealStart);
+assert.ok(revealStart>=0 && revealEnd>revealStart &&
+  auth.slice(revealStart,revealEnd).includes("window.refreshPaper()"),
   "Login reveal must still initiate the authenticated PAPER refresh");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
 const msiAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Msi-Install.ps1"),"utf8");
@@ -410,7 +413,10 @@ assert.match(js,/if \(sessionChanged && securitySessionReady\(\)\) \{\s*void ref
 assert.match(auth,/window\.pravdaClearUpdateReadiness\(\)/,
   "Authentication transitions must reset stale update status");
 assert.match(html,/id="security-events"/,"Security events must be visible after login");
-assert.match(ipc,/^\s*"protonvpn"\s*=>\s*"https:\/\/protonvpn\.com\/support\/protonvpn-windows-vpn-application"\.to_owned\(\),\s*$/m,"Proton documentation must be a fixed official URL");
+assert.ok(ipc.split("\n").some(line =>
+  line.replaceAll(/\s+/g,"") ===
+  '"protonvpn"=>"https://protonvpn.com/support/protonvpn-windows-vpn-application".to_owned(),'),
+  "Proton documentation must be a fixed official URL");
 assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
   "Simulator alerts must be rendered from the Rust IPC snapshot");
 assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.articles\)/,
