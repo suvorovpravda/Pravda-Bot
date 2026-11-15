@@ -1,0 +1,82 @@
+name: 🤖 Autonomous PR #220 Monitor
+
+on:
+  schedule:
+    # S'exécute toutes les heures, pile à la minute 0 (UTC)
+    # 00:00, 01:00, 02:00 ... 23:00 UTC
+    - cron: '0 * * * *'
+  workflow_dispatch: # Pour forcer un test manuel si besoin
+
+permissions:
+  actions: read
+  pull-requests: write
+
+jobs:
+  monitor-pr-220:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Evaluate PR #220 Workflows
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: 220
+        run: |
+          echo "🔍 Audit autonome de la PR #$PR_NUMBER en cours..."
+
+          # 1. Récupérer le SHA exact de la HEAD actuelle de la PR
+          HEAD_SHA=$(gh pr view $PR_NUMBER --json headRefOid --jq '.headRefOid')
+          echo "SHA cible : $HEAD_SHA"
+
+          # 2. Récupérer TOUS les runs associés à ce SHA exact
+          RUNS=$(gh run list --commit $HEAD_SHA --json name,conclusion,status,databaseId,url --jq '.[]')
+
+          # 3. Compter les états
+          PENDING=$(echo "$RUNS" | jq -r 'select(.status != "completed") | .name' | wc -l)
+          FAILURES=$(echo "$RUNS" | jq -r 'select(.conclusion == "failure" or .conclusion == "cancelled") | .name' | wc -l)
+          SUCCESSES=$(echo "$RUNS" | jq -r 'select(.conclusion == "success" or .conclusion == "skipped") | .name' | wc -l)
+          TOTAL=$(echo "$RUNS" | jq -r '.name' | wc -l)
+
+          echo "Total: $TOTAL | En attente: $PENDING | Échecs: $FAILURES | Succès: $SUCCESSES"
+
+          # 4. LOGIQUE DE DÉCISION (Ne commente QUE s'il y a un verdict définitif)
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "⏳ Aucun workflow trouvé pour ce SHA. En attente du déclenchement CI."
+            exit 0
+          elif [ "$PENDING" -gt 0 ]; then
+            echo "⏳ $PENDING workflows encore en cours. Silence radio pour éviter le spam."
+            exit 0
+          elif [ "$FAILURES" -gt 0 ]; then
+            VERDICT="🚨 ÉCHEC DÉTECTÉ"
+            STATUS_EMOJI="❌"
+          else
+            VERDICT="✅ VERDICT DÉFINITIF : SUCCÈS COMPLET"
+            STATUS_EMOJI="✅"
+          fi
+
+          # 5. GÉNÉRATION DU RAPPORT PRÊT À COPIER-COLLER
+          REPORT=$(cat <<EOF
+          ### $VERDICT sur la PR #$PR_NUMBER
+          **SHA évalué** : `$HEAD_SHA`
+          **Horodatage** : $(date -u '+%Y-%m-%d %H:%M:%S UTC')
+
+          #### 📊 État des Workflows Critiques
+          $(echo "$RUNS" | jq -r '"| \(.name) | \(.conclusion // "en cours") | [Lien](\(.url)) |"')
+          |---|---|---|
+          | **Total** | **$TOTAL** | |
+          | **Succès/Skip** | **$SUCCESSES** | |
+          | **Échecs** | **$FAILURES** | |
+          | **En attente** | **$PENDING** | |
+
+          #### ⚖️ Rappel de Gouvernance
+          - **NO-GO #160** : Strictement maintenu.
+          - **Action requise** : Aucune fusion, aucune release. Ce rapport est informatif.
+          - **Prochaine étape** : Si ✅, procéder à la revue humaine finale et à la recette MSI installée.
+          EOF
+          )
+
+          # 6. POSTER LE RAPPORT SUR LA PR
+          echo "$REPORT" > report.md
+          gh pr comment $PR_NUMBER --body-file report.md
+          echo "📝 Rapport publié sur la PR #$PR_NUMBER."
