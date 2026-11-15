@@ -1829,7 +1829,11 @@ const translations = {
             $("language-select").value = currentLanguage;
         }
         applyLanguage();
-        refreshAll();
+        // A UI language change must not leave a rejected refresh promise
+        // unobserved. Keep the failure message static and secret-free.
+        void refreshAll().catch(() => {
+            $("refresh-button").title = "Actualisation locale indisponible";
+        });
     });
     $("chart-symbol").addEventListener("change", drawPriceChart);
     $("chart-symbol").addEventListener("change", refreshHistory);
