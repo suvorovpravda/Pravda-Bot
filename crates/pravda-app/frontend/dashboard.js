@@ -1415,16 +1415,18 @@ const translations = {
         markNavigationBootPhase("P14G-paper1b");
         const controlGeneration = paperControlGeneration;
         markNavigationBootPhase("P14G-paper1c");
-        const refreshNumber = ++paperRefreshNumber;
+        // A suppressed refresh must not invalidate an already running snapshot.
+        // Increment only after the readiness and control guards have passed.
         markNavigationBootPhase("P14G-paper1d");
-        const isCurrent = () => generation === window.pravdaAuthGeneration
-            && controlGeneration === paperControlGeneration && !paperStopInFlight
-            && refreshNumber === paperRefreshNumber;
-        markNavigationBootPhase("P14G-paper1e");
         if (!securitySessionReady() || (!explicit && !securityVisible()) || paperBusy || paperStopInFlight) {
             markNavigationBootPhase("P14G-paper1f");
             return;
         }
+        const refreshNumber = ++paperRefreshNumber;
+        const isCurrent = () => generation === window.pravdaAuthGeneration
+            && controlGeneration === paperControlGeneration && !paperStopInFlight
+            && refreshNumber === paperRefreshNumber;
+        markNavigationBootPhase("P14G-paper1e");
         markNavigationBootPhase("P14G-paper1g");
         try {
             markNavigationBootPhase("P14G-paper1h");
