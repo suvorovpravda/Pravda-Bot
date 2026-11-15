@@ -57,9 +57,9 @@ if(tracked.includes("AGENTS.md")) {
     "cross_project_state_changes: false"
   ]) assert.ok(marker.includes(required),"Coordinator marker missing: "+required);
   const ignore=readFileSync(".gitignore","utf8");
-  assert.match(ignore,/^\\.codex\\/coordination\\/\\*$/m,
+  assert.match(ignore,/^\.codex\/coordination\/\*$/m,
     "Ephemeral Coordinator state must be ignored");
-  assert.match(ignore,/^!\\.codex\\/coordination\\/project\\.yaml$/m,
+  assert.match(ignore,/^!\.codex\/coordination\/project\.yaml$/m,
     "Coordinator marker must remain trackable");
 }
 const deploymentPages=["README.md","SECURITY.md","docs/PRAVDA-GUIDE.md"];
