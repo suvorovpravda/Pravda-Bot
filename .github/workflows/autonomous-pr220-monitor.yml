@@ -10,11 +10,22 @@ permissions:
   actions: read
   pull-requests: write
 
+concurrency:
+  group: autonomous-pr220-monitor
+  cancel-in-progress: false
+
+env:
+  GH_REPO: ${{ github.repository }}
+
 jobs:
   monitor-pr-220:
     runs-on: ubuntu-latest
+    outputs:
+      verdict: ${{ steps.audit.outputs.verdict }}
+      sha: ${{ steps.audit.outputs.sha }}
     steps:
       - name: Evaluate PR #220 workflows
+        id: audit
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: '220'
@@ -125,7 +136,7 @@ jobs:
             echo "<!-- $marker -->"
             echo "### $verdict sur la PR #$PR_NUMBER"
             echo
-            echo "**SHA évalué** : `$HEAD_SHA`"
+            printf '**SHA évalué** : `%s`\n' "$HEAD_SHA"
             echo "**Horodatage** : $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             echo
             echo "#### 📊 État des Workflows Critiques"
@@ -144,3 +155,15 @@ jobs:
           } > report.md
 
           gh pr comment "$PR_NUMBER" --body-file report.md
+          echo "verdict=$verdict_key" >> "$GITHUB_OUTPUT"
+          echo "sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+
+  notify-slack:
+    needs: monitor-pr-220
+    if: needs.monitor-pr-220.outputs.verdict != ''
+    uses: ./.github/workflows/slack-pr220-notifier.yml
+    with:
+      verdict: ${{ needs.monitor-pr-220.outputs.verdict }}
+      sha: ${{ needs.monitor-pr-220.outputs.sha }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
