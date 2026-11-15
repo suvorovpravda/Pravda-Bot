@@ -32,7 +32,6 @@ jobs:
             "Rust migration"
             "Windows installer packaging (manual; optional Authenticode)"
             "Windows browser fallback and password persistence"
-            "SonarCloud main diagnostic"
             "CodeQL Advanced"
             "RustSec dependency audit (blocking)"
           )
@@ -55,7 +54,7 @@ jobs:
 
               if [ "$status" != "completed" ]; then
                 pending=$((pending + 1))
-              elif [ "$conclusion" = "success" ] || [ "$conclusion" = "skipped" ]; then
+              elif [ "$conclusion" = "success" ]; then
                 successes=$((successes + 1))
               else
                 failures=$((failures + 1))
@@ -65,22 +64,28 @@ jobs:
             report_rows+="| $workflow_name | $conclusion | [Lien]($url) |"$'\n'
           done
 
-          # A completed Sonar workflow is insufficient by itself: require the public
-          # PR-quality-gate response and zero open issues/hotspots on new code.
+          # SonarCloud is one mandatory control: its diagnostic workflow must pass,
+          # then the PR quality gate must be OK with zero new issues and hotspots.
           sonar_state="en attente"
-          sonar_json="$(curl --fail --silent --show-error --max-time 30             "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER" || true)"
-          issues_json="$(curl --fail --silent --show-error --max-time 30             "https://sonarcloud.io/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER&inNewCodePeriod=true&statuses=OPEN,CONFIRMED&ps=1" || true)"
-          hotspots_json="$(curl --fail --silent --show-error --max-time 30             "https://sonarcloud.io/api/hotspots/search?projectKey=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER&status=TO_REVIEW&ps=1" || true)"
+          sonar_run="$(jq -c --arg n "SonarCloud main diagnostic" '[.[] | select(.name == $n)] | first // empty' <<<"$RUNS")"
 
-          if [ -n "$sonar_json" ] && [ -n "$issues_json" ] && [ -n "$hotspots_json" ]; then
-            sonar_gate="$(jq -r '.projectStatus.status // "UNKNOWN"' <<<"$sonar_json")"
-            sonar_issues="$(jq -r '.total // -1' <<<"$issues_json")"
-            sonar_hotspots="$(jq -r '.paging.total // .total // -1' <<<"$hotspots_json")"
+          if [ -n "$sonar_run" ] && [ "$(jq -r '.status' <<<"$sonar_run")" = "completed" ] && [ "$(jq -r '.conclusion' <<<"$sonar_run")" != "success" ]; then
+            sonar_state="failure"
+          elif [ -n "$sonar_run" ] && [ "$(jq -r '.status' <<<"$sonar_run")" = "completed" ] && [ "$(jq -r '.conclusion' <<<"$sonar_run")" = "success" ]; then
+            sonar_json="$(curl --fail --silent --show-error --max-time 30 "https://sonarcloud.io/api/qualitygates/project_status?projectKey=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER" || true)"
+            issues_json="$(curl --fail --silent --show-error --max-time 30 "https://sonarcloud.io/api/issues/search?componentKeys=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER&inNewCodePeriod=true&statuses=OPEN,CONFIRMED&ps=1" || true)"
+            hotspots_json="$(curl --fail --silent --show-error --max-time 30 "https://sonarcloud.io/api/hotspots/search?projectKey=$SONAR_PROJECT_KEY&pullRequest=$PR_NUMBER&status=TO_REVIEW&ps=1" || true)"
 
-            if [ "$sonar_gate" = "OK" ] && [ "$sonar_issues" = "0" ] && [ "$sonar_hotspots" = "0" ]; then
-              sonar_state="success"
-            elif [ "$sonar_gate" = "ERROR" ] || [ "$sonar_issues" -gt 0 ] || [ "$sonar_hotspots" -gt 0 ]; then
-              sonar_state="failure"
+            if [ -n "$sonar_json" ] && [ -n "$issues_json" ] && [ -n "$hotspots_json" ]; then
+              sonar_gate="$(jq -r '.projectStatus.status // "UNKNOWN"' <<<"$sonar_json")"
+              sonar_issues="$(jq -r '.total // -1' <<<"$issues_json")"
+              sonar_hotspots="$(jq -r '.paging.total // .total // -1' <<<"$hotspots_json")"
+
+              if [ "$sonar_gate" = "OK" ] && [ "$sonar_issues" = "0" ] && [ "$sonar_hotspots" = "0" ]; then
+                sonar_state="success"
+              elif [ "$sonar_gate" = "ERROR" ] || [ "$sonar_issues" -gt 0 ] || [ "$sonar_hotspots" -gt 0 ]; then
+                sonar_state="failure"
+              fi
             fi
           fi
 
