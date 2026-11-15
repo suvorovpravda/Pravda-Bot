@@ -134,14 +134,14 @@ mod tests {
         // A live-labelled cached quote with a falsified zero age is not fresh
         // once the native clock is more than the one-second tolerance ahead.
         // The timestamp is deliberately fixed so the boundary is deterministic.
-        let within_tolerance = native_observation_probe(
-            &observed(), "BTC/USDT", "Binance", NOW_MS + 1_000,
-        ).expect("the documented one-second rounding tolerance applies");
+        let within_tolerance =
+            native_observation_probe(&observed(), "BTC/USDT", "Binance", NOW_MS + 1_000)
+                .expect("the documented one-second rounding tolerance applies");
         assert!(within_tolerance.contains(&"MDA|MDA_UNATTESTED_OBSERVATION".to_owned()));
 
-        let beyond_tolerance = native_observation_probe(
-            &observed(), "BTC/USDT", "Binance", NOW_MS + 1_001,
-        ).expect("a contradictory age must produce a closed diagnostic");
+        let beyond_tolerance =
+            native_observation_probe(&observed(), "BTC/USDT", "Binance", NOW_MS + 1_001)
+                .expect("a contradictory age must produce a closed diagnostic");
         for expected in [
             "MDA|MDA_QUOTE_CLOCK_INVALID",
             "market_attestation|ABSENT",
@@ -152,7 +152,10 @@ mod tests {
             "REG|SKIPPED",
             "execution|DISABLED",
         ] {
-            assert!(beyond_tolerance.iter().any(|row| row == expected), "missing {expected}");
+            assert!(
+                beyond_tolerance.iter().any(|row| row == expected),
+                "missing {expected}"
+            );
         }
     }
 
@@ -173,8 +176,13 @@ mod tests {
         let rows = native_observation_probe(&snapshot, "BTC/USDT", "Binance", NOW_MS)
             .expect("untrusted metadata cannot alter a read-only observation");
         assert_eq!(rows, baseline, "untrusted metadata changed IPC diagnostics");
-        assert!(!rows.join("|").contains(canary), "private source data leaked to IPC");
-        assert!(rows.iter().all(|row| !row.contains('<') && !row.contains('>')));
+        assert!(
+            !rows.join("|").contains(canary),
+            "private source data leaked to IPC"
+        );
+        assert!(rows
+            .iter()
+            .all(|row| !row.contains('<') && !row.contains('>')));
     }
 
     #[test]
