@@ -87,3 +87,21 @@ fn quote_freshness_limit_is_inclusive_at_exact_millisecond_precision() {
         Err(NativeMarketRefusal::ClockOrAgeInvalid)
     ));
 }
+
+#[test]
+fn submillisecond_freshness_boundary_does_not_round_stale_quotes_into_policy() {
+    // A rounded millisecond DTO would make both observations appear 2_000 ms old.
+    // The native adapter must enforce the limit at the source's nanosecond precision.
+    let mut just_inside = snapshot("2025-11-10T09:59:58.000000001Z");
+    just_inside["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+    let evidence = inspect(&just_inside).expect("one nanosecond inside policy");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+
+    let mut just_outside = snapshot("2025-11-10T09:59:57.999999999Z");
+    just_outside["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+    assert!(matches!(
+        inspect(&just_outside),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+}
