@@ -411,6 +411,48 @@ mod tests {
             observed_at,
         }
     }
+
+    #[tokio::test]
+    async fn runtime_market_snapshot_timestamp_is_accepted_by_native_adapter() {
+        let store = PravdaStore::open(":memory:").unwrap();
+        let (tx, _) = broadcast::channel(1);
+        let runtime = PravdaRuntime::new(store, tx);
+        // Keep the native producer's RFC3339 serialization in this test,
+        // but use a controlled quote instant and comparison clock so
+        // millisecond truncation cannot make the quote appear future-dated.
+        let quote_time = chrono::DateTime::parse_from_rfc3339("2025-11-10T10:00:00.123456789Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let tick = Tick {
+            symbol: Symbol::BTCUSDT,
+            price: 123.456,
+            exchange: Exchange::Binance,
+            timestamp: quote_time,
+            observed_at: Instant::now() - Duration::from_secs(1),
+        };
+        runtime
+            .prices
+            .write()
+            .await
+            .entry(Symbol::BTCUSDT)
+            .or_default()
+            .insert(Exchange::Binance, tick);
+
+        let mut snapshot = runtime.market_snapshot(Duration::from_secs(5)).await;
+        snapshot["stream_state"] = json!("observations_recent");
+        let now_ms = u64::try_from(quote_time.timestamp_millis()).unwrap() + 1_000;
+        let evidence = crate::agent_pipeline::evidence_from_native_market_snapshot(
+            &snapshot,
+            crate::agent_contract::PaperSymbol::BtcUsdt,
+            crate::agent_contract::PaperVenue::Binance,
+            now_ms,
+            5_000,
+            50,
+        )
+        .expect("runtime-produced RFC3339 quote timestamp must parse");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+    }
     async fn wait_for_alert_lock_waiter(runtime: &PravdaRuntime) {
         tokio::time::timeout(Duration::from_secs(8), async {
             loop {
