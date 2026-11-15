@@ -20,9 +20,9 @@ assert.ok(p14gNavStart>=0 && p14gNavEnd>p14gNavStart,
 // WebView2 suite executes dashboard.js; this offline test never evaluates
 // dynamically assembled JavaScript from source text.
 const p14gNavigation=js.slice(p14gNavStart,p14gNavEnd);
-assert.match(p14gNavigation,/window\\.pravdaDashboardReady !== true/,
+assert.match(p14gNavigation,/window\.pravdaDashboardReady !== true/,
   "Navigation must reject an unfinished dashboard");
-assert.match(p14gNavigation,/document\\.querySelector\\("\\.shell"\\)\\.hidden/,
+assert.match(p14gNavigation,/document\.querySelector\("\.shell"\)\.hidden/,
   "Navigation must reject an unrevealed authenticated shell");
 const p14gGuard=p14gNavigation.indexOf('window.pravdaDashboardReady !== true');
 const p14gGuardReturn=p14gNavigation.indexOf('return;',p14gGuard);
