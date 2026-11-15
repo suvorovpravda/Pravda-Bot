@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "282cdf40afd6a8203ab86a273d8a55d563da1441",
-  "latest_evidence_at": "2026-11-15T05:47:27Z",
-  "refreshed_at_utc": "2026-11-15T05:48:50.367Z",
+  "latest_evidence_at": "2026-11-15T05:59:09Z",
+  "refreshed_at_utc": "2026-11-15T05:59:15.750Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 2,
     "total": 4
   },
   "p0_governance": {
@@ -102,7 +102,7 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PENDING"
+        "state": "PASS"
       },
       {
         "name": "Windows desktop build and startup",
@@ -119,7 +119,7 @@
       "state": "RUNNING",
       "sha": "282cdf40af",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43682577272",
-      "observedAt": "2026-11-15T05:47:27Z"
+      "observedAt": "2026-11-15T05:59:06Z"
     },
     {
       "id": "windows-package.yml",
@@ -128,28 +128,28 @@
       "state": "RUNNING",
       "sha": "282cdf40af",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43682577265",
-      "observedAt": "2026-11-15T05:47:27Z"
+      "observedAt": "2026-11-15T05:49:01Z"
     },
     {
       "id": "codeql.yml",
       "name": "CODEQL / ANALYSE",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "282cdf40af",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43682577293",
-      "observedAt": "2026-11-15T05:47:27Z"
+      "observedAt": "2026-11-15T05:59:09Z"
     },
     {
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / AUDIT BLOQUANT",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "282cdf40af",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/43682577394",
-      "observedAt": "2026-11-15T05:47:27Z"
+      "observedAt": "2026-11-15T05:54:05Z"
     }
   ],
-  "open_prs": 7,
+  "open_prs": 8,
   "active_pr": null,
   "open_issues": 11,
   "production": "NO-GO",
