@@ -24,7 +24,7 @@ assert.equal(config.get("sonar.sources"),".",
   "Keep source audit at repository root, including active Rust and JavaScript");
 const testRoots=["tests_js"];
 assert.deepEqual(config.get("sonar.tests")?.split(",").map(x=>x.trim()).sort((a,b)=>a.localeCompare(b)),
-  testRoots.slice().sort((a,b)=>a.localeCompare(b)),"Mark both Python and JS test roots as test code");
+  testRoots.slice().sort((a,b)=>a.localeCompare(b)),"Keep only the active JavaScript regression root indexed as test code");
 for (const dir of testRoots) assert.ok(existsSync(dir),"Test directory is absent: "+dir);
 assert.ok(existsSync("archive/python-legacy"),"Retired Python archive must remain in the repository");
 assert.deepEqual(config.get("sonar.exclusions")?.split(",").map(x=>x.trim()).sort((a,b)=>a.localeCompare(b)),
