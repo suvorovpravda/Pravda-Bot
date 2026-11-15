@@ -1,0 +1,40 @@
+name: Slack Notifier PR 220
+on:
+  workflow_call:
+    inputs:
+      verdict:
+        required: true
+        type: string
+      sha:
+        required: true
+        type: string
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+permissions: {}
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send definitive verdict
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          VERDICT: ${{ inputs.verdict }}
+          HEAD_SHA: ${{ inputs.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::notice::SLACK_WEBHOOK_URL absent; no Slack message sent."
+            exit 0
+          fi
+          case "$VERDICT" in
+            failure) COLOR="#dc3545"; TITLE="PR #220 : échec CI" ;;
+            success) COLOR="#28a745"; TITLE="PR #220 : verdict de succès CI" ;;
+            *) echo "Invalid verdict"; exit 1 ;;
+          esac
+          [[ "$HEAD_SHA" =~ ^[a-f0-9]{40}$ ]]
+          jq -n --arg color "$COLOR" --arg title "$TITLE" --arg sha "$HEAD_SHA" \
+            '{attachments:[{color:$color,title:$title,title_link:"https://github.com/suvorovpravda/Pravda-Bot/pull/220",text:("SHA : "+$sha+"\nNO-GO #160 maintenu. Revue humaine et recette MSI requises.")}]}' > payload.json
+          curl --fail --silent --show-error --max-time 30 \
+            -H 'Content-type: application/json' --data-binary @payload.json "$SLACK_WEBHOOK_URL"
