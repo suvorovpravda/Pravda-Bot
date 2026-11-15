@@ -1848,7 +1848,9 @@ const translations = {
             typeof a.id==="string" && ["EUR","CHF"].includes(a.currency) &&
             ["above","below"].includes(a.direction) && Number.isFinite(a.target) &&
             a.target>0 && ["BTC/USDT","ETH/USDT","SOL/USDT"].includes(a.symbol) &&
-            ["Kraken","Binance"].includes(a.exchange)).slice(0,30);
+            ["Kraken","Binance"].includes(a.exchange)).slice(0,30).map(a => ({
+                ...a, triggered: a.triggered === true
+            }));
     } catch { localAlerts=[]; }
     const storeLocalAlerts = () => {
         try { localStorage.setItem(alertStorageKey, JSON.stringify(localAlerts)); }
@@ -1892,10 +1894,23 @@ const translations = {
         if(localAlerts.length>=30){$("alert-notice").textContent="Limite de 30 alertes locales.";return;}
         const target=Number($("alert-target").value);
         if(!Number.isFinite(target)||target<=0){$("alert-notice").textContent="Seuil positif requis.";return;}
+        const symbol=$("alert-symbol").value;
+        const exchange=$("alert-exchange").value;
+        const direction=$("alert-direction").value;
+        const currency=$("alert-currency").value;
+        // The same allowlists are enforced when localStorage is reloaded.
+        // Reject tampered or stale form values instead of persisting alerts
+        // which disappear silently on the next application launch.
+        if(!["BTC/USDT","ETH/USDT","SOL/USDT"].includes(symbol) ||
+           !["Kraken","Binance"].includes(exchange) ||
+           !["above","below"].includes(direction) ||
+           !["EUR","CHF"].includes(currency)){
+            $("alert-notice").textContent="Paramètres d'alerte non pris en charge.";
+            return;
+        }
         const alert={
             id:String(Date.now())+"-"+String(Math.random()),
-            symbol:$("alert-symbol").value,exchange:$("alert-exchange").value,
-            direction:$("alert-direction").value,currency:$("alert-currency").value,
+            symbol,exchange,direction,currency,
             target,triggered:false
         };
         localAlerts.push(alert);storeLocalAlerts();showLocalAlerts();
