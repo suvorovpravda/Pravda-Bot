@@ -1494,6 +1494,70 @@ const translations = {
     // A paper snapshot is optional until its authenticated tab is opened.
     // Avoid starting a native IPC request before the dashboard script is ready.
     window.pravdaDashboardPhase = "P03A";
+    // Research observations are not signals and cannot call ipc_paper_trade.
+    // Render only bounded, static Rust diagnostic codes as text (never HTML).
+    let paperProbeBusy = false;
+    $("paper-probe-button").addEventListener("click", async () => {
+        if (!securitySessionReady() || paperProbeBusy) return;
+        const generation = window.pravdaAuthGeneration;
+        const button = $("paper-probe-button");
+        const status = $("paper-probe-status");
+        paperProbeBusy = true;
+        button.disabled = true;
+        status.textContent = "Lecture de l'observation native en cours…";
+        try {
+            const rows = await window.pravdaInvoke("ipc_paper_pipeline_probe", {
+                symbol: "BTC/USDT",
+                venue: "Binance"
+            });
+            if (generation !== window.pravdaAuthGeneration) return;
+            // The Rust probe emits 15 rows, including all seven closed role
+            // diagnostics. Reject missing, duplicated or unexpected claims.
+            const required = [
+                "mode|PAPER_RESEARCH_ONLY",
+                "verdict|BLOCKED_NO_INDEPENDENT_EVIDENCE",
+                "market_attestation|ABSENT",
+                "portfolio_attestation|ABSENT",
+                "proposal|NONE",
+                "order_intent|NONE",
+                "ARCH|UNVERIFIED",
+                "SS|UNVERIFIED",
+                "GMO|SKIPPED",
+                "REG|SKIPPED",
+                "IR|HUMAN_REVIEW_REQUIRED",
+                "UCA|UNATTESTED_DATA_ONLY",
+                "portfolio|UNCHANGED",
+                "execution|DISABLED"
+            ];
+            // Accept only MDA outcomes emitted by the native Rust adapter.
+            // A future or compromised IPC reply must not smuggle an approval
+            // through the previously permissive MDA_* diagnostic pattern.
+            const allowedMda = new Set([
+                "MDA|MDA_UNATTESTED_OBSERVATION",
+                "MDA|MDA_STREAM_UNAVAILABLE",
+                "MDA|MDA_QUOTE_UNAVAILABLE",
+                "MDA|MDA_QUOTE_UNTRUSTED_OR_STALE",
+                "MDA|MDA_QUOTE_CLOCK_INVALID",
+                "MDA|MDA_PRICE_INVALID",
+                "MDA|MDA_POLICY_INVALID"
+            ]);
+            if (!Array.isArray(rows) || rows.length !== 15
+                || rows.some(row => typeof row !== "string" || row.length > 100)
+                || required.some(code => rows.filter(row => row === code).length !== 1)
+                || rows.filter(row => allowedMda.has(row)).length !== 1
+                || rows.some(row => !required.includes(row) && !allowedMda.has(row))) {
+                throw new Error("INVALID_PAPER_PROBE");
+            }
+            status.textContent = rows.join(" · ");
+        } catch (_) {
+            if (generation === window.pravdaAuthGeneration) {
+                status.textContent = "Diagnostic non vérifié. Analyse et ordres restent bloqués.";
+            }
+        } finally {
+            paperProbeBusy = false;
+            button.disabled = false;
+        }
+    });
     $("paper-order-form").addEventListener("submit", event => {
         event.preventDefault();
         void paperAction("ipc_paper_trade", {
