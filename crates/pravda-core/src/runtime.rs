@@ -420,7 +420,9 @@ mod tests {
         // Keep the native producer's RFC3339 serialization in this test,
         // but use a controlled quote instant and comparison clock so
         // millisecond truncation cannot make the quote appear future-dated.
-        let quote_time = Utc::now() - chrono::Duration::seconds(1);
+        let quote_time = chrono::DateTime::parse_from_rfc3339("2025-11-10T10:00:00.123456789Z")
+            .unwrap()
+            .with_timezone(&Utc);
         let tick = Tick {
             symbol: Symbol::BTCUSDT,
             price: 123.456,
@@ -438,7 +440,7 @@ mod tests {
 
         let mut snapshot = runtime.market_snapshot(Duration::from_secs(5)).await;
         snapshot["stream_state"] = json!("observations_recent");
-        let now_ms = u64::try_from(Utc::now().timestamp_millis()).unwrap();
+        let now_ms = u64::try_from(quote_time.timestamp_millis()).unwrap() + 1_000;
         let evidence = crate::agent_pipeline::evidence_from_native_market_snapshot(
             &snapshot,
             crate::agent_contract::PaperSymbol::BtcUsdt,
