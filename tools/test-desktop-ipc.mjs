@@ -39,17 +39,17 @@ const p14gContext={
 vm.createContext(p14gContext);
 vm.runInContext(js.slice(p14gNavStart,p14gNavEnd),p14gContext);
 for(const route of ["home","paper","security","tests","journals","revolut"])
-  vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
+  p14gContext.applyTab(route);
 assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
   "Unready dashboard navigation must never start protected or consent-dependent IPC");
 p14gContext.window.pravdaDashboardReady=true;
 for(const route of ["home","paper","security","tests","journals","revolut"])
-  vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
+  p14gContext.applyTab(route);
 assert.deepEqual(p14gCalls,{paper:0,security:0,events:0,revolut:0},
   "Dashboard marked ready but still hidden must not perform protected refreshes");
 p14gShell.hidden=false;
 for(const route of ["home","paper","security","tests","journals","revolut"])
-  vm.runInContext('applyTab('+JSON.stringify(route)+')',p14gContext);
+  p14gContext.applyTab(route);
 assert.deepEqual(p14gCalls,{paper:3,security:2,events:2,revolut:1},
   "Ready navigation must preserve every existing explicit module refresh");
 assert.match(auth,/function refreshRevealedDashboard\(\) \{[\s\S]*?window\.refreshPaper\(\)/,
