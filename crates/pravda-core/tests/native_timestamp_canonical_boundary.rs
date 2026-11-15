@@ -151,3 +151,21 @@ fn reported_fractional_age_above_policy_limit_fails_without_rounding() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn equivalent_timezone_offsets_preserve_the_same_unattested_instant() {
+    // Offset boundaries must be normalized as instants, not compared as text.
+    // These are synthetic observations, never independently attested prices.
+    for timestamp in [
+        "2025-11-10T10:00:00Z",
+        "2025-11-10T00:00:00-10:00",
+        "2025-11-11T00:00:00+14:00",
+        "2025-11-10T10:00:00+00:00",
+    ] {
+        let evidence = inspect(&snapshot(timestamp))
+            .expect("equivalent RFC3339 offset must identify the same fresh instant");
+        assert_eq!(evidence.quote_received_at_ms, NOW, "{timestamp}");
+        assert!(!evidence.provenance_verified);
+        assert!(!evidence.portfolio_verified);
+    }
+}
