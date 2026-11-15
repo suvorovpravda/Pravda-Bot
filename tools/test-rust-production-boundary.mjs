@@ -33,9 +33,16 @@ for(const path of active) {
   if(/(^|\/)(?:__pycache__|[^/]+\.egg-info)(?:\/|$)/i.test(path))
     problems.push("Tracked Python build artifacts outside archive: "+path);
 }
+const pythonFfiDependencies=new Set(["pyo3","maturin","cpython"]);
 for(const path of active.filter(p=>p.endsWith("Cargo.toml"))) {
   const toml=readFileSync(path,"utf8");
-  if(/^\s*(?:pyo3|maturin|cpython)\s*=/m.test(toml))
+  // Parse line-local assignment keys; never run a backtracking search over
+  // arbitrary-length Cargo manifests.
+  if(toml.split(/\r?\n/).some(line=>{
+    const content=line.trimStart();
+    const equals=content.indexOf("=");
+    return equals>=0 && pythonFfiDependencies.has(content.slice(0,equals).trimEnd());
+  }))
     problems.push("Active Cargo manifest enables Python FFI: "+path);
 }
 
@@ -59,10 +66,15 @@ function executableStatements(path, lines) {
   for(let index=0;index<lines.length;index++) {
     const raw=lines[index], trim=raw.trim();
     const indent=raw.length-raw.trimStart().length;
-    const match=raw.match(/^\s*(?:-\s+)?run\s*:\s*(.*)$/);
-    if(match) {
+    // Match YAML run keys with bounded string operations, avoiding
+    // overlapping whitespace quantifiers on attacker-controlled lines.
+    let statement=raw.trimStart();
+    if(statement.startsWith("-") && (statement[1]===" " || statement[1]==="\t"))
+      statement=statement.slice(1).trimStart();
+    const colon=statement.indexOf(":");
+    if(colon>=0 && statement.slice(0,colon).trimEnd()==="run") {
       blockIndent=null;
-      const value=match[1].trim();
+      const value=statement.slice(colon+1).trim();
       if(/^[|>][-+]?\s*(?:#.*)?$/.test(value)) {
         blockIndent=indent;
       } else if(value) {
