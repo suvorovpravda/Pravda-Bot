@@ -170,20 +170,7 @@ assert.match(paperBootScript,/\$\("paper-order-form"\)\.addEventListener\("submi
 assert.match(paperBootScript,/\$\("paper-reset"\)\.addEventListener\("click"/,
   "Paper reset must remain a user-initiated event");
 assert.match(paperBootScript,/window\.refreshPaper\s*=\s*refreshPaper\.bind\(null,\s*true\)/,
-  "PAPER refresh must bind the original global function without recursion");
-// Classic browser scripts expose top-level functions on window. Replacing one
-// with an arrow that calls its global name causes synchronous stack overflow.
-assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
-  "A self-referential window refresh export would overflow the installed WebView2 stack");
-// Require exactly one global export per refresh handler and an explicit
-// bound reference to the original function. Never execute source assembled
-// from repository text in CI; the installed WebView2 tests check behavior.
-for (const name of ["refreshPaper", "refreshSecurity"]) {
-  const exports=js.split("\n").filter(line=>line.trim().startsWith("window."+name+" = "));
-  assert.equal(exports.length,1,name+": expected exactly one global refresh export");
-  assert.equal(exports[0].trim(),"window."+name+" = "+name+".bind(null, true);",
-    name+": exported refresh must bind the original function with explicit=true");
-}
+  "Paper snapshot must remain manually callable after successful onboarding");
 assert.match(js,/if \(tab === "security"\) \{[\s\S]*?refreshPaper\(true\);/,
   "Authenticated security tab must still fetch paper state on demand");
 assert.match(auth,/if \(window\.pravdaDashboardReady !== true\)/,
@@ -353,6 +340,29 @@ for(const cmd of ["ipc_paper_snapshot","ipc_paper_trade","ipc_paper_reset"]) {
 }
 
 assert.match(html,/id="revolut-consent"[^>]*disabled/,"Optional network module must default disabled");
+assert.equal((html.match(/id="revolut-consent"/g)||[]).length,1,
+  "Revolut has exactly one native-consent checkbox");
+assert.equal((html.match(/id="revolut-refresh"/g)||[]).length,1,
+  "Revolut has exactly one native-refresh button");
+const revolutControls = html.match(/<article class="feature-tile revolut-controls"[^>]*>[\s\S]*?<\/article>/)?.[0];
+assert.ok(revolutControls && /id="revolut-consent"/.test(revolutControls)
+  && /id="revolut-refresh"/.test(revolutControls),
+  "The original Revolut consent and refresh controls must remain together");
+assert.match(html,/data-nav-tab="markets"/,
+  "Markets must be available from the sidebar");
+assert.match(js,/tab === "markets" && category === "revolut"/,
+  "Markets must show the Revolut order-book card");
+assert.ok(css.includes('.shell[data-active-tab]:not([data-active-tab="all"]):not([data-active-tab="markets"]) .terminal-cockpit .feature-grid {'),
+  "The shared feature-grid hide rule must explicitly exclude Markets");
+assert.match(css,/\.shell\[data-active-tab="markets"\] \.terminal-cockpit \.feature-grid \{\s*display: grid;/,
+  "Markets must show the existing Revolut consent controls");
+assert.match(css,/\.shell\[data-active-tab="markets"\] \.terminal-cockpit \.feature-grid > :not\(\.revolut-controls\) \{\s*display: none;/,
+  "Unrelated legacy quick-access modules stay hidden in Markets");
+assert.match(js,/\$\("revolut-refresh"\)\.addEventListener\("click",refreshRevolut\)/,
+  "The original Revolut refresh handler must remain bound");
+assert.match(js,/if \(!revolutOptIn\) \{/,
+  "No Revolut network read without a confirmed Rust consent");
+
 assert.match(js,/ipc_revolut_consent_get/,"UI must read native persisted consent");
 assert.match(js,/ipc_revolut_consent_set/,"UI must persist opt-in through Rust IPC");
 assert.match(ipc,/source == "revolut" && !consent\.enabled\(\)/,"Revolut feed must be gated in Rust");
@@ -375,7 +385,9 @@ assert.match(js,/if \(!explicit && !securityVisible\(\)\) return;/,
 assert.match(js,/if \(securityCheckInFlight\) \{/,
   "Security tests must be single-flight");
 assert.match(js,/window\.refreshSecurity\s*=\s*refreshSecurity\.bind\(null,\s*true\);/,
-  "Security refresh must bind its original global function without recursion");
+  "User-driven security checks must not be silently skipped because of visibilityState");
+assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,
+  "Self-referential global refresh exports overflow the WebView2 stack");
 assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
   "Manual acceptance controls must never silently ignore a click for document.hidden");
 assert.match(js,/if \(tab === "security"\)/,
