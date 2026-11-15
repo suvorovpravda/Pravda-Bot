@@ -10,6 +10,13 @@ const cap=JSON.parse(read("capabilities/main.json"));
 const main=read("src/main.rs"), ipc=read("src/ipc.rs"), paper=read("src/paper.rs"), build=read("build.rs");
 const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
+const onboardingHarness=readFileSync(join(process.cwd(),"tools/test-installed-onboarding.mjs"),"utf8");
+assert.match(onboardingHarness,/function normalizeBootShadowTrace\(view\)/,
+  "Installed WebView2 harness must sanitize the bounded phase trace");
+assert.match(onboardingHarness,/allowedShadowPhase\.test\(entry\.phase\)/,
+  "The harness must reject unapproved phase strings");
+assert.match(onboardingHarness,/report\.bootShadowTrace = normalizeBootShadowTrace\(view\)/,
+  "The installed GUI failure report must retain the sanitized shadow trace");
 const msiAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Msi-Install.ps1"),"utf8");
 const nsisAcceptance=readFileSync(join(process.cwd(),"tools/Test-Pravda-Nsis-Install.ps1"),"utf8");
 const setupSource=readFileSync(join(process.cwd(),"rust/pravda-server/src/bin/pravda-setup.rs"),"utf8");
@@ -140,6 +147,33 @@ assert.match(js,/checked_at_utc: finishedAt\.toISOString\(\)/,
   "Every completed test must publish its actual completion timestamp");
 assert.match(js,/window\.pravdaDashboardReady = true;/,
   "Dashboard must advertise readiness only after all handlers are bound");
+const probeStart = js.indexOf("    function markNavigationBootPhase(phase) {");
+const probeEnd = js.indexOf("    function applyTab(requestedTab) {",probeStart);
+assert.ok(probeStart >= 0 && probeEnd > probeStart,
+  "P14G shadow probe must be inside the bounded bootstrap marker function");
+const probeContext = {
+  window:{pravdaDashboardPhase:"P14G-paper1",pravdaDashboardReady:false},
+  performance:{now:()=>123.8}
+};
+vm.createContext(probeContext);
+vm.runInContext(js.slice(probeStart,probeEnd),probeContext);
+vm.runInContext('markNavigationBootPhase("P14G-paper1a")',probeContext);
+assert.equal(probeContext.window.pravdaDashboardPhase,"P14G-paper1a",
+  "Native marker must accept the first paper sub-phase before readiness");
+assert.equal(probeContext.window.__pravda_debug_phases[0].phase,"P14G-paper1a");
+assert.equal(probeContext.window.__pravda_debug_phases[0].ready,false);
+assert.equal(probeContext.window.__pravda_debug_phases[0].ms,123);
+probeContext.window.pravdaDashboardReady = true;
+vm.runInContext('markNavigationBootPhase("P14G-paper1b")',probeContext);
+assert.equal(probeContext.window.pravdaDashboardPhase,"P14G-paper1a",
+  "Readiness gate must still reject subsequent official phase writes");
+assert.equal(probeContext.window.__pravda_debug_phases[1].phase,"P14G-paper1b");
+assert.equal(probeContext.window.__pravda_debug_phases[1].ready,true,
+  "Shadow probe must record a post-readiness attempt without opening the gate");
+for (let i = 0; i < 60; i++)
+  vm.runInContext('markNavigationBootPhase("P14G-paper1j")',probeContext);
+assert.equal(probeContext.window.__pravda_debug_phases.length,48,
+  "Shadow diagnostic must be bounded to 48 entries");
 const bootDiagnosticStart=js.indexOf('window.pravdaDashboardPhase = "P02H";');
 const bootDiagnosticEnd=js.indexOf('window.pravdaDashboardPhase = "P02I";',bootDiagnosticStart);
 assert.ok(bootDiagnosticStart>=0 && bootDiagnosticEnd>bootDiagnosticStart,
@@ -772,5 +806,43 @@ assert.equal((paperController.match(/const controlGeneration = \+\+paperControlG
   "STOP and REARM must each invalidate obsolete state responses");
 assert.doesNotMatch(paperController,/\bfetch\s*\(|\bWebSocket\s*\(/,
   "Paper-only stop/rearm must not cross into a market-network path");
+
+// Regression: a tampered/stale alert form must never persist values that the
+// startup localStorage validator will reject on the next application launch.
+const alertFormStart=js.indexOf('    $("price-alert-form").addEventListener("submit", event => {');
+const alertFormEnd=js.indexOf('    $("history-export").addEventListener(',alertFormStart);
+assert.ok(alertFormStart>=0 && alertFormEnd>alertFormStart,
+  "Local price alert submission must remain explicitly bounded");
+const alertForm=js.slice(alertFormStart,alertFormEnd);
+const alertStorageStart=js.indexOf('    const alertStorageKey = "pravda-local-price-alerts-v1";');
+const alertStorageEnd=js.indexOf('    const storeLocalAlerts =',alertStorageStart);
+assert.ok(alertStorageStart>=0 && alertStorageEnd>alertStorageStart,
+  "Local alert storage validation must remain present");
+const alertStorage=js.slice(alertStorageStart,alertStorageEnd);
+assert.match(alertStorage,/\.map\(a\s*=>\s*\(\{\s*\.\.\.a,\s*triggered:\s*a\.triggered\s*===\s*true\s*\}\)\)/,
+  "Persisted local alert trigger flags must be normalized to strict booleans");
+// A malformed persisted truthy string must not silently suppress the first
+// threshold notification; only a literal boolean true may preserve the state.
+for(const [stored, expected] of [[true,true],[false,false],["false",false],[1,false],[null,false],[undefined,false]]){
+  assert.equal(stored===true,expected,
+    "Malformed persisted alert trigger state must not count as triggered");
+}
+for(const [field,values] of [
+  ["symbol",["BTC/USDT","ETH/USDT","SOL/USDT"]],
+  ["exchange",["Kraken","Binance"]],
+  ["direction",["above","below"]],
+  ["currency",["EUR","CHF"]]
+]){
+  const allowed=JSON.stringify(values);
+  assert.ok(alertForm.includes(allowed+".includes("+field+")"),
+    field+": form must reject unsupported values before persistence");
+  assert.ok(alertStorage.includes(allowed+".includes(a."+field+")"),
+    field+": persisted allowlist must agree with form allowlist");
+}
+assert.match(alertForm,/if\(!Number\.isFinite\(target\)\|\|target<=0\)/,
+  "Local alert form must reject nonfinite or nonpositive thresholds");
+assert.ok(alertForm.indexOf("Paramètres d'alerte non pris en charge.") <
+  alertForm.indexOf("localAlerts.push(alert)"),
+  "Unsupported local alert values must be rejected before mutation");
 
 console.log("Bundled desktop IPC-only frontend/ACL/CSP contracts OK");
