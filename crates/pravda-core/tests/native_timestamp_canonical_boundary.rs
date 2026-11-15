@@ -133,3 +133,21 @@ fn reported_age_tolerance_cannot_override_wall_clock_freshness() {
     assert!(!evidence.provenance_verified);
     assert!(!evidence.portfolio_verified);
 }
+
+#[test]
+fn reported_fractional_age_above_policy_limit_fails_without_rounding() {
+    // The native wall clock is exactly at the policy limit. A cache-reported
+    // age even one microsecond beyond it must not be rounded back into policy.
+    let mut quote = snapshot("2025-11-10T09:59:58.000Z");
+    quote["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.000001);
+    assert!(matches!(
+        inspect(&quote),
+        Err(NativeMarketRefusal::ClockOrAgeInvalid)
+    ));
+
+    // The inclusive boundary remains an observation, never an attestation.
+    quote["symbols"]["BTC/USDT"]["Binance"]["age_seconds"] = json!(2.0);
+    let evidence = inspect(&quote).expect("exact age limit remains admissible");
+    assert!(!evidence.provenance_verified);
+    assert!(!evidence.portfolio_verified);
+}
