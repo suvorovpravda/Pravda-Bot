@@ -483,6 +483,26 @@ assert.match(auth,/window\.pravdaClearRevolutPrivate\(\)/,
   "Authentication transitions must clear private connection state");
 assert.match(auth,/void window\.refreshRevolutPrivateStatus\(\)/,
   "Login reveal must refresh the private connection state");
+// The GUI must be able to start provisioning without PowerShell, and without
+// ever receiving a secret: the assistant is this same executable, fixed argv.
+assert.match(ipc,/pub fn ipc_revolut_private_setup\(\s*window: Window,\s*session: State<'_, IpcAuth>,\s*\) -> Result<\(\), String>/,
+  "The setup command must accept no caller-supplied payload");
+assert.match(privateRuntime,/Command::new\(executable\)/,
+  "Only the current executable may be launched");
+assert.match(privateRuntime,/std::env::current_exe\(\)/,
+  "The assistant must be this executable, not an external tool");
+assert.match(privateRuntime,/\.arg\("--revolut-x-setup"\)/,
+  "The assistant argv must be fixed");
+assert.match(privateRuntime,/CREATE_NEW_CONSOLE/,
+  "The assistant needs its own console for masked entry");
+assert.doesNotMatch(privateRuntime,/cmd(?:\.exe)?|powershell|pwsh|shell_execute|ShellExecute/i,
+  "Provisioning must never go through a shell");
+assert.match(privateRuntime,/if offline_diagnostic\(\) \{\s*return Err\("OFFLINE_DIAGNOSTIC"\);\s*\}\s*#\[cfg\(windows\)\]/,
+  "The harness and offline diagnostic must never spawn the assistant");
+assert.match(privateCenter,/id="revolut-private-setup"/,
+  "The settings page must offer the no-PowerShell provisioning assistant");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_setup"\)/,
+  "The assistant must be started through authenticated Rust IPC");
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
 assert.match(js,/const securitySessionReady = \(\) => !!securityShell && !securityShell.hidden;/,
@@ -525,7 +545,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,31);
+assert.equal(new Set(handlers).size,32);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -542,7 +562,8 @@ for(const cmd of ["ipc_market_snapshot","ipc_paper_pipeline_probe","ipc_paper_re
  "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
  "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_update_status",
  "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set",
- "ipc_revolut_private_status","ipc_revolut_private_consent_set","ipc_revolut_private_balances","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
+ "ipc_revolut_private_setup","ipc_revolut_private_status","ipc_revolut_private_consent_set",
+ "ipc_revolut_private_balances","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
   const part=ipc.slice(i,next>i?next:ipc.length);

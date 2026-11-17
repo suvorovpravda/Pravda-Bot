@@ -220,7 +220,8 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
     "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set",
-    "ipc_revolut_private_status","ipc_revolut_private_consent_set","ipc_revolut_private_balances","ipc_fx_status",
+    "ipc_revolut_private_setup","ipc_revolut_private_status","ipc_revolut_private_consent_set",
+    "ipc_revolut_private_balances","ipc_fx_status",
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
@@ -316,7 +317,8 @@ try {
 
   for(const name of ["ipc_market_snapshot","ipc_history_recent",
     "ipc_paper_alerts_snapshot","ipc_runtime_metrics",
-    "ipc_fx_status","ipc_session_check","ipc_revolut_private_status","ipc_revolut_private_balances"])
+    "ipc_fx_status","ipc_session_check","ipc_revolut_private_setup","ipc_revolut_private_status",
+    "ipc_revolut_private_balances"])
     rustDenied("no session: "+name,await invoke(name));
   const query={symbol:"BTC/USDT",exchange:"Binance",period:"day"};
   for(const name of ["ipc_history_query","ipc_history_export_csv"])

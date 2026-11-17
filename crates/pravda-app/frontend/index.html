@@ -322,11 +322,13 @@
                 <section id="revolut-private-center" class="maintenance-notice" aria-label="Connexion Revolut X en lecture seule">
                     <h3>Connexions · Revolut X (lecture seule)</h3>
                     <p class="fine-print">L’import des identifiants se fait uniquement dans la console Windows locale de Pravda-Bot : le mot de passe de l’application et la clé API y sont saisis masqués, la clé privée est lue depuis un fichier. Cette interface ne reçoit ni clé, ni secret, ni signature, et ne peut pas en enregistrer. Les identifiants restent dans le Gestionnaire d’identification Windows.</p>
-                    <pre class="fine-print" id="revolut-private-command">pravda-server.exe --revolut-x-setup C:\chemin\revolut-x-prive.pem</pre>
+                    <p class="fine-print">Le bouton « Configurer Revolut X » ouvre l’assistant Windows intégré à cet exécutable : il demande le mot de passe local, le chemin du fichier PEM, puis la clé API en saisie masquée. Aucune de ces valeurs ne passe par cette page. PowerShell n’est pas nécessaire ; la commande ci-dessous reste disponible pour un usage avancé.</p>
+                    <pre class="fine-print" id="revolut-private-command">Pravda-Bot.exe --revolut-x-setup</pre>
                     <div id="revolut-private-state" class="paper-summary" role="status" aria-live="polite">État local non encore consulté.</div>
                     <label class="feature-consent"><input id="revolut-private-consent" type="checkbox" disabled> Autoriser la lecture authentifiée de mes soldes Revolut X (réseau, facultatif)</label>
                     <p class="fine-print" id="revolut-private-consent-status" role="status" aria-live="polite">Vérification du consentement local…</p>
                     <div class="feature-actions">
+                        <button class="button button-primary" id="revolut-private-setup" type="button">Configurer Revolut X (assistant Windows)</button>
                         <button class="button" id="revolut-private-refresh" type="button">Vérifier l’état local</button>
                         <button class="button button-primary" id="revolut-private-test" type="button" disabled>Tester la connexion et lire les soldes</button>
                     </div>

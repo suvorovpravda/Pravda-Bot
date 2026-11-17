@@ -14,6 +14,7 @@ const guarded = [
   "ipc_security_events",
   "ipc_revolut_consent_get",
   "ipc_revolut_consent_set",
+  "ipc_revolut_private_setup",
   "ipc_revolut_private_status",
   "ipc_revolut_private_consent_set",
   "ipc_revolut_private_balances",

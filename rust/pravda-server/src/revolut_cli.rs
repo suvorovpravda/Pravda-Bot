@@ -4,6 +4,7 @@ use std::ffi::OsString;
 
 enum Command {
     Setup(OsString),
+    SetupInteractive,
     Balances,
     OrderDetails(OsString),
 }
@@ -14,12 +15,18 @@ fn parse_command(args: &[OsString]) -> Option<Result<Command, &'static str>> {
         "--revolut-x-setup" if args.len() == 2 && !args[1].is_empty() => {
             Some(Ok(Command::Setup(args[1].clone())))
         }
+        // The desktop assistant launches this mode with no argument: the
+        // operator types the file path in the assistant window, never in the
+        // WebView, and no path is ever accepted from JavaScript.
+        "--revolut-x-setup" if args.is_empty() || args.len() == 1 => {
+            Some(Ok(Command::SetupInteractive))
+        }
         "--revolut-x-balances" if args.len() == 1 => Some(Ok(Command::Balances)),
         "--revolut-x-order-status" if args.len() == 2 && !args[1].is_empty() => {
             Some(Ok(Command::OrderDetails(args[1].clone())))
         }
         "--revolut-x-setup" | "--revolut-x-balances" | "--revolut-x-order-status" => Some(Err(
-            "Usage: --revolut-x-setup <private-pem-path> OR --revolut-x-balances OR --revolut-x-order-status <venue-uuid>",
+            "Usage: --revolut-x-setup [private-pem-path] OR --revolut-x-balances OR --revolut-x-order-status <venue-uuid>",
         )),
         _ => None,
     }
@@ -35,7 +42,7 @@ pub async fn run(args: &[OsString]) -> Option<Result<(), &'static str>> {
     {
         match command {
             Command::Setup(path) | Command::OrderDetails(path) => drop(path),
-            Command::Balances => {}
+            Command::SetupInteractive | Command::Balances => {}
         }
         Some(Err("Revolut X credential management requires Windows"))
     }
@@ -110,6 +117,42 @@ mod windows {
         Ok(())
     }
 
+    // Interactive path entry for the GUI-launched assistant. The path is not a
+    // secret, but it is still never supplied by the WebView.
+    fn prompt_key_path() -> Result<PathBuf, &'static str> {
+        use std::io::Write;
+        print!("Revolut X private key file (PEM) path: ");
+        std::io::stdout()
+            .flush()
+            .map_err(|_| "A Windows console is required")?;
+        let mut line = String::new();
+        std::io::stdin()
+            .read_line(&mut line)
+            .map_err(|_| "A Windows console is required")?;
+        let trimmed = line.trim().trim_matches('"').trim();
+        if trimmed.is_empty() || trimmed.len() > 1024 {
+            return Err("Private key file path is invalid");
+        }
+        Ok(PathBuf::from(trimmed))
+    }
+
+    fn prompt_and_store(
+        account: &RevolutXVaultAccount<WindowsCredentialStore>,
+        pem: &[u8],
+    ) -> Result<(), &'static str> {
+        let key = Zeroizing::new(
+            rpassword::prompt_password("Revolut X API key (hidden): ")
+                .map_err(|_| "A Windows console is required")?,
+        );
+        account.provision_new(key.as_bytes(), pem).map_err(|_| {
+            "Credentials were not saved: invalid, existing or vault unavailable"
+        })?;
+        println!(
+            "Credentials saved in Windows Credential Manager. No connection was attempted."
+        );
+        Ok(())
+    }
+
     fn read_private_key(path: &Path) -> Result<Zeroizing<Vec<u8>>, &'static str> {
         let file = std::fs::File::open(path).map_err(|_| "Cannot read the private key file")?;
         let mut bytes = Zeroizing::new(Vec::with_capacity(1025));
@@ -146,16 +189,13 @@ mod windows {
             Command::Setup(path) => {
                 let _provision_lock = acquire_provision_lock(&root)?;
                 let pem = read_private_key(Path::new(&path))?;
-                let key = Zeroizing::new(
-                    rpassword::prompt_password("Revolut X API key (hidden): ")
-                        .map_err(|_| "A Windows console is required")?,
-                );
-                account.provision_new(key.as_bytes(), &pem).map_err(|_| {
-                    "Credentials were not saved: invalid, existing or vault unavailable"
-                })?;
-                println!(
-                    "Credentials saved in Windows Credential Manager. No connection was attempted."
-                );
+                prompt_and_store(&account, &pem)?;
+            }
+            Command::SetupInteractive => {
+                let _provision_lock = acquire_provision_lock(&root)?;
+                let path = prompt_key_path()?;
+                let pem = read_private_key(&path)?;
+                prompt_and_store(&account, &pem)?;
             }
             Command::Balances => {
                 let balances = account.balances().await.map_err(|_| {
@@ -262,6 +302,10 @@ mod tests {
         ));
         assert!(matches!(
             parse_command(&args(&["--revolut-x-setup"])),
+            Some(Ok(Command::SetupInteractive))
+        ));
+        assert!(matches!(
+            parse_command(&args(&["--revolut-x-setup", "key.pem", "extra"])),
             Some(Err(_))
         ));
         assert!(matches!(

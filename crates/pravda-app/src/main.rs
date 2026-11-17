@@ -194,6 +194,7 @@ async fn main() {
             ipc::ipc_public_feed,
             ipc::ipc_revolut_consent_get,
             ipc::ipc_revolut_consent_set,
+            ipc::ipc_revolut_private_setup,
             ipc::ipc_revolut_private_status,
             ipc::ipc_revolut_private_consent_set,
             ipc::ipc_revolut_private_balances,

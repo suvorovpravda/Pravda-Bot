@@ -70,6 +70,32 @@ fn offline_diagnostic() -> bool {
         || std::env::var("PRAVDA_REVOLUT_X_ENABLED").as_deref() == Ok("false")
 }
 
+/// Launch the audited provisioning assistant carried by this same executable
+/// (`Pravda-Bot.exe --revolut-x-setup`). Fixed argv, no shell, no argument from
+/// JavaScript: the operator types the local password, the PEM path and the API
+/// key in the assistant window, so the WebView never receives a secret.
+pub fn launch_setup_assistant() -> Result<(), &'static str> {
+    if offline_diagnostic() {
+        return Err("OFFLINE_DIAGNOSTIC");
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+        let executable = std::env::current_exe().map_err(|_| "PRIVATE_SETUP_UNAVAILABLE")?;
+        std::process::Command::new(executable)
+            .arg("--revolut-x-setup")
+            .creation_flags(CREATE_NEW_CONSOLE)
+            .spawn()
+            .map_err(|_| "PRIVATE_SETUP_UNAVAILABLE")?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        Err("PRIVATE_UNSUPPORTED_PLATFORM")
+    }
+}
+
 /// Local connection state. No network call and no credential material.
 pub fn status_rows(consent: &RevolutPrivateConsent) -> Vec<String> {
     pravda_server::revolut_private_view::status_rows(consent.enabled())
@@ -186,6 +212,13 @@ mod tests {
         consent.set(false).unwrap();
         assert_eq!(gated_balance_rows(&consent, false).await, Err("PRIVATE_OPT_IN_REQUIRED"));
         std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn setup_assistant_is_unavailable_off_windows_and_never_spawns_in_diagnostic() {
+        // The harness/diagnostic refusal is checked before any process spawn.
+        #[cfg(not(windows))]
+        assert_eq!(launch_setup_assistant(), Err("PRIVATE_UNSUPPORTED_PLATFORM"));
     }
 
     #[test]

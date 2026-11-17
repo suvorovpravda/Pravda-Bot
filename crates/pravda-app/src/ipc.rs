@@ -801,6 +801,17 @@ pub fn ipc_revolut_consent_set(
     Ok(consent.enabled())
 }
 
+/// Open the local provisioning assistant. No secret, path or argument is
+/// accepted from the WebView: the command takes no caller-supplied payload.
+#[tauri::command]
+pub fn ipc_revolut_private_setup(
+    window: Window,
+    session: State<'_, IpcAuth>,
+) -> Result<(), String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    revolut_connection::launch_setup_assistant().map_err(str::to_string)
+}
+
 /// Local, read-only connection state. No network call and no key material:
 /// provisioning stays in the Windows console path `--revolut-x-setup`.
 #[tauri::command]

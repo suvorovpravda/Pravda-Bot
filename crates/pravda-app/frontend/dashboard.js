@@ -1507,6 +1507,41 @@ const translations = {
             if (sessionChanged && securitySessionReady()) void readRevolutPrivateStatus();
         }
     }
+    async function openRevolutPrivateAssistant() {
+        const generation = window.pravdaAuthGeneration;
+        if (!securitySessionReady()) {
+            clearRevolutPrivate();
+            return;
+        }
+        const button = $("revolut-private-setup");
+        button.disabled = true;
+        try {
+            await window.pravdaInvoke("ipc_revolut_private_setup");
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("revolut-private-checked").textContent =
+                "Assistant Windows ouvert : saisissez-y le mot de passe local, le chemin du fichier " +
+                "PEM et la clé API (masquée), puis revenez ici et cliquez sur « Vérifier l’état local ». " +
+                "Cette page n’a reçu aucun secret.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            const raw = String(error);
+            const texts = {
+                OFFLINE_DIAGNOSTIC: "Diagnostic hors réseau : assistant d’import refusé.",
+                PRIVATE_UNSUPPORTED_PLATFORM: "Assistant d’import disponible uniquement sur Windows.",
+                PRIVATE_SETUP_UNAVAILABLE: "Assistant d’import indisponible : aucun identifiant enregistré.",
+                UNAUTHORIZED: "Session locale expirée : reconnectez-vous."
+            };
+            let message = "Assistant d’import non ouvert : aucun identifiant enregistré.";
+            for (const code of Object.keys(texts)) {
+                if (raw.includes(code)) message = texts[code];
+            }
+            $("revolut-private-checked").textContent = message;
+            if (raw.includes("UNAUTHORIZED")) window.pravdaRequireLogin();
+        } finally {
+            if (generation === window.pravdaAuthGeneration) button.disabled = false;
+        }
+    }
+    $("revolut-private-setup").addEventListener("click", () => { void openRevolutPrivateAssistant(); });
     revolutPrivateConsentCheckbox.addEventListener("change", () => {
         void setRevolutPrivateConsent(revolutPrivateConsentCheckbox.checked);
     });
