@@ -157,3 +157,22 @@ test("assistant failures other than UNAUTHORIZED keep the local session", async 
     "an unavailable assistant must not force a local re-login");
   assert.match(harness.$("revolut-private-checked").textContent, /Assistant d’import indisponible/);
 });
+
+// P3: a revocation that Rust could not persist must be reported as non durable.
+test("an unpersistable revocation warns that the stored opt-in must be removed", async () => {
+  // Rust closes memory first, then fails to persist: the next status read must
+  // report the memory state (disabled), never the stale file.
+  let memory = true;
+  const harness = boot({
+    ipc_revolut_private_status: () => memory ? STATUS_ENABLED : STATUS_DISABLED,
+    ipc_revolut_private_consent_set: () => { memory = false; throw "PRIVATE_CONSENT_REVOKE_UNSAFE"; }
+  });
+  await harness.probe.readRevolutPrivateStatus();
+  await settle();
+  await harness.probe.setRevolutPrivateConsent(false);
+  await settle();
+  const status = harness.$("revolut-private-consent-status").textContent;
+  assert.match(status, /Révocation non durable/, "the operator must be warned");
+  assert.match(status, /revolut_private_consent\.cfg/, "the file to remove must be named");
+  assert.equal(harness.$("revolut-private-consent").checked, false, "the gate stays closed");
+});

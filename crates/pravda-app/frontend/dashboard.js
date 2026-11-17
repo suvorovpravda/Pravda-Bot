@@ -1288,6 +1288,7 @@ const translations = {
     let revolutPrivateOptIn = false;
     let revolutPrivateVersion = 0;
     let revolutPrivateBusy = false;
+    let revolutPrivateStorageWarning = "";
     const revolutPrivateConsentCheckbox = $("revolut-private-consent");
     const revolutPrivateTestButton = $("revolut-private-test");
     const revolutPrivateFields = ["connection", "consent", "scope", "orders", "vault"];
@@ -1299,6 +1300,7 @@ const translations = {
         revolutPrivateVersion++;
         revolutPrivateOptIn = false;
         revolutPrivateBusy = false;
+        revolutPrivateStorageWarning = "";
         revolutPrivateConsentCheckbox.checked = false;
         revolutPrivateConsentCheckbox.disabled = true;
         revolutPrivateTestButton.disabled = true;
@@ -1352,9 +1354,11 @@ const translations = {
             };
             $("revolut-private-state").textContent =
                 labels[values.connection] + " · lecture seule · ordres désactivés";
-            $("revolut-private-consent-status").textContent = revolutPrivateOptIn
-                ? "Consentement privé actif, distinct du carnet public."
-                : "Consentement privé désactivé : aucune lecture authentifiée.";
+            // A non-durable revocation stays visible until a consent write succeeds.
+            $("revolut-private-consent-status").textContent = revolutPrivateStorageWarning ||
+                (revolutPrivateOptIn
+                    ? "Consentement privé actif, distinct du carnet public."
+                    : "Consentement privé désactivé : aucune lecture authentifiée.");
         } catch (_error) {
             if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
             revolutPrivateOptIn = false;
@@ -1382,11 +1386,19 @@ const translations = {
             if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
             if (typeof stored !== "boolean") throw Error("INVALID_PRIVATE_CONSENT");
             revolutPrivateOptIn = stored;
+            revolutPrivateStorageWarning = "";
             $("revolut-private-balances").textContent = "Aucun solde lu.";
-        } catch (_error) {
+        } catch (error) {
             if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
             revolutPrivateOptIn = false;
-            $("revolut-private-consent-status").textContent =
+            // A revocation that could not be persisted is not durable: the operator
+            // must remove the stored opt-in before the next launch.
+            revolutPrivateStorageWarning =
+                revolutPrivateErrorCodes(String(error)).has("PRIVATE_CONSENT_REVOKE_UNSAFE")
+                    ? "Révocation non durable : le fichier de consentement n’a pas pu être modifié. " +
+                      "Fermez l’application et supprimez revolut_private_consent.cfg avant de relancer."
+                    : "";
+            $("revolut-private-consent-status").textContent = revolutPrivateStorageWarning ||
                 "Consentement privé non enregistré : lectures refusées.";
         } finally {
             if (generation === window.pravdaAuthGeneration && version === revolutPrivateVersion) {

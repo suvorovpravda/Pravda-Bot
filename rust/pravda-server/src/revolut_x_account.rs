@@ -290,7 +290,9 @@ mod tests {
         assert!(!account.configured().unwrap());
         let key = "A".repeat(API_KEY_LEN);
         let pem = temporary_pem();
-        account.provision_new(key.as_bytes(), pem.as_bytes()).unwrap();
+        account
+            .provision_new(key.as_bytes(), pem.as_bytes())
+            .unwrap();
         assert!(account.configured().unwrap());
         assert_eq!(account.store.0.lock().unwrap().len(), 1);
     }

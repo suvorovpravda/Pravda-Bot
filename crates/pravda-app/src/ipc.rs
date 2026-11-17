@@ -845,7 +845,9 @@ pub async fn ipc_revolut_private_balances(
     consent: State<'_, RevolutPrivateConsent>,
 ) -> Result<Vec<String>, String> {
     let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
-    let result = revolut_connection::balance_rows(consent.inner()).await.map_err(str::to_string);
+    let result = revolut_connection::balance_rows(consent.inner())
+        .await
+        .map_err(str::to_string);
     finish_authorized_read(&session, &issued_to, result)
 }
 

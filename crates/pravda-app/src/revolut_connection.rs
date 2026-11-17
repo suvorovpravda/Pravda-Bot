@@ -39,7 +39,9 @@ impl RevolutPrivateConsent {
     }
 
     /// Only the authenticated main WebView reaches this through Rust IPC.
-    /// A failed write can never leave the gate open, even in memory.
+    /// Revocation is fail-safe across a restart: memory closes first, then the
+    /// stored opt-in is destroyed before anything else, so a failed write can
+    /// never leave a readable `enabled` behind.
     pub fn set(&self, enabled: bool) -> Result<(), &'static str> {
         let mut current = self
             .enabled
@@ -47,18 +49,45 @@ impl RevolutPrivateConsent {
             .unwrap_or_else(|poison| poison.into_inner());
         if !enabled {
             *current = false;
+            return self.revoke_storage();
         }
+        self.write_storage(ENABLED)?;
+        *current = true;
+        Ok(())
+    }
+
+    fn write_storage(&self, content: &str) -> Result<(), &'static str> {
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
             .truncate(true)
             .open(&self.file)
             .map_err(|_| "PRIVATE_CONSENT_STORAGE_FAILURE")?;
-        let content = if enabled { ENABLED } else { DISABLED };
         file.write_all(content.as_bytes())
             .and_then(|()| file.sync_all())
-            .map_err(|_| "PRIVATE_CONSENT_STORAGE_FAILURE")?;
-        *current = enabled;
+            .map_err(|_| "PRIVATE_CONSENT_STORAGE_FAILURE")
+    }
+
+    // Truncation already destroys an affirmative consent, but `open` itself can
+    // fail (read-only attribute, ACL, exclusive lock) while the previous
+    // `enabled` file stays readable: `load` would then restore the permission on
+    // the next launch. Deletion and renaming depend on the directory rather than
+    // on write access to the file, so both are attempted before giving up.
+    fn revoke_storage(&self) -> Result<(), &'static str> {
+        if self.write_storage(DISABLED).is_ok() {
+            return Ok(());
+        }
+        if std::fs::remove_file(&self.file).is_ok() {
+            return Ok(());
+        }
+        if std::fs::rename(&self.file, self.file.with_extension("cfg.revoked")).is_ok() {
+            return Ok(());
+        }
+        // Nothing could be changed. Only a still-readable opt-in is unsafe; an
+        // absent, unreadable or already disabled file is fail-closed by `load`.
+        if matches!(std::fs::read_to_string(&self.file), Ok(content) if content == ENABLED) {
+            return Err("PRIVATE_CONSENT_REVOKE_UNSAFE");
+        }
         Ok(())
     }
 }
@@ -191,10 +220,77 @@ mod tests {
         std::fs::remove_dir_all(root).unwrap();
     }
 
+    fn set_writable(path: &Path, writable: bool) {
+        let mut permissions = std::fs::metadata(path).unwrap().permissions();
+        #[cfg(windows)]
+        permissions.set_readonly(!writable);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            permissions.set_mode(match (writable, path.is_dir()) {
+                (true, true) => 0o755,
+                (false, true) => 0o555,
+                (true, false) => 0o644,
+                (false, false) => 0o444,
+            });
+        }
+        std::fs::set_permissions(path, permissions).unwrap();
+    }
+
+    // Revocation must survive a restart. A read-only consent file makes `open`
+    // fail while the previous `enabled` stays readable: the stored opt-in must
+    // still be destroyed, or the failure must be reported as unsafe.
+    #[test]
+    fn failed_revocation_never_leaves_a_readable_opt_in() {
+        let (dir, consent) = enabled_consent("revoke-readonly");
+        let path = dir.join("revolut_private_consent.cfg");
+        set_writable(&path, false);
+        let outcome = consent.set(false);
+        assert!(!consent.enabled());
+        let stored = std::fs::read_to_string(&path).unwrap_or_default();
+        assert_ne!(stored, ENABLED, "a revoked opt-in must not stay readable");
+        assert!(
+            !RevolutPrivateConsent::load(&dir.join("auth.json")).enabled(),
+            "a restart must not restore a revoked consent"
+        );
+        if let Err(code) = outcome {
+            assert_eq!(code, "PRIVATE_CONSENT_REVOKE_UNSAFE");
+        }
+        if path.exists() {
+            set_writable(&path, true);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    // When neither rewriting, deleting nor renaming is possible, the operator
+    // must be told that the revocation is not durable instead of silently
+    // succeeding. The directory itself is made unwritable here.
+    #[test]
+    fn an_unpersistable_revocation_is_reported_as_unsafe() {
+        let (dir, consent) = enabled_consent("revoke-locked");
+        let path = dir.join("revolut_private_consent.cfg");
+        set_writable(&path, false);
+        set_writable(&dir, false);
+        let outcome = consent.set(false);
+        let privileged = std::fs::OpenOptions::new().write(true).open(&path).is_ok();
+        if !privileged {
+            assert_eq!(outcome, Err("PRIVATE_CONSENT_REVOKE_UNSAFE"));
+            assert!(!consent.enabled());
+        }
+        set_writable(&dir, true);
+        if path.exists() {
+            set_writable(&path, true);
+        }
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
     #[tokio::test]
     async fn offline_diagnostic_refuses_before_vault_and_network() {
         let (dir, consent) = enabled_consent("offline");
-        assert_eq!(gated_balance_rows(&consent, true).await, Err("OFFLINE_DIAGNOSTIC"));
+        assert_eq!(
+            gated_balance_rows(&consent, true).await,
+            Err("OFFLINE_DIAGNOSTIC")
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -202,7 +298,10 @@ mod tests {
     async fn consent_off_refuses_before_any_request() {
         let dir = fixture("optout");
         let consent = RevolutPrivateConsent::load(&dir.join("auth.json"));
-        assert_eq!(gated_balance_rows(&consent, false).await, Err("PRIVATE_OPT_IN_REQUIRED"));
+        assert_eq!(
+            gated_balance_rows(&consent, false).await,
+            Err("PRIVATE_OPT_IN_REQUIRED")
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -210,7 +309,10 @@ mod tests {
     async fn revocation_before_the_read_exposes_no_balance() {
         let (dir, consent) = enabled_consent("revoke");
         consent.set(false).unwrap();
-        assert_eq!(gated_balance_rows(&consent, false).await, Err("PRIVATE_OPT_IN_REQUIRED"));
+        assert_eq!(
+            gated_balance_rows(&consent, false).await,
+            Err("PRIVATE_OPT_IN_REQUIRED")
+        );
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -218,7 +320,10 @@ mod tests {
     fn setup_assistant_is_unavailable_off_windows_and_never_spawns_in_diagnostic() {
         // The harness/diagnostic refusal is checked before any process spawn.
         #[cfg(not(windows))]
-        assert_eq!(launch_setup_assistant(), Err("PRIVATE_UNSUPPORTED_PLATFORM"));
+        assert_eq!(
+            launch_setup_assistant(),
+            Err("PRIVATE_UNSUPPORTED_PLATFORM")
+        );
     }
 
     #[test]

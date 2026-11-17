@@ -226,12 +226,10 @@ mod windows {
             rpassword::prompt_password("Revolut X API key (hidden): ")
                 .map_err(|_| "A Windows console is required")?,
         );
-        account.provision_new(key.as_bytes(), pem).map_err(|_| {
-            "Credentials were not saved: invalid, existing or vault unavailable"
-        })?;
-        println!(
-            "Credentials saved in Windows Credential Manager. No connection was attempted."
-        );
+        account
+            .provision_new(key.as_bytes(), pem)
+            .map_err(|_| "Credentials were not saved: invalid, existing or vault unavailable")?;
+        println!("Credentials saved in Windows Credential Manager. No connection was attempted.");
         Ok(())
     }
 
@@ -418,9 +416,15 @@ mod tests {
     #[test]
     fn only_the_gui_assistant_holds_its_own_window() {
         assert!(owns_assistant_window(&args(&["--revolut-x-setup"])));
-        assert!(!owns_assistant_window(&args(&["--revolut-x-setup", "key.pem"])));
+        assert!(!owns_assistant_window(&args(&[
+            "--revolut-x-setup",
+            "key.pem"
+        ])));
         assert!(!owns_assistant_window(&args(&["--revolut-x-balances"])));
-        assert!(!owns_assistant_window(&args(&["--revolut-x-order-status", "uuid"])));
+        assert!(!owns_assistant_window(&args(&[
+            "--revolut-x-order-status",
+            "uuid"
+        ])));
         assert!(!owns_assistant_window(&args(&["--revolut-x-setup", ""])));
         assert!(!owns_assistant_window(&[]));
         assert!(!owns_assistant_window(&args(&["--other"])));

@@ -556,12 +556,25 @@ assert.doesNotMatch(privateUi,/includes\("UNAUTHORIZED"\)|includes\(code\)/,
   "Closed error codes are whole tokens: a substring match maps PRIVATE_VENUE_UNAUTHORIZED to a session expiry");
 assert.match(privateUi,/function revolutPrivateErrorCodes\(raw\)/,
   "Error codes must be tokenized once, not matched as substrings");
-assert.equal((privateUi.match(/revolutPrivateErrorCodes\(raw\)/g)||[]).length,4,
-  "One tokenizer definition and three call sites: balances, failure text and the assistant");
+assert.equal((privateUi.match(/revolutPrivateErrorCodes\(/g)||[]).length,5,
+  "One tokenizer definition and four call sites: balances, failure text, assistant, consent");
 const privateUiTests=readFileSync(join(process.cwd(),"tools/tests/revolut-private-ui.test.mjs"),"utf8");
 assert.match(privateUiTests,/consent revocation are never rendered/,"The revocation regression must stay covered");
 assert.match(privateUiTests,/PRIVATE_VENUE_UNAUTHORIZED never locks the local session/,
   "The venue/session confusion regression must stay covered");
+// P3: a revocation must destroy the stored opt-in, or be reported as non durable.
+assert.match(privateModule,/fn revoke_storage\(&self\) -> Result<\(\), &'static str>/,
+  "Revocation must own a fail-safe storage path");
+assert.match(privateModule,/std::fs::remove_file\(&self\.file\)/,
+  "An unwritable consent file must still be deletable");
+assert.match(privateModule,/std::fs::rename\(&self\.file, self\.file\.with_extension\("cfg\.revoked"\)\)/,
+  "Renaming is the last resort before reporting an unsafe revocation");
+assert.match(privateModule,/PRIVATE_CONSENT_REVOKE_UNSAFE/,
+  "A revocation that cannot be persisted must have its own closed code");
+assert.match(privateUi,/PRIVATE_CONSENT_REVOKE_UNSAFE/,
+  "The interface must tell the operator that the revocation is not durable");
+assert.match(privateModule,/fn failed_revocation_never_leaves_a_readable_opt_in/,
+  "The restart-after-failed-revocation regression must stay covered in Rust");
 const rustWorkflow=readFileSync(join(process.cwd(),".github/workflows/rust.yml"),"utf8");
 assert.match(rustWorkflow,/node --test tools\/tests\/revolut-private-ui\.test\.mjs/,
   "The private UI regressions must run in the Rust check matrix (Linux and Windows)");

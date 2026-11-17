@@ -28,7 +28,11 @@ fn state_rows<S: SecretStore>(
     consent_enabled: bool,
 ) -> Vec<String> {
     let state = connection_state(account);
-    let consent = if consent_enabled { "enabled" } else { "disabled" };
+    let consent = if consent_enabled {
+        "enabled"
+    } else {
+        "disabled"
+    };
     let vault = if state == "unsupported" {
         "unsupported"
     } else {
@@ -45,7 +49,11 @@ fn state_rows<S: SecretStore>(
 
 /// Local connection state. No network call, no key material, no raw error.
 pub fn status_rows(consent_enabled: bool) -> Vec<String> {
-    let consent = if consent_enabled { "enabled" } else { "disabled" };
+    let consent = if consent_enabled {
+        "enabled"
+    } else {
+        "disabled"
+    };
     match vault_account() {
         Ok(account) => state_rows(&account, consent_enabled),
         Err(_) => vec![
@@ -97,7 +105,9 @@ fn validated_balance_row(
         Some(value) if valid_amount(value) => value,
         Some(_) => return Err("PRIVATE_INVALID_RESPONSE"),
     };
-    Ok(format!("balance|{currency}|{available}|{reserved}|{total}|{staked}"))
+    Ok(format!(
+        "balance|{currency}|{available}|{reserved}|{total}|{staked}"
+    ))
 }
 
 async fn read_rows<S: SecretStore>(
