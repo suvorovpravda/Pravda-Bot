@@ -29,6 +29,9 @@ fn main() {
         "ipc_public_feed",
         "ipc_revolut_consent_get",
         "ipc_revolut_consent_set",
+        "ipc_revolut_private_status",
+        "ipc_revolut_private_consent_set",
+        "ipc_revolut_private_balances",
         "ipc_open_source",
     ];
     tauri_build::try_build(

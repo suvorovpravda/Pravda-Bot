@@ -25,6 +25,26 @@ pub enum AccountConnectionError {
     InvalidBundle,
 }
 
+impl AccountConnectionError {
+    /// Closed, non-sensitive classification for user feedback. It never
+    /// formats a raw error, file path, credential identifier, HTTP header or
+    /// venue payload, so a caller cannot leak secrets by displaying it.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::Credentials(SecretStoreError::UnsupportedPlatform) => {
+                "PRIVATE_UNSUPPORTED_PLATFORM"
+            }
+            Self::Credentials(SecretStoreError::NotFound) => "PRIVATE_NOT_CONFIGURED",
+            Self::InvalidBundle => "PRIVATE_NOT_CONFIGURED",
+            Self::Request(PrivateReadError::Unauthorized) => "PRIVATE_VENUE_UNAUTHORIZED",
+            Self::Request(PrivateReadError::RateLimited) => "PRIVATE_RATE_LIMITED",
+            Self::Request(PrivateReadError::Network) => "PRIVATE_NETWORK",
+            Self::Request(PrivateReadError::InvalidResponse) => "PRIVATE_INVALID_RESPONSE",
+            _ => "PRIVATE_UNAVAILABLE",
+        }
+    }
+}
+
 enum Credentials {
     Bundle(SecretValue),
     Legacy(SecretValue, SecretValue),
@@ -101,6 +121,16 @@ impl<S: SecretStore> RevolutXVaultAccount<S> {
                 self.store.get(REVX_ED25519_PRIVATE_PEM)?,
             )),
             Err(error) => Err(error.into()),
+        }
+    }
+
+    /// Presence and structural validity of the stored pair, without ever
+    /// returning key material. An empty vault is a normal state, not a fault.
+    pub fn configured(&self) -> Result<bool, AccountConnectionError> {
+        match self.load_credentials() {
+            Ok(_) => Ok(true),
+            Err(AccountConnectionError::Credentials(SecretStoreError::NotFound)) => Ok(false),
+            Err(error) => Err(error),
         }
     }
 
@@ -252,6 +282,34 @@ mod tests {
             account.provision_new(key.as_bytes(), pem.as_bytes()),
             Err(AccountConnectionError::AlreadyConfigured)
         ));
+    }
+
+    #[test]
+    fn configured_reports_presence_without_exposing_the_pair() {
+        let account = RevolutXVaultAccount::new(MemoryStore::default()).unwrap();
+        assert!(!account.configured().unwrap());
+        let key = "A".repeat(API_KEY_LEN);
+        let pem = temporary_pem();
+        account.provision_new(key.as_bytes(), pem.as_bytes()).unwrap();
+        assert!(account.configured().unwrap());
+        assert_eq!(account.store.0.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn error_codes_stay_a_closed_non_sensitive_vocabulary() {
+        for code in [
+            AccountConnectionError::Credentials(SecretStoreError::NotFound).code(),
+            AccountConnectionError::Credentials(SecretStoreError::UnsupportedPlatform).code(),
+            AccountConnectionError::InvalidBundle.code(),
+            AccountConnectionError::AlreadyConfigured.code(),
+            AccountConnectionError::Request(PrivateReadError::Unauthorized).code(),
+            AccountConnectionError::Request(PrivateReadError::RateLimited).code(),
+            AccountConnectionError::Request(PrivateReadError::Network).code(),
+        ] {
+            assert!(code.starts_with("PRIVATE_"), "{code}");
+            assert!(code.len() <= 32, "{code}");
+            assert!(code.bytes().all(|b| b.is_ascii_uppercase() || b == b'_'));
+        }
     }
 
     #[test]
