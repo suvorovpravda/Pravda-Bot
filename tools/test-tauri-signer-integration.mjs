@@ -8,6 +8,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { buildUpdaterMetadata } from "./prepare-updater-release.mjs";
+import { trustedExecFileSync, toolchainDirectories } from "./lib/trusted-exec.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "pravda-updater-signer-test-"));
 const keyPath = join(root, "throwaway.key");
@@ -20,8 +21,8 @@ for (const name of ["TAURI_SIGNING_PRIVATE_KEY", "TAURI_SIGNING_PRIVATE_KEY_PATH
 
 function signer(args) {
   try {
-    execFileSync("cargo", ["tauri", "signer", ...args], {
-      env, stdio: ["ignore", "pipe", "pipe"], timeout: 60000, maxBuffer: 1024 * 1024
+    trustedExecFileSync("cargo", ["tauri", "signer", ...args], {
+      extraDirectories: toolchainDirectories(), env, stdio: ["ignore", "pipe", "pipe"], timeout: 60000, maxBuffer: 1024 * 1024
     });
   } catch {
     // Never relay a subprocess environment or the test key in logs.

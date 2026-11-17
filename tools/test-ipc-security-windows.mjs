@@ -7,6 +7,8 @@ import {existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync} from "node
 import {resolve, join} from "node:path";
 import {tmpdir} from "node:os";
 import {randomBytes, createHash} from "node:crypto";
+import { trustedExecFileSync, trustedSpawn, toolchainDirectories }
+  from "./lib/trusted-exec.mjs";
 
 const exe = resolve("crates/pravda-app/target/debug/pravda-app.exe");
 const basePort = Number(process.env.PRAVDA_E2E_DRIVER_PORT || "4444");
@@ -127,7 +129,7 @@ async function stopSession() {
     // The Windows-only test harness owns this exact PID. Kill the driver
     // and any child EdgeDriver/app process, not unrelated applications.
     try {
-      execFileSync("taskkill", ["/PID", String(active.pid), "/T", "/F"], {
+      trustedExecFileSync("taskkill", ["/PID", String(active.pid), "/T", "/F"], {
         windowsHide: true,
         timeout: 15_000,
         stdio: "ignore"
@@ -169,7 +171,8 @@ async function startSession(mode, driverPort) {
   };
   for (const key of ["PRAVDA_ADMIN_PASSWORD","PRAVDA_LEGACY_DB_PATH","MARKET_HISTORY_DB"])
     delete env[key];
-  child = spawn("tauri-driver", ["--port", String(port)], {
+  child = trustedSpawn("tauri-driver", ["--port", String(port)], {
+    extraDirectories: toolchainDirectories(),
     cwd:process.cwd(),env,stdio:["ignore","ignore","pipe"],windowsHide:true
   });
   child.stderr?.on("data", data => {
@@ -319,7 +322,7 @@ try {
   assert.ok(existsSync(exe),"Debug security-e2e executable missing");
   assert.ok(Number.isInteger(basePort)&&basePort>=1024&&basePort<=65533,
     "Invalid base driver port");
-  report.git_sha=execFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();
+  report.git_sha=trustedExecFileSync("git",["rev-parse","HEAD"],{encoding:"utf8"}).trim();
   report.windows_version=String(process.env.PRAVDA_E2E_WINDOWS_VERSION||"");
   report.webview2_version=String(process.env.PRAVDA_E2E_WEBVIEW2_VERSION||"");
   assert.ok(report.windows_version&&/^\d+\.\d+\.\d+\.\d+$/.test(report.webview2_version),

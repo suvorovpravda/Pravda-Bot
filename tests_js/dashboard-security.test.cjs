@@ -7,7 +7,9 @@ const test = require('node:test');
 const html = fs.readFileSync(path.join(__dirname, '../dashboard.html'), 'utf8');
 const start = html.indexOf('async function refreshNews()');
 const end = html.indexOf('async function refreshCrypto()', start);
-assert.ok(start >= 0 && end > start, 'The actual news renderer must be present');
+test('The actual news renderer section is present in the delivered dashboard', () => {
+  assert.ok(start >= 0 && end > start, 'The actual news renderer must be present');
+});
 
 class Element {
   constructor() {this.children = []; this.textContent = '';}

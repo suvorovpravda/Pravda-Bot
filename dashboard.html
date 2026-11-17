@@ -742,7 +742,7 @@
             const b = quoteCell(row.binance);
             const k = quoteCell(row.kraken);
             const s = document.createElement("td"); s.textContent = row.spread;
-            if (row.spread !== "—") s.className = parseFloat(row.spread) >= 0 ? "positive" : "negative";
+            if (row.spread !== "—") s.className = Number.parseFloat(row.spread) >= 0 ? "positive" : "negative";
             tr.append(sym, b, k, s); tbody.append(tr);
         }
         const symbol = $("chart-symbol").value, exchange = $("chart-exchange").value;
@@ -1130,15 +1130,15 @@
             if (mapSvg) {
                 const NS = "http://www.w3.org/2000/svg";
                 mapSvg.replaceChildren();
-                const msgs = payload.messages.filter(m => Number.isFinite(parseFloat(m.lat)) && Number.isFinite(parseFloat(m.lon)));
+                const msgs = payload.messages.filter(m => Number.isFinite(Number.parseFloat(m.lat)) && Number.isFinite(Number.parseFloat(m.lon)));
                 if (msgs.length) {
-                    const lats = msgs.map(m=>parseFloat(m.lat));
-                    const lons = msgs.map(m=>parseFloat(m.lon));
+                    const lats = msgs.map(m=>Number.parseFloat(m.lat));
+                    const lons = msgs.map(m=>Number.parseFloat(m.lon));
                     const minLat = Math.min(...lats), maxLat = Math.max(...lats);
                     const minLon = Math.min(...lons), maxLon = Math.max(...lons);
                     const pad = 40;
                     msgs.forEach(m=>{
-                        const lat = parseFloat(m.lat), lon = parseFloat(m.lon);
+                        const lat = Number.parseFloat(m.lat), lon = Number.parseFloat(m.lon);
                         const x = pad + ((lon - minLon)/(maxLon - minLon || 1)) * (800 - pad*2);
                         const y = pad + (1 - (lat - minLat)/(maxLat - minLat || 1)) * (430 - pad*2);
                         const circle = document.createElementNS(NS,"circle");

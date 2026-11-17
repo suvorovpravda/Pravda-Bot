@@ -63,7 +63,7 @@ jobs:
       - name: Native bundled IPC frontend security contract
         run: node tools/test-desktop-ipc.mjs
       - name: Authentication dashboard startup, overlapping-login and visibility regressions
-        run: node --test tools/tests/auth-dashboard-startup.test.mjs
+        run: node --test tools/tests/auth-dashboard-startup.test.mjs tools/tests/trusted-exec.test.mjs
       - name: Private Revolut X consent revocation and error-code regressions
         run: node --test tools/tests/revolut-private-ui.test.mjs tools/tests/revolut-probe-channel.test.mjs
       - name: Signed Windows updater metadata tampering contracts

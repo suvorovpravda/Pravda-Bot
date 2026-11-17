@@ -63,7 +63,12 @@ const binance=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/binanc
 const kraken=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/kraken.rs"),"utf8");
 assert.match(desktop,/config\.market_feeds_enabled = false;/,
   "Diagnostic offline mode must force-disable WebSocket producers");
-assert.match(desktop,/stream_state.*?as_object_mut/s,
+// Linear scan instead of /stream_state.*?as_object_mut/s: the lazy dot-all
+// form is super-linear on a large source (Sonar javascript:S8786). Same
+// guarantee, bounded work: the first stream_state must be followed by an
+// as_object_mut somewhere later in the file.
+const streamStateAt = desktop.indexOf("stream_state");
+assert.ok(streamStateAt >= 0 && desktop.indexOf("as_object_mut", streamStateAt) > streamStateAt,
   "A real market snapshot must expose the Rust feed status");
 assert.match(js,/streamStatusMessage\(payload\.stream_state\)/,
   "UI must distinguish configured-offline feeds from waiting for first quote");
@@ -183,23 +188,33 @@ const probeContext = {
   window:{pravdaDashboardPhase:"P14G-paper1",pravdaDashboardReady:false},
   performance:{now:()=>123.8}
 };
+// Single audited dynamic-execution sink (Sonar javascript:S1523). It evaluates
+// ONLY slices of this repository's own delivered frontend sources, located by
+// explicit markers, never external or user-supplied input. Every harness in
+// this file goes through it so the review surface is one function.
+function runRepoSource(context, source, filename) {
+  assert.ok(typeof source === "string" && source.length > 0,
+    "Only non-empty repository source slices may be evaluated");
+  return vm.runInContext(source, context, { filename });
+}
+
 vm.createContext(probeContext);
-vm.runInContext(js.slice(probeStart,probeEnd),probeContext);
-vm.runInContext('markNavigationBootPhase("P14G-paper1a")',probeContext);
+runRepoSource(probeContext, js.slice(probeStart,probeEnd), "repo-section.js");
+probeContext.markNavigationBootPhase("P14G-paper1a");
 assert.equal(probeContext.window.pravdaDashboardPhase,"P14G-paper1a",
   "Native marker must accept the first paper sub-phase before readiness");
 assert.equal(probeContext.window.__pravda_debug_phases[0].phase,"P14G-paper1a");
 assert.equal(probeContext.window.__pravda_debug_phases[0].ready,false);
 assert.equal(probeContext.window.__pravda_debug_phases[0].ms,123);
 probeContext.window.pravdaDashboardReady = true;
-vm.runInContext('markNavigationBootPhase("P14G-paper1b")',probeContext);
+probeContext.markNavigationBootPhase("P14G-paper1b");
 assert.equal(probeContext.window.pravdaDashboardPhase,"P14G-paper1a",
   "Readiness gate must still reject subsequent official phase writes");
 assert.equal(probeContext.window.__pravda_debug_phases[1].phase,"P14G-paper1b");
 assert.equal(probeContext.window.__pravda_debug_phases[1].ready,true,
   "Shadow probe must record a post-readiness attempt without opening the gate");
 for (let i = 0; i < 60; i++)
-  vm.runInContext('markNavigationBootPhase("P14G-paper1j")',probeContext);
+  probeContext.markNavigationBootPhase("P14G-paper1j");
 assert.equal(probeContext.window.__pravda_debug_phases.length,48,
   "Shadow diagnostic must be bounded to 48 entries");
 const bootDiagnosticStart=js.indexOf('window.pravdaDashboardPhase = "P02H";');
@@ -264,7 +279,7 @@ const bootUi={
   };}}
 };
 vm.createContext(bootUi);
-vm.runInContext(auth.slice(diagnosticStart,diagnosticEnd),bootUi);
+runRepoSource(bootUi, auth.slice(diagnosticStart,diagnosticEnd), "repo-section.js");
 assert.equal(typeof bootWindowError,"function",
   "Authentication must observe dashboard runtime errors without collecting raw exceptions");
 bootWindowError({
@@ -304,7 +319,8 @@ assert.doesNotMatch(js,/Math\.(?:min|max)\(\.\.\./,
 const extentStart=js.indexOf("    function finiteExtent(values) {");
 const extentEnd=js.indexOf("    function drawPriceChart()",extentStart);
 assert.ok(extentStart>=0 && extentEnd>extentStart);
-const extent = vm.runInNewContext(js.slice(extentStart,extentEnd) + "\nfiniteExtent;", {});
+const extent = runRepoSource(vm.createContext({}),
+  js.slice(extentStart,extentEnd) + "\nfiniteExtent;", "desktop-finite-extent.js");
 const largeSeries=Array.from({length:250000},(_,i)=>i);
 assert.equal(extent(largeSeries).min,0);
 assert.equal(extent(largeSeries).max,249999);
@@ -700,7 +716,7 @@ const ui = {
   }
 };
 vm.createContext(ui);
-vm.runInContext(js.slice(fetchStart, fetchEnd), ui, {filename:"desktop-fetchJson.js"});
+runRepoSource(ui, js.slice(fetchStart, fetchEnd), "desktop-fetchJson.js");
 const oldRejected = ui.fetchJson("/api/geopolitics");
 ui.window.pravdaAuthGeneration = 4; // session A logout + B login
 release.reject(new Error("UNAUTHORIZED"));
@@ -792,7 +808,7 @@ function actualFrontend(name,next) {
   const start = js.indexOf("    async function "+name+"(");
   const end = js.indexOf("    async function "+next+"(",start+1);
   assert.ok(start>=0 && end>start,"Cannot isolate actual "+name+" implementation");
-  vm.runInContext(js.slice(start,end),ui,{filename:"desktop-"+name+".js"});
+  runRepoSource(ui, js.slice(start,end), "desktop-"+name+".js");
 }
 actualFrontend("refreshFx","refreshFlows");
 actualFrontend("refreshHistory","refreshAlerts");
@@ -865,20 +881,22 @@ const marketUi = {
 marketUi.renderMarket = payload => {
   marketUi.marketRenders.push(payload);
   marketUi.lastPayload = payload;
-  vm.runInContext("latestMarket=lastPayload",marketUi);
+  marketUi.latestMarket = marketUi.lastPayload;
 };
 marketUi.renderFx = payload => {
   marketUi.fxRenders.push(payload);
   marketUi.lastFxPayload = payload;
-  vm.runInContext("latestFx=lastFxPayload",marketUi);
+  marketUi.latestFx = marketUi.lastFxPayload;
 };
 vm.createContext(marketUi);
-vm.runInContext('let currentLanguage="fr", latestMarket={session:"A"}, ' +
-  'latestFx={session:"A"}, historicalPoints=[{price:123}];',marketUi);
+marketUi.currentLanguage = "fr";
+marketUi.latestMarket = {session:"A"};
+marketUi.latestFx = {session:"A"};
+marketUi.historicalPoints = [{price:123}];
 function runRealSection(startMarker,endMarker) {
   const start=js.indexOf(startMarker), end=js.indexOf(endMarker,start+1);
   assert.ok(start>=0 && end>start,"Missing actual frontend section: "+startMarker);
-  vm.runInContext(js.slice(start,end),marketUi,{filename:"desktop-market-session.js"});
+  runRepoSource(marketUi, js.slice(start,end), "desktop-market-session.js");
 }
 runRealSection("    function applyLanguage()", "    const $ =");
 runRealSection("    function clearMarketSnapshot()", "    function updateTerminalWatchlist(");
@@ -888,16 +906,16 @@ marketUi.window.pravdaClearMarketSession();
 marketUi.applyLanguage();
 assert.equal(marketUi.marketRenders.length,0,"Language change must not replay session A quotes");
 assert.equal(marketUi.fxRenders.length,0,"Language change must not replay session A FX");
-assert.equal(vm.runInContext("latestMarket",marketUi),null);
-assert.equal(vm.runInContext("latestFx",marketUi),null);
-assert.equal(vm.runInContext("historicalPoints.length",marketUi),0);
+assert.equal(marketUi.latestMarket,null);
+assert.equal(marketUi.latestFx,null);
+assert.equal(marketUi.historicalPoints.length,0);
 assert.equal(marketUi.$("chart-price").textContent,"—");
 assert.equal(marketUi.$("crypto-quotes").textContent,"");
 for (const row of watchRows) {
   assert.equal(row.dataset.freshness,"unavailable");
   assert.equal(row.querySelector(".watch-price").textContent,"—");
 }
-vm.runInContext('latestMarket={session:"B"}; latestFx={session:"B"};',marketUi);
+marketUi.latestMarket = {session:"B"}; marketUi.latestFx = {session:"B"};
 marketUi.applyLanguage();
 assert.equal(marketUi.marketRenders.at(-1).session,"B","Current session quotes remain usable");
 assert.equal(marketUi.fxRenders.at(-1).session,"B","Current session FX remains usable");
@@ -906,12 +924,12 @@ const rendersAfterFailure=marketUi.marketRenders.length;
 marketUi.applyLanguage();
 assert.equal(marketUi.marketRenders.length,rendersAfterFailure,
   "Language change must not relabel a failed market refresh as live");
-vm.runInContext('latestMarket={session:"market-still-healthy"}; latestFx={session:"B"};',marketUi);
+marketUi.latestMarket = {session:"market-still-healthy"}; marketUi.latestFx = {session:"B"};
 const rendersBeforeFxFailure=marketUi.marketRenders.length;
 await marketUi.refreshFx();
-assert.equal(vm.runInContext("latestFx",marketUi),null,
+assert.equal(marketUi.latestFx,null,
   "A failed FX refresh must not leave old rates usable for conversions");
-assert.equal(vm.runInContext("latestMarket.session",marketUi),"market-still-healthy",
+assert.equal(marketUi.latestMarket.session,"market-still-healthy",
   "An FX-only failure must preserve the independent market snapshot");
 assert.equal(marketUi.marketRenders.length,rendersBeforeFxFailure+1,
   "An FX-only failure must redraw market observations without stale conversions");
@@ -932,7 +950,7 @@ marketPending[3].resolve({session:"newest"});
 await newSuccess;
 marketPending[2].reject(new Error("offline"));
 await oldFailure;
-assert.equal(vm.runInContext("latestMarket.session",marketUi),"newest",
+assert.equal(marketUi.latestMarket.session,"newest",
   "An older failure must not erase a newer successful market refresh");
 const fxPending=[];
 marketUi.fetchJson=()=>new Promise((resolve,reject)=>fxPending.push({resolve,reject}));
@@ -942,7 +960,7 @@ fxPending[1].resolve({session:"newest-FX"});
 await newFxRequest;
 fxPending[0].reject(new Error("offline"));
 await oldFxRequest;
-assert.equal(vm.runInContext("latestFx.session",marketUi),"newest-FX",
+assert.equal(marketUi.latestFx.session,"newest-FX",
   "An older FX failure must not erase a newer successful FX refresh");
 const earlierFxSuccess=marketUi.refreshFx();
 const laterFxFailure=marketUi.refreshFx();
@@ -953,7 +971,7 @@ fxPending[2].resolve({session:"obsolete-FX"});
 await earlierFxSuccess;
 assert.equal(marketUi.fxRenders.length,fxRendersAfterFailure,
   "An older FX success must not undo a newer failed FX refresh");
-assert.equal(vm.runInContext("latestFx",marketUi),null);
+assert.equal(marketUi.latestFx,null);
 
 // Execute the *actual* updater readiness UI closure with an old IPC response
 // delayed across logout and reauthentication. The new login must win without
@@ -981,9 +999,8 @@ const updaterVm = {
   }
 };
 vm.createContext(updaterVm);
-vm.runInContext(js.slice(updaterStart,updaterEnd),updaterVm,{
-  filename:"pravda-updater-readiness-session.js"
-});
+runRepoSource(updaterVm, js.slice(updaterStart,updaterEnd),
+  "pravda-updater-readiness-session.js");
 assert.equal(updaterPending.length,1,
   "Authenticated dashboard initially requests a local Rust updater state");
 updaterSessionReady = false;

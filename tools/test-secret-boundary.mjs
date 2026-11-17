@@ -7,10 +7,11 @@ import {execFileSync} from "node:child_process";
 import {readFileSync, existsSync, mkdtempSync, rmSync, writeFileSync, unlinkSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
+import { trustedExecFileSync } from "./lib/trusted-exec.mjs";
 
 function git(...args) {
   try {
-    return execFileSync("git",args,{encoding:"utf8",maxBuffer:128*1024*1024,
+    return trustedExecFileSync("git",args,{encoding:"utf8",maxBuffer:128*1024*1024,
       timeout:120000,windowsHide:true,stdio:["ignore","pipe","pipe"]});
   } catch {
     // Node child-process errors can embed the entire captured stdout/output,
@@ -63,7 +64,7 @@ assert.equal(git("rev-parse","--is-shallow-repository").trim(),"false",
 function verifyMergePatchDetection() {
   const temp=mkdtempSync(join(tmpdir(),"pravda-history-audit-"));
   function run(...args) {
-    return execFileSync("git",args,{cwd:temp,encoding:"utf8",timeout:15000,windowsHide:true});
+    return trustedExecFileSync("git",args,{cwd:temp,encoding:"utf8",timeout:15000,windowsHide:true});
   }
   function commit(message) {
     run("-c","user.name=Pravda CI","-c","user.email=ci@invalid.local","commit","-m",message);

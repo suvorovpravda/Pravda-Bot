@@ -7,6 +7,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
 import { allocateDriverPorts, driverPortsAvailable } from "./driver-port-preflight.mjs";
+import { trustedExecFileSync, trustedSpawn, toolchainDirectories }
+  from "./lib/trusted-exec.mjs";
 
 const exe = resolve(process.env.PRAVDA_INSTALLED_EXE || "");
 const auth = resolve(process.env.PRAVDA_AUTH_PATH || "");
@@ -136,7 +138,8 @@ async function start() {
   // Fail closed if either tauri-driver or native EdgeDriver port is occupied.
   check("Private WebDriver and native ports available",
     await driverPortsAvailable(port, nativePort));
-  child = spawn("tauri-driver", ["--port", String(port), "--native-port", String(nativePort)], {
+  child = trustedSpawn("tauri-driver", ["--port", String(port), "--native-port", String(nativePort)], {
+    extraDirectories: toolchainDirectories(),
     windowsHide:true, stdio:["ignore","ignore","pipe"],
     env:{...process.env, PRAVDA_MARKET_FEEDS_ENABLED:"false"}
   });
@@ -190,7 +193,7 @@ async function stop() {
   if (!active) return;
   if (active.exitCode === null && active.signalCode === null) {
     try {
-      execFileSync("taskkill", ["/PID", String(active.pid), "/T", "/F"],
+      trustedExecFileSync("taskkill", ["/PID", String(active.pid), "/T", "/F"],
         {windowsHide:true,timeout:15000,stdio:"ignore"});
     } catch {/* driver may have already exited */}
     if (active.exitCode === null && active.signalCode === null)
