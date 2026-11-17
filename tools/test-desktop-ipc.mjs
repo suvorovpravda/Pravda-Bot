@@ -438,6 +438,51 @@ assert.match(auth,/window\.pravdaLockRevolutConsent\(\)/,
   "Login screen must immediately lock stale optional-network controls");
 assert.match(auth,/window\.refreshRevolutConsent\(\)/,
   "Signing back in must re-read permission from native Rust");
+// Revolut X private read-only connection. The WebView must never be able to
+// receive, accept or store an exchange credential: provisioning stays in the
+// local Rust console path and the vault stays behind the service layer.
+const privateCenter = html.match(/<section id="revolut-private-center"[\s\S]*?<\/section>/)?.[0];
+assert.ok(privateCenter,"Private Revolut X connection panel must exist in the settings page");
+for (const id of ["revolut-private-center","revolut-private-consent","revolut-private-refresh",
+  "revolut-private-test","revolut-private-state","revolut-private-balances","revolut-private-command"]) {
+  assert.equal((html.match(new RegExp('id="'+id+'"',"g"))||[]).length,1,"Unique id "+id);
+}
+assert.match(privateCenter,/id="revolut-private-consent"[^>]*disabled/,
+  "Authenticated account reads must default to disabled");
+assert.match(privateCenter,/id="revolut-private-test"[^>]*disabled/,
+  "The authenticated read action must start disabled");
+assert.doesNotMatch(privateCenter,/type="password"|type="text"|<textarea|api[_-]?key|api[_-]?secret/i,
+  "No credential input may exist in the private connection panel");
+assert.match(privateCenter,/--revolut-x-setup/,
+  "Provisioning must point at the existing local Rust console procedure");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_status"\)/,
+  "Connection state must come from authenticated Rust IPC");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_consent_set",\s*\{enabled: requested\}\)/,
+  "Private consent must be persisted by Rust, never by browser storage");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_balances"\)/,
+  "Balances must be read through the consent-gated Rust command");
+assert.match(js,/if \(!revolutPrivateOptIn\) \{/,"The UI must refuse to read without consent");
+assert.match(js,/if \(revolutPrivateBusy\) \{/,"Private reads must be single-flight");
+assert.match(js,/window\.pravdaClearRevolutPrivate = clearRevolutPrivate/,
+  "Logout must be able to clear private connection state");
+assert.match(ipc,/consent: State<'_, RevolutPrivateConsent>/,
+  "Private commands must take the Rust-owned private consent gate");
+assert.match(ipc,/revolut_connection::balance_rows\(consent\.inner\(\)\)/,
+  "Private balances must be gated inside Rust, not in JavaScript");
+const privateModule=read("src/revolut_connection.rs");
+const privateRuntime=privateModule.split("#[cfg(test)]")[0];
+assert.match(privateRuntime,/if !consent\.enabled\(\) \{\s*return Err\("PRIVATE_OPT_IN_REQUIRED"\);/,
+  "Rust must refuse private reads without the explicit opt-in");
+assert.match(privateRuntime,/OFFLINE_DIAGNOSTIC/,
+  "The isolated offline diagnostic must never reach a private endpoint");
+assert.match(privateRuntime,/revolut_private_consent\.cfg/,
+  "Private consent must be stored separately from the public order-book gate");
+assert.doesNotMatch(privateRuntime,/provision_new|api_key|private_pem|SecretStore|SecretValue|WindowsCredentialStore|expose\(\)/,
+  "The IPC-facing module must never touch credential material");
+assert.match(auth,/window\.pravdaClearRevolutPrivate\(\)/,
+  "Authentication transitions must clear private connection state");
+assert.match(auth,/void window\.refreshRevolutPrivateStatus\(\)/,
+  "Login reveal must refresh the private connection state");
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
 assert.match(js,/const securitySessionReady = \(\) => !!securityShell && !securityShell.hidden;/,

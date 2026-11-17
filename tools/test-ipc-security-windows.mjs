@@ -219,7 +219,8 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     Boolean(latest), latest?"native title callback received":"no verified native report");
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
-    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_fx_status",
+    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set",
+    "ipc_revolut_private_status","ipc_revolut_private_consent_set","ipc_revolut_private_balances","ipc_fx_status",
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
@@ -315,7 +316,7 @@ try {
 
   for(const name of ["ipc_market_snapshot","ipc_history_recent",
     "ipc_paper_alerts_snapshot","ipc_runtime_metrics",
-    "ipc_fx_status","ipc_session_check"])
+    "ipc_fx_status","ipc_session_check","ipc_revolut_private_status","ipc_revolut_private_balances"])
     rustDenied("no session: "+name,await invoke(name));
   const query={symbol:"BTC/USDT",exchange:"Binance",period:"day"};
   for(const name of ["ipc_history_query","ipc_history_export_csv"])
@@ -323,6 +324,8 @@ try {
 
   rustDenied("opt-in: no session cannot read preference",await invoke("ipc_revolut_consent_get"));
   rustDenied("opt-in: no session cannot change preference",await invoke("ipc_revolut_consent_set",{enabled:true}));
+  rustDenied("private: no session cannot change private consent",
+    await invoke("ipc_revolut_private_consent_set",{enabled:true}));
   const password="Pravda-E2E-"+randomBytes(32).toString("hex");
   const setup=await invoke("ipc_auth_setup",{password,confirm:password});
   verdict("main: one-time test setup",setup.state==="resolved",setup.state);
@@ -338,6 +341,37 @@ try {
   verdict("opt-in: authenticated main can enable public feed",
     consentOn.state==="resolved" && consentOn.value===true,
     "Enabled explicitly without reading a live feed");
+  const privateInitial=await invoke("ipc_revolut_private_status");
+  verdict("private: connection state is a closed local vocabulary",
+    privateInitial.state==="resolved" && Array.isArray(privateInitial.value) &&
+      privateInitial.value.length===5 && privateInitial.value[1]==="consent|disabled" &&
+      privateInitial.value[2]==="scope|read_only" && privateInitial.value[3]==="orders|disabled",
+    "New profile has no private Revolut X consent");
+  const privateBlocked=await invoke("ipc_revolut_private_balances");
+  verdict("private: Rust refuses balances without consent",
+    privateBlocked.state==="rejected" && /PRIVATE_OPT_IN_REQUIRED/.test(privateBlocked.error||""),
+    "Refused before any signed request");
+  const privateOn=await invoke("ipc_revolut_private_consent_set",{enabled:true});
+  verdict("private: authenticated main can enable private reads",
+    privateOn.state==="resolved" && privateOn.value===true,"Explicit opt-in only");
+  const privateUnconfigured=await invoke("ipc_revolut_private_balances");
+  verdict("private: unprovisioned vault refuses without leaking material",
+    privateUnconfigured.state==="rejected" &&
+      /^PRIVATE_NOT_CONFIGURED$|^PRIVATE_UNSUPPORTED_PLATFORM$|^OFFLINE_DIAGNOSTIC$/
+        .test(privateUnconfigured.error||""),
+    "CI profile has no exchange credential: "+(privateUnconfigured.error||""));
+  const privateOff=await invoke("ipc_revolut_private_consent_set",{enabled:false});
+  verdict("private: consent revocation is persisted",
+    privateOff.state==="resolved" && privateOff.value===false,"Revoked explicitly");
+  const privateRevoked=await invoke("ipc_revolut_private_balances");
+  verdict("private: revoked consent refuses again",
+    privateRevoked.state==="rejected" && /PRIVATE_OPT_IN_REQUIRED/.test(privateRevoked.error||""),
+    "Fail closed after revocation");
+  const privateState=await invoke("ipc_revolut_private_status");
+  verdict("private: status rows carry no credential material",
+    privateState.state==="resolved" &&
+      privateState.value.every(row=>/^[a-z_]+\|[a-z_]+$/.test(row)),
+    "Closed vocabulary only, no key, path or payload");
   const market=await invoke("ipc_market_snapshot");
   verdict("main: authenticated snapshot",market.state==="resolved",market.state);
   await checkConcurrentWindowAfterAuth(Date.now());

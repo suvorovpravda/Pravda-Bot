@@ -36,6 +36,9 @@ Le projet privilégie une expérience **locale, lisible et vérifiable** : donn�
 | **Risque et recherche** | Contrôles déterministes pour encadrer des scénarios de simulation et rendre leurs décisions examinables. |
 | **Historique local** | Stockage SQLite/WAL pour les données et événements pris en charge par l’application. |
 | **Diagnostic Windows** | Outils Doctor et Harness pour contrôler l’installation et exécuter des scénarios de recette sans envoyer d’ordres. |
+| **Connexion Revolut X** | Lecture authentifiée des soldes, en lecture seule, après import local des identifiants. Aucun secret dans l’interface, aucun ordre. |
+
+La connexion Revolut X est facultative et **désactivée par défaut**. Les identifiants sont importés uniquement dans la console Windows locale (`pravda-server.exe --revolut-x-setup <chemin-pem>`) et conservés dans le Gestionnaire d’identification Windows ; la page **Paramètres → Connexions** ne reçoit jamais de clé et ne propose aucun champ pour en saisir. La lecture des soldes exige une session locale authentifiée **et** un consentement privé distinct de celui du carnet public. Un test de connexion réussi ne vaut ni homologation du compte, ni autorisation de trading réel.
 
 Les fonctions progressent avec le dépôt. Consultez les [Issues](https://github.com/suvorovpravda/Pravda-Bot/issues), les [Pull Requests](https://github.com/suvorovpravda/Pravda-Bot/pulls) et les [versions publiées](https://github.com/suvorovpravda/Pravda-Bot/releases) pour connaître le contenu de chaque livraison.
 

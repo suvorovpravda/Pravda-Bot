@@ -14,6 +14,9 @@ const guarded = [
   "ipc_security_events",
   "ipc_revolut_consent_get",
   "ipc_revolut_consent_set",
+  "ipc_revolut_private_status",
+  "ipc_revolut_private_consent_set",
+  "ipc_revolut_private_balances",
   "ipc_fx_status",
   "plugin:fs|write_text_file",
   "plugin:shell|execute"
@@ -27,6 +30,7 @@ async function check() {
       query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
     },
     ipc_revolut_consent_set: {enabled: false},
+    ipc_revolut_private_consent_set: {enabled: false},
     ipc_history_export_csv: {
       query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
     },
