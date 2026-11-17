@@ -256,32 +256,50 @@ mod tests {
         if let Err(code) = outcome {
             assert_eq!(code, "PRIVATE_CONSENT_REVOKE_UNSAFE");
         }
-        if path.exists() {
-            set_writable(&path, true);
-        }
-        std::fs::remove_dir_all(dir).unwrap();
+        cleanup(&dir);
     }
 
-    // When neither rewriting, deleting nor renaming is possible, the operator
-    // must be told that the revocation is not durable instead of silently
-    // succeeding. The directory itself is made unwritable here.
+    // Restore attributes before removing the fixture: on Windows a read-only
+    // file cannot be deleted, and a renamed file keeps its attribute.
+    fn cleanup(dir: &Path) {
+        set_writable(dir, true);
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                if entry.path().is_file() {
+                    set_writable(&entry.path(), true);
+                }
+            }
+        }
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    // The outcome must match what could actually be persisted: either the stored
+    // opt-in is destroyed, or the operator is told the revocation is not durable.
+    // Platforms differ: Windows allows renaming a read-only file, Unix directory
+    // permissions can block all three attempts.
     #[test]
-    fn an_unpersistable_revocation_is_reported_as_unsafe() {
+    fn a_revocation_destroys_the_opt_in_or_reports_itself_unsafe() {
         let (dir, consent) = enabled_consent("revoke-locked");
         let path = dir.join("revolut_private_consent.cfg");
         set_writable(&path, false);
         set_writable(&dir, false);
         let outcome = consent.set(false);
-        let privileged = std::fs::OpenOptions::new().write(true).open(&path).is_ok();
-        if !privileged {
-            assert_eq!(outcome, Err("PRIVATE_CONSENT_REVOKE_UNSAFE"));
-            assert!(!consent.enabled());
+        assert!(!consent.enabled());
+        let stored = std::fs::read_to_string(&path).unwrap_or_default();
+        match outcome {
+            Err(code) => {
+                assert_eq!(code, "PRIVATE_CONSENT_REVOKE_UNSAFE");
+                // Honest limitation: storage that cannot be modified at all keeps
+                // the opt-in across a restart. That is exactly why the operator is
+                // told to delete the file, instead of being reported a success.
+                assert_eq!(stored, ENABLED);
+            }
+            Ok(()) => {
+                assert_ne!(stored, ENABLED);
+                assert!(!RevolutPrivateConsent::load(&dir.join("auth.json")).enabled());
+            }
         }
-        set_writable(&dir, true);
-        if path.exists() {
-            set_writable(&path, true);
-        }
-        std::fs::remove_dir_all(dir).unwrap();
+        cleanup(&dir);
     }
 
     #[tokio::test]

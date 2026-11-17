@@ -62,11 +62,15 @@ fn owns_assistant_window(args: &[OsString]) -> bool {
 /// Enter, after the outcome has been printed. A no-op for every other command,
 /// for a terminal-provided path and on platforms without the assistant.
 pub fn hold_assistant_window(args: &[OsString]) {
-    if !owns_assistant_window(args) {
-        return;
-    }
+    let holds = owns_assistant_window(args);
     #[cfg(windows)]
-    windows::hold_window();
+    if holds {
+        windows::hold_window();
+    }
+    // Off Windows the assistant does not exist; the predicate is still evaluated
+    // so the command vocabulary stays identical on every platform.
+    #[cfg(not(windows))]
+    let _ = holds;
 }
 
 #[cfg(windows)]

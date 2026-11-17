@@ -522,8 +522,8 @@ assert.match(cliRuntime,/ensure_console\(\)\?;\s*let root = trusted_local_root\(
   "Every console command must bind its handles before any prompt or print");
 assert.match(cliRuntime,/pub fn hold_assistant_window\(args: &\[OsString\]\)/,
   "The assistant window must be held after the outcome is printed");
-assert.match(cliRuntime,/if !owns_assistant_window\(args\) \{\s*return;/,
-  "Only the GUI assistant may wait for an acknowledgement");
+assert.match(cliRuntime,/let holds = owns_assistant_window\(args\);\s*#\[cfg\(windows\)\]\s*if holds \{\s*windows::hold_window\(\);/,
+  "Only the GUI assistant may wait for an acknowledgement, and only on Windows");
 assert.match(cliRuntime,/Press Enter to close this assistant\./,
   "The operator must be able to read the result before the window closes");
 assert.match(main,/pravda_server::revolut_cli::hold_assistant_window\(&arguments\);/,
