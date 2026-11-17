@@ -14,6 +14,10 @@ const guarded = [
   "ipc_security_events",
   "ipc_revolut_consent_get",
   "ipc_revolut_consent_set",
+  "ipc_revolut_private_setup",
+  "ipc_revolut_private_status",
+  "ipc_revolut_private_consent_set",
+  "ipc_revolut_private_balances",
   "ipc_fx_status",
   "plugin:fs|write_text_file",
   "plugin:shell|execute"
@@ -27,6 +31,7 @@ async function check() {
       query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
     },
     ipc_revolut_consent_set: {enabled: false},
+    ipc_revolut_private_consent_set: {enabled: false},
     ipc_history_export_csv: {
       query: {symbol:"BTC/USDT",exchange:"Binance",period:"day"}
     },
@@ -55,7 +60,16 @@ async function check() {
         access_denied:denial_layer==="tauri_acl", denial_layer, malformed});
     }
   }
-  const payload = JSON.stringify({v:1,seq:sequence++,results});
+  // Compact wire keys: the Rust title callback drops any payload longer than
+  // its bound (main.rs, `payload.len() > 3_000`), and a dropped report means
+  // every deny verdict loses its evidence. The native E2E expands these keys
+  // back to the explicit names its verdicts read (expandProbeResult).
+  // Guarded by tools/tests/revolut-probe-channel.test.mjs, which executes this
+  // real script and measures the emitted title against the compiled bound.
+  const payload = JSON.stringify({v:1,seq:sequence++,results:results.map(row=>({
+    c:row.command, s:row.state, a:row.access_denied,
+    d:row.denial_layer, m:row.malformed
+  }))});
   document.title = "PRAVDA_E2E_PROBE:" + btoa(payload);
 }
 void check();
