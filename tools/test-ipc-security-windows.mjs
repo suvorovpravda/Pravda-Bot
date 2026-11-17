@@ -193,6 +193,15 @@ async function startSession(mode, driverPort) {
     "tauri-driver did not return a sessionId");
 }
 
+// The probe emits compact wire keys so the whole report stays inside the Rust
+// title-channel bound: an oversized document title is dropped silently and no
+// deny verdict would have evidence. Expand them back to the explicit names the
+// verdicts below read. Executed by tools/tests/revolut-probe-channel.test.mjs.
+function expandProbeResult(row) {
+  return {command:row.c, state:row.s, access_denied:row.a,
+    denial_layer:row.d, malformed:row.m};
+}
+
 // Proves a capability-free WebView runs in the SAME native Rust process as
 // the authenticated main WebView. A debug-only Rust document-title callback
 // reports the outcomes, even when EdgeDriver enumerates only its first view.
@@ -208,7 +217,8 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
         if (!/^\d+$/.test(parts[1]))continue;
         try {
           const proof=JSON.parse(Buffer.from(parts[2],"base64").toString("utf8"));
-          if (proof.v===1 && Array.isArray(proof.results)) latest=proof;
+          if (proof.v===1 && Array.isArray(proof.results))
+            latest={...proof,results:proof.results.map(expandProbeResult)};
         } catch {/* reject malformed side-channel data */ }
       }
     }
@@ -216,7 +226,11 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     await new Promise(resolveDone=>setTimeout(resolveDone,500));
   }
   verdict("concurrent: unauthorized native WebView reports after login",
-    Boolean(latest), latest?"native title callback received":"no verified native report");
+    Boolean(latest), latest?"native title callback received":
+      "no verified native report; evidence log "+(existsSync(file)?
+        readFileSync(file,"utf8").trim().split(/\r?\n/).filter(Boolean).length+" lines":
+        "absent")+" — an empty log means the Rust title callback dropped an oversized"+
+        " payload (main.rs bound); run tools/tests/revolut-probe-channel.test.mjs");
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
     "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set",
