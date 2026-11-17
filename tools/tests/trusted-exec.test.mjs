@@ -8,7 +8,7 @@ import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  resolveTrusted, trustedDirectories, trustedExecFileSync
+  resolveTrusted, trustedDirectories, trustedExecFileSync, edgeDriverDirectory
 } from "../lib/trusted-exec.mjs";
 
 test("a command is resolved only inside the fixed system directories", () => {
@@ -63,4 +63,28 @@ test("command names carrying a path are rejected outright", () => {
     assert.throws(() => resolveTrusted(name), /plain identifiers/,
       `${JSON.stringify(name)} must be refused`);
   }
+});
+
+test("child dependency PATH is explicitly scoped and never inherits attacker PATH", () => {
+  const allowed = mkdtempSync(join(tmpdir(), "pravda-dependent-"));
+  const attacker = mkdtempSync(join(tmpdir(), "pravda-path-attacker-"));
+  const cmd = process.platform === "win32" ? "cmd" : "env";
+  const args = process.platform === "win32" ? ["/d", "/c", "echo %PATH%"] : [];
+  const output = String(trustedExecFileSync(cmd, args, {
+    encoding: "utf8",
+    dependentDirectories: [allowed],
+    env: { ...process.env, PATH: attacker, Path: attacker }
+  }));
+  assert.ok(output.includes(allowed), "the explicitly supplied helper path must survive");
+  assert.ok(!output.includes(attacker), "attacker PATH must never be inherited");
+  assert.throws(() => trustedExecFileSync(cmd, args, {
+    dependentDirectories: ["relative/path"]
+  }), /absolute/);
+});
+
+test("the Windows EdgeDriver path derives only from an absolute runner temp root", () => {
+  assert.equal(edgeDriverDirectory("D:\\a\\_temp", "win32"),
+    "D:\\a\\_temp\\edgedriver-bin");
+  assert.throws(() => edgeDriverDirectory(".\\_temp", "win32"),
+    /absolute RUNNER_TEMP/);
 });

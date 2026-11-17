@@ -12,7 +12,7 @@
 import { execFileSync, spawn } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join, win32 } from "node:path";
 
 /// Fixed, absolute, administrator-owned locations. No relative entry, no ".",
 /// no caller-supplied directory, no environment-derived search path.
@@ -33,8 +33,21 @@ export function toolchainDirectories() {
   return [join(home, "bin")];
 }
 
+// CI downloads the Microsoft-matched EdgeDriver to this exact directory.
+// Resolve it from the runner's absolute temp root; never search inherited PATH.
+export function edgeDriverDirectory(runnerTemp = process.env.RUNNER_TEMP, platform = process.platform) {
+  if (platform !== "win32" || typeof runnerTemp !== "string" ||
+      !win32.isAbsolute(runnerTemp)) {
+    throw new Error("Windows E2E requires an absolute RUNNER_TEMP for matched EdgeDriver");
+  }
+  return win32.join(runnerTemp, "edgedriver-bin");
+}
+
 function isFile(path) {
   try { return existsSync(path) && statSync(path).isFile(); } catch { return false; }
+}
+function isDirectory(path) {
+  try { return statSync(path).isDirectory(); } catch { return false; }
 }
 
 /// Absolute path of `command` inside the allowed directories, or null.
@@ -54,15 +67,23 @@ export function resolveTrusted(command, extraDirectories = [], platform = proces
 
 function fixed(command, options) {
   const extra = options.extraDirectories || [];
+  // Child-only dependency search paths do not participate in the resolution of
+  // the invoked command, so an EdgeDriver directory cannot supply tauri-driver.
+  const dependent = options.dependentDirectories || [];
+  if (!Array.isArray(dependent) || dependent.some(dir =>
+      typeof dir !== "string" || !isAbsolute(dir) || !isDirectory(dir))) {
+    throw new Error("Dependent executable directories must exist and be absolute");
+  }
   const executable = resolveTrusted(command, extra);
   if (!executable) {
     throw new Error(`Trusted executable not found for ${command}; ` +
       "refusing to fall back to the inherited PATH");
   }
   const separator = process.platform === "win32" ? ";" : ":";
-  const path = [...trustedDirectories(), ...extra].join(separator);
+  const path = [...trustedDirectories(), ...extra, ...dependent].join(separator);
   const rest = { ...options };
   delete rest.extraDirectories;
+  delete rest.dependentDirectories;
   return [executable, { ...rest, env: { ...rest.env, PATH: path, Path: path } }];
 }
 

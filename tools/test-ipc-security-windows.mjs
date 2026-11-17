@@ -7,7 +7,7 @@ import {existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync} from "node
 import {resolve, join} from "node:path";
 import {tmpdir} from "node:os";
 import {randomBytes, createHash} from "node:crypto";
-import { trustedExecFileSync, trustedSpawn, toolchainDirectories }
+import { trustedExecFileSync, trustedSpawn, toolchainDirectories, edgeDriverDirectory }
   from "./lib/trusted-exec.mjs";
 
 const exe = resolve("crates/pravda-app/target/debug/pravda-app.exe");
@@ -171,8 +171,17 @@ async function startSession(mode, driverPort) {
   };
   for (const key of ["PRAVDA_ADMIN_PASSWORD","PRAVDA_LEGACY_DB_PATH","MARKET_HISTORY_DB"])
     delete env[key];
+  // tauri-driver launches msedgedriver.exe by name. The CI downloads the
+  // runtime-matched Microsoft binary into RUNNER_TEMP/edgedriver-bin, not a
+  // globally trusted system directory. Include that one validated directory
+  // ONLY in the spawned driver's child PATH, not in tauri-driver resolution.
+  const edgeDir = edgeDriverDirectory();
+  if (!existsSync(join(edgeDir, "msedgedriver.exe"))) {
+    throw Error("Matched EdgeDriver missing from the runner's exact download directory");
+  }
   child = trustedSpawn("tauri-driver", ["--port", String(port)], {
     extraDirectories: toolchainDirectories(),
+    dependentDirectories: [edgeDir],
     cwd:process.cwd(),env,stdio:["ignore","ignore","pipe"],windowsHide:true
   });
   child.stderr?.on("data", data => {
