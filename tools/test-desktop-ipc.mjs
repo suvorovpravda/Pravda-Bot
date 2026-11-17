@@ -446,6 +446,24 @@ assert.match(js,/if \(!explicit && !securityVisible\(\)\) return;/,
   "Only passive checks may be skipped for hidden WebView2 documents");
 assert.match(js,/if \(securityCheckInFlight\) \{/,
   "Security tests must be single-flight");
+// Eight entries alone are insufficient: duplicated check IDs could falsely
+// display 8/8 verified while omitting a critical check (e.g. kill_switch).
+const securityReportStart=js.indexOf('const rows = await window.pravdaInvoke("ipc_security_report");');
+const securityReportEnd=js.indexOf('panel.replaceChildren(...nodes);',securityReportStart);
+assert.ok(securityReportStart>=0 && securityReportEnd>securityReportStart,
+  "Security report parser must be present");
+const securityReportParser=js.slice(securityReportStart,securityReportEnd);
+assert.match(securityReportParser,/rows\.length !== 8/,
+  "Security report must have exactly eight checks");
+assert.match(securityReportParser,/const seenChecks = new Set\(\)/,
+  "Security report must track distinct check identifiers");
+assert.match(securityReportParser,/seenChecks\.has\(parts\[0\]\)/,
+  "Duplicate security check IDs must be rejected before counting verified checks");
+assert.match(securityReportParser,/seenChecks\.add\(parts\[0\]\)/,
+  "Each accepted security check ID must be recorded");
+assert.ok(securityReportParser.indexOf('seenChecks.has(parts[0])') <
+  securityReportParser.indexOf('if (parts[1] === "verified") verified++'),
+  "Duplicate checks must be rejected before displaying verified counts");
 assert.match(js,/window\.refreshSecurity\s*=\s*refreshSecurity\.bind\(null,\s*true\);/,
   "User-driven security checks must not be silently skipped because of visibilityState");
 assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s*\1\(true\);/,

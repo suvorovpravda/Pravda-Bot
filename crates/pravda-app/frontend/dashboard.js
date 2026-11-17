@@ -1071,13 +1071,17 @@ const translations = {
                 kill_switch: "Protection anti-fuite VPN"
             };
             const nodes = [];
+            const seenChecks = new Set();
             let verified = 0;
             let blocked = 0;
             for (const row of rows) {
                 if (typeof row !== "string" || row.length > 300) throw new Error("INVALID_ROW");
                 const parts = row.split("|");
-                if (parts.length !== 3 || !translated[parts[1]] ||
-                    !Object.hasOwn(checkNames, parts[0])) throw new Error("INVALID_ROW");
+                if (parts.length !== 3 || !Object.hasOwn(translated, parts[1]) ||
+                    !Object.hasOwn(checkNames, parts[0]) || seenChecks.has(parts[0])) {
+                    throw new Error("INVALID_ROW");
+                }
+                seenChecks.add(parts[0]);
                 if (parts[1] === "verified") verified++;
                 if (parts[1] === "blocked") blocked++;
                 const item = document.createElement("div");
