@@ -638,7 +638,9 @@ for (const name of [
     "UI refresh must identify initial authenticated generation: "+name);
   const staleGenerationGuard = name === "refreshRevolut"
     ? /if \(requestGeneration !== window\.pravdaAuthGeneration \|\| consentVersion !== revolutConsentVersion \|\| !revolutOptIn \|\| shell\.hidden\) return;/
-    : /if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/;
+    : name === "runAcceptance"
+      ? /if \(requestGeneration !== window\.pravdaAuthGeneration\s*\|\|\s*requestEpoch !== acceptanceRequestEpoch\) return;/
+      : /if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/;
   assert.match(body,staleGenerationGuard,
     "Stale UI refresh must not mutate the new login's dashboard: "+name);
 }
