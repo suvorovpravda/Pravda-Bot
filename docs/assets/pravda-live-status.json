@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "6d09c16e32e04d2063579f4551197907f306a327",
-  "latest_evidence_at": "2026-11-17T16:11:21Z",
-  "refreshed_at_utc": "2026-11-17T16:11:29.386Z",
+  "latest_evidence_at": "2026-11-17T16:11:53Z",
+  "refreshed_at_utc": "2026-11-17T16:15:32.585Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 1,
     "total": 4
   },
   "p0_governance": {
@@ -102,7 +102,7 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PENDING"
+        "state": "PASS"
       },
       {
         "name": "Windows desktop build and startup",
@@ -119,7 +119,7 @@
       "state": "RUNNING",
       "sha": "6d09c16e32",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/44122869634",
-      "observedAt": "2026-11-17T16:11:18Z"
+      "observedAt": "2026-11-17T16:11:29Z"
     },
     {
       "id": "windows-package.yml",
@@ -143,10 +143,10 @@
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / AUDIT BLOQUANT",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "6d09c16e32",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/44122869549",
-      "observedAt": "2026-11-17T16:11:21Z"
+      "observedAt": "2026-11-17T16:11:53Z"
     }
   ],
   "open_prs": 2,
