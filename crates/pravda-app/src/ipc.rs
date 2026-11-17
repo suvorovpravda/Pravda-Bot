@@ -3,6 +3,7 @@
 //! The frontend transport switch is a separate, reviewed PR.
 use crate::consent::RevolutPublicConsent;
 use crate::paper::PaperSandbox;
+use crate::revolut_connection::{self, RevolutPrivateConsent};
 use pravda_server::{paper_control::PaperControl, Auth, AuthError};
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -798,6 +799,56 @@ pub fn ipc_revolut_consent_set(
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
     consent.set(enabled).map_err(str::to_string)?;
     Ok(consent.enabled())
+}
+
+/// Open the local provisioning assistant. No secret, path or argument is
+/// accepted from the WebView: the command takes no caller-supplied payload.
+#[tauri::command]
+pub fn ipc_revolut_private_setup(
+    window: Window,
+    session: State<'_, IpcAuth>,
+) -> Result<(), String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    revolut_connection::launch_setup_assistant().map_err(str::to_string)
+}
+
+/// Local, read-only connection state. No network call and no key material:
+/// provisioning stays in the Windows console path `--revolut-x-setup`.
+#[tauri::command]
+pub fn ipc_revolut_private_status(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    consent: State<'_, RevolutPrivateConsent>,
+) -> Result<Vec<String>, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    Ok(revolut_connection::status_rows(consent.inner()))
+}
+
+#[tauri::command]
+pub fn ipc_revolut_private_consent_set(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    consent: State<'_, RevolutPrivateConsent>,
+    enabled: bool,
+) -> Result<bool, String> {
+    require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    consent.set(enabled).map_err(str::to_string)?;
+    Ok(consent.enabled())
+}
+
+/// Explicit, authenticated, consent-gated read of the account balances.
+/// The signed GET is the connection test; no order route exists.
+#[tauri::command]
+pub async fn ipc_revolut_private_balances(
+    window: Window,
+    session: State<'_, IpcAuth>,
+    consent: State<'_, RevolutPrivateConsent>,
+) -> Result<Vec<String>, String> {
+    let issued_to = authorized_read_token(&session, window.label()).map_err(str::to_string)?;
+    let result = revolut_connection::balance_rows(consent.inner())
+        .await
+        .map_err(str::to_string);
+    finish_authorized_read(&session, &issued_to, result)
 }
 
 fn safe_article_link(raw: &str) -> Result<String, &'static str> {

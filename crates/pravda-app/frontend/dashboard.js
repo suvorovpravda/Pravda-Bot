@@ -1300,6 +1300,302 @@ const translations = {
     window.refreshUpdateReadiness = refreshUpdateReadiness;
     void refreshUpdateReadiness();
 
+    // Revolut X private connection. Rust owns the Windows vault, the Ed25519
+    // signing and the consent gate; this page never receives a key, a secret or
+    // a signature, and it offers no field that could accept one.
+    let revolutPrivateOptIn = false;
+    let revolutPrivateVersion = 0;
+    let revolutPrivateBusy = false;
+    let revolutPrivateStorageWarning = "";
+    const revolutPrivateConsentCheckbox = $("revolut-private-consent");
+    const revolutPrivateTestButton = $("revolut-private-test");
+    const revolutPrivateFields = ["connection", "consent", "scope", "orders", "vault"];
+    const revolutPrivateStates = new Set(["configured", "unconfigured", "unsupported", "unavailable"]);
+    const revolutPrivateDecimal = /^\d{1,64}(?:\.\d{1,64})?$/;
+    const REVOLUT_PRIVATE_IDLE = "Aucune lecture authentifiée effectuée. Ordres réels, retraits et " +
+        "mise à jour automatique : désactivés. La simulation reste en mode PAPER.";
+    function clearRevolutPrivate() {
+        revolutPrivateVersion++;
+        revolutPrivateOptIn = false;
+        revolutPrivateBusy = false;
+        revolutPrivateStorageWarning = "";
+        revolutPrivateConsentCheckbox.checked = false;
+        revolutPrivateConsentCheckbox.disabled = true;
+        revolutPrivateTestButton.disabled = true;
+        $("revolut-private-state").textContent = "État local non encore consulté.";
+        $("revolut-private-consent-status").textContent = "Vérification du consentement local…";
+        $("revolut-private-balances").textContent = "Aucun solde lu.";
+        $("revolut-private-checked").textContent = REVOLUT_PRIVATE_IDLE;
+    }
+    window.pravdaClearRevolutPrivate = clearRevolutPrivate;
+    function parseRevolutPrivateStatus(rows) {
+        if (!Array.isArray(rows) || rows.length !== revolutPrivateFields.length) {
+            throw Error("INVALID_PRIVATE_STATUS");
+        }
+        const values = {};
+        for (const [index, line] of rows.entries()) {
+            if (typeof line !== "string" || line.length > 40) throw Error("INVALID_PRIVATE_STATUS");
+            const parts = line.split("|");
+            if (parts.length !== 2 || parts[0] !== revolutPrivateFields[index]) {
+                throw Error("INVALID_PRIVATE_STATUS");
+            }
+            values[parts[0]] = parts[1];
+        }
+        if (!revolutPrivateStates.has(values.connection) ||
+            (values.consent !== "enabled" && values.consent !== "disabled") ||
+            values.scope !== "read_only" || values.orders !== "disabled" ||
+            (values.vault !== "windows_credential_manager" && values.vault !== "unsupported")) {
+            throw Error("INVALID_PRIVATE_STATUS");
+        }
+        return values;
+    }
+    async function readRevolutPrivateStatus() {
+        const generation = window.pravdaAuthGeneration;
+        const version = ++revolutPrivateVersion;
+        if (!securitySessionReady()) {
+            clearRevolutPrivate();
+            return;
+        }
+        try {
+            const rows = await window.pravdaInvoke("ipc_revolut_private_status");
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            const values = parseRevolutPrivateStatus(rows);
+            revolutPrivateOptIn = values.consent === "enabled";
+            revolutPrivateConsentCheckbox.disabled = false;
+            revolutPrivateConsentCheckbox.checked = revolutPrivateOptIn;
+            revolutPrivateTestButton.disabled = !revolutPrivateOptIn || values.connection !== "configured";
+            const labels = {
+                configured: "Identifiants présents dans le coffre Windows",
+                unconfigured: "Aucun identifiant enregistré : import console requis",
+                unsupported: "Coffre Windows indisponible sur cette plateforme",
+                unavailable: "Coffre illisible : état non vérifié"
+            };
+            $("revolut-private-state").textContent =
+                labels[values.connection] + " · lecture seule · ordres désactivés";
+            // A non-durable revocation stays visible until a consent write succeeds.
+            $("revolut-private-consent-status").textContent = revolutPrivateStorageWarning ||
+                (revolutPrivateOptIn
+                    ? "Consentement privé actif, distinct du carnet public."
+                    : "Consentement privé désactivé : aucune lecture authentifiée.");
+        } catch (_error) {
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            revolutPrivateOptIn = false;
+            revolutPrivateConsentCheckbox.checked = false;
+            revolutPrivateConsentCheckbox.disabled = true;
+            revolutPrivateTestButton.disabled = true;
+            $("revolut-private-state").textContent = "État de connexion non vérifié.";
+            $("revolut-private-consent-status").textContent =
+                "Consentement privé illisible : lectures refusées.";
+        }
+    }
+    async function setRevolutPrivateConsent(requested) {
+        const generation = window.pravdaAuthGeneration;
+        const version = ++revolutPrivateVersion;
+        revolutPrivateOptIn = false;
+        revolutPrivateTestButton.disabled = true;
+        revolutPrivateConsentCheckbox.disabled = true;
+        if (!securitySessionReady()) {
+            clearRevolutPrivate();
+            return;
+        }
+        try {
+            const stored = await window.pravdaInvoke("ipc_revolut_private_consent_set",
+                {enabled: requested});
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            if (typeof stored !== "boolean") throw Error("INVALID_PRIVATE_CONSENT");
+            revolutPrivateOptIn = stored;
+            revolutPrivateStorageWarning = "";
+            $("revolut-private-balances").textContent = "Aucun solde lu.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            revolutPrivateOptIn = false;
+            // A revocation that could not be persisted is not durable: the operator
+            // must remove the stored opt-in before the next launch.
+            revolutPrivateStorageWarning =
+                revolutPrivateErrorCodes(String(error)).has("PRIVATE_CONSENT_REVOKE_UNSAFE")
+                    ? "Révocation non durable : le fichier de consentement n’a pas pu être modifié. " +
+                      "Fermez l’application et supprimez revolut_private_consent.cfg avant de relancer."
+                    : "";
+            $("revolut-private-consent-status").textContent = revolutPrivateStorageWarning ||
+                "Consentement privé non enregistré : lectures refusées.";
+        } finally {
+            if (generation === window.pravdaAuthGeneration && version === revolutPrivateVersion) {
+                revolutPrivateConsentCheckbox.disabled = false;
+                revolutPrivateConsentCheckbox.checked = revolutPrivateOptIn;
+                void readRevolutPrivateStatus();
+            }
+        }
+    }
+    function renderRevolutPrivateBalances(rows) {
+        if (!Array.isArray(rows) || rows.length < 3 || rows.length > 67) {
+            throw Error("INVALID_PRIVATE_BALANCES");
+        }
+        const header = {};
+        for (const [index, key] of ["status", "observed_at", "count"].entries()) {
+            const parts = typeof rows[index] === "string" ? rows[index].split("|") : [];
+            if (parts.length !== 2 || parts[0] !== key) throw Error("INVALID_PRIVATE_BALANCES");
+            header[key] = parts[1];
+        }
+        if (header.status !== "ok" || !/^\d{13,15}$/.test(header.observed_at) ||
+            !/^\d{1,2}$/.test(header.count)) throw Error("INVALID_PRIVATE_BALANCES");
+        const count = Number(header.count);
+        if (count !== rows.length - 3 || count > 64) throw Error("INVALID_PRIVATE_BALANCES");
+        const container = $("revolut-private-balances");
+        const parsed = [];
+        for (const raw of rows.slice(3)) {
+            const parts = typeof raw === "string" ? raw.split("|") : [];
+            if (parts.length !== 6 || parts[0] !== "balance" ||
+                !/^[A-Z0-9]{2,10}$/.test(parts[1])) throw Error("INVALID_PRIVATE_BALANCES");
+            const [available, reserved, total, staked] = parts.slice(2);
+            if (![available, reserved, total].every(value => revolutPrivateDecimal.test(value)) ||
+                !(staked === "none" || revolutPrivateDecimal.test(staked))) {
+                throw Error("INVALID_PRIVATE_BALANCES");
+            }
+            parsed.push([parts[1], available, reserved, total, staked]);
+        }
+        container.replaceChildren();
+        if (count === 0) {
+            container.textContent = "Connexion vérifiée : le compte ne publie aucun solde.";
+            return header;
+        }
+        const table = document.createElement("table");
+        table.className = "quote-table";
+        const head = document.createElement("thead");
+        const headRow = document.createElement("tr");
+        for (const label of ["Devise", "Disponible", "Réservé", "Total", "Staké"]) {
+            const cell = document.createElement("th");
+            cell.textContent = label;
+            headRow.append(cell);
+        }
+        head.append(headRow);
+        table.append(head);
+        const body = document.createElement("tbody");
+        for (const values of parsed) {
+            const row = document.createElement("tr");
+            for (const value of values) {
+                const cell = document.createElement("td");
+                cell.textContent = value;
+                row.append(cell);
+            }
+            body.append(row);
+        }
+        table.append(body);
+        container.append(table);
+        return header;
+    }
+    // Closed error codes are whole tokens, never substrings: UNAUTHORIZED is the
+    // local session, PRIVATE_VENUE_UNAUTHORIZED is Revolut X rejecting the API
+    // key. Matching substrings would lock the local session on a venue refusal.
+    function revolutPrivateErrorCodes(raw) {
+        return new Set(String(raw).match(/[A-Z][A-Z_]{2,}/g) || []);
+    }
+    function revolutPrivateFailureText(raw) {
+        const codes = {
+            PRIVATE_OPT_IN_REQUIRED: "Consentement privé requis : aucune requête envoyée.",
+            PRIVATE_NOT_CONFIGURED: "Aucun identifiant enregistré : import console requis, aucune requête envoyée.",
+            PRIVATE_UNSUPPORTED_PLATFORM: "Coffre Windows indisponible : lecture impossible sur cette plateforme.",
+            PRIVATE_VENUE_UNAUTHORIZED: "Identifiants refusés par Revolut X : vérifiez la clé et ses permissions de lecture.",
+            PRIVATE_RATE_LIMITED: "Limite de débit Revolut X atteinte : réessayez plus tard.",
+            PRIVATE_NETWORK: "Réseau indisponible : aucun solde vérifié.",
+            PRIVATE_INVALID_RESPONSE: "Réponse Revolut X non conforme : aucun solde affiché.",
+            PRIVATE_UNAVAILABLE: "Connexion privée indisponible : aucun solde affiché.",
+            OFFLINE_DIAGNOSTIC: "Diagnostic hors réseau : lecture authentifiée refusée.",
+            UNAUTHORIZED: "Session locale expirée : reconnectez-vous."
+        };
+        const tokens = revolutPrivateErrorCodes(raw);
+        for (const code of Object.keys(codes)) {
+            if (tokens.has(code)) return codes[code];
+        }
+        return "Lecture authentifiée non vérifiée : aucun solde affiché.";
+    }
+    async function refreshRevolutPrivate() {
+        const generation = window.pravdaAuthGeneration;
+        if (!securitySessionReady()) {
+            clearRevolutPrivate();
+            return;
+        }
+        if (!revolutPrivateOptIn) {
+            $("revolut-private-balances").textContent = "Lecture authentifiée désactivée.";
+            return;
+        }
+        if (revolutPrivateBusy) {
+            $("revolut-private-checked").textContent = "Lecture déjà en cours.";
+            return;
+        }
+        revolutPrivateBusy = true;
+        revolutPrivateTestButton.disabled = true;
+        $("revolut-private-checked").textContent = "Requête signée en cours, en lecture seule…";
+        // Rust re-checks consent after the signed request, but a reply already
+        // authorized must still be discarded here if the operator revoked the
+        // private consent while it was in flight.
+        const version = revolutPrivateVersion;
+        try {
+            const rows = await window.pravdaInvoke("ipc_revolut_private_balances");
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            if (!revolutPrivateOptIn) return;
+            const header = renderRevolutPrivateBalances(rows);
+            $("revolut-private-checked").textContent = "Lecture authentifiée à " +
+                new Date(Number(header.observed_at)).toLocaleTimeString("fr-FR") + " · " +
+                header.count + " devise(s) · aucun ordre, aucun retrait, aucune clé affichée.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            const raw = String(error);
+            $("revolut-private-balances").textContent = "Aucun solde vérifié.";
+            $("revolut-private-checked").textContent = revolutPrivateFailureText(raw);
+            if (revolutPrivateErrorCodes(raw).has("UNAUTHORIZED")) window.pravdaRequireLogin();
+        } finally {
+            const sessionChanged = generation !== window.pravdaAuthGeneration;
+            revolutPrivateBusy = false;
+            // After a revocation the consent flow owns the controls, not this reply.
+            if (version === revolutPrivateVersion) {
+                revolutPrivateTestButton.disabled = !revolutPrivateOptIn;
+            }
+            if (sessionChanged && securitySessionReady()) void readRevolutPrivateStatus();
+        }
+    }
+    async function openRevolutPrivateAssistant() {
+        const generation = window.pravdaAuthGeneration;
+        if (!securitySessionReady()) {
+            clearRevolutPrivate();
+            return;
+        }
+        const button = $("revolut-private-setup");
+        button.disabled = true;
+        try {
+            await window.pravdaInvoke("ipc_revolut_private_setup");
+            if (generation !== window.pravdaAuthGeneration) return;
+            $("revolut-private-checked").textContent =
+                "Assistant Windows ouvert : saisissez-y le mot de passe local, le chemin du fichier " +
+                "PEM et la clé API (masquée), puis revenez ici et cliquez sur « Vérifier l’état local ». " +
+                "Cette page n’a reçu aucun secret.";
+        } catch (error) {
+            if (generation !== window.pravdaAuthGeneration) return;
+            const raw = String(error);
+            const texts = {
+                OFFLINE_DIAGNOSTIC: "Diagnostic hors réseau : assistant d’import refusé.",
+                PRIVATE_UNSUPPORTED_PLATFORM: "Assistant d’import disponible uniquement sur Windows.",
+                PRIVATE_SETUP_UNAVAILABLE: "Assistant d’import indisponible : aucun identifiant enregistré.",
+                UNAUTHORIZED: "Session locale expirée : reconnectez-vous."
+            };
+            let message = "Assistant d’import non ouvert : aucun identifiant enregistré.";
+            const tokens = revolutPrivateErrorCodes(raw);
+            for (const code of Object.keys(texts)) {
+                if (tokens.has(code)) message = texts[code];
+            }
+            $("revolut-private-checked").textContent = message;
+            if (tokens.has("UNAUTHORIZED")) window.pravdaRequireLogin();
+        } finally {
+            if (generation === window.pravdaAuthGeneration) button.disabled = false;
+        }
+    }
+    $("revolut-private-setup").addEventListener("click", () => { void openRevolutPrivateAssistant(); });
+    revolutPrivateConsentCheckbox.addEventListener("change", () => {
+        void setRevolutPrivateConsent(revolutPrivateConsentCheckbox.checked);
+    });
+    $("revolut-private-refresh").addEventListener("click", () => { void readRevolutPrivateStatus(); });
+    revolutPrivateTestButton.addEventListener("click", () => { void refreshRevolutPrivate(); });
+    window.refreshRevolutPrivateStatus = readRevolutPrivateStatus;
+
     // Paper Trading is a deterministic, Rust-owned sandbox and never touches
     // authenticated exchanges, local browser storage, or actual account funds.
     const paperFormat = cents => (cents / 100).toLocaleString("fr-FR", {

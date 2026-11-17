@@ -5,6 +5,7 @@ mod consent;
 mod ipc;
 mod paper;
 mod paper_pipeline;
+mod revolut_connection;
 
 use std::sync::Arc;
 use tauri::{WebviewUrl, WebviewWindowBuilder};
@@ -114,8 +115,14 @@ async fn main() {
     }
     let arguments: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     if let Some(result) = pravda_server::revolut_cli::run(&arguments).await {
+        let failed = result.is_err();
         if let Err(message) = result {
             eprintln!("{message}");
+        }
+        // The GUI-launched assistant owns its console window: the outcome must
+        // stay readable until the operator acknowledges it, success or failure.
+        pravda_server::revolut_cli::hold_assistant_window(&arguments);
+        if failed {
             std::process::exit(1);
         }
         return;
@@ -132,6 +139,8 @@ async fn main() {
         }
     };
     let public_consent = consent::RevolutPublicConsent::load(std::path::Path::new(&auth_path));
+    let private_consent =
+        revolut_connection::RevolutPrivateConsent::load(std::path::Path::new(&auth_path));
     let shared_auth = match pravda_server::Auth::load(
         std::path::PathBuf::from(auth_path),
         pravda_server::PBKDF2_ITERATIONS,
@@ -158,6 +167,7 @@ async fn main() {
     tauri::Builder::default()
         .manage(ipc_auth)
         .manage(public_consent)
+        .manage(private_consent)
         .manage(ipc::SecurityEvents::default())
         .manage(paper::PaperSandbox::default())
         .manage(paper_control)
@@ -190,6 +200,10 @@ async fn main() {
             ipc::ipc_public_feed,
             ipc::ipc_revolut_consent_get,
             ipc::ipc_revolut_consent_set,
+            ipc::ipc_revolut_private_setup,
+            ipc::ipc_revolut_private_status,
+            ipc::ipc_revolut_private_consent_set,
+            ipc::ipc_revolut_private_balances,
             ipc::ipc_open_source
         ])
         .setup(|app| {

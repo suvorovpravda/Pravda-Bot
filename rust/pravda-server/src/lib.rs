@@ -5,6 +5,7 @@ mod config;
 mod desktop;
 mod history;
 pub mod revolut_cli;
+pub mod revolut_private_view;
 pub mod revolut_x_account;
 pub mod secret_store;
 pub use desktop::{DesktopPayload, DesktopRuntime};

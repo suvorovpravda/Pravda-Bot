@@ -438,6 +438,154 @@ assert.match(auth,/window\.pravdaLockRevolutConsent\(\)/,
   "Login screen must immediately lock stale optional-network controls");
 assert.match(auth,/window\.refreshRevolutConsent\(\)/,
   "Signing back in must re-read permission from native Rust");
+// Revolut X private read-only connection. The WebView must never be able to
+// receive, accept or store an exchange credential: provisioning stays in the
+// local Rust console path and the vault stays behind the service layer.
+const privateCenter = html.match(/<section id="revolut-private-center"[\s\S]*?<\/section>/)?.[0];
+assert.ok(privateCenter,"Private Revolut X connection panel must exist in the settings page");
+for (const id of ["revolut-private-center","revolut-private-consent","revolut-private-refresh",
+  "revolut-private-test","revolut-private-state","revolut-private-balances","revolut-private-command"]) {
+  assert.equal((html.match(new RegExp('id="'+id+'"',"g"))||[]).length,1,"Unique id "+id);
+}
+assert.match(privateCenter,/id="revolut-private-consent"[^>]*disabled/,
+  "Authenticated account reads must default to disabled");
+assert.match(privateCenter,/id="revolut-private-test"[^>]*disabled/,
+  "The authenticated read action must start disabled");
+assert.doesNotMatch(privateCenter,/type="password"|type="text"|<textarea|api[_-]?key|api[_-]?secret/i,
+  "No credential input may exist in the private connection panel");
+assert.match(privateCenter,/--revolut-x-setup/,
+  "Provisioning must point at the existing local Rust console procedure");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_status"\)/,
+  "Connection state must come from authenticated Rust IPC");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_consent_set",\s*\{enabled: requested\}\)/,
+  "Private consent must be persisted by Rust, never by browser storage");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_balances"\)/,
+  "Balances must be read through the consent-gated Rust command");
+assert.match(js,/if \(!revolutPrivateOptIn\) \{/,"The UI must refuse to read without consent");
+assert.match(js,/if \(revolutPrivateBusy\) \{/,"Private reads must be single-flight");
+assert.match(js,/window\.pravdaClearRevolutPrivate = clearRevolutPrivate/,
+  "Logout must be able to clear private connection state");
+assert.match(ipc,/consent: State<'_, RevolutPrivateConsent>/,
+  "Private commands must take the Rust-owned private consent gate");
+assert.match(ipc,/revolut_connection::balance_rows\(consent\.inner\(\)\)/,
+  "Private balances must be gated inside Rust, not in JavaScript");
+const privateModule=read("src/revolut_connection.rs");
+const privateRuntime=privateModule.split("#[cfg(test)]")[0];
+assert.match(privateRuntime,/if !consent\.enabled\(\) \{\s*return Err\("PRIVATE_OPT_IN_REQUIRED"\);/,
+  "Rust must refuse private reads without the explicit opt-in");
+assert.match(privateRuntime,/OFFLINE_DIAGNOSTIC/,
+  "The isolated offline diagnostic must never reach a private endpoint");
+assert.match(privateRuntime,/revolut_private_consent\.cfg/,
+  "Private consent must be stored separately from the public order-book gate");
+assert.doesNotMatch(privateRuntime,/provision_new|api_key|private_pem|SecretStore|SecretValue|WindowsCredentialStore|expose\(\)/,
+  "The IPC-facing module must never touch credential material");
+assert.match(auth,/window\.pravdaClearRevolutPrivate\(\)/,
+  "Authentication transitions must clear private connection state");
+assert.match(auth,/void window\.refreshRevolutPrivateStatus\(\)/,
+  "Login reveal must refresh the private connection state");
+// The GUI must be able to start provisioning without PowerShell, and without
+// ever receiving a secret: the assistant is this same executable, fixed argv.
+assert.match(ipc,/pub fn ipc_revolut_private_setup\(\s*window: Window,\s*session: State<'_, IpcAuth>,\s*\) -> Result<\(\), String>/,
+  "The setup command must accept no caller-supplied payload");
+assert.match(privateRuntime,/Command::new\(executable\)/,
+  "Only the current executable may be launched");
+assert.match(privateRuntime,/std::env::current_exe\(\)/,
+  "The assistant must be this executable, not an external tool");
+assert.match(privateRuntime,/\.arg\("--revolut-x-setup"\)/,
+  "The assistant argv must be fixed");
+assert.match(privateRuntime,/CREATE_NEW_CONSOLE/,
+  "The assistant needs its own console for masked entry");
+// A Windows-subsystem (GUI) executable starts with no standard handles, so the
+// creation flag alone cannot make the assistant usable: the console must be
+// allocated or attached explicitly and the three handles bound to it.
+const cliSource=readFileSync(join(process.cwd(),"rust/pravda-server/src/revolut_cli.rs"),"utf8");
+const cliRuntime=cliSource.split("#[cfg(test)]")[0];
+const serverManifest=readFileSync(join(process.cwd(),"rust/pravda-server/Cargo.toml"),"utf8");
+assert.match(serverManifest,/"Win32_System_Console"/,
+  "The console API must be an enabled feature of the existing windows-sys dependency");
+assert.match(serverManifest,/"Win32_Storage_FileSystem"/,
+  "Handle-type inspection must use the existing windows-sys dependency");
+assert.match(cliRuntime,/AllocConsole\(\) == 0/,"The assistant must allocate its own console");
+assert.match(cliRuntime,/AttachConsole\(ATTACH_PARENT_PROCESS\) == 0/,
+  "A terminal-launched assistant must attach to the calling console");
+assert.match(cliRuntime,/bind_standard_handle\(STD_INPUT_HANDLE, "CONIN\$"\)/,
+  "Interactive path entry needs a console input handle, not a GUI null handle");
+assert.match(cliRuntime,/bind_standard_handle\(STD_OUTPUT_HANDLE, "CONOUT\$"\)/,
+  "Assistant output must reach the console");
+assert.match(cliRuntime,/bind_standard_handle\(STD_ERROR_HANDLE, "CONOUT\$"\)/,
+  "Assistant failures must be readable instead of silently discarded");
+assert.match(cliRuntime,/SetStdHandle\(identifier, file\.as_raw_handle\(\)\)/,
+  "Rust standard handles must be rebound onto the console explicitly");
+assert.match(cliRuntime,/GetFileType\(current\) \} != FILE_TYPE_UNKNOWN/,
+  "An existing pipe or file redirection must never be redirected to the console");
+assert.match(cliRuntime,/ensure_console\(\)\?;\s*let root = trusted_local_root\(\)/,
+  "Every console command must bind its handles before any prompt or print");
+assert.match(cliRuntime,/pub fn hold_assistant_window\(args: &\[OsString\]\)/,
+  "The assistant window must be held after the outcome is printed");
+assert.match(cliRuntime,/let holds = owns_assistant_window\(args\);\s*#\[cfg\(windows\)\]\s*if holds \{\s*windows::hold_window\(\);/,
+  "Only the GUI assistant may wait for an acknowledgement, and only on Windows");
+assert.match(cliRuntime,/Press Enter to close this assistant\./,
+  "The operator must be able to read the result before the window closes");
+assert.match(main,/pravda_server::revolut_cli::hold_assistant_window\(&arguments\);/,
+  "The desktop entry point must hold the assistant window");
+assert.ok(main.indexOf('eprintln!("{message}"') < main.indexOf("hold_assistant_window(&arguments)"),
+  "The failure reason must be printed before the assistant waits for Enter");
+// Two reproduced regressions: a signed reply authorized before a revocation must
+// never be rendered, and a venue credential refusal must never relock the local
+// session. Both are executed by tools/tests/revolut-private-ui.test.mjs.
+const privateUiStart=js.indexOf("    let revolutPrivateOptIn = false;");
+const privateUiEnd=js.indexOf('    $("revolut-private-setup").addEventListener');
+assert.ok(privateUiStart>=0 && privateUiEnd>privateUiStart,
+  "The private connection section must remain locatable for the regression harness");
+const privateUi=js.slice(privateUiStart,privateUiEnd);
+const privateReadStart=privateUi.indexOf("    async function refreshRevolutPrivate() {");
+const privateReadEnd=privateUi.indexOf("    async function openRevolutPrivateAssistant() {");
+const privateRead=privateUi.slice(privateReadStart,privateReadEnd);
+assert.ok(privateReadStart>=0 && privateReadEnd>privateReadStart,
+  "The private read function must remain locatable");
+assert.match(privateRead,/const version = revolutPrivateVersion;/,
+  "The private read must capture the consent version before awaiting the signed reply");
+assert.equal((privateRead.match(/version !== revolutPrivateVersion/g)||[]).length,2,
+  "Both the success and the failure path must discard a reply invalidated by a revocation");
+assert.ok(privateRead.indexOf("version !== revolutPrivateVersion") <
+  privateRead.indexOf("renderRevolutPrivateBalances(rows)"),
+  "The revocation guard must run before any balance is rendered");
+assert.match(privateRead,/if \(!revolutPrivateOptIn\) return;/,
+  "A withdrawn consent must never render a reply, even at equal version");
+assert.doesNotMatch(privateUi,/includes\("UNAUTHORIZED"\)|includes\(code\)/,
+  "Closed error codes are whole tokens: a substring match maps PRIVATE_VENUE_UNAUTHORIZED to a session expiry");
+assert.match(privateUi,/function revolutPrivateErrorCodes\(raw\)/,
+  "Error codes must be tokenized once, not matched as substrings");
+assert.equal((privateUi.match(/revolutPrivateErrorCodes\(/g)||[]).length,5,
+  "One tokenizer definition and four call sites: balances, failure text, assistant, consent");
+const privateUiTests=readFileSync(join(process.cwd(),"tools/tests/revolut-private-ui.test.mjs"),"utf8");
+assert.match(privateUiTests,/consent revocation are never rendered/,"The revocation regression must stay covered");
+assert.match(privateUiTests,/PRIVATE_VENUE_UNAUTHORIZED never locks the local session/,
+  "The venue/session confusion regression must stay covered");
+// P3: a revocation must destroy the stored opt-in, or be reported as non durable.
+assert.match(privateModule,/fn revoke_storage\(&self\) -> Result<\(\), &'static str>/,
+  "Revocation must own a fail-safe storage path");
+assert.match(privateModule,/std::fs::remove_file\(&self\.file\)/,
+  "An unwritable consent file must still be deletable");
+assert.match(privateModule,/std::fs::rename\(&self\.file, self\.file\.with_extension\("cfg\.revoked"\)\)/,
+  "Renaming is the last resort before reporting an unsafe revocation");
+assert.match(privateModule,/PRIVATE_CONSENT_REVOKE_UNSAFE/,
+  "A revocation that cannot be persisted must have its own closed code");
+assert.match(privateUi,/PRIVATE_CONSENT_REVOKE_UNSAFE/,
+  "The interface must tell the operator that the revocation is not durable");
+assert.match(privateModule,/fn failed_revocation_never_leaves_a_readable_opt_in/,
+  "The restart-after-failed-revocation regression must stay covered in Rust");
+const rustWorkflow=readFileSync(join(process.cwd(),".github/workflows/rust.yml"),"utf8");
+assert.match(rustWorkflow,/node --test tools\/tests\/revolut-private-ui\.test\.mjs/,
+  "The private UI regressions must run in the Rust check matrix (Linux and Windows)");
+assert.doesNotMatch(privateRuntime,/cmd(?:\.exe)?|powershell|pwsh|shell_execute|ShellExecute/i,
+  "Provisioning must never go through a shell");
+assert.match(privateRuntime,/if offline_diagnostic\(\) \{\s*return Err\("OFFLINE_DIAGNOSTIC"\);\s*\}\s*#\[cfg\(windows\)\]/,
+  "The harness and offline diagnostic must never spawn the assistant");
+assert.match(privateCenter,/id="revolut-private-setup"/,
+  "The settings page must offer the no-PowerShell provisioning assistant");
+assert.match(js,/window\.pravdaInvoke\("ipc_revolut_private_setup"\)/,
+  "The assistant must be started through authenticated Rust IPC");
 assert.doesNotMatch(js,/setInterval\(refreshSecurity(?:Events)?\s*,/,
   "No background SQLite/security diagnostic polling");
 assert.match(js,/const securitySessionReady = \(\) => !!securityShell && !securityShell.hidden;/,
@@ -516,7 +664,7 @@ assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.
   "Unavailable news must not be treated as a successful empty result");
 assert.doesNotMatch(auth,/\bfetch\s*\(|https?:\/\/127\.0\.0\.1/);
 const handlers=[...main.matchAll(/ipc::(ipc_[a-z_]+)/g)].map(x=>x[1]);
-assert.equal(new Set(handlers).size,28);
+assert.equal(new Set(handlers).size,32);
 for(const cmd of handlers) {
   assert.ok(build.includes('"'+cmd+'"'),"Missing manifest "+cmd);
   assert.ok(cap.permissions.includes("allow-"+cmd.replaceAll("_","-")),"Missing ACL "+cmd);
@@ -526,12 +674,15 @@ const asyncSessionBound = new Set([
   "ipc_market_snapshot","ipc_history_recent","ipc_history_query",
   "ipc_history_export_csv","ipc_paper_alerts_snapshot","ipc_fx_status",
   "ipc_public_feed","ipc_security_report","ipc_acceptance_report",
-  "ipc_paper_pipeline_probe","ipc_paper_research_preflight"
+  "ipc_paper_pipeline_probe","ipc_paper_research_preflight",
+  "ipc_revolut_private_balances"
 ]);
 for(const cmd of ["ipc_market_snapshot","ipc_paper_pipeline_probe","ipc_paper_research_preflight",
  "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
  "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_update_status",
- "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
+ "ipc_fx_status","ipc_public_feed","ipc_revolut_consent_get","ipc_revolut_consent_set",
+ "ipc_revolut_private_setup","ipc_revolut_private_status","ipc_revolut_private_consent_set",
+ "ipc_revolut_private_balances","ipc_open_source","ipc_session_check","ipc_security_report","ipc_acceptance_report","ipc_security_events","ipc_auth_logout"]) {
   const i=ipc.indexOf("fn "+cmd+"(");
   const next=ipc.indexOf("\n#[tauri::command]",i+1);
   const part=ipc.slice(i,next>i?next:ipc.length);
