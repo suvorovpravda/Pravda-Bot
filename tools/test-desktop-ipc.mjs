@@ -530,6 +530,41 @@ assert.match(main,/pravda_server::revolut_cli::hold_assistant_window\(&arguments
   "The desktop entry point must hold the assistant window");
 assert.ok(main.indexOf('eprintln!("{message}"') < main.indexOf("hold_assistant_window(&arguments)"),
   "The failure reason must be printed before the assistant waits for Enter");
+// Two reproduced regressions: a signed reply authorized before a revocation must
+// never be rendered, and a venue credential refusal must never relock the local
+// session. Both are executed by tools/tests/revolut-private-ui.test.mjs.
+const privateUiStart=js.indexOf("    let revolutPrivateOptIn = false;");
+const privateUiEnd=js.indexOf('    $("revolut-private-setup").addEventListener');
+assert.ok(privateUiStart>=0 && privateUiEnd>privateUiStart,
+  "The private connection section must remain locatable for the regression harness");
+const privateUi=js.slice(privateUiStart,privateUiEnd);
+const privateReadStart=privateUi.indexOf("    async function refreshRevolutPrivate() {");
+const privateReadEnd=privateUi.indexOf("    async function openRevolutPrivateAssistant() {");
+const privateRead=privateUi.slice(privateReadStart,privateReadEnd);
+assert.ok(privateReadStart>=0 && privateReadEnd>privateReadStart,
+  "The private read function must remain locatable");
+assert.match(privateRead,/const version = revolutPrivateVersion;/,
+  "The private read must capture the consent version before awaiting the signed reply");
+assert.equal((privateRead.match(/version !== revolutPrivateVersion/g)||[]).length,2,
+  "Both the success and the failure path must discard a reply invalidated by a revocation");
+assert.ok(privateRead.indexOf("version !== revolutPrivateVersion") <
+  privateRead.indexOf("renderRevolutPrivateBalances(rows)"),
+  "The revocation guard must run before any balance is rendered");
+assert.match(privateRead,/if \(!revolutPrivateOptIn\) return;/,
+  "A withdrawn consent must never render a reply, even at equal version");
+assert.doesNotMatch(privateUi,/includes\("UNAUTHORIZED"\)|includes\(code\)/,
+  "Closed error codes are whole tokens: a substring match maps PRIVATE_VENUE_UNAUTHORIZED to a session expiry");
+assert.match(privateUi,/function revolutPrivateErrorCodes\(raw\)/,
+  "Error codes must be tokenized once, not matched as substrings");
+assert.equal((privateUi.match(/revolutPrivateErrorCodes\(raw\)/g)||[]).length,4,
+  "One tokenizer definition and three call sites: balances, failure text and the assistant");
+const privateUiTests=readFileSync(join(process.cwd(),"tools/tests/revolut-private-ui.test.mjs"),"utf8");
+assert.match(privateUiTests,/consent revocation are never rendered/,"The revocation regression must stay covered");
+assert.match(privateUiTests,/PRIVATE_VENUE_UNAUTHORIZED never locks the local session/,
+  "The venue/session confusion regression must stay covered");
+const rustWorkflow=readFileSync(join(process.cwd(),".github/workflows/rust.yml"),"utf8");
+assert.match(rustWorkflow,/node --test tools\/tests\/revolut-private-ui\.test\.mjs/,
+  "The private UI regressions must run in the Rust check matrix (Linux and Windows)");
 assert.doesNotMatch(privateRuntime,/cmd(?:\.exe)?|powershell|pwsh|shell_execute|ShellExecute/i,
   "Provisioning must never go through a shell");
 assert.match(privateRuntime,/if offline_diagnostic\(\) \{\s*return Err\("OFFLINE_DIAGNOSTIC"\);\s*\}\s*#\[cfg\(windows\)\]/,

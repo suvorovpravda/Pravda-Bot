@@ -1453,6 +1453,12 @@ const translations = {
         container.append(table);
         return header;
     }
+    // Closed error codes are whole tokens, never substrings: UNAUTHORIZED is the
+    // local session, PRIVATE_VENUE_UNAUTHORIZED is Revolut X rejecting the API
+    // key. Matching substrings would lock the local session on a venue refusal.
+    function revolutPrivateErrorCodes(raw) {
+        return new Set(String(raw).match(/[A-Z][A-Z_]{2,}/g) || []);
+    }
     function revolutPrivateFailureText(raw) {
         const codes = {
             PRIVATE_OPT_IN_REQUIRED: "Consentement privé requis : aucune requête envoyée.",
@@ -1462,11 +1468,13 @@ const translations = {
             PRIVATE_RATE_LIMITED: "Limite de débit Revolut X atteinte : réessayez plus tard.",
             PRIVATE_NETWORK: "Réseau indisponible : aucun solde vérifié.",
             PRIVATE_INVALID_RESPONSE: "Réponse Revolut X non conforme : aucun solde affiché.",
+            PRIVATE_UNAVAILABLE: "Connexion privée indisponible : aucun solde affiché.",
             OFFLINE_DIAGNOSTIC: "Diagnostic hors réseau : lecture authentifiée refusée.",
             UNAUTHORIZED: "Session locale expirée : reconnectez-vous."
         };
+        const tokens = revolutPrivateErrorCodes(raw);
         for (const code of Object.keys(codes)) {
-            if (raw.includes(code)) return codes[code];
+            if (tokens.has(code)) return codes[code];
         }
         return "Lecture authentifiée non vérifiée : aucun solde affiché.";
     }
@@ -1487,23 +1495,31 @@ const translations = {
         revolutPrivateBusy = true;
         revolutPrivateTestButton.disabled = true;
         $("revolut-private-checked").textContent = "Requête signée en cours, en lecture seule…";
+        // Rust re-checks consent after the signed request, but a reply already
+        // authorized must still be discarded here if the operator revoked the
+        // private consent while it was in flight.
+        const version = revolutPrivateVersion;
         try {
             const rows = await window.pravdaInvoke("ipc_revolut_private_balances");
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
+            if (!revolutPrivateOptIn) return;
             const header = renderRevolutPrivateBalances(rows);
             $("revolut-private-checked").textContent = "Lecture authentifiée à " +
                 new Date(Number(header.observed_at)).toLocaleTimeString("fr-FR") + " · " +
                 header.count + " devise(s) · aucun ordre, aucun retrait, aucune clé affichée.";
         } catch (error) {
-            if (generation !== window.pravdaAuthGeneration) return;
+            if (generation !== window.pravdaAuthGeneration || version !== revolutPrivateVersion) return;
             const raw = String(error);
             $("revolut-private-balances").textContent = "Aucun solde vérifié.";
             $("revolut-private-checked").textContent = revolutPrivateFailureText(raw);
-            if (raw.includes("UNAUTHORIZED")) window.pravdaRequireLogin();
+            if (revolutPrivateErrorCodes(raw).has("UNAUTHORIZED")) window.pravdaRequireLogin();
         } finally {
             const sessionChanged = generation !== window.pravdaAuthGeneration;
             revolutPrivateBusy = false;
-            revolutPrivateTestButton.disabled = !revolutPrivateOptIn;
+            // After a revocation the consent flow owns the controls, not this reply.
+            if (version === revolutPrivateVersion) {
+                revolutPrivateTestButton.disabled = !revolutPrivateOptIn;
+            }
             if (sessionChanged && securitySessionReady()) void readRevolutPrivateStatus();
         }
     }
@@ -1532,11 +1548,12 @@ const translations = {
                 UNAUTHORIZED: "Session locale expirée : reconnectez-vous."
             };
             let message = "Assistant d’import non ouvert : aucun identifiant enregistré.";
+            const tokens = revolutPrivateErrorCodes(raw);
             for (const code of Object.keys(texts)) {
-                if (raw.includes(code)) message = texts[code];
+                if (tokens.has(code)) message = texts[code];
             }
             $("revolut-private-checked").textContent = message;
-            if (raw.includes("UNAUTHORIZED")) window.pravdaRequireLogin();
+            if (tokens.has("UNAUTHORIZED")) window.pravdaRequireLogin();
         } finally {
             if (generation === window.pravdaAuthGeneration) button.disabled = false;
         }
