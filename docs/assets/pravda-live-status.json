@@ -2,7 +2,7 @@
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "3967818c91408fa045ac3d95454640a5cfb24955",
   "latest_evidence_at": "2026-11-17T19:46:04Z",
-  "refreshed_at_utc": "2026-11-17T19:46:43.833Z",
+  "refreshed_at_utc": "2026-11-17T19:49:18.826Z",
   "historical": {
     "rows": [
       {
@@ -102,7 +102,7 @@
       },
       {
         "name": "Rust check (windows-latest)",
-        "state": "PENDING"
+        "state": "PASS"
       },
       {
         "name": "Windows desktop build and startup",
