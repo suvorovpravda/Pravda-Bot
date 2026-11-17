@@ -54,3 +54,6 @@ archive/python-legacy/__pycache__/
 archive/python-legacy/*.pyc
 /pravda_auth.json
 /pravda_auth.json.*.tmp
+
+.codex/coordination/*
+!.codex/coordination/project.yaml
