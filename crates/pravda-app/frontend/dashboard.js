@@ -933,6 +933,7 @@ const translations = {
 
     async function refreshRevolut() {
         const requestGeneration = window.pravdaAuthGeneration;
+        const consentVersion = revolutConsentVersion;
         const status = $("revolut-status");
         const container = $("revolut-orderbook");
         if (!revolutOptIn) {
@@ -943,6 +944,7 @@ const translations = {
         setStatus(status,"pending","Lecture du carnet public…");
         try {
             const data = await fetchJson("/api/revolut/public");
+            if (requestGeneration !== window.pravdaAuthGeneration || consentVersion !== revolutConsentVersion || !revolutOptIn || shell.hidden) return;
             if (data.status === "unavailable" || !data.book?.data) throw new Error("PUBLIC_ORDER_BOOK_UNAVAILABLE");
             const book = data.book.data;
             const bestBid = book.bids?.[0]?.price;
@@ -957,7 +959,7 @@ const translations = {
             }
             setStatus(status,"live","Carnet public reçu");
         } catch (error) {
-            if (requestGeneration !== window.pravdaAuthGeneration) return;
+            if (requestGeneration !== window.pravdaAuthGeneration || consentVersion !== revolutConsentVersion || !revolutOptIn || shell.hidden) return;
             container.textContent="Le carnet public Revolut X est indisponible. Aucun prix fictif n’est affiché.";
             setStatus(status,"error","Source indisponible");
         }
@@ -1069,13 +1071,17 @@ const translations = {
                 kill_switch: "Protection anti-fuite VPN"
             };
             const nodes = [];
+            const seenChecks = new Set();
             let verified = 0;
             let blocked = 0;
             for (const row of rows) {
                 if (typeof row !== "string" || row.length > 300) throw new Error("INVALID_ROW");
                 const parts = row.split("|");
-                if (parts.length !== 3 || !translated[parts[1]] ||
-                    !Object.hasOwn(checkNames, parts[0])) throw new Error("INVALID_ROW");
+                if (parts.length !== 3 || !Object.hasOwn(translated, parts[1]) ||
+                    !Object.hasOwn(checkNames, parts[0]) || seenChecks.has(parts[0])) {
+                    throw new Error("INVALID_ROW");
+                }
+                seenChecks.add(parts[0]);
                 if (parts[1] === "verified") verified++;
                 if (parts[1] === "blocked") blocked++;
                 const item = document.createElement("div");
