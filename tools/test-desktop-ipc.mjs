@@ -618,6 +618,24 @@ assert.doesNotMatch(js,/window\.(refreshPaper|refreshSecurity)\s*=\s*\(\)\s*=>\s
   "Self-referential global refresh exports overflow the WebView2 stack");
 assert.doesNotMatch(js,/if \(!securityVisible\(\) \|\| acceptanceBusy/,
   "Manual acceptance controls must never silently ignore a click for document.hidden");
+
+const acceptanceStart=js.indexOf("async function runAcceptance(phase) {");
+const acceptanceEnd=js.indexOf('window.pravdaDashboardPhase = "P02G";',acceptanceStart);
+const acceptanceClearStart=js.indexOf("function clearAcceptanceUi() {");
+assert.ok(acceptanceStart>=0 && acceptanceEnd>acceptanceStart && acceptanceClearStart>=0,
+  "Acceptance lifecycle must be present");
+const acceptanceBody=js.slice(acceptanceStart,acceptanceEnd);
+const acceptanceClear=js.slice(acceptanceClearStart,acceptanceStart);
+assert.match(acceptanceClear,/acceptanceRequestEpoch\+\+;[\s\S]*?acceptanceBusy = false;/,
+  "Logout must invalidate pending acceptance requests and release single-flight lock");
+assert.match(acceptanceBody,/const requestEpoch = \+\+acceptanceRequestEpoch;/,
+  "Each acceptance campaign must capture a unique epoch");
+assert.equal([...acceptanceBody.matchAll(/requestGeneration !== window\.pravdaAuthGeneration \|\|\s*requestEpoch !== acceptanceRequestEpoch/g)].length,2,
+  "Both stale acceptance success and error paths must be rejected");
+const acceptanceFinally=acceptanceBody.slice(acceptanceBody.lastIndexOf("} finally {"));
+assert.match(acceptanceFinally,/if \(requestEpoch === acceptanceRequestEpoch\) \{\s*acceptanceBusy = false;/,
+  "Old session completions must not unlock a newer acceptance campaign");
+
 assert.match(js,/if \(tab === "security"\)/,
   "Opening Security must refresh its local status");
 
@@ -771,7 +789,9 @@ for (const name of [
     "UI refresh must identify initial authenticated generation: "+name);
   const staleGenerationGuard = name === "refreshRevolut"
     ? /if \(requestGeneration !== window\.pravdaAuthGeneration \|\| consentVersion !== revolutConsentVersion \|\| !revolutOptIn \|\| shell\.hidden\) return;/
-    : /if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/;
+    : name === "runAcceptance"
+      ? /if \(requestGeneration !== window\.pravdaAuthGeneration\s*\|\|\s*requestEpoch !== acceptanceRequestEpoch\) return;/
+      : /if \(requestGeneration !== window\.pravdaAuthGeneration\) return;/;
   assert.match(body,staleGenerationGuard,
     "Stale UI refresh must not mutate the new login's dashboard: "+name);
 }
