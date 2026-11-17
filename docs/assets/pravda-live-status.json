@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "3967818c91408fa045ac3d95454640a5cfb24955",
-  "latest_evidence_at": "2026-11-17T19:45:25Z",
-  "refreshed_at_utc": "2026-11-17T19:45:29.236Z",
+  "latest_evidence_at": "2026-11-17T19:46:04Z",
+  "refreshed_at_utc": "2026-11-17T19:46:43.833Z",
   "historical": {
     "rows": [
       {
@@ -86,7 +86,7 @@
     "origin": "docs/PRAVDA-GUIDE.md"
   },
   "required_checks": {
-    "passed": 0,
+    "passed": 1,
     "total": 4
   },
   "p0_governance": {
@@ -119,7 +119,7 @@
       "state": "RUNNING",
       "sha": "3967818c91",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/44161984014",
-      "observedAt": "2026-11-17T19:45:21Z"
+      "observedAt": "2026-11-17T19:45:32Z"
     },
     {
       "id": "windows-package.yml",
@@ -143,10 +143,10 @@
       "id": "rustsec-audit.yml",
       "name": "RUSTSEC / AUDIT BLOQUANT",
       "kind": "required",
-      "state": "RUNNING",
+      "state": "PASS",
       "sha": "3967818c91",
       "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/44161984140",
-      "observedAt": "2026-11-17T19:45:25Z"
+      "observedAt": "2026-11-17T19:46:04Z"
     }
   ],
   "open_prs": 2,
