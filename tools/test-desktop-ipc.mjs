@@ -9,6 +9,34 @@ const cfg=JSON.parse(read("tauri.conf.json"));
 const cap=JSON.parse(read("capabilities/main.json"));
 const main=read("src/main.rs"), ipc=read("src/ipc.rs"), paper=read("src/paper.rs"), build=read("build.rs");
 const html=read("frontend/index.html"), js=read("frontend/dashboard.js"),auth=read("frontend/auth.js"), css=read("frontend/styles.css");
+// #160: dashboard.js is evaluated while the authenticated shell is still hidden.
+// The first navigation must not synchronously start protected IPC refreshes;
+// auth.js already initiates them after dashboard readiness and reveal.
+const p14gNavStart=js.indexOf("    function applyTab(requestedTab) {");
+const p14gNavEnd=js.indexOf("    const knownTabs =",p14gNavStart);
+assert.ok(p14gNavStart>=0 && p14gNavEnd>p14gNavStart,
+  "P14G navigation function must be executable in the regression harness");
+// Static contract for the pre-authentication navigation guard. The native
+// WebView2 suite executes dashboard.js; this offline test never evaluates
+// dynamically assembled JavaScript from source text.
+const p14gNavigation=js.slice(p14gNavStart,p14gNavEnd);
+assert.match(p14gNavigation,/window\.pravdaDashboardReady !== true/,
+  "Navigation must reject an unfinished dashboard");
+assert.match(p14gNavigation,/document\.querySelector\("\.shell"\)\.hidden/,
+  "Navigation must reject an unrevealed authenticated shell");
+const p14gGuard=p14gNavigation.indexOf('window.pravdaDashboardReady !== true');
+const p14gGuardReturn=p14gNavigation.indexOf('return;',p14gGuard);
+const p14gProtected=p14gNavigation.indexOf('void refreshSecurity(true);');
+assert.ok(p14gGuard>=0 && p14gGuardReturn>p14gGuard && p14gProtected>p14gGuardReturn,
+  "Readiness guard must return before the first protected refresh");
+for(const call of ['refreshPaper(true)','refreshSecurity(true)','refreshSecurityEvents()','refreshRevolut()'])
+  assert.ok(p14gNavigation.includes(call),
+    "Authenticated navigation must retain protected refresh: "+call);
+const revealStart=auth.indexOf("function refreshRevealedDashboard() {");
+const revealEnd=auth.indexOf("\n}",revealStart);
+assert.ok(revealStart>=0 && revealEnd>revealStart &&
+  auth.slice(revealStart,revealEnd).includes("window.refreshPaper()"),
+  "Login reveal must still initiate the authenticated PAPER refresh");
 const installerWorkflow=readFileSync(join(process.cwd(),".github/workflows/windows-package.yml"),"utf8");
 const onboardingHarness=readFileSync(join(process.cwd(),"tools/test-installed-onboarding.mjs"),"utf8");
 assert.match(onboardingHarness,/function normalizeBootShadowTrace\(view\)/,
@@ -460,7 +488,10 @@ assert.match(js,/if \(sessionChanged && securitySessionReady\(\)\) \{\s*void ref
 assert.match(auth,/window\.pravdaClearUpdateReadiness\(\)/,
   "Authentication transitions must reset stale update status");
 assert.match(html,/id="security-events"/,"Security events must be visible after login");
-assert.match(ipc,/^\s*"protonvpn"\s*=>\s*"https:\/\/protonvpn\.com\/support\/protonvpn-windows-vpn-application"\.to_owned\(\),\s*$/m,"Proton documentation must be a fixed official URL");
+assert.ok(ipc.split("\n").some(line =>
+  line.replaceAll(/\s+/g,"") ===
+  '"protonvpn"=>"https://protonvpn.com/support/protonvpn-windows-vpn-application".to_owned(),'),
+  "Proton documentation must be a fixed official URL");
 assert.match(js,/renderAlerts\(Array\.isArray\(payload\.alerts\)/,
   "Simulator alerts must be rendered from the Rust IPC snapshot");
 assert.match(js,/payload\.status==="unavailable" \|\| !Array\.isArray\(payload\.articles\)/,
