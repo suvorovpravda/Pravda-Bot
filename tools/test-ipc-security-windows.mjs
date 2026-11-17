@@ -193,6 +193,15 @@ async function startSession(mode, driverPort) {
     "tauri-driver did not return a sessionId");
 }
 
+// The probe emits compact wire keys so the whole report stays inside the Rust
+// title-channel bound: an oversized document title is dropped silently and no
+// deny verdict would have evidence. Expand them back to the explicit names the
+// verdicts below read. Executed by tools/tests/revolut-probe-channel.test.mjs.
+function expandProbeResult(row) {
+  return {command:row.c, state:row.s, access_denied:row.a,
+    denial_layer:row.d, malformed:row.m};
+}
+
 // Proves a capability-free WebView runs in the SAME native Rust process as
 // the authenticated main WebView. A debug-only Rust document-title callback
 // reports the outcomes, even when EdgeDriver enumerates only its first view.
@@ -208,7 +217,8 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
         if (!/^\d+$/.test(parts[1]))continue;
         try {
           const proof=JSON.parse(Buffer.from(parts[2],"base64").toString("utf8"));
-          if (proof.v===1 && Array.isArray(proof.results)) latest=proof;
+          if (proof.v===1 && Array.isArray(proof.results))
+            latest={...proof,results:proof.results.map(expandProbeResult)};
         } catch {/* reject malformed side-channel data */ }
       }
     }
@@ -216,10 +226,16 @@ async function checkConcurrentWindowAfterAuth(authenticatedAt) {
     await new Promise(resolveDone=>setTimeout(resolveDone,500));
   }
   verdict("concurrent: unauthorized native WebView reports after login",
-    Boolean(latest), latest?"native title callback received":"no verified native report");
+    Boolean(latest), latest?"native title callback received":
+      "no verified native report; evidence log "+(existsSync(file)?
+        readFileSync(file,"utf8").trim().split(/\r?\n/).filter(Boolean).length+" lines":
+        "absent")+" — an empty log means the Rust title callback dropped an oversized"+
+        " payload (main.rs bound); run tools/tests/revolut-probe-channel.test.mjs");
   for (const command of ["ipc_auth_status","ipc_session_check","ipc_market_snapshot",
     "ipc_history_recent","ipc_history_query","ipc_history_export_csv",
-    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set","ipc_fx_status",
+    "ipc_paper_alerts_snapshot","ipc_runtime_metrics","ipc_security_report","ipc_security_events","ipc_revolut_consent_get","ipc_revolut_consent_set",
+    "ipc_revolut_private_setup","ipc_revolut_private_status","ipc_revolut_private_consent_set",
+    "ipc_revolut_private_balances","ipc_fx_status",
     "plugin:fs|write_text_file","plugin:shell|execute"]) {
     const record=latest.results.find(item=>item.command===command);
     verdict("concurrent: "+command+" denied with main authenticated",
@@ -315,7 +331,8 @@ try {
 
   for(const name of ["ipc_market_snapshot","ipc_history_recent",
     "ipc_paper_alerts_snapshot","ipc_runtime_metrics",
-    "ipc_fx_status","ipc_session_check"])
+    "ipc_fx_status","ipc_session_check","ipc_revolut_private_setup","ipc_revolut_private_status",
+    "ipc_revolut_private_balances"])
     rustDenied("no session: "+name,await invoke(name));
   const query={symbol:"BTC/USDT",exchange:"Binance",period:"day"};
   for(const name of ["ipc_history_query","ipc_history_export_csv"])
@@ -323,6 +340,8 @@ try {
 
   rustDenied("opt-in: no session cannot read preference",await invoke("ipc_revolut_consent_get"));
   rustDenied("opt-in: no session cannot change preference",await invoke("ipc_revolut_consent_set",{enabled:true}));
+  rustDenied("private: no session cannot change private consent",
+    await invoke("ipc_revolut_private_consent_set",{enabled:true}));
   const password="Pravda-E2E-"+randomBytes(32).toString("hex");
   const setup=await invoke("ipc_auth_setup",{password,confirm:password});
   verdict("main: one-time test setup",setup.state==="resolved",setup.state);
@@ -338,6 +357,54 @@ try {
   verdict("opt-in: authenticated main can enable public feed",
     consentOn.state==="resolved" && consentOn.value===true,
     "Enabled explicitly without reading a live feed");
+  const privateInitial=await invoke("ipc_revolut_private_status");
+  verdict("private: connection state is a closed local vocabulary",
+    privateInitial.state==="resolved" && Array.isArray(privateInitial.value) &&
+      privateInitial.value.length===5 && privateInitial.value[1]==="consent|disabled" &&
+      privateInitial.value[2]==="scope|read_only" && privateInitial.value[3]==="orders|disabled",
+    "New profile has no private Revolut X consent");
+  const privateBlocked=await invoke("ipc_revolut_private_balances");
+  verdict("private: Rust refuses balances without consent",
+    privateBlocked.state==="rejected" && /PRIVATE_OPT_IN_REQUIRED/.test(privateBlocked.error||""),
+    "Refused before any signed request");
+  const privateOn=await invoke("ipc_revolut_private_consent_set",{enabled:true});
+  verdict("private: authenticated main can enable private reads",
+    privateOn.state==="resolved" && privateOn.value===true,"Explicit opt-in only");
+  const privateUnconfigured=await invoke("ipc_revolut_private_balances");
+  verdict("private: unprovisioned vault refuses without leaking material",
+    privateUnconfigured.state==="rejected" &&
+      /^PRIVATE_NOT_CONFIGURED$|^PRIVATE_UNSUPPORTED_PLATFORM$|^OFFLINE_DIAGNOSTIC$/
+        .test(privateUnconfigured.error||""),
+    "CI profile has no exchange credential: "+(privateUnconfigured.error||""));
+  const privateOff=await invoke("ipc_revolut_private_consent_set",{enabled:false});
+  verdict("private: consent revocation is persisted",
+    privateOff.state==="resolved" && privateOff.value===false,"Revoked explicitly");
+  const privateRevoked=await invoke("ipc_revolut_private_balances");
+  verdict("private: revoked consent refuses again",
+    privateRevoked.state==="rejected" && /PRIVATE_OPT_IN_REQUIRED/.test(privateRevoked.error||""),
+    "Fail closed after revocation");
+  const privateState=await invoke("ipc_revolut_private_status");
+  verdict("private: status rows carry no credential material",
+    privateState.state==="resolved" &&
+      privateState.value.every(row=>/^[a-z_]+\|[a-z_]+$/.test(row)),
+    "Closed vocabulary only, no key, path or payload");
+  // The desktop executable itself must route the Revolut X console commands.
+  // A three-argument argv is the deterministic, prompt-free usage error (no
+  // empty-argument quoting ambiguity): it proves
+  // routing, readable error reporting and a non-zero exit code from a GUI
+  // subsystem binary, without touching the vault, the network or a console.
+  let cliUsage;
+  try {
+    const stdout=execFileSync(exe,["--revolut-x-setup","a","b"],
+      {encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:30_000,windowsHide:true});
+    cliUsage={status:0,stderr:"",stdout:String(stdout)};
+  } catch (error) {
+    cliUsage={status:error.status,stderr:String(error.stderr||""),stdout:String(error.stdout||"")};
+  }
+  verdict("private: the executable routes the assistant argv and reports failures",
+    cliUsage.status===1 && /--revolut-x-setup/.test(cliUsage.stderr) &&
+      !/BEGIN [A-Z ]*PRIVATE KEY|api[_-]?key/i.test(cliUsage.stderr+cliUsage.stdout),
+    "Exit "+cliUsage.status+" stderr="+JSON.stringify(cliUsage.stderr.slice(0,160)));
   const market=await invoke("ipc_market_snapshot");
   verdict("main: authenticated snapshot",market.state==="resolved",market.state);
   await checkConcurrentWindowAfterAuth(Date.now());

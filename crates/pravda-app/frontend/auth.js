@@ -142,6 +142,7 @@ function showLogin() {
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     if (typeof window.pravdaClearUpdateReadiness === "function") window.pravdaClearUpdateReadiness();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
+    if (typeof window.pravdaClearRevolutPrivate === "function") window.pravdaClearRevolutPrivate();
     shell.hidden = true;
     screen.hidden = false;
     form.reset();
@@ -160,6 +161,7 @@ function refreshRevealedDashboard() {
     if (typeof window.refreshAll === "function") void window.refreshAll();
     if (typeof window.refreshSecurity === "function") void window.refreshSecurity();
     if (typeof window.refreshUpdateReadiness === "function") void window.refreshUpdateReadiness();
+    if (typeof window.refreshRevolutPrivateStatus === "function") void window.refreshRevolutPrivateStatus();
     if (typeof window.refreshSecurityEvents === "function") void window.refreshSecurityEvents();
     if (typeof window.refreshPaper === "function") void window.refreshPaper();
 }
@@ -175,6 +177,7 @@ function activateDashboard() {
     if (typeof window.pravdaClearAcceptance === "function") window.pravdaClearAcceptance();
     if (typeof window.pravdaClearUpdateReadiness === "function") window.pravdaClearUpdateReadiness();
     if (typeof window.pravdaClearMarketSession === "function") window.pravdaClearMarketSession();
+    if (typeof window.pravdaClearRevolutPrivate === "function") window.pravdaClearRevolutPrivate();
     // Keep the authenticated shell hidden until dashboard initialization is verified.
     // A script load event alone is not proof of a usable logout control.
     screen.hidden = false;
