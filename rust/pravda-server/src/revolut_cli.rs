@@ -52,6 +52,23 @@ pub async fn run(args: &[OsString]) -> Option<Result<(), &'static str>> {
     }
 }
 
+/// True only for the assistant launched by the desktop button: that console
+/// window belongs to this process and closes as soon as the command returns.
+fn owns_assistant_window(args: &[OsString]) -> bool {
+    matches!(parse_command(args), Some(Ok(Command::SetupInteractive)))
+}
+
+/// Keeps the GUI-launched assistant window on screen until the operator presses
+/// Enter, after the outcome has been printed. A no-op for every other command,
+/// for a terminal-provided path and on platforms without the assistant.
+pub fn hold_assistant_window(args: &[OsString]) {
+    if !owns_assistant_window(args) {
+        return;
+    }
+    #[cfg(windows)]
+    windows::hold_window();
+}
+
 #[cfg(windows)]
 mod windows {
     use super::Command;
@@ -61,11 +78,19 @@ mod windows {
     };
     use std::{
         io::Read,
-        os::windows::{ffi::OsStringExt, fs::OpenOptionsExt},
+        os::windows::{ffi::OsStringExt, fs::OpenOptionsExt, io::AsRawHandle},
         path::{Path, PathBuf},
     };
     use windows_sys::Win32::{
-        System::Com::CoTaskMemFree,
+        Foundation::INVALID_HANDLE_VALUE,
+        Storage::FileSystem::{GetFileType, FILE_TYPE_UNKNOWN},
+        System::{
+            Com::CoTaskMemFree,
+            Console::{
+                AllocConsole, AttachConsole, GetConsoleWindow, GetStdHandle, SetStdHandle,
+                ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE,
+            },
+        },
         UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath},
     };
     use zeroize::Zeroizing;
@@ -93,6 +118,63 @@ mod windows {
         // SAFETY: raw was allocated by SHGetKnownFolderPath and is freed once.
         unsafe { CoTaskMemFree(raw.cast()) };
         path.ok_or("Windows account data directory is invalid")
+    }
+
+    // The desktop executable is built with `windows_subsystem = "windows"`: it
+    // starts with no standard handles, even when CREATE_NEW_CONSOLE gave it a
+    // console window. Without this, `print!`, `println!` and `std::io::stdin()`
+    // fail silently and the assistant cannot be used. Attach or allocate a
+    // console explicitly instead of relying on the creation flag alone.
+    fn ensure_console() -> Result<(), &'static str> {
+        // SAFETY: these calls only affect this process; no pointer is read.
+        unsafe {
+            if GetConsoleWindow().is_null()
+                && AllocConsole() == 0
+                && AttachConsole(ATTACH_PARENT_PROCESS) == 0
+            {
+                return Err("A Windows console is required");
+            }
+        }
+        bind_standard_handle(STD_INPUT_HANDLE, "CONIN$")?;
+        bind_standard_handle(STD_OUTPUT_HANDLE, "CONOUT$")?;
+        bind_standard_handle(STD_ERROR_HANDLE, "CONOUT$")?;
+        Ok(())
+    }
+
+    // Bind one standard handle to the console only when it is absent or
+    // invalid. An existing redirection (terminal pipe, test harness) is kept
+    // exactly as it is, so captured output never changes destination.
+    fn bind_standard_handle(identifier: u32, device: &str) -> Result<(), &'static str> {
+        // SAFETY: GetStdHandle and GetFileType only inspect this process.
+        let current = unsafe { GetStdHandle(identifier) };
+        if !current.is_null()
+            && current != INVALID_HANDLE_VALUE
+            && unsafe { GetFileType(current) } != FILE_TYPE_UNKNOWN
+        {
+            return Ok(());
+        }
+        let file = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open(device)
+            .map_err(|_| "A Windows console is required")?;
+        // SAFETY: the handle is valid and stays open for the whole process.
+        if unsafe { SetStdHandle(identifier, file.as_raw_handle()) } == 0 {
+            return Err("A Windows console is required");
+        }
+        std::mem::forget(file);
+        Ok(())
+    }
+
+    // The assistant owns its console window: it would close on exit and take
+    // the outcome with it. Keep it readable until the operator acknowledges.
+    pub(super) fn hold_window() {
+        use std::io::Write;
+        println!();
+        print!("Press Enter to close this assistant.");
+        let _ = std::io::stdout().flush();
+        let mut line = String::new();
+        let _ = std::io::stdin().read_line(&mut line);
     }
 
     fn authenticate(path: &Path) -> Result<(), &'static str> {
@@ -181,6 +263,9 @@ mod windows {
     }
 
     pub(super) async fn run(command: Command) -> Result<(), &'static str> {
+        // Every console command needs readable output, and setup needs a usable
+        // stdin, including when the GUI executable started this process.
+        ensure_console()?;
         let root = trusted_local_root()?;
         authenticate(&root.join("pravda_auth.json"))?;
         let account = RevolutXVaultAccount::new(WindowsCredentialStore)
@@ -326,5 +411,20 @@ mod tests {
             result,
             Some(Err("Revolut X credential management requires Windows"))
         ));
+    }
+
+    // Only the no-argument assistant owns its console window. A terminal command
+    // or an explicit path must never block on an acknowledgement prompt.
+    #[test]
+    fn only_the_gui_assistant_holds_its_own_window() {
+        assert!(owns_assistant_window(&args(&["--revolut-x-setup"])));
+        assert!(!owns_assistant_window(&args(&["--revolut-x-setup", "key.pem"])));
+        assert!(!owns_assistant_window(&args(&["--revolut-x-balances"])));
+        assert!(!owns_assistant_window(&args(&["--revolut-x-order-status", "uuid"])));
+        assert!(!owns_assistant_window(&args(&["--revolut-x-setup", ""])));
+        assert!(!owns_assistant_window(&[]));
+        assert!(!owns_assistant_window(&args(&["--other"])));
+        hold_assistant_window(&args(&["--revolut-x-balances"]));
+        hold_assistant_window(&[]);
     }
 }

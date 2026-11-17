@@ -115,8 +115,14 @@ async fn main() {
     }
     let arguments: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
     if let Some(result) = pravda_server::revolut_cli::run(&arguments).await {
+        let failed = result.is_err();
         if let Err(message) = result {
             eprintln!("{message}");
+        }
+        // The GUI-launched assistant owns its console window: the outcome must
+        // stay readable until the operator acknowledges it, success or failure.
+        pravda_server::revolut_cli::hold_assistant_window(&arguments);
+        if failed {
             std::process::exit(1);
         }
         return;

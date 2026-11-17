@@ -374,6 +374,22 @@ try {
     privateState.state==="resolved" &&
       privateState.value.every(row=>/^[a-z_]+\|[a-z_]+$/.test(row)),
     "Closed vocabulary only, no key, path or payload");
+  // The desktop executable itself must route the Revolut X console commands.
+  // An invalid argv is the only deterministic, prompt-free path: it proves
+  // routing, readable error reporting and a non-zero exit code from a GUI
+  // subsystem binary, without touching the vault, the network or a console.
+  let cliUsage;
+  try {
+    const stdout=execFileSync(exe,["--revolut-x-setup",""],
+      {encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:30_000,windowsHide:true});
+    cliUsage={status:0,stderr:"",stdout:String(stdout)};
+  } catch (error) {
+    cliUsage={status:error.status,stderr:String(error.stderr||""),stdout:String(error.stdout||"")};
+  }
+  verdict("private: the executable routes the assistant argv and reports failures",
+    cliUsage.status===1 && /--revolut-x-setup/.test(cliUsage.stderr) &&
+      !/BEGIN [A-Z ]*PRIVATE KEY|api[_-]?key/i.test(cliUsage.stderr+cliUsage.stdout),
+    "Exit "+cliUsage.status+" with a usage message and no credential material");
   const market=await invoke("ipc_market_snapshot");
   verdict("main: authenticated snapshot",market.state==="resolved",market.state);
   await checkConcurrentWindowAfterAuth(Date.now());

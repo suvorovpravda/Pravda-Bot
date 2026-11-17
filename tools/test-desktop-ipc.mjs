@@ -495,6 +495,41 @@ assert.match(privateRuntime,/\.arg\("--revolut-x-setup"\)/,
   "The assistant argv must be fixed");
 assert.match(privateRuntime,/CREATE_NEW_CONSOLE/,
   "The assistant needs its own console for masked entry");
+// A Windows-subsystem (GUI) executable starts with no standard handles, so the
+// creation flag alone cannot make the assistant usable: the console must be
+// allocated or attached explicitly and the three handles bound to it.
+const cliSource=readFileSync(join(process.cwd(),"rust/pravda-server/src/revolut_cli.rs"),"utf8");
+const cliRuntime=cliSource.split("#[cfg(test)]")[0];
+const serverManifest=readFileSync(join(process.cwd(),"rust/pravda-server/Cargo.toml"),"utf8");
+assert.match(serverManifest,/"Win32_System_Console"/,
+  "The console API must be an enabled feature of the existing windows-sys dependency");
+assert.match(serverManifest,/"Win32_Storage_FileSystem"/,
+  "Handle-type inspection must use the existing windows-sys dependency");
+assert.match(cliRuntime,/AllocConsole\(\) == 0/,"The assistant must allocate its own console");
+assert.match(cliRuntime,/AttachConsole\(ATTACH_PARENT_PROCESS\) == 0/,
+  "A terminal-launched assistant must attach to the calling console");
+assert.match(cliRuntime,/bind_standard_handle\(STD_INPUT_HANDLE, "CONIN\$"\)/,
+  "Interactive path entry needs a console input handle, not a GUI null handle");
+assert.match(cliRuntime,/bind_standard_handle\(STD_OUTPUT_HANDLE, "CONOUT\$"\)/,
+  "Assistant output must reach the console");
+assert.match(cliRuntime,/bind_standard_handle\(STD_ERROR_HANDLE, "CONOUT\$"\)/,
+  "Assistant failures must be readable instead of silently discarded");
+assert.match(cliRuntime,/SetStdHandle\(identifier, file\.as_raw_handle\(\)\)/,
+  "Rust standard handles must be rebound onto the console explicitly");
+assert.match(cliRuntime,/GetFileType\(current\) \} != FILE_TYPE_UNKNOWN/,
+  "An existing pipe or file redirection must never be redirected to the console");
+assert.match(cliRuntime,/ensure_console\(\)\?;\s*let root = trusted_local_root\(\)/,
+  "Every console command must bind its handles before any prompt or print");
+assert.match(cliRuntime,/pub fn hold_assistant_window\(args: &\[OsString\]\)/,
+  "The assistant window must be held after the outcome is printed");
+assert.match(cliRuntime,/if !owns_assistant_window\(args\) \{\s*return;/,
+  "Only the GUI assistant may wait for an acknowledgement");
+assert.match(cliRuntime,/Press Enter to close this assistant\./,
+  "The operator must be able to read the result before the window closes");
+assert.match(main,/pravda_server::revolut_cli::hold_assistant_window\(&arguments\);/,
+  "The desktop entry point must hold the assistant window");
+assert.ok(main.indexOf('eprintln!("{message}"') < main.indexOf("hold_assistant_window(&arguments)"),
+  "The failure reason must be printed before the assistant waits for Enter");
 assert.doesNotMatch(privateRuntime,/cmd(?:\.exe)?|powershell|pwsh|shell_execute|ShellExecute/i,
   "Provisioning must never go through a shell");
 assert.match(privateRuntime,/if offline_diagnostic\(\) \{\s*return Err\("OFFLINE_DIAGNOSTIC"\);\s*\}\s*#\[cfg\(windows\)\]/,
