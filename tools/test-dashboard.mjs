@@ -2,6 +2,7 @@
 // Run: node tools/test-dashboard.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { validateSyntax } from "./lib/syntax-check.mjs";
 import vm from "node:vm";
 
 // Single audited dynamic-execution point (Sonar javascript:S1523). It parses or
@@ -11,7 +12,7 @@ function repoSource(source, sandbox, filename, parseOnly = false) {
     assert.ok(typeof source === "string" && source.length > 0,
         "Only non-empty repository source may be parsed or evaluated");
     return parseOnly
-        ? new vm.Script(source, { filename })
+        ? validateSyntax(source, filename)
         : vm.runInNewContext(source, sandbox, { filename });
 }
 
@@ -20,7 +21,19 @@ const scriptTag = html.match(/<script>([\s\S]*?)<\/script>/i);
 assert.ok(scriptTag, "dashboard must contain its inline script");
 const script = scriptTag[1];
 const parsedDashboard = repoSource(script, null, "dashboard.html", true);
-assert.ok(parsedDashboard instanceof vm.Script, "Dashboard JavaScript must parse successfully");
+assert.equal(parsedDashboard, true, "Dashboard JavaScript must parse successfully");
+assert.throws(
+    () => validateSyntax("const invalid = ;", "syntax-error-fixture.js"),
+    (error) => {
+        assert.ok(error instanceof SyntaxError);
+        assert.equal(error.code, "ERR_INVALID_JAVASCRIPT_SYNTAX");
+        assert.equal(error.filename, "syntax-error-fixture.js");
+        assert.match(error.stderr, /SyntaxError/);
+        assert.doesNotMatch(error.stderr, /pravda-syntax-check-/);
+        return true;
+    },
+    "Syntax errors must retain their diagnostic label and captured stderr"
+);
 
 function between(start, end) {
     const a = script.indexOf(start);
