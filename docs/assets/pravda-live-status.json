@@ -1,8 +1,8 @@
 {
   "schema": "PRAVDA-STATUS-v1",
   "source_sha": "e250deb80f3ac56ea1575d3b37368042403e5faf",
-  "latest_evidence_at": "2026-11-18T02:30:51Z",
-  "refreshed_at_utc": "2026-11-18T09:23:43.782Z",
+  "latest_evidence_at": "2026-11-18T15:43:35Z",
+  "refreshed_at_utc": "2026-11-18T15:43:47.809Z",
   "historical": {
     "rows": [
       {
@@ -145,8 +145,8 @@
       "kind": "required",
       "state": "PASS",
       "sha": "e250deb80f",
-      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/44220982379",
-      "observedAt": "2026-11-18T02:08:25Z"
+      "url": "https://github.com/suvorovpravda/Pravda-Bot/actions/runs/44338857366",
+      "observedAt": "2026-11-18T15:43:35Z"
     }
   ],
   "open_prs": 1,
