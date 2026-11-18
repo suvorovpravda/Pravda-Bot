@@ -756,6 +756,17 @@ pub async fn ipc_fx_status(
     finish_authorized_read(&session, &issued_to, Ok(desktop.fx_status().await))
 }
 
+// Compile-time gate for optional public network data. This is independent of
+// the user's persisted consent: disabling the module always wins, including
+// when consent was saved by an earlier version of the application.
+fn public_feed_build_gate(source: &str) -> Result<(), &'static str> {
+    if source == "revolut" && !cfg!(feature = "revolut-consent") {
+        Err("REVOLUT_MODULE_DISABLED")
+    } else {
+        Ok(())
+    }
+}
+
 #[tauri::command]
 pub async fn ipc_public_feed(
     window: Window,
@@ -768,6 +779,7 @@ pub async fn ipc_public_feed(
     if !matches!(source.as_str(), "energy" | "news" | "revolut" | "sources") {
         return Err("INVALID_PUBLIC_SOURCE".to_owned());
     }
+    public_feed_build_gate(&source).map_err(str::to_string)?;
     if source == "revolut" && !consent.enabled() {
         return Err("PUBLIC_FEED_OPT_IN_REQUIRED".to_owned());
     }
@@ -786,6 +798,7 @@ pub fn ipc_revolut_consent_get(
     consent: State<'_, RevolutPublicConsent>,
 ) -> Result<bool, String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    public_feed_build_gate("revolut").map_err(str::to_string)?;
     Ok(consent.enabled())
 }
 
@@ -797,6 +810,7 @@ pub fn ipc_revolut_consent_set(
     enabled: bool,
 ) -> Result<bool, String> {
     require_authenticated(&session, window.label()).map_err(str::to_string)?;
+    public_feed_build_gate("revolut").map_err(str::to_string)?;
     consent.set(enabled).map_err(str::to_string)?;
     Ok(consent.enabled())
 }
@@ -1206,5 +1220,27 @@ mod tests {
         assert_eq!(require_authenticated(&session, "main"), Err("UNAUTHORIZED"));
         assert_eq!(safe_auth_error(AuthError::Invalid), "INVALID_CREDENTIALS");
         let _ = std::fs::remove_file(path);
+    }
+}
+
+#[cfg(test)]
+mod public_feed_build_gate_tests {
+    use super::public_feed_build_gate;
+
+    #[test]
+    fn disabled_revolut_cannot_use_saved_consent_or_public_network_path() {
+        let gate = public_feed_build_gate("revolut");
+        if cfg!(feature = "revolut-consent") {
+            assert!(gate.is_ok());
+        } else {
+            assert_eq!(gate, Err("REVOLUT_MODULE_DISABLED"));
+        }
+    }
+
+    #[test]
+    fn optional_module_flag_does_not_disable_other_allowlisted_public_sources() {
+        for source in ["energy", "news", "sources"] {
+            assert!(public_feed_build_gate(source).is_ok(), "{source}");
+        }
     }
 }
