@@ -7,6 +7,11 @@ description = "Pravda-Bot desktop app with Tauri"
 # Explicit opt-in for debug-only native WebView2 security acceptance.
 # No probe window is built in release binaries, even with this feature.
 [features]
+# Keep current behavior for ordinary builds and existing installed acceptance.
+# An isolated release candidate may disable the optional public Revolut feed
+# using: cargo build --no-default-features (must be tested as installed).
+default = ["revolut-consent"]
+revolut-consent = []
 security-e2e = []
 
 [workspace]
