@@ -16,7 +16,7 @@ export function validateSyntax(source, filename = "snippet.js") {
 
   const diagnosticName = filename.replace(/[\r\n]/g, "_");
   const tempDir = mkdtempSync(join(tmpdir(), "pravda-syntax-check-"));
-  const tempFile = join(tempDir, "snippet.js");
+  const tempFile = join(tempDir, "snippet.cjs");
 
   try {
     writeFileSync(tempFile, source, {
