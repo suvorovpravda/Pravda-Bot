@@ -5,22 +5,11 @@ import { readFileSync } from "node:fs";
 import { validateSyntax } from "./lib/syntax-check.mjs";
 import vm from "node:vm";
 
-// Single audited dynamic-execution point (Sonar javascript:S1523). It parses or
-// evaluates ONLY slices of this repository's own dashboard.html inline script,
-// located by explicit markers, never external or user-supplied input.
-function repoSource(source, sandbox, filename, parseOnly = false) {
-    assert.ok(typeof source === "string" && source.length > 0,
-        "Only non-empty repository source may be parsed or evaluated");
-    return parseOnly
-        ? validateSyntax(source, filename)
-        : vm.runInNewContext(source, sandbox, { filename });
-}
-
 const html = readFileSync(new URL("../dashboard.html", import.meta.url), "utf8");
 const scriptTag = html.match(/<script>([\s\S]*?)<\/script>/i);
 assert.ok(scriptTag, "dashboard must contain its inline script");
 const script = scriptTag[1];
-const parsedDashboard = repoSource(script, null, "dashboard.html", true);
+const parsedDashboard = validateSyntax(script, "dashboard.html");
 assert.equal(parsedDashboard, true, "Dashboard JavaScript must parse successfully");
 assert.throws(
     () => validateSyntax("const invalid = ;", "syntax-error-fixture.js"),
@@ -44,7 +33,7 @@ function between(start, end) {
 
 // EUR and CHF may not be available: quote-native USDT must still display.
 const quoteHelpers = between("    function convertQuote(", "    const parsePrice =");
-const prices = repoSource([
+const prices = vm.runInNewContext([
     "let latestFx = null;",
     "const numericFormat = (v) => Number(v).toFixed(2);",
     "const formatCurrency = (v, c) => c + ':' + Number(v).toFixed(2);",
@@ -52,7 +41,7 @@ const prices = repoSource([
     "const withoutFx = { direct: convertQuote(120.25, 'USDT'), eur: convertQuote(120.25, 'EUR'), chf: convertQuote(120.25, 'CHF'), label: formatMarketValue(120.25, 'USDT') };",
     "latestFx = { rates: { USD: 1.2, CHF: 0.94 } };",
     "({ withoutFx, withFx: { eur: convertQuote(120, 'EUR'), chf: convertQuote(120, 'CHF') }, invalid: convertQuote(-1, 'USDT') });"
-].join("\n"), undefined, "dashboard-quote-helpers.js");
+].join("\n"));
 assert.equal(prices.withoutFx.direct, 120.25);
 assert.equal(prices.withoutFx.eur, null);
 assert.equal(prices.withoutFx.chf, null);
@@ -83,7 +72,7 @@ const context = {
     t: (value) => value
 };
 const renderAlerts = between("    function renderAlerts(", "    async function refreshAlerts()");
-repoSource(renderAlerts + "\nrenderAlerts([{ symbol: 'BTC/USDT', message: 'Paper test event', timestamp: '2026-11-02T00:00:00Z', spread_percent: 0.5 }]);", context, "dashboard-alerts.js");
+vm.runInNewContext(renderAlerts + "\nrenderAlerts([{ symbol: 'BTC/USDT', message: 'Paper test event', timestamp: '2026-11-02T00:00:00Z', spread_percent: 0.5 }]);", context);
 assert.equal(alertRoot.children.length, 1);
 assert.equal(alertRoot.children[0].children.length, 1);
 assert.match(alertRoot.children[0].children[0].textContent, /Paper test event/);
