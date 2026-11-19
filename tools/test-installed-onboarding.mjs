@@ -7,7 +7,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomBytes, createHash } from "node:crypto";
 import { allocateDriverPorts, driverPortsAvailable } from "./driver-port-preflight.mjs";
-import { trustedExecFileSync, trustedSpawn, toolchainDirectories }
+import { trustedExecFileSync, trustedSpawn, toolchainDirectories, edgeDriverDirectory }
   from "./lib/trusted-exec.mjs";
 
 const exe = resolve(process.env.PRAVDA_INSTALLED_EXE || "");
@@ -138,8 +138,13 @@ async function start() {
   // Fail closed if either tauri-driver or native EdgeDriver port is occupied.
   check("Private WebDriver and native ports available",
     await driverPortsAvailable(port, nativePort));
+  const edgeDir = edgeDriverDirectory();
+  if (!existsSync(resolve(edgeDir, "msedgedriver.exe"))) {
+    throw Error("Matched EdgeDriver missing from the runner's exact download directory");
+  }
   child = trustedSpawn("tauri-driver", ["--port", String(port), "--native-port", String(nativePort)], {
     extraDirectories: toolchainDirectories(),
+    dependentDirectories: [edgeDir],
     windowsHide:true, stdio:["ignore","ignore","pipe"],
     env:{...process.env, PRAVDA_MARKET_FEEDS_ENABLED:"false"}
   });
