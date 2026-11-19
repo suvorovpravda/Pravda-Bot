@@ -7,8 +7,9 @@
 import assert from "node:assert/strict";
 import {execFileSync} from "node:child_process";
 import {readFileSync} from "node:fs";
+import { trustedExecFileSync } from "./lib/trusted-exec.mjs";
 
-const tracked=execFileSync("git",["ls-files","-z"],{encoding:"utf8"})
+const tracked=trustedExecFileSync("git",["ls-files","-z"],{encoding:"utf8"})
   .split("\0").filter(Boolean);
 const archive="archive/python-legacy/";
 const active=tracked.filter(p=>!p.startsWith(archive));

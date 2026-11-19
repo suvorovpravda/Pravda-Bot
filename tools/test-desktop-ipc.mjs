@@ -63,7 +63,12 @@ const binance=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/binanc
 const kraken=readFileSync(join(process.cwd(),"crates/pravda-fetchers/src/kraken.rs"),"utf8");
 assert.match(desktop,/config\.market_feeds_enabled = false;/,
   "Diagnostic offline mode must force-disable WebSocket producers");
-assert.match(desktop,/stream_state.*?as_object_mut/s,
+// Linear scan instead of /stream_state.*?as_object_mut/s: the lazy dot-all
+// form is super-linear on a large source (Sonar javascript:S8786). Same
+// guarantee, bounded work: the first stream_state must be followed by an
+// as_object_mut somewhere later in the file.
+const streamStateAt = desktop.indexOf("stream_state");
+assert.ok(streamStateAt >= 0 && desktop.indexOf("as_object_mut", streamStateAt) > streamStateAt,
   "A real market snapshot must expose the Rust feed status");
 assert.match(js,/streamStatusMessage\(payload\.stream_state\)/,
   "UI must distinguish configured-offline feeds from waiting for first quote");

@@ -2,14 +2,27 @@
 // Run: node tools/test-dashboard.mjs
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { validateSyntax } from "./lib/syntax-check.mjs";
 import vm from "node:vm";
 
 const html = readFileSync(new URL("../dashboard.html", import.meta.url), "utf8");
 const scriptTag = html.match(/<script>([\s\S]*?)<\/script>/i);
 assert.ok(scriptTag, "dashboard must contain its inline script");
 const script = scriptTag[1];
-const parsedDashboard = new vm.Script(script, { filename: "dashboard.html" });
-assert.ok(parsedDashboard instanceof vm.Script, "Dashboard JavaScript must parse successfully");
+const parsedDashboard = validateSyntax(script, "dashboard.html");
+assert.equal(parsedDashboard, true, "Dashboard JavaScript must parse successfully");
+assert.throws(
+    () => validateSyntax("const invalid = ;", "syntax-error-fixture.js"),
+    (error) => {
+        assert.ok(error instanceof SyntaxError);
+        assert.equal(error.code, "ERR_INVALID_JAVASCRIPT_SYNTAX");
+        assert.equal(error.filename, "syntax-error-fixture.js");
+        assert.match(error.stderr, /SyntaxError/);
+        assert.doesNotMatch(error.stderr, /pravda-syntax-check-/);
+        return true;
+    },
+    "Syntax errors must retain their diagnostic label and captured stderr"
+);
 
 function between(start, end) {
     const a = script.indexOf(start);

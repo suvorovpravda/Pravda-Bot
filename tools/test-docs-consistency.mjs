@@ -9,8 +9,9 @@ import {execFileSync} from "node:child_process";
 import {existsSync, readFileSync} from "node:fs";
 import {dirname, resolve} from "node:path";
 import {isIP} from "node:net";
+import { trustedExecFileSync } from "./lib/trusted-exec.mjs";
 
-const tracked=execFileSync("git",["ls-files","-z"],{encoding:"utf8"})
+const tracked=trustedExecFileSync("git",["ls-files","-z"],{encoding:"utf8"})
   .split("\0").filter(Boolean);
 const canonicalDocs=[
   "README.md",
